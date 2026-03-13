@@ -47,7 +47,8 @@ artifacts-monorepo/
 - `journal_entries` — Daily operations journal with board highlights
 - `task_sessions` — Task-based bot team deployment sessions (objective, status, timestamps)
 - `task_session_bots` — Junction table linking sessions to their assigned bot team
-- `task_session_messages` — Messages within task sessions (with flaggedRoles for missing-role alerts)
+- `task_session_messages` — Messages within task sessions (with flaggedRoles for missing-role alerts, messageType: text/tool_call/tool_result, toolData jsonb)
+- `world_state` — Session-scoped key-value store for bots to share persistent findings within a task session
 
 ## Bot Categories
 
@@ -104,3 +105,23 @@ Run `pnpm --filter @workspace/scripts run seed-bots` to seed all 51 bot personal
 - `POST /api/bots/fabricate` — Fabricate a new AI-generated bot
 - `GET /api/bots/declarations` — Get all bots with cached declarations (sorted by department)
 - `POST /api/bots/generate-declarations` — SSE stream: generate AI declarations for all bots
+- `POST /api/task-sessions/:id/messages/stream` — SSE stream of agentic bot responses with tool steps
+- `POST /api/conversations/:id/messages/stream` — SSE stream of agentic bot response with tool steps
+
+## Agentic Tool System
+
+Bots use OpenAI function calling with a formal tool registry. Tools available:
+- `web_search` — Search the web via DuckDuckGo Instant Answer API
+- `read_world_state` — Read from session-scoped shared key-value store
+- `write_world_state` — Write to session-scoped shared key-value store
+- `read_platform_data` — Query bots/sessions/conversations (context-scoped only)
+- `delegate_to_bot` — Delegate a sub-task to another bot (session-scoped only)
+
+The agentic loop iterates: call model → detect tool calls → execute → append results → call again, capped at 10 iterations. Uses p-limit/p-retry from shared infrastructure for concurrency and retry. Tool calls and results are stored as typed message records in the database. SSE streaming sends events (`tool_call`, `tool_result`, `message`, `done`) live to the frontend. The UI shows collapsible tool step cards with a working pulse indicator.
+
+Key files:
+- `artifacts/api-server/src/tools/registry.ts` — Tool registry with Zod input/output schemas and OpenAI format export
+- `artifacts/api-server/src/tools/definitions.ts` — Tool implementations
+- `artifacts/api-server/src/tools/agentic-loop.ts` — Agentic loop with p-retry/p-limit
+- `artifacts/galaxybots/src/hooks/use-sse.ts` — SSE stream consumption hook
+- `artifacts/galaxybots/src/components/ToolStepCard.tsx` — Collapsible tool step UI components

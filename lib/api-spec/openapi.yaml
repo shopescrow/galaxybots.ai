@@ -602,6 +602,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /task-sessions/{id}/messages/stream:
+    post:
+      operationId: streamTaskSessionMessage
+      tags: [task-sessions]
+      summary: Send a message and stream bot responses via SSE
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendTaskSessionMessageBody"
+      responses:
+        "200":
+          description: SSE stream of agentic events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /conversations/{id}/messages/stream:
+    post:
+      operationId: streamConversationMessage
+      tags: [conversations]
+      summary: Send a message and stream bot response via SSE
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "200":
+          description: SSE stream of agentic events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
   /task-sessions/{id}/alerts:
     get:
       operationId: getTaskSessionAlerts
@@ -767,6 +817,12 @@ components:
           type: string
         senderName:
           type: ["string", "null"]
+        messageType:
+          type: string
+          enum: [text, tool_call, tool_result]
+          default: text
+        toolData:
+          type: ["object", "null"]
         createdAt:
           type: string
           format: date-time
@@ -1098,6 +1154,12 @@ components:
           type: string
         content:
           type: string
+        messageType:
+          type: string
+          enum: [text, tool_call, tool_result]
+          default: text
+        toolData:
+          type: ["object", "null"]
         flaggedRoles:
           type: array
           items:

@@ -5,6 +5,8 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
+import type { TaskSessionMessageMessageType } from "./taskSessionMessageMessageType";
+import type { TaskSessionMessageToolData } from "./taskSessionMessageToolData";
 
 export interface TaskSessionMessage {
   id: number;
@@ -17,6 +19,9 @@ export interface TaskSessionMessage {
   botTitle?: string | null;
   role: string;
   content: string;
+  messageType?: TaskSessionMessageMessageType;
+  /** @nullable */
+  toolData?: TaskSessionMessageToolData;
   flaggedRoles?: string[];
   createdAt: Date;
 }

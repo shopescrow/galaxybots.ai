@@ -19,7 +19,8 @@ import {
   ExpandTaskSessionBody,
   FabricateBotBody,
 } from "@workspace/api-zod";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
+import { runAgenticLoop, type AgenticEvent } from "../tools";
 
 const router: IRouter = Router();
 
@@ -295,6 +296,7 @@ router.post(
         content: body.data.content,
         botName: body.data.senderName || "CEO",
         botTitle: "CEO / Architect",
+        messageType: "text",
       })
       .returning();
 
@@ -340,25 +342,57 @@ TEAM MEMBERS: ${teamRoster}
 
 You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
 
+You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.
+
 IMPORTANT: If you identify that this task requires expertise not currently represented on the team, end your response with exactly this format on a new line:
 [NEED_ROLE: Role Title - brief reason why this expertise is needed]
 Only flag a missing role if it is genuinely critical and not covered by any current team member.`;
 
-      const completion = await openai.chat.completions.create({
+      const { finalContent, events } = await runAgenticLoop({
         model: "gpt-4o-mini",
-        max_completion_tokens: 500,
+        maxIterations: 10,
+        maxTokens: 500,
+        systemPrompt,
         messages: [
-          { role: "system", content: systemPrompt },
           {
             role: "user",
             content: `Recent discussion:\n${contextMessages}\n\nProvide your expert perspective on the latest message.`,
           },
         ],
+        context: {
+          sessionId: session.id,
+          botId: bot.id,
+          botName: bot.name,
+        },
       });
 
-      const content =
-        completion.choices[0]?.message?.content ??
-        "Acknowledged. I will incorporate this into my analysis.";
+      for (const event of events) {
+        if (event.type === "tool_call") {
+          await db.insert(taskSessionMessagesTable).values({
+            sessionId: session.id,
+            botId: bot.id,
+            botName: bot.name,
+            botTitle: bot.title,
+            role: "bot",
+            content: `Using tool: ${event.toolName}`,
+            messageType: "tool_call",
+            toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
+          });
+        } else if (event.type === "tool_result") {
+          await db.insert(taskSessionMessagesTable).values({
+            sessionId: session.id,
+            botId: bot.id,
+            botName: bot.name,
+            botTitle: bot.title,
+            role: "bot",
+            content: `Tool result: ${event.toolName}`,
+            messageType: "tool_result",
+            toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
+          });
+        }
+      }
+
+      const content = finalContent || "Acknowledged. I will incorporate this into my analysis.";
 
       const flaggedRoles: string[] = [];
       const roleMatch = content.match(/\[NEED_ROLE:\s*(.+?)(?:\s*-\s*.+?)?\]/g);
@@ -385,6 +419,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           botTitle: bot.title,
           role: "bot",
           content: cleanContent,
+          messageType: "text",
           flaggedRoles,
         })
         .returning();
@@ -393,6 +428,192 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
     }
 
     res.status(201).json(responses);
+  },
+);
+
+router.post(
+  "/task-sessions/:id/messages/stream",
+  async (req, res): Promise<void> => {
+    const params = SendTaskSessionMessageParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const body = SendTaskSessionMessageBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+
+    const [session] = await db
+      .select()
+      .from(taskSessionsTable)
+      .where(eq(taskSessionsTable.id, params.data.id));
+    if (!session) {
+      res.status(404).json({ error: "Task session not found" });
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    const sendSSE = (event: { type: string; [key: string]: unknown }) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    try {
+      const [userMsg] = await db
+        .insert(taskSessionMessagesTable)
+        .values({
+          sessionId: session.id,
+          role: "user",
+          content: body.data.content,
+          botName: body.data.senderName || "CEO",
+          botTitle: "CEO / Architect",
+          messageType: "text",
+        })
+        .returning();
+
+      sendSSE({ type: "message", content: userMsg.content, botName: userMsg.botName || "CEO" });
+
+      const sessionBotRows = await db
+        .select()
+        .from(taskSessionBotsTable)
+        .where(eq(taskSessionBotsTable.sessionId, session.id));
+      const botIds = sessionBotRows.map((sb) => sb.botId);
+      let teamBots: (typeof botsTable.$inferSelect)[] = [];
+      if (botIds.length > 0) {
+        teamBots = await db
+          .select()
+          .from(botsTable)
+          .where(inArray(botsTable.id, botIds));
+      }
+
+      const recentMsgs = await db
+        .select()
+        .from(taskSessionMessagesTable)
+        .where(eq(taskSessionMessagesTable.sessionId, session.id))
+        .orderBy(desc(taskSessionMessagesTable.createdAt))
+        .limit(10);
+
+      const contextMessages = recentMsgs
+        .reverse()
+        .map((m) => `${m.botName || "User"}: ${m.content}`)
+        .join("\n");
+
+      const teamRoster = teamBots
+        .map((b) => `${b.name} (${b.title})`)
+        .join(", ");
+
+      await batchProcessWithSSE(
+        teamBots,
+        async (bot) => {
+          const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
+Personality: ${bot.personality}
+Your responsibilities: ${bot.responsibilities.join("; ")}
+
+TASK OBJECTIVE: ${session.objective}
+TEAM MEMBERS: ${teamRoster}
+
+You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
+
+You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.
+
+IMPORTANT: If you identify that this task requires expertise not currently represented on the team, end your response with exactly this format on a new line:
+[NEED_ROLE: Role Title - brief reason why this expertise is needed]
+Only flag a missing role if it is genuinely critical and not covered by any current team member.`;
+
+          const { finalContent, events } = await runAgenticLoop({
+            model: "gpt-4o-mini",
+            maxIterations: 10,
+            maxTokens: 500,
+            systemPrompt,
+            messages: [
+              {
+                role: "user",
+                content: `Recent discussion:\n${contextMessages}\n\nProvide your expert perspective on the latest message.`,
+              },
+            ],
+            context: {
+              sessionId: session.id,
+              botId: bot.id,
+              botName: bot.name,
+            },
+            onEvent: (event) => {
+              sendSSE({ ...event, botId: bot.id, botName: bot.name, botTitle: bot.title });
+            },
+          });
+
+          for (const event of events) {
+            if (event.type === "tool_call") {
+              await db.insert(taskSessionMessagesTable).values({
+                sessionId: session.id,
+                botId: bot.id,
+                botName: bot.name,
+                botTitle: bot.title,
+                role: "bot",
+                content: `Using tool: ${event.toolName}`,
+                messageType: "tool_call",
+                toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
+              });
+            } else if (event.type === "tool_result") {
+              await db.insert(taskSessionMessagesTable).values({
+                sessionId: session.id,
+                botId: bot.id,
+                botName: bot.name,
+                botTitle: bot.title,
+                role: "bot",
+                content: `Tool result: ${event.toolName}`,
+                messageType: "tool_result",
+                toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
+              });
+            }
+          }
+
+          const content = finalContent || "Acknowledged. I will incorporate this into my analysis.";
+
+          const flaggedRoles: string[] = [];
+          const roleMatch = content.match(/\[NEED_ROLE:\s*(.+?)(?:\s*-\s*.+?)?\]/g);
+          if (roleMatch) {
+            for (const match of roleMatch) {
+              const extracted = match
+                .replace(/\[NEED_ROLE:\s*/, "")
+                .replace(/\]$/, "");
+              flaggedRoles.push(extracted);
+            }
+          }
+
+          const cleanContent = content.replace(/\[NEED_ROLE:\s*.+?\]/g, "").trim();
+
+          await db
+            .insert(taskSessionMessagesTable)
+            .values({
+              sessionId: session.id,
+              botId: bot.id,
+              botName: bot.name,
+              botTitle: bot.title,
+              role: "bot",
+              content: cleanContent,
+              messageType: "text",
+              flaggedRoles,
+            });
+
+          return { botId: bot.id, content: cleanContent };
+        },
+        sendSSE,
+      );
+
+      sendSSE({ type: "done", content: "All bots have responded" });
+    } catch (err) {
+      sendSSE({ type: "error", content: err instanceof Error ? err.message : "Stream error" });
+    } finally {
+      res.end();
+    }
   },
 );
 

@@ -8,15 +8,18 @@ import {
   useTaskSession,
   useTaskSessionMessages,
   useTaskSessionAlerts,
-  useSendTaskMessage,
   useExpandSession,
   useFabricateBotMutation,
 } from "@/hooks/use-task-sessions";
-import { useState, useRef, useEffect } from "react";
+import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
+import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "wouter";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetTaskSessionMessagesQueryKey, getGetTaskSessionAlertsQueryKey } from "@workspace/api-client-react";
 import {
   Loader2,
   Terminal,
@@ -38,31 +41,50 @@ export default function TaskBoardroom() {
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(
     new Set(),
   );
+  const queryClient = useQueryClient();
 
   const { data: session, isLoading: sessionLoading } =
     useTaskSession(sessionId);
   const { data: messages, isLoading: messagesLoading } =
     useTaskSessionMessages(sessionId);
   const { data: alerts } = useTaskSessionAlerts(sessionId);
-  const sendMessage = useSendTaskMessage(sessionId);
   const expandSession = useExpandSession(sessionId);
   const fabricateMutation = useFabricateBotMutation();
+
+  const onStreamComplete = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: getGetTaskSessionMessagesQueryKey(sessionId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getGetTaskSessionAlertsQueryKey(sessionId),
+    });
+  }, [queryClient, sessionId]);
+
+  const { isStreaming, events: streamEvents, startStream } = useSSEStream({
+    onComplete: onStreamComplete,
+  });
+
+  const currentWorkingBot = streamEvents
+    .filter((e) => (e.type === "tool_call" || e.type === "message") && e.botName)
+    .pop()?.botName;
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamEvents]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || sendMessage.isPending) return;
+    if (!content.trim() || isStreaming) return;
 
-    await sendMessage.mutateAsync({
-      id: sessionId,
-      data: { content: content.trim(), senderName: "Architect" },
-    });
+    const messageContent = content.trim();
     setContent("");
+
+    await startStream(`/api/task-sessions/${sessionId}/messages/stream`, {
+      content: messageContent,
+      senderName: "Architect",
+    });
   };
 
   const activeAlerts =
@@ -284,13 +306,24 @@ export default function TaskBoardroom() {
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-2 font-tech"
           >
-            {messages?.length === 0 ? (
+            {messages?.length === 0 && !isStreaming ? (
               <div className="text-primary/50 italic text-sm text-center py-8">
                 Start the discussion — your team is ready.
               </div>
             ) : (
               messages?.map((msg) => {
                 const isUser = msg.role === "user";
+                const msgType = (msg as { messageType?: string }).messageType || "text";
+                const toolData = (msg as { toolData?: unknown }).toolData;
+
+                if (msgType === "tool_call" || msgType === "tool_result") {
+                  return (
+                    <div key={msg.id} className="ml-4">
+                      <MessageToolSteps toolData={toolData} messageType={msgType} />
+                    </div>
+                  );
+                }
+
                 return (
                   <motion.div
                     key={msg.id}
@@ -335,12 +368,11 @@ export default function TaskBoardroom() {
                 );
               })
             )}
-            {sendMessage.isPending && (
-              <div className="flex items-center gap-2 text-primary/50 py-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm font-tech animate-pulse">
-                  Team is responding...
-                </span>
+
+            {isStreaming && (
+              <div className="space-y-2 mt-2">
+                <ToolStepsDisplay events={streamEvents} />
+                <WorkingIndicator botName={currentWorkingBot} />
               </div>
             )}
           </div>
@@ -354,16 +386,16 @@ export default function TaskBoardroom() {
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="Direct your task team..."
                   className="pl-10 bg-black/50 border-primary/30 text-primary placeholder:text-primary/30 font-tech focus-visible:ring-primary/50"
-                  disabled={sendMessage.isPending}
+                  disabled={isStreaming}
                 />
               </div>
               <Button
                 type="submit"
-                disabled={!content.trim() || sendMessage.isPending}
+                disabled={!content.trim() || isStreaming}
                 variant="glow"
                 className="font-tech tracking-widest"
               >
-                {sendMessage.isPending ? (
+                {isStreaming ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>

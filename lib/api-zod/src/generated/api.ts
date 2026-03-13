@@ -92,12 +92,18 @@ export const GetConversationMessagesParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getConversationMessagesResponseMessageTypeDefault = `text`;
+
 export const GetConversationMessagesResponseItem = zod.object({
   id: zod.number(),
   conversationId: zod.number(),
   role: zod.enum(["user", "bot", "system"]),
   content: zod.string(),
   senderName: zod.string().nullish(),
+  messageType: zod
+    .enum(["text", "tool_call", "tool_result"])
+    .default(getConversationMessagesResponseMessageTypeDefault),
+  toolData: zod.object({}).passthrough().nullish(),
   createdAt: zod.date(),
 });
 export const GetConversationMessagesResponse = zod.array(
@@ -444,6 +450,8 @@ export const GetTaskSessionMessagesParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getTaskSessionMessagesResponseMessageTypeDefault = `text`;
+
 export const GetTaskSessionMessagesResponseItem = zod.object({
   id: zod.number(),
   sessionId: zod.number(),
@@ -452,6 +460,10 @@ export const GetTaskSessionMessagesResponseItem = zod.object({
   botTitle: zod.string().nullish(),
   role: zod.string(),
   content: zod.string(),
+  messageType: zod
+    .enum(["text", "tool_call", "tool_result"])
+    .default(getTaskSessionMessagesResponseMessageTypeDefault),
+  toolData: zod.object({}).passthrough().nullish(),
   flaggedRoles: zod.array(zod.string()).optional(),
   createdAt: zod.date(),
 });
@@ -467,6 +479,30 @@ export const SendTaskSessionMessageParams = zod.object({
 });
 
 export const SendTaskSessionMessageBody = zod.object({
+  content: zod.string(),
+  senderName: zod.string().nullish(),
+});
+
+/**
+ * @summary Send a message and stream bot responses via SSE
+ */
+export const StreamTaskSessionMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const StreamTaskSessionMessageBody = zod.object({
+  content: zod.string(),
+  senderName: zod.string().nullish(),
+});
+
+/**
+ * @summary Send a message and stream bot response via SSE
+ */
+export const StreamConversationMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const StreamConversationMessageBody = zod.object({
   content: zod.string(),
   senderName: zod.string().nullish(),
 });

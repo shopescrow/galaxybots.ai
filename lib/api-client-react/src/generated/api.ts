@@ -2313,6 +2313,181 @@ export const useSendTaskSessionMessage = <
 };
 
 /**
+ * @summary Send a message and stream bot responses via SSE
+ */
+export const getStreamTaskSessionMessageUrl = (id: number) => {
+  return `/api/task-sessions/${id}/messages/stream`;
+};
+
+export const streamTaskSessionMessage = async (
+  id: number,
+  sendTaskSessionMessageBody: SendTaskSessionMessageBody,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getStreamTaskSessionMessageUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendTaskSessionMessageBody),
+  });
+};
+
+export const getStreamTaskSessionMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof streamTaskSessionMessage>>,
+    TError,
+    { id: number; data: BodyType<SendTaskSessionMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof streamTaskSessionMessage>>,
+  TError,
+  { id: number; data: BodyType<SendTaskSessionMessageBody> },
+  TContext
+> => {
+  const mutationKey = ["streamTaskSessionMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof streamTaskSessionMessage>>,
+    { id: number; data: BodyType<SendTaskSessionMessageBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return streamTaskSessionMessage(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StreamTaskSessionMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof streamTaskSessionMessage>>
+>;
+export type StreamTaskSessionMessageMutationBody =
+  BodyType<SendTaskSessionMessageBody>;
+export type StreamTaskSessionMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a message and stream bot responses via SSE
+ */
+export const useStreamTaskSessionMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof streamTaskSessionMessage>>,
+    TError,
+    { id: number; data: BodyType<SendTaskSessionMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof streamTaskSessionMessage>>,
+  TError,
+  { id: number; data: BodyType<SendTaskSessionMessageBody> },
+  TContext
+> => {
+  return useMutation(getStreamTaskSessionMessageMutationOptions(options));
+};
+
+/**
+ * @summary Send a message and stream bot response via SSE
+ */
+export const getStreamConversationMessageUrl = (id: number) => {
+  return `/api/conversations/${id}/messages/stream`;
+};
+
+export const streamConversationMessage = async (
+  id: number,
+  sendMessageBody: SendMessageBody,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getStreamConversationMessageUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendMessageBody),
+  });
+};
+
+export const getStreamConversationMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof streamConversationMessage>>,
+    TError,
+    { id: number; data: BodyType<SendMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof streamConversationMessage>>,
+  TError,
+  { id: number; data: BodyType<SendMessageBody> },
+  TContext
+> => {
+  const mutationKey = ["streamConversationMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof streamConversationMessage>>,
+    { id: number; data: BodyType<SendMessageBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return streamConversationMessage(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StreamConversationMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof streamConversationMessage>>
+>;
+export type StreamConversationMessageMutationBody = BodyType<SendMessageBody>;
+export type StreamConversationMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a message and stream bot response via SSE
+ */
+export const useStreamConversationMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof streamConversationMessage>>,
+    TError,
+    { id: number; data: BodyType<SendMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof streamConversationMessage>>,
+  TError,
+  { id: number; data: BodyType<SendMessageBody> },
+  TContext
+> => {
+  return useMutation(getStreamConversationMessageMutationOptions(options));
+};
+
+/**
  * @summary Get missing-role alerts for a task session
  */
 export const getGetTaskSessionAlertsUrl = (id: number) => {

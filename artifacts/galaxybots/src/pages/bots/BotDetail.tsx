@@ -1,15 +1,19 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useBot } from "@/hooks/use-bots";
 import { useStartConversation, useConversations, useChatMessages, useSendChatMessage } from "@/hooks/use-chat";
+import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
+import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Send, BotIcon, User, Terminal } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetConversationMessagesQueryKey } from "@workspace/api-client-react";
 
 export default function BotDetail() {
   const params = useParams();
@@ -127,26 +131,36 @@ export default function BotDetail() {
 
 function ChatInterface({ conversationId, botName }: { conversationId: number, botName: string }) {
   const { data: messages, isLoading } = useChatMessages(conversationId);
-  const sendMessage = useSendChatMessage();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const onStreamComplete = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: getGetConversationMessagesQueryKey(conversationId),
+    });
+  }, [queryClient, conversationId]);
+
+  const { isStreaming, events: streamEvents, startStream } = useSSEStream({
+    onComplete: onStreamComplete,
+  });
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamEvents]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || sendMessage.isPending) return;
+    if (!input.trim() || isStreaming) return;
     
     const content = input;
     setInput("");
     
-    await sendMessage.mutateAsync({
-      id: conversationId,
-      data: { content, senderName: "CEO" }
+    await startStream(`/api/conversations/${conversationId}/messages/stream`, {
+      content,
+      senderName: "CEO",
     });
   };
 
@@ -159,7 +173,7 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
-        ) : messages?.length === 0 ? (
+        ) : messages?.length === 0 && !isStreaming ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground italic text-sm">
             Connection established. Waiting for input...
           </div>
@@ -167,6 +181,16 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
           messages?.map((msg) => {
             const isUser = msg.role === 'user';
             const isSystem = msg.role === 'system';
+            const msgType = (msg as { messageType?: string }).messageType || "text";
+            const toolData = (msg as { toolData?: unknown }).toolData;
+
+            if (msgType === "tool_call" || msgType === "tool_result") {
+              return (
+                <div key={msg.id} className="ml-12">
+                  <MessageToolSteps toolData={toolData} messageType={msgType} />
+                </div>
+              );
+            }
             
             if (isSystem) {
               return (
@@ -212,6 +236,13 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
             );
           })
         )}
+
+        {isStreaming && (
+          <div className="space-y-2 ml-12">
+            <ToolStepsDisplay events={streamEvents} />
+            <WorkingIndicator botName={botName} />
+          </div>
+        )}
       </div>
 
       <div className="p-4 border-t border-border/40 bg-background/80 supports-[backdrop-filter]:backdrop-blur-md z-10" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
@@ -221,10 +252,10 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
             onChange={(e) => setInput(e.target.value)}
             placeholder="Issue directive..." 
             className="flex-1 bg-secondary/50 border-border shadow-inner font-tech min-h-[44px]"
-            disabled={sendMessage.isPending}
+            disabled={isStreaming}
           />
-          <Button type="submit" disabled={!input.trim() || sendMessage.isPending} className="px-6 shrink-0 min-w-[44px] min-h-[44px]" variant={input.trim() ? "glow" : "secondary"}>
-            {sendMessage.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+          <Button type="submit" disabled={!input.trim() || isStreaming} className="px-6 shrink-0 min-w-[44px] min-h-[44px]" variant={input.trim() ? "glow" : "secondary"}>
+            {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </Button>
         </form>
       </div>

@@ -55,6 +55,20 @@ export const MessageRole = {
   system: "system",
 } as const;
 
+export type MessageMessageType =
+  (typeof MessageMessageType)[keyof typeof MessageMessageType];
+
+export const MessageMessageType = {
+  text: "text",
+  tool_call: "tool_call",
+  tool_result: "tool_result",
+} as const;
+
+/**
+ * @nullable
+ */
+export type MessageToolData = { [key: string]: unknown } | null;
+
 export interface Message {
   id: number;
   conversationId: number;
@@ -62,6 +76,9 @@ export interface Message {
   content: string;
   /** @nullable */
   senderName?: string | null;
+  messageType?: MessageMessageType;
+  /** @nullable */
+  toolData?: MessageToolData;
   createdAt: string;
 }
 
@@ -276,6 +293,20 @@ export interface CreateTaskSessionBody {
   botIds: number[];
 }
 
+export type TaskSessionMessageMessageType =
+  (typeof TaskSessionMessageMessageType)[keyof typeof TaskSessionMessageMessageType];
+
+export const TaskSessionMessageMessageType = {
+  text: "text",
+  tool_call: "tool_call",
+  tool_result: "tool_result",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TaskSessionMessageToolData = { [key: string]: unknown } | null;
+
 export interface TaskSessionMessage {
   id: number;
   sessionId: number;
@@ -287,6 +318,9 @@ export interface TaskSessionMessage {
   botTitle?: string | null;
   role: string;
   content: string;
+  messageType?: TaskSessionMessageMessageType;
+  /** @nullable */
+  toolData?: TaskSessionMessageToolData;
   flaggedRoles?: string[];
   createdAt: string;
 }

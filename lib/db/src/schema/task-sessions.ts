@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { botsTable } from "./bots";
@@ -27,6 +27,8 @@ export const taskSessionMessagesTable = pgTable("task_session_messages", {
   botTitle: text("bot_title"),
   role: text("role").notNull().default("bot"),
   content: text("content").notNull(),
+  messageType: text("message_type").notNull().default("text"),
+  toolData: jsonb("tool_data"),
   flaggedRoles: text("flagged_roles").array().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

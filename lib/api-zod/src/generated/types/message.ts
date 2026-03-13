@@ -5,7 +5,9 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
+import type { MessageMessageType } from "./messageMessageType";
 import type { MessageRole } from "./messageRole";
+import type { MessageToolData } from "./messageToolData";
 
 export interface Message {
   id: number;
@@ -14,5 +16,8 @@ export interface Message {
   content: string;
   /** @nullable */
   senderName?: string | null;
+  messageType?: MessageMessageType;
+  /** @nullable */
+  toolData?: MessageToolData;
   createdAt: Date;
 }
