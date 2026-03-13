@@ -723,6 +723,219 @@ paths:
               schema:
                 $ref: "#/components/schemas/Bot"
 
+  /bots/{botId}/memories:
+    get:
+      operationId: getBotMemories
+      tags: [memory]
+      summary: Get memories for a bot
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotMemory"
+
+  /bots/{botId}/memories/search:
+    post:
+      operationId: searchBotMemories
+      tags: [memory]
+      summary: Search bot memories semantically
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemorySearchBody"
+      responses:
+        "200":
+          description: Matching memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotMemory"
+
+  /memories/{id}:
+    delete:
+      operationId: deleteMemory
+      tags: [memory]
+      summary: Delete a specific memory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /task-sessions/{id}/consolidate:
+    post:
+      operationId: consolidateSession
+      tags: [memory]
+      summary: Consolidate a task session into long-term memory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Consolidation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsolidationResult"
+
+  /bot-assignments:
+    get:
+      operationId: listBotAssignments
+      tags: [assignments]
+      summary: List all bot assignments
+      responses:
+        "200":
+          description: List of assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotAssignment"
+    post:
+      operationId: createBotAssignment
+      tags: [assignments]
+      summary: Create a new bot assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBotAssignmentBody"
+      responses:
+        "201":
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotAssignment"
+
+  /bot-assignments/{id}:
+    patch:
+      operationId: updateBotAssignment
+      tags: [assignments]
+      summary: Update a bot assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBotAssignmentBody"
+      responses:
+        "200":
+          description: Assignment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotAssignment"
+    delete:
+      operationId: deleteBotAssignment
+      tags: [assignments]
+      summary: Delete a bot assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assignment deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /bot-assignments/{id}/run:
+    post:
+      operationId: runBotAssignment
+      tags: [assignments]
+      summary: Manually run a bot assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackgroundReport"
+
+  /background-reports:
+    get:
+      operationId: listBackgroundReports
+      tags: [assignments]
+      summary: List background reports
+      parameters:
+        - name: botId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BackgroundReport"
+
 components:
   schemas:
     HealthStatus:
@@ -1218,3 +1431,131 @@ components:
         category:
           type: string
       required: [name, title, department, personality, responsibilities, description, category]
+
+    BotMemory:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        sourceType:
+          type: string
+        sourceId:
+          type: ["integer", "null"]
+        sessionId:
+          type: ["integer", "null"]
+        content:
+          type: string
+        summary:
+          type: string
+        topic:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, botId, sourceType, content, summary, createdAt]
+
+    BotAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        objective:
+          type: string
+        schedule:
+          type: string
+        isActive:
+          type: string
+        lastRunAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+      required: [id, botId, objective, schedule, isActive, createdAt]
+
+    CreateBotAssignmentBody:
+      type: object
+      properties:
+        botId:
+          type: integer
+        objective:
+          type: string
+        schedule:
+          type: string
+          enum: [hourly, daily, weekly]
+      required: [botId, objective]
+
+    UpdateBotAssignmentBody:
+      type: object
+      properties:
+        isActive:
+          type: string
+
+    BackgroundReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        assignmentId:
+          type: integer
+        botId:
+          type: integer
+        content:
+          type: string
+        summary:
+          type: string
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+        objective:
+          type: ["string", "null"]
+      required: [id, assignmentId, botId, content, summary, createdAt]
+
+    MemorySearchBody:
+      type: object
+      properties:
+        query:
+          type: string
+        limit:
+          type: integer
+      required: [query]
+
+    ConsolidationResult:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            decisions:
+              type: array
+              items:
+                type: string
+            findings:
+              type: array
+              items:
+                type: string
+            actionItems:
+              type: array
+              items:
+                type: string
+            keyContext:
+              type: string
+        memories:
+          type: array
+          items:
+            $ref: "#/components/schemas/BotMemory"

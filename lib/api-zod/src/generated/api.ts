@@ -570,3 +570,190 @@ export const FabricateBotBody = zod.object({
   description: zod.string(),
   category: zod.string(),
 });
+
+/**
+ * @summary Get memories for a bot
+ */
+export const GetBotMemoriesParams = zod.object({
+  botId: zod.coerce.number(),
+});
+
+export const GetBotMemoriesQueryParams = zod.object({
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetBotMemoriesResponseItem = zod.object({
+  id: zod.number(),
+  botId: zod.number(),
+  sourceType: zod.string(),
+  sourceId: zod.number().nullish(),
+  sessionId: zod.number().nullish(),
+  content: zod.string(),
+  summary: zod.string(),
+  topic: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const GetBotMemoriesResponse = zod.array(GetBotMemoriesResponseItem);
+
+/**
+ * @summary Search bot memories semantically
+ */
+export const SearchBotMemoriesParams = zod.object({
+  botId: zod.coerce.number(),
+});
+
+export const SearchBotMemoriesBody = zod.object({
+  query: zod.string(),
+  limit: zod.number().optional(),
+});
+
+export const SearchBotMemoriesResponseItem = zod.object({
+  id: zod.number(),
+  botId: zod.number(),
+  sourceType: zod.string(),
+  sourceId: zod.number().nullish(),
+  sessionId: zod.number().nullish(),
+  content: zod.string(),
+  summary: zod.string(),
+  topic: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const SearchBotMemoriesResponse = zod.array(
+  SearchBotMemoriesResponseItem,
+);
+
+/**
+ * @summary Delete a specific memory
+ */
+export const DeleteMemoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteMemoryResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Consolidate a task session into long-term memory
+ */
+export const ConsolidateSessionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ConsolidateSessionResponse = zod.object({
+  summary: zod
+    .object({
+      decisions: zod.array(zod.string()).optional(),
+      findings: zod.array(zod.string()).optional(),
+      actionItems: zod.array(zod.string()).optional(),
+      keyContext: zod.string().optional(),
+    })
+    .optional(),
+  memories: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        botId: zod.number(),
+        sourceType: zod.string(),
+        sourceId: zod.number().nullish(),
+        sessionId: zod.number().nullish(),
+        content: zod.string(),
+        summary: zod.string(),
+        topic: zod.string().nullish(),
+        createdAt: zod.date(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary List all bot assignments
+ */
+export const ListBotAssignmentsResponseItem = zod.object({
+  id: zod.number(),
+  botId: zod.number(),
+  objective: zod.string(),
+  schedule: zod.string(),
+  isActive: zod.string(),
+  lastRunAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  botName: zod.string().nullish(),
+  botTitle: zod.string().nullish(),
+});
+export const ListBotAssignmentsResponse = zod.array(
+  ListBotAssignmentsResponseItem,
+);
+
+/**
+ * @summary Create a new bot assignment
+ */
+export const CreateBotAssignmentBody = zod.object({
+  botId: zod.number(),
+  objective: zod.string(),
+  schedule: zod.enum(["hourly", "daily", "weekly"]).optional(),
+});
+
+/**
+ * @summary Update a bot assignment
+ */
+export const UpdateBotAssignmentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateBotAssignmentBody = zod.object({
+  isActive: zod.string().optional(),
+});
+
+export const UpdateBotAssignmentResponse = zod.object({
+  id: zod.number(),
+  botId: zod.number(),
+  objective: zod.string(),
+  schedule: zod.string(),
+  isActive: zod.string(),
+  lastRunAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  botName: zod.string().nullish(),
+  botTitle: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a bot assignment
+ */
+export const DeleteBotAssignmentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteBotAssignmentResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Manually run a bot assignment
+ */
+export const RunBotAssignmentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List background reports
+ */
+export const ListBackgroundReportsQueryParams = zod.object({
+  botId: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const ListBackgroundReportsResponseItem = zod.object({
+  id: zod.number(),
+  assignmentId: zod.number(),
+  botId: zod.number(),
+  content: zod.string(),
+  summary: zod.string(),
+  deliveredAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  botName: zod.string().nullish(),
+  botTitle: zod.string().nullish(),
+  objective: zod.string().nullish(),
+});
+export const ListBackgroundReportsResponse = zod.array(
+  ListBackgroundReportsResponseItem,
+);

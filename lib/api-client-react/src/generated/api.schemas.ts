@@ -351,6 +351,89 @@ export interface FabricateBotBody {
   category: string;
 }
 
+export interface BotMemory {
+  id: number;
+  botId: number;
+  sourceType: string;
+  /** @nullable */
+  sourceId?: number | null;
+  /** @nullable */
+  sessionId?: number | null;
+  content: string;
+  summary: string;
+  /** @nullable */
+  topic?: string | null;
+  createdAt: string;
+}
+
+export interface BotAssignment {
+  id: number;
+  botId: number;
+  objective: string;
+  schedule: string;
+  isActive: string;
+  /** @nullable */
+  lastRunAt?: string | null;
+  createdAt: string;
+  /** @nullable */
+  botName?: string | null;
+  /** @nullable */
+  botTitle?: string | null;
+}
+
+export type CreateBotAssignmentBodySchedule =
+  (typeof CreateBotAssignmentBodySchedule)[keyof typeof CreateBotAssignmentBodySchedule];
+
+export const CreateBotAssignmentBodySchedule = {
+  hourly: "hourly",
+  daily: "daily",
+  weekly: "weekly",
+} as const;
+
+export interface CreateBotAssignmentBody {
+  botId: number;
+  objective: string;
+  schedule?: CreateBotAssignmentBodySchedule;
+}
+
+export interface UpdateBotAssignmentBody {
+  isActive?: string;
+}
+
+export interface BackgroundReport {
+  id: number;
+  assignmentId: number;
+  botId: number;
+  content: string;
+  summary: string;
+  /** @nullable */
+  deliveredAt?: string | null;
+  createdAt: string;
+  /** @nullable */
+  botName?: string | null;
+  /** @nullable */
+  botTitle?: string | null;
+  /** @nullable */
+  objective?: string | null;
+}
+
+export interface MemorySearchBody {
+  query: string;
+  limit?: number;
+}
+
+export type ConsolidationResultSummary = {
+  decisions?: string[];
+  findings?: string[];
+  actionItems?: string[];
+  keyContext?: string;
+};
+
+export interface ConsolidationResult {
+  summary?: ConsolidationResultSummary;
+  memories?: BotMemory[];
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -396,4 +479,21 @@ export type ListPartnerReferralsParams = {
    * @nullable
    */
   partnerRef?: string | null;
+};
+
+export type GetBotMemoriesParams = {
+  limit?: number;
+};
+
+export type DeleteMemory200 = {
+  success?: boolean;
+};
+
+export type DeleteBotAssignment200 = {
+  success?: boolean;
+};
+
+export type ListBackgroundReportsParams = {
+  botId?: number;
+  limit?: number;
 };

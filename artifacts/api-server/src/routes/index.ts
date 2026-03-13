@@ -9,6 +9,7 @@ import blogRouter from "./blog";
 import partnerRouter from "./partner";
 import translateRouter from "./translate";
 import taskSessionsRouter from "./task-sessions";
+import memoryRouter from "./memory";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(blogRouter);
 router.use(partnerRouter);
 router.use(translateRouter);
 router.use(taskSessionsRouter);
+router.use(memoryRouter);
 
 export default router;

@@ -15,6 +15,7 @@ import {
   Target,
   Clock,
 } from "lucide-react";
+import { AssignmentsPanel } from "@/components/memory/AssignmentsPanel";
 
 export default function TaskSessions() {
   const { data: sessions, isLoading } = useTaskSessions();
@@ -39,6 +40,10 @@ export default function TaskSessions() {
                 Deploy Team
               </Button>
             </Link>
+          </div>
+
+          <div className="mb-8">
+            <AssignmentsPanel />
           </div>
 
           {isLoading ? (

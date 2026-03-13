@@ -21,6 +21,7 @@ import {
 } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { runAgenticLoop, type AgenticEvent } from "../tools";
+import { buildMemoryContext } from "../services/memory";
 
 const router: IRouter = Router();
 
@@ -333,13 +334,18 @@ router.post(
       .join(", ");
 
     for (const bot of teamBots) {
+      let memoryContext = "";
+      try {
+        memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`);
+      } catch (_e) {}
+
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
-
+${memoryContext}
 You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
 
 You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.

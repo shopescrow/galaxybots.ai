@@ -8,12 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetConversationMessagesQueryKey } from "@workspace/api-client-react";
+import { MemoryAudit } from "@/components/memory/MemoryAudit";
 
 export default function BotDetail() {
   const params = useParams();
@@ -26,6 +27,7 @@ export default function BotDetail() {
   
   const startConvo = useStartConversation();
   const [isStarting, setIsStarting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"chat" | "memory">("chat");
 
   const handleStartChat = async () => {
     if (!bot) return;
@@ -95,32 +97,59 @@ export default function BotDetail() {
             </div>
 
             <div className="lg:col-span-2 flex flex-col min-h-0 flex-1">
-              <Card className="flex-1 flex flex-col overflow-hidden border-border/40 min-h-0">
-                <CardHeader className="bg-secondary/30 border-b border-border/40 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-cyan animate-pulse" />
-                    <CardTitle className="text-lg">Secure Channel: {bot.name}</CardTitle>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="flex-1 p-0 flex flex-col overflow-hidden relative min-h-0">
-                  {!activeConvo ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background/50">
-                      <BotIcon className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
-                      <h3 className="text-xl font-display mb-2">Initialize Connection</h3>
-                      <p className="text-muted-foreground mb-6 max-w-md">
-                        Open a secure communication channel with this director to request analysis, strategies, or operational tasks.
-                      </p>
-                      <Button variant="glow" onClick={handleStartChat} disabled={isStarting} className="min-h-[44px]">
-                        {isStarting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Terminal className="w-4 h-4 mr-2" />}
-                        Open Channel
-                      </Button>
+              <div className="flex gap-1 mb-3">
+                <Button
+                  variant={activeTab === "chat" ? "glow" : "ghost"}
+                  size="sm"
+                  className="font-tech text-xs"
+                  onClick={() => setActiveTab("chat")}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                  Chat
+                </Button>
+                <Button
+                  variant={activeTab === "memory" ? "glow" : "ghost"}
+                  size="sm"
+                  className="font-tech text-xs"
+                  onClick={() => setActiveTab("memory")}
+                >
+                  <Brain className="w-3.5 h-3.5 mr-1.5" />
+                  Memory
+                </Button>
+              </div>
+
+              {activeTab === "chat" ? (
+                <Card className="flex-1 flex flex-col overflow-hidden border-border/40 min-h-0">
+                  <CardHeader className="bg-secondary/30 border-b border-border/40 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-cyan animate-pulse" />
+                      <CardTitle className="text-lg">Secure Channel: {bot.name}</CardTitle>
                     </div>
-                  ) : (
-                    <ChatInterface conversationId={activeConvo.id} botName={bot.name} />
-                  )}
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  
+                  <CardContent className="flex-1 p-0 flex flex-col overflow-hidden relative min-h-0">
+                    {!activeConvo ? (
+                      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background/50">
+                        <BotIcon className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
+                        <h3 className="text-xl font-display mb-2">Initialize Connection</h3>
+                        <p className="text-muted-foreground mb-6 max-w-md">
+                          Open a secure communication channel with this director to request analysis, strategies, or operational tasks.
+                        </p>
+                        <Button variant="glow" onClick={handleStartChat} disabled={isStarting} className="min-h-[44px]">
+                          {isStarting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Terminal className="w-4 h-4 mr-2" />}
+                          Open Channel
+                        </Button>
+                      </div>
+                    ) : (
+                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} />
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="flex-1 overflow-y-auto pb-10">
+                  <MemoryAudit botId={botId} botName={bot.name} />
+                </div>
+              )}
             </div>
           </div>
         )}

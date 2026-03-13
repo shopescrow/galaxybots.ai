@@ -18,27 +18,37 @@ import type {
 
 import type {
   AnalyzeTaskBody,
+  BackgroundReport,
   BlogPost,
   BoardroomMessage,
   Bot,
+  BotAssignment,
+  BotMemory,
   Client,
   ClientBot,
+  ConsolidationResult,
   Conversation,
+  CreateBotAssignmentBody,
   CreateClientBody,
   CreateConversationBody,
   CreateTaskSessionBody,
+  DeleteBotAssignment200,
+  DeleteMemory200,
   ErrorResponse,
   ExpandTaskSessionBody,
   FabricateBotBody,
   GetBoardroomMessagesParams,
+  GetBotMemoriesParams,
   GetJournalEntriesParams,
   GetPartnerLinkParams,
   HealthStatus,
   HireBotBody,
   JournalEntry,
+  ListBackgroundReportsParams,
   ListBlogPostsParams,
   ListConversationsParams,
   ListPartnerReferralsParams,
+  MemorySearchBody,
   Message,
   MessageResponse,
   PartnerInfo,
@@ -51,6 +61,7 @@ import type {
   TaskSessionAlert,
   TaskSessionMessage,
   TeamProposal,
+  UpdateBotAssignmentBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -2747,3 +2758,883 @@ export const useFabricateBot = <
 > => {
   return useMutation(getFabricateBotMutationOptions(options));
 };
+
+/**
+ * @summary Get memories for a bot
+ */
+export const getGetBotMemoriesUrl = (
+  botId: number,
+  params?: GetBotMemoriesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bots/${botId}/memories?${stringifiedParams}`
+    : `/api/bots/${botId}/memories`;
+};
+
+export const getBotMemories = async (
+  botId: number,
+  params?: GetBotMemoriesParams,
+  options?: RequestInit,
+): Promise<BotMemory[]> => {
+  return customFetch<BotMemory[]>(getGetBotMemoriesUrl(botId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBotMemoriesQueryKey = (
+  botId: number,
+  params?: GetBotMemoriesParams,
+) => {
+  return [`/api/bots/${botId}/memories`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBotMemoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBotMemories>>,
+  TError = ErrorType<unknown>,
+>(
+  botId: number,
+  params?: GetBotMemoriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBotMemories>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBotMemoriesQueryKey(botId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBotMemories>>> = ({
+    signal,
+  }) => getBotMemories(botId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!botId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBotMemories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBotMemoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBotMemories>>
+>;
+export type GetBotMemoriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get memories for a bot
+ */
+
+export function useGetBotMemories<
+  TData = Awaited<ReturnType<typeof getBotMemories>>,
+  TError = ErrorType<unknown>,
+>(
+  botId: number,
+  params?: GetBotMemoriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBotMemories>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBotMemoriesQueryOptions(botId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Search bot memories semantically
+ */
+export const getSearchBotMemoriesUrl = (botId: number) => {
+  return `/api/bots/${botId}/memories/search`;
+};
+
+export const searchBotMemories = async (
+  botId: number,
+  memorySearchBody: MemorySearchBody,
+  options?: RequestInit,
+): Promise<BotMemory[]> => {
+  return customFetch<BotMemory[]>(getSearchBotMemoriesUrl(botId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(memorySearchBody),
+  });
+};
+
+export const getSearchBotMemoriesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof searchBotMemories>>,
+    TError,
+    { botId: number; data: BodyType<MemorySearchBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof searchBotMemories>>,
+  TError,
+  { botId: number; data: BodyType<MemorySearchBody> },
+  TContext
+> => {
+  const mutationKey = ["searchBotMemories"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof searchBotMemories>>,
+    { botId: number; data: BodyType<MemorySearchBody> }
+  > = (props) => {
+    const { botId, data } = props ?? {};
+
+    return searchBotMemories(botId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SearchBotMemoriesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof searchBotMemories>>
+>;
+export type SearchBotMemoriesMutationBody = BodyType<MemorySearchBody>;
+export type SearchBotMemoriesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Search bot memories semantically
+ */
+export const useSearchBotMemories = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof searchBotMemories>>,
+    TError,
+    { botId: number; data: BodyType<MemorySearchBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof searchBotMemories>>,
+  TError,
+  { botId: number; data: BodyType<MemorySearchBody> },
+  TContext
+> => {
+  return useMutation(getSearchBotMemoriesMutationOptions(options));
+};
+
+/**
+ * @summary Delete a specific memory
+ */
+export const getDeleteMemoryUrl = (id: number) => {
+  return `/api/memories/${id}`;
+};
+
+export const deleteMemory = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DeleteMemory200> => {
+  return customFetch<DeleteMemory200>(getDeleteMemoryUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteMemoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMemory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMemory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteMemory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMemory>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteMemory(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMemoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMemory>>
+>;
+
+export type DeleteMemoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a specific memory
+ */
+export const useDeleteMemory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMemory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMemory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteMemoryMutationOptions(options));
+};
+
+/**
+ * @summary Consolidate a task session into long-term memory
+ */
+export const getConsolidateSessionUrl = (id: number) => {
+  return `/api/task-sessions/${id}/consolidate`;
+};
+
+export const consolidateSession = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ConsolidationResult> => {
+  return customFetch<ConsolidationResult>(getConsolidateSessionUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getConsolidateSessionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof consolidateSession>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof consolidateSession>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["consolidateSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof consolidateSession>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return consolidateSession(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConsolidateSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof consolidateSession>>
+>;
+
+export type ConsolidateSessionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Consolidate a task session into long-term memory
+ */
+export const useConsolidateSession = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof consolidateSession>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof consolidateSession>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getConsolidateSessionMutationOptions(options));
+};
+
+/**
+ * @summary List all bot assignments
+ */
+export const getListBotAssignmentsUrl = () => {
+  return `/api/bot-assignments`;
+};
+
+export const listBotAssignments = async (
+  options?: RequestInit,
+): Promise<BotAssignment[]> => {
+  return customFetch<BotAssignment[]>(getListBotAssignmentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBotAssignmentsQueryKey = () => {
+  return [`/api/bot-assignments`] as const;
+};
+
+export const getListBotAssignmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBotAssignments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBotAssignments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBotAssignmentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBotAssignments>>
+  > = ({ signal }) => listBotAssignments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBotAssignments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBotAssignmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBotAssignments>>
+>;
+export type ListBotAssignmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all bot assignments
+ */
+
+export function useListBotAssignments<
+  TData = Awaited<ReturnType<typeof listBotAssignments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBotAssignments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBotAssignmentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new bot assignment
+ */
+export const getCreateBotAssignmentUrl = () => {
+  return `/api/bot-assignments`;
+};
+
+export const createBotAssignment = async (
+  createBotAssignmentBody: CreateBotAssignmentBody,
+  options?: RequestInit,
+): Promise<BotAssignment> => {
+  return customFetch<BotAssignment>(getCreateBotAssignmentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createBotAssignmentBody),
+  });
+};
+
+export const getCreateBotAssignmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBotAssignment>>,
+    TError,
+    { data: BodyType<CreateBotAssignmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBotAssignment>>,
+  TError,
+  { data: BodyType<CreateBotAssignmentBody> },
+  TContext
+> => {
+  const mutationKey = ["createBotAssignment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBotAssignment>>,
+    { data: BodyType<CreateBotAssignmentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createBotAssignment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBotAssignmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBotAssignment>>
+>;
+export type CreateBotAssignmentMutationBody = BodyType<CreateBotAssignmentBody>;
+export type CreateBotAssignmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new bot assignment
+ */
+export const useCreateBotAssignment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBotAssignment>>,
+    TError,
+    { data: BodyType<CreateBotAssignmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBotAssignment>>,
+  TError,
+  { data: BodyType<CreateBotAssignmentBody> },
+  TContext
+> => {
+  return useMutation(getCreateBotAssignmentMutationOptions(options));
+};
+
+/**
+ * @summary Update a bot assignment
+ */
+export const getUpdateBotAssignmentUrl = (id: number) => {
+  return `/api/bot-assignments/${id}`;
+};
+
+export const updateBotAssignment = async (
+  id: number,
+  updateBotAssignmentBody: UpdateBotAssignmentBody,
+  options?: RequestInit,
+): Promise<BotAssignment> => {
+  return customFetch<BotAssignment>(getUpdateBotAssignmentUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateBotAssignmentBody),
+  });
+};
+
+export const getUpdateBotAssignmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBotAssignment>>,
+    TError,
+    { id: number; data: BodyType<UpdateBotAssignmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateBotAssignment>>,
+  TError,
+  { id: number; data: BodyType<UpdateBotAssignmentBody> },
+  TContext
+> => {
+  const mutationKey = ["updateBotAssignment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateBotAssignment>>,
+    { id: number; data: BodyType<UpdateBotAssignmentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateBotAssignment(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateBotAssignmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateBotAssignment>>
+>;
+export type UpdateBotAssignmentMutationBody = BodyType<UpdateBotAssignmentBody>;
+export type UpdateBotAssignmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a bot assignment
+ */
+export const useUpdateBotAssignment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateBotAssignment>>,
+    TError,
+    { id: number; data: BodyType<UpdateBotAssignmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateBotAssignment>>,
+  TError,
+  { id: number; data: BodyType<UpdateBotAssignmentBody> },
+  TContext
+> => {
+  return useMutation(getUpdateBotAssignmentMutationOptions(options));
+};
+
+/**
+ * @summary Delete a bot assignment
+ */
+export const getDeleteBotAssignmentUrl = (id: number) => {
+  return `/api/bot-assignments/${id}`;
+};
+
+export const deleteBotAssignment = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DeleteBotAssignment200> => {
+  return customFetch<DeleteBotAssignment200>(getDeleteBotAssignmentUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteBotAssignmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBotAssignment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteBotAssignment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteBotAssignment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteBotAssignment>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteBotAssignment(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteBotAssignmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBotAssignment>>
+>;
+
+export type DeleteBotAssignmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a bot assignment
+ */
+export const useDeleteBotAssignment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteBotAssignment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteBotAssignment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteBotAssignmentMutationOptions(options));
+};
+
+/**
+ * @summary Manually run a bot assignment
+ */
+export const getRunBotAssignmentUrl = (id: number) => {
+  return `/api/bot-assignments/${id}/run`;
+};
+
+export const runBotAssignment = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BackgroundReport> => {
+  return customFetch<BackgroundReport>(getRunBotAssignmentUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunBotAssignmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runBotAssignment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runBotAssignment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["runBotAssignment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runBotAssignment>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return runBotAssignment(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunBotAssignmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runBotAssignment>>
+>;
+
+export type RunBotAssignmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Manually run a bot assignment
+ */
+export const useRunBotAssignment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runBotAssignment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runBotAssignment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRunBotAssignmentMutationOptions(options));
+};
+
+/**
+ * @summary List background reports
+ */
+export const getListBackgroundReportsUrl = (
+  params?: ListBackgroundReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/background-reports?${stringifiedParams}`
+    : `/api/background-reports`;
+};
+
+export const listBackgroundReports = async (
+  params?: ListBackgroundReportsParams,
+  options?: RequestInit,
+): Promise<BackgroundReport[]> => {
+  return customFetch<BackgroundReport[]>(getListBackgroundReportsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBackgroundReportsQueryKey = (
+  params?: ListBackgroundReportsParams,
+) => {
+  return [`/api/background-reports`, ...(params ? [params] : [])] as const;
+};
+
+export const getListBackgroundReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBackgroundReports>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListBackgroundReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBackgroundReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListBackgroundReportsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listBackgroundReports>>
+  > = ({ signal }) =>
+    listBackgroundReports(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBackgroundReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBackgroundReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBackgroundReports>>
+>;
+export type ListBackgroundReportsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List background reports
+ */
+
+export function useListBackgroundReports<
+  TData = Awaited<ReturnType<typeof listBackgroundReports>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListBackgroundReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBackgroundReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBackgroundReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

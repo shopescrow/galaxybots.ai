@@ -9,3 +9,4 @@ export * from "./blog_posts";
 export * from "./partner_registrations";
 export * from "./task-sessions";
 export * from "./world-state";
+export * from "./memory";
