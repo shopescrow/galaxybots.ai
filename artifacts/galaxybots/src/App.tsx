@@ -41,11 +41,14 @@ function Router() {
       <Route path="/hire" component={Hire} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/blog" component={Blog} />
-      <Route path="/blog/:slug" component={Blogígitos
-  const ci     =ref" component={PartnerLanding} />
+      <Route path="/blog/:slug" component={BlogPost} />
+      <Route path="/partner" component={PartnerLanding} />
       <Route path="/valuation" component={Valuation} />
       <Route path="/global" component={Global} />
-      <Route component
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
 
 function App() {
   return (
