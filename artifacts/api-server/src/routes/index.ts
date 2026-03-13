@@ -7,6 +7,7 @@ import clientsRouter from "./clients";
 import journalRouter from "./journal";
 import blogRouter from "./blog";
 import partnerRouter from "./partner";
+import translateRouter from "./translate";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(clientsRouter);
 router.use(journalRouter);
 router.use(blogRouter);
 router.use(partnerRouter);
+router.use(translateRouter);
 
 export default router;

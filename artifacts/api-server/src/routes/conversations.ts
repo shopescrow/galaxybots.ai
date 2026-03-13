@@ -105,6 +105,17 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     .where(eq(messages.conversationId, params.data.id))
     .orderBy(messages.createdAt);
 
+  const responseLanguage = req.body.language || req.query.language || "en";
+  const languageNames: Record<string, string> = {
+    en: "English", es: "Spanish", fr: "French", de: "German", zh: "Mandarin Chinese",
+    ar: "Arabic", pt: "Brazilian Portuguese", ja: "Japanese", hi: "Hindi",
+    ru: "Russian", it: "Italian", ko: "Korean", nl: "Dutch", tr: "Turkish", sv: "Swedish",
+  };
+  const langName = languageNames[responseLanguage] || "English";
+  const langInstruction = responseLanguage !== "en"
+    ? `\n\nIMPORTANT: Respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Do not use English unless quoting a specific term.`
+    : "";
+
   const systemPrompt = `You are ${bot.name}, the ${bot.title} at GalaxyBots.ai — a world-class AI corporate director.
 
 Your personality: ${bot.personality}
@@ -113,7 +124,7 @@ Your department: ${bot.department}
 Your key responsibilities:
 ${bot.responsibilities.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
-You speak with the authority, expertise, and professionalism of a Fortune 500 executive. Provide strategic, insightful, and actionable advice from your professional perspective. Be direct, confident, and brilliant. You are speaking to the CEO or a client. Always stay in character.`;
+You speak with the authority, expertise, and professionalism of a Fortune 500 executive. Provide strategic, insightful, and actionable advice from your professional perspective. Be direct, confident, and brilliant. You are speaking to the CEO or a client. Always stay in character.${langInstruction}`;
 
   const chatMessages = [
     { role: "system" as const, content: systemPrompt },

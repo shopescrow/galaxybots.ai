@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Hexagon, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../ui/button";
+import { LanguageSelector } from "@/components/LanguageSelector";
 
 const NAV_LINKS = [
   { href: "/bots", label: "Roster" },
@@ -50,6 +51,7 @@ export function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
+          <LanguageSelector />
           <Link href="/how-it-works">
             <Button variant="outline" size="sm" className="font-tech text-xs">How It Works</Button>
           </Link>
