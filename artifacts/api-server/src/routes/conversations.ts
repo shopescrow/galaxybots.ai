@@ -136,7 +136,7 @@ You speak with the authority, expertise, and professionalism of a Fortune 500 ex
   ];
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "gpt-4o",
     max_completion_tokens: 8192,
     messages: chatMessages,
   });
