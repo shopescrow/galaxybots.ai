@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AnalyzeTaskBody,
   BlogPost,
   BoardroomMessage,
   Bot,
@@ -25,7 +26,10 @@ import type {
   Conversation,
   CreateClientBody,
   CreateConversationBody,
+  CreateTaskSessionBody,
   ErrorResponse,
+  ExpandTaskSessionBody,
+  FabricateBotBody,
   GetBoardroomMessagesParams,
   GetJournalEntriesParams,
   GetPartnerLinkParams,
@@ -42,6 +46,11 @@ import type {
   PostBoardroomMessageBody,
   RegisterPartnerUserBody,
   SendMessageBody,
+  SendTaskSessionMessageBody,
+  TaskSession,
+  TaskSessionAlert,
+  TaskSessionMessage,
+  TeamProposal,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1792,3 +1801,774 @@ export function useListPartnerReferrals<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Analyze a task and propose a bot team
+ */
+export const getAnalyzeTaskUrl = () => {
+  return `/api/task-sessions/analyze`;
+};
+
+export const analyzeTask = async (
+  analyzeTaskBody: AnalyzeTaskBody,
+  options?: RequestInit,
+): Promise<TeamProposal> => {
+  return customFetch<TeamProposal>(getAnalyzeTaskUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(analyzeTaskBody),
+  });
+};
+
+export const getAnalyzeTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeTask>>,
+    TError,
+    { data: BodyType<AnalyzeTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof analyzeTask>>,
+  TError,
+  { data: BodyType<AnalyzeTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["analyzeTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeTask>>,
+    { data: BodyType<AnalyzeTaskBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return analyzeTask(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AnalyzeTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof analyzeTask>>
+>;
+export type AnalyzeTaskMutationBody = BodyType<AnalyzeTaskBody>;
+export type AnalyzeTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Analyze a task and propose a bot team
+ */
+export const useAnalyzeTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeTask>>,
+    TError,
+    { data: BodyType<AnalyzeTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeTask>>,
+  TError,
+  { data: BodyType<AnalyzeTaskBody> },
+  TContext
+> => {
+  return useMutation(getAnalyzeTaskMutationOptions(options));
+};
+
+/**
+ * @summary List all task sessions
+ */
+export const getListTaskSessionsUrl = () => {
+  return `/api/task-sessions`;
+};
+
+export const listTaskSessions = async (
+  options?: RequestInit,
+): Promise<TaskSession[]> => {
+  return customFetch<TaskSession[]>(getListTaskSessionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTaskSessionsQueryKey = () => {
+  return [`/api/task-sessions`] as const;
+};
+
+export const getListTaskSessionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTaskSessions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTaskSessions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTaskSessionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTaskSessions>>
+  > = ({ signal }) => listTaskSessions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTaskSessions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTaskSessionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTaskSessions>>
+>;
+export type ListTaskSessionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all task sessions
+ */
+
+export function useListTaskSessions<
+  TData = Awaited<ReturnType<typeof listTaskSessions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTaskSessions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTaskSessionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new task session with approved team
+ */
+export const getCreateTaskSessionUrl = () => {
+  return `/api/task-sessions`;
+};
+
+export const createTaskSession = async (
+  createTaskSessionBody: CreateTaskSessionBody,
+  options?: RequestInit,
+): Promise<TaskSession> => {
+  return customFetch<TaskSession>(getCreateTaskSessionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createTaskSessionBody),
+  });
+};
+
+export const getCreateTaskSessionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTaskSession>>,
+    TError,
+    { data: BodyType<CreateTaskSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTaskSession>>,
+  TError,
+  { data: BodyType<CreateTaskSessionBody> },
+  TContext
+> => {
+  const mutationKey = ["createTaskSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTaskSession>>,
+    { data: BodyType<CreateTaskSessionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTaskSession(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTaskSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTaskSession>>
+>;
+export type CreateTaskSessionMutationBody = BodyType<CreateTaskSessionBody>;
+export type CreateTaskSessionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new task session with approved team
+ */
+export const useCreateTaskSession = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTaskSession>>,
+    TError,
+    { data: BodyType<CreateTaskSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createTaskSession>>,
+  TError,
+  { data: BodyType<CreateTaskSessionBody> },
+  TContext
+> => {
+  return useMutation(getCreateTaskSessionMutationOptions(options));
+};
+
+/**
+ * @summary Get a task session by ID
+ */
+export const getGetTaskSessionUrl = (id: number) => {
+  return `/api/task-sessions/${id}`;
+};
+
+export const getTaskSession = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TaskSession> => {
+  return customFetch<TaskSession>(getGetTaskSessionUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTaskSessionQueryKey = (id: number) => {
+  return [`/api/task-sessions/${id}`] as const;
+};
+
+export const getGetTaskSessionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTaskSession>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskSession>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTaskSessionQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTaskSession>>> = ({
+    signal,
+  }) => getTaskSession(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaskSession>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTaskSessionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaskSession>>
+>;
+export type GetTaskSessionQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a task session by ID
+ */
+
+export function useGetTaskSession<
+  TData = Awaited<ReturnType<typeof getTaskSession>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskSession>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTaskSessionQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get messages in a task session
+ */
+export const getGetTaskSessionMessagesUrl = (id: number) => {
+  return `/api/task-sessions/${id}/messages`;
+};
+
+export const getTaskSessionMessages = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TaskSessionMessage[]> => {
+  return customFetch<TaskSessionMessage[]>(getGetTaskSessionMessagesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTaskSessionMessagesQueryKey = (id: number) => {
+  return [`/api/task-sessions/${id}/messages`] as const;
+};
+
+export const getGetTaskSessionMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTaskSessionMessages>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskSessionMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTaskSessionMessagesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTaskSessionMessages>>
+  > = ({ signal }) => getTaskSessionMessages(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaskSessionMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTaskSessionMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaskSessionMessages>>
+>;
+export type GetTaskSessionMessagesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get messages in a task session
+ */
+
+export function useGetTaskSessionMessages<
+  TData = Awaited<ReturnType<typeof getTaskSessionMessages>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskSessionMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTaskSessionMessagesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Send a message in a task session
+ */
+export const getSendTaskSessionMessageUrl = (id: number) => {
+  return `/api/task-sessions/${id}/messages`;
+};
+
+export const sendTaskSessionMessage = async (
+  id: number,
+  sendTaskSessionMessageBody: SendTaskSessionMessageBody,
+  options?: RequestInit,
+): Promise<TaskSessionMessage[]> => {
+  return customFetch<TaskSessionMessage[]>(getSendTaskSessionMessageUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendTaskSessionMessageBody),
+  });
+};
+
+export const getSendTaskSessionMessageMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTaskSessionMessage>>,
+    TError,
+    { id: number; data: BodyType<SendTaskSessionMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendTaskSessionMessage>>,
+  TError,
+  { id: number; data: BodyType<SendTaskSessionMessageBody> },
+  TContext
+> => {
+  const mutationKey = ["sendTaskSessionMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendTaskSessionMessage>>,
+    { id: number; data: BodyType<SendTaskSessionMessageBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return sendTaskSessionMessage(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendTaskSessionMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendTaskSessionMessage>>
+>;
+export type SendTaskSessionMessageMutationBody =
+  BodyType<SendTaskSessionMessageBody>;
+export type SendTaskSessionMessageMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send a message in a task session
+ */
+export const useSendTaskSessionMessage = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTaskSessionMessage>>,
+    TError,
+    { id: number; data: BodyType<SendTaskSessionMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendTaskSessionMessage>>,
+  TError,
+  { id: number; data: BodyType<SendTaskSessionMessageBody> },
+  TContext
+> => {
+  return useMutation(getSendTaskSessionMessageMutationOptions(options));
+};
+
+/**
+ * @summary Get missing-role alerts for a task session
+ */
+export const getGetTaskSessionAlertsUrl = (id: number) => {
+  return `/api/task-sessions/${id}/alerts`;
+};
+
+export const getTaskSessionAlerts = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TaskSessionAlert[]> => {
+  return customFetch<TaskSessionAlert[]>(getGetTaskSessionAlertsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTaskSessionAlertsQueryKey = (id: number) => {
+  return [`/api/task-sessions/${id}/alerts`] as const;
+};
+
+export const getGetTaskSessionAlertsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTaskSessionAlerts>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskSessionAlerts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTaskSessionAlertsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTaskSessionAlerts>>
+  > = ({ signal }) => getTaskSessionAlerts(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaskSessionAlerts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTaskSessionAlertsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaskSessionAlerts>>
+>;
+export type GetTaskSessionAlertsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get missing-role alerts for a task session
+ */
+
+export function useGetTaskSessionAlerts<
+  TData = Awaited<ReturnType<typeof getTaskSessionAlerts>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskSessionAlerts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTaskSessionAlertsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add bots to an active task session
+ */
+export const getExpandTaskSessionUrl = (id: number) => {
+  return `/api/task-sessions/${id}/expand`;
+};
+
+export const expandTaskSession = async (
+  id: number,
+  expandTaskSessionBody: ExpandTaskSessionBody,
+  options?: RequestInit,
+): Promise<TaskSession> => {
+  return customFetch<TaskSession>(getExpandTaskSessionUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(expandTaskSessionBody),
+  });
+};
+
+export const getExpandTaskSessionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof expandTaskSession>>,
+    TError,
+    { id: number; data: BodyType<ExpandTaskSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof expandTaskSession>>,
+  TError,
+  { id: number; data: BodyType<ExpandTaskSessionBody> },
+  TContext
+> => {
+  const mutationKey = ["expandTaskSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof expandTaskSession>>,
+    { id: number; data: BodyType<ExpandTaskSessionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return expandTaskSession(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExpandTaskSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof expandTaskSession>>
+>;
+export type ExpandTaskSessionMutationBody = BodyType<ExpandTaskSessionBody>;
+export type ExpandTaskSessionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add bots to an active task session
+ */
+export const useExpandTaskSession = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof expandTaskSession>>,
+    TError,
+    { id: number; data: BodyType<ExpandTaskSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof expandTaskSession>>,
+  TError,
+  { id: number; data: BodyType<ExpandTaskSessionBody> },
+  TContext
+> => {
+  return useMutation(getExpandTaskSessionMutationOptions(options));
+};
+
+/**
+ * @summary Fabricate a new AI-generated bot
+ */
+export const getFabricateBotUrl = () => {
+  return `/api/bots/fabricate`;
+};
+
+export const fabricateBot = async (
+  fabricateBotBody: FabricateBotBody,
+  options?: RequestInit,
+): Promise<Bot> => {
+  return customFetch<Bot>(getFabricateBotUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fabricateBotBody),
+  });
+};
+
+export const getFabricateBotMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fabricateBot>>,
+    TError,
+    { data: BodyType<FabricateBotBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof fabricateBot>>,
+  TError,
+  { data: BodyType<FabricateBotBody> },
+  TContext
+> => {
+  const mutationKey = ["fabricateBot"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof fabricateBot>>,
+    { data: BodyType<FabricateBotBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return fabricateBot(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FabricateBotMutationResult = NonNullable<
+  Awaited<ReturnType<typeof fabricateBot>>
+>;
+export type FabricateBotMutationBody = BodyType<FabricateBotBody>;
+export type FabricateBotMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Fabricate a new AI-generated bot
+ */
+export const useFabricateBot = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fabricateBot>>,
+    TError,
+    { data: BodyType<FabricateBotBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof fabricateBot>>,
+  TError,
+  { data: BodyType<FabricateBotBody> },
+  TContext
+> => {
+  return useMutation(getFabricateBotMutationOptions(options));
+};

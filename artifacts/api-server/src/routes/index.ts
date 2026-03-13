@@ -8,6 +8,7 @@ import journalRouter from "./journal";
 import blogRouter from "./blog";
 import partnerRouter from "./partner";
 import translateRouter from "./translate";
+import taskSessionsRouter from "./task-sessions";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(journalRouter);
 router.use(blogRouter);
 router.use(partnerRouter);
 router.use(translateRouter);
+router.use(taskSessionsRouter);
 
 export default router;

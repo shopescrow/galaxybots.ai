@@ -18,6 +18,9 @@ import BlogPost from "@/pages/blog/BlogPost";
 import PartnerLanding from "@/pages/partner/PartnerLanding";
 import Valuation from "@/pages/Valuation";
 import Global from "@/pages/Global";
+import TaskSessions from "@/pages/task-sessions/TaskSessions";
+import DeployTeam from "@/pages/task-sessions/DeployTeam";
+import TaskBoardroom from "@/pages/task-sessions/TaskBoardroom";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -45,6 +48,9 @@ function Router() {
       <Route path="/partner" component={PartnerLanding} />
       <Route path="/valuation" component={Valuation} />
       <Route path="/global" component={Global} />
+      <Route path="/task-rooms" component={TaskSessions} />
+      <Route path="/deploy-team" component={DeployTeam} />
+      <Route path="/task-rooms/:id" component={TaskBoardroom} />
       <Route component={NotFound} />
     </Switch>
   );

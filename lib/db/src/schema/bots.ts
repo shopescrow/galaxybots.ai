@@ -13,6 +13,7 @@ export const botsTable = pgTable("bots", {
   personality: text("personality").notNull(),
   avatar: text("avatar"),
   isAvailable: boolean("is_available").notNull().default(true),
+  isAiGenerated: boolean("is_ai_generated").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

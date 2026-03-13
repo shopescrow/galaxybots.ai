@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./analyzeTaskBody";
 export * from "./blogPost";
 export * from "./boardroomMessage";
 export * from "./boardroomMessageRole";
@@ -19,7 +20,10 @@ export * from "./conversation";
 export * from "./createClientBody";
 export * from "./createClientBodyPlan";
 export * from "./createConversationBody";
+export * from "./createTaskSessionBody";
 export * from "./errorResponse";
+export * from "./expandTaskSessionBody";
+export * from "./fabricateBotBody";
 export * from "./getBoardroomMessagesParams";
 export * from "./getJournalEntriesParams";
 export * from "./getPartnerLinkParams";
@@ -35,6 +39,13 @@ export * from "./messageRole";
 export * from "./partnerInfo";
 export * from "./partnerRegistration";
 export * from "./postBoardroomMessageBody";
+export * from "./proposedBot";
 export * from "./registerPartnerUserBody";
 export * from "./registerPartnerUserBodyPlan";
 export * from "./sendMessageBody";
+export * from "./sendTaskSessionMessageBody";
+export * from "./taskSession";
+export * from "./taskSessionAlert";
+export * from "./taskSessionBot";
+export * from "./taskSessionMessage";
+export * from "./teamProposal";

@@ -28,6 +28,7 @@ export const ListBotsResponseItem = zod.object({
   personality: zod.string(),
   avatar: zod.string().nullish(),
   isAvailable: zod.boolean(),
+  isAiGenerated: zod.boolean(),
   createdAt: zod.date(),
 });
 export const ListBotsResponse = zod.array(ListBotsResponseItem);
@@ -50,6 +51,7 @@ export const GetBotResponse = zod.object({
   personality: zod.string(),
   avatar: zod.string().nullish(),
   isAvailable: zod.boolean(),
+  isAiGenerated: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -203,6 +205,7 @@ export const GetClientBotsResponseItem = zod.object({
   personality: zod.string(),
   avatar: zod.string().nullish(),
   isAvailable: zod.boolean(),
+  isAiGenerated: zod.boolean(),
   createdAt: zod.date(),
 });
 export const GetClientBotsResponse = zod.array(GetClientBotsResponseItem);
@@ -329,3 +332,205 @@ export const ListPartnerReferralsResponseItem = zod.object({
 export const ListPartnerReferralsResponse = zod.array(
   ListPartnerReferralsResponseItem,
 );
+
+/**
+ * @summary Analyze a task and propose a bot team
+ */
+export const AnalyzeTaskBody = zod.object({
+  objective: zod.string(),
+});
+
+export const AnalyzeTaskResponse = zod.object({
+  objective: zod.string(),
+  matchedBots: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      title: zod.string(),
+      department: zod.string(),
+      category: zod.string(),
+      description: zod.string(),
+      responsibilities: zod.array(zod.string()),
+      personality: zod.string(),
+      avatar: zod.string().nullish(),
+      isAvailable: zod.boolean(),
+      isAiGenerated: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+  proposedBots: zod.array(
+    zod.object({
+      name: zod.string(),
+      title: zod.string(),
+      department: zod.string(),
+      personality: zod.string(),
+      responsibilities: zod.array(zod.string()),
+    }),
+  ),
+  reasoning: zod.string(),
+});
+
+/**
+ * @summary List all task sessions
+ */
+export const ListTaskSessionsResponseItem = zod.object({
+  id: zod.number(),
+  objective: zod.string(),
+  status: zod.string(),
+  teamBots: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      title: zod.string(),
+      department: zod.string(),
+      category: zod.string(),
+      description: zod.string(),
+      responsibilities: zod.array(zod.string()),
+      personality: zod.string(),
+      avatar: zod.string().nullish(),
+      isAvailable: zod.boolean(),
+      isAiGenerated: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListTaskSessionsResponse = zod.array(ListTaskSessionsResponseItem);
+
+/**
+ * @summary Create a new task session with approved team
+ */
+export const CreateTaskSessionBody = zod.object({
+  objective: zod.string(),
+  botIds: zod.array(zod.number()),
+});
+
+/**
+ * @summary Get a task session by ID
+ */
+export const GetTaskSessionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetTaskSessionResponse = zod.object({
+  id: zod.number(),
+  objective: zod.string(),
+  status: zod.string(),
+  teamBots: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      title: zod.string(),
+      department: zod.string(),
+      category: zod.string(),
+      description: zod.string(),
+      responsibilities: zod.array(zod.string()),
+      personality: zod.string(),
+      avatar: zod.string().nullish(),
+      isAvailable: zod.boolean(),
+      isAiGenerated: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Get messages in a task session
+ */
+export const GetTaskSessionMessagesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetTaskSessionMessagesResponseItem = zod.object({
+  id: zod.number(),
+  sessionId: zod.number(),
+  botId: zod.number().nullish(),
+  botName: zod.string().nullish(),
+  botTitle: zod.string().nullish(),
+  role: zod.string(),
+  content: zod.string(),
+  flaggedRoles: zod.array(zod.string()).optional(),
+  createdAt: zod.date(),
+});
+export const GetTaskSessionMessagesResponse = zod.array(
+  GetTaskSessionMessagesResponseItem,
+);
+
+/**
+ * @summary Send a message in a task session
+ */
+export const SendTaskSessionMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendTaskSessionMessageBody = zod.object({
+  content: zod.string(),
+  senderName: zod.string().nullish(),
+});
+
+/**
+ * @summary Get missing-role alerts for a task session
+ */
+export const GetTaskSessionAlertsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetTaskSessionAlertsResponseItem = zod.object({
+  role: zod.string(),
+  suggestedBy: zod.string(),
+  messageId: zod.number(),
+});
+export const GetTaskSessionAlertsResponse = zod.array(
+  GetTaskSessionAlertsResponseItem,
+);
+
+/**
+ * @summary Add bots to an active task session
+ */
+export const ExpandTaskSessionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ExpandTaskSessionBody = zod.object({
+  botIds: zod.array(zod.number()),
+});
+
+export const ExpandTaskSessionResponse = zod.object({
+  id: zod.number(),
+  objective: zod.string(),
+  status: zod.string(),
+  teamBots: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      title: zod.string(),
+      department: zod.string(),
+      category: zod.string(),
+      description: zod.string(),
+      responsibilities: zod.array(zod.string()),
+      personality: zod.string(),
+      avatar: zod.string().nullish(),
+      isAvailable: zod.boolean(),
+      isAiGenerated: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Fabricate a new AI-generated bot
+ */
+export const FabricateBotBody = zod.object({
+  name: zod.string(),
+  title: zod.string(),
+  department: zod.string(),
+  personality: zod.string(),
+  responsibilities: zod.array(zod.string()),
+  description: zod.string(),
+  category: zod.string(),
+});

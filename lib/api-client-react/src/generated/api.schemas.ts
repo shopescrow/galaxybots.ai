@@ -25,6 +25,7 @@ export interface Bot {
   /** @nullable */
   avatar?: string | null;
   isAvailable: boolean;
+  isAiGenerated: boolean;
   createdAt: string;
 }
 
@@ -232,6 +233,88 @@ export interface PartnerRegistration {
   source?: string | null;
   status: string;
   registeredAt: string;
+}
+
+export interface AnalyzeTaskBody {
+  objective: string;
+}
+
+export interface ProposedBot {
+  name: string;
+  title: string;
+  department: string;
+  personality: string;
+  responsibilities: string[];
+}
+
+export interface TeamProposal {
+  objective: string;
+  matchedBots: Bot[];
+  proposedBots: ProposedBot[];
+  reasoning: string;
+}
+
+export interface TaskSessionBot {
+  id: number;
+  sessionId: number;
+  botId: number;
+  role: string;
+  addedAt: string;
+}
+
+export interface TaskSession {
+  id: number;
+  objective: string;
+  status: string;
+  teamBots: Bot[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaskSessionBody {
+  objective: string;
+  botIds: number[];
+}
+
+export interface TaskSessionMessage {
+  id: number;
+  sessionId: number;
+  /** @nullable */
+  botId?: number | null;
+  /** @nullable */
+  botName?: string | null;
+  /** @nullable */
+  botTitle?: string | null;
+  role: string;
+  content: string;
+  flaggedRoles?: string[];
+  createdAt: string;
+}
+
+export interface SendTaskSessionMessageBody {
+  content: string;
+  /** @nullable */
+  senderName?: string | null;
+}
+
+export interface TaskSessionAlert {
+  role: string;
+  suggestedBy: string;
+  messageId: number;
+}
+
+export interface ExpandTaskSessionBody {
+  botIds: number[];
+}
+
+export interface FabricateBotBody {
+  name: string;
+  title: string;
+  department: string;
+  personality: string;
+  responsibilities: string[];
+  description: string;
+  category: string;
 }
 
 export type ListConversationsParams = {

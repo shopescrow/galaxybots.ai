@@ -23,6 +23,8 @@ tags:
     description: Blog post operations
   - name: partner
     description: Partner integration operations
+  - name: task-sessions
+    description: Task-based bot team deployment operations
 paths:
   /healthz:
     get:
@@ -466,6 +468,211 @@ paths:
                 items:
                   $ref: "#/components/schemas/PartnerRegistration"
 
+  /task-sessions/analyze:
+    post:
+      operationId: analyzeTask
+      tags: [task-sessions]
+      summary: Analyze a task and propose a bot team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeTaskBody"
+      responses:
+        "200":
+          description: Team proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamProposal"
+
+  /task-sessions:
+    get:
+      operationId: listTaskSessions
+      tags: [task-sessions]
+      summary: List all task sessions
+      responses:
+        "200":
+          description: List of task sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSession"
+    post:
+      operationId: createTaskSession
+      tags: [task-sessions]
+      summary: Create a new task session with approved team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskSessionBody"
+      responses:
+        "201":
+          description: Task session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSession"
+
+  /task-sessions/{id}:
+    get:
+      operationId: getTaskSession
+      tags: [task-sessions]
+      summary: Get a task session by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /task-sessions/{id}/messages:
+    get:
+      operationId: getTaskSessionMessages
+      tags: [task-sessions]
+      summary: Get messages in a task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of task session messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSessionMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendTaskSessionMessage
+      tags: [task-sessions]
+      summary: Send a message in a task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendTaskSessionMessageBody"
+      responses:
+        "201":
+          description: Message sent and bots respond
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSessionMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /task-sessions/{id}/alerts:
+    get:
+      operationId: getTaskSessionAlerts
+      tags: [task-sessions]
+      summary: Get missing-role alerts for a task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSessionAlert"
+
+  /task-sessions/{id}/expand:
+    post:
+      operationId: expandTaskSession
+      tags: [task-sessions]
+      summary: Add bots to an active task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpandTaskSessionBody"
+      responses:
+        "200":
+          description: Session expanded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bots/fabricate:
+    post:
+      operationId: fabricateBot
+      tags: [bots]
+      summary: Fabricate a new AI-generated bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FabricateBotBody"
+      responses:
+        "201":
+          description: Bot fabricated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+
 components:
   schemas:
     HealthStatus:
@@ -507,10 +714,12 @@ components:
           type: ["string", "null"]
         isAvailable:
           type: boolean
+        isAiGenerated:
+          type: boolean
         createdAt:
           type: string
           format: date-time
-      required: [id, name, title, department, category, description, responsibilities, personality, isAvailable, createdAt]
+      required: [id, name, title, department, category, description, responsibilities, personality, isAvailable, isAiGenerated, createdAt]
 
     Conversation:
       type: object
@@ -782,3 +991,168 @@ components:
           type: string
           format: date-time
       required: [id, partnerRef, clientId, companyName, contactName, contactEmail, plan, status, registeredAt]
+
+    AnalyzeTaskBody:
+      type: object
+      properties:
+        objective:
+          type: string
+      required: [objective]
+
+    ProposedBot:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        personality:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+      required: [name, title, department, personality, responsibilities]
+
+    TeamProposal:
+      type: object
+      properties:
+        objective:
+          type: string
+        matchedBots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bot"
+        proposedBots:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposedBot"
+        reasoning:
+          type: string
+      required: [objective, matchedBots, proposedBots, reasoning]
+
+    TaskSessionBot:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        botId:
+          type: integer
+        role:
+          type: string
+        addedAt:
+          type: string
+          format: date-time
+      required: [id, sessionId, botId, role, addedAt]
+
+    TaskSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        objective:
+          type: string
+        status:
+          type: string
+        teamBots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bot"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, objective, status, teamBots, createdAt, updatedAt]
+
+    CreateTaskSessionBody:
+      type: object
+      properties:
+        objective:
+          type: string
+        botIds:
+          type: array
+          items:
+            type: integer
+      required: [objective, botIds]
+
+    TaskSessionMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        botId:
+          type: ["integer", "null"]
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+        role:
+          type: string
+        content:
+          type: string
+        flaggedRoles:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, sessionId, role, content, createdAt]
+
+    SendTaskSessionMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+        senderName:
+          type: ["string", "null"]
+      required: [content]
+
+    TaskSessionAlert:
+      type: object
+      properties:
+        role:
+          type: string
+        suggestedBy:
+          type: string
+        messageId:
+          type: integer
+      required: [role, suggestedBy, messageId]
+
+    ExpandTaskSessionBody:
+      type: object
+      properties:
+        botIds:
+          type: array
+          items:
+            type: integer
+      required: [botIds]
+
+    FabricateBotBody:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        personality:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        category:
+          type: string
+      required: [name, title, department, personality, responsibilities, description, category]

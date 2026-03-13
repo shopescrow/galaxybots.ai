@@ -38,13 +38,16 @@ artifacts-monorepo/
 
 ## Database Schema
 
-- `bots` — All 51 AI director personalities with roles, departments, descriptions, personalities
+- `bots` — All 51 AI director personalities with roles, departments, descriptions, personalities (+ `isAiGenerated` flag for fabricated bots)
 - `conversations` — Chat conversations between users/clients and bots
 - `messages` — Individual messages in conversations (role: user/bot/system)
 - `clients` — Companies that hire bots
 - `client_bots` — Junction table for which bots a client has hired
 - `boardroom_messages` — Internal board communications (encoded + English)
 - `journal_entries` — Daily operations journal with board highlights
+- `task_sessions` — Task-based bot team deployment sessions (objective, status, timestamps)
+- `task_session_bots` — Junction table linking sessions to their assigned bot team
+- `task_session_messages` — Messages within task sessions (with flaggedRoles for missing-role alerts)
 
 ## Bot Categories
 
@@ -66,6 +69,10 @@ artifacts-monorepo/
 4. **Boardroom** — Internal board communications with encoded + English transcriptions
 5. **Daily Journal** — Operations journal with board session highlights
 6. **Clients** — Client management and bot hiring system
+7. **Task Rooms** — Deploy cross-functional bot teams for business objectives
+   - **Deploy Team** — AI-powered task analysis, team proposal, bot fabrication ("Give Birth") with CEO approval
+   - **Task Boardroom** — Dedicated chat with assigned team, "Add Thinking Power" alerts for missing roles
+   - **Task Sessions Dashboard** — List all task rooms with status, team size, last activity
 
 ## Seeding
 
@@ -85,3 +92,12 @@ Run `pnpm --filter @workspace/scripts run seed-bots` to seed all 51 bot personal
 - `GET /api/clients/:id/bots` — Get client's hired bots
 - `POST /api/clients/:id/bots` — Hire a bot for a client
 - `GET /api/journal` — Get journal entries
+- `POST /api/task-sessions/analyze` — AI analyzes task and proposes team
+- `GET /api/task-sessions` — List all task sessions
+- `POST /api/task-sessions` — Create task session with approved team
+- `GET /api/task-sessions/:id` — Get task session details
+- `GET /api/task-sessions/:id/messages` — Get session messages
+- `POST /api/task-sessions/:id/messages` — Send message (all team bots respond)
+- `GET /api/task-sessions/:id/alerts` — Get missing-role alerts
+- `POST /api/task-sessions/:id/expand` — Add bots to active session
+- `POST /api/bots/fabricate` — Fabricate a new AI-generated bot

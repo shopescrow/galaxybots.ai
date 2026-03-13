@@ -1,0 +1,382 @@
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import {
+  useAnalyzeTaskMutation,
+  useCreateTaskSessionMutation,
+  useFabricateBotMutation,
+} from "@/hooks/use-task-sessions";
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Loader2,
+  Rocket,
+  Users,
+  Sparkles,
+  Check,
+  X,
+  Baby,
+  Brain,
+  ArrowRight,
+} from "lucide-react";
+
+interface ProposedBot {
+  name: string;
+  title: string;
+  department: string;
+  personality: string;
+  responsibilities: string[];
+}
+
+interface MatchedBot {
+  id: number;
+  name: string;
+  title: string;
+  department: string;
+  description: string;
+  isAiGenerated: boolean;
+}
+
+export default function DeployTeam() {
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [objective, setObjective] = useState("");
+  const [proposal, setProposal] = useState<{
+    objective: string;
+    matchedBots: MatchedBot[];
+    proposedBots: ProposedBot[];
+    reasoning: string;
+  } | null>(null);
+  const [approvedNewBots, setApprovedNewBots] = useState<
+    Map<number, { approved: boolean; botId?: number }>
+  >(new Map());
+  const [fabricatingIdx, setFabricatingIdx] = useState<number | null>(null);
+
+  const analyzeMutation = useAnalyzeTaskMutation();
+  const createSessionMutation = useCreateTaskSessionMutation();
+  const fabricateMutation = useFabricateBotMutation();
+
+  const handleAnalyze = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!objective.trim() || analyzeMutation.isPending) return;
+
+    setProposal(null);
+    setApprovedNewBots(new Map());
+
+    const result = await analyzeMutation.mutateAsync({
+      data: { objective: objective.trim() },
+    });
+    setProposal(result as typeof proposal);
+  };
+
+  const handleApproveBot = async (idx: number, bot: ProposedBot) => {
+    setFabricatingIdx(idx);
+    try {
+      const newBot = await fabricateMutation.mutateAsync({
+        data: {
+          name: bot.name,
+          title: bot.title,
+          department: bot.department,
+          personality: bot.personality,
+          responsibilities: bot.responsibilities,
+          description: `AI-fabricated specialist: ${bot.title} in ${bot.department}`,
+          category: bot.department,
+        },
+      });
+      const updated = new Map(approvedNewBots);
+      updated.set(idx, { approved: true, botId: (newBot as { id: number }).id });
+      setApprovedNewBots(updated);
+      toast({
+        title: "Bot Fabricated",
+        description: `${bot.name} has been created and added to the roster.`,
+      });
+    } catch {
+      toast({
+        title: "Fabrication Failed",
+        description: "Could not create the new bot. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setFabricatingIdx(null);
+  };
+
+  const handleRejectBot = (idx: number) => {
+    const updated = new Map(approvedNewBots);
+    updated.set(idx, { approved: false });
+    setApprovedNewBots(updated);
+  };
+
+  const handleLaunch = async () => {
+    if (!proposal) return;
+
+    const botIds = [
+      ...proposal.matchedBots.map((b) => b.id),
+      ...[...approvedNewBots.entries()]
+        .filter(([, v]) => v.approved && v.botId)
+        .map(([, v]) => v.botId!),
+    ];
+
+    if (botIds.length === 0) {
+      toast({
+        title: "No team members",
+        description: "You need at least one bot to launch a task room.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const session = await createSessionMutation.mutateAsync({
+      data: { objective: proposal.objective, botIds },
+    });
+
+    toast({
+      title: "Task Room Deployed",
+      description: `Team of ${botIds.length} specialists assembled.`,
+    });
+
+    navigate(`/task-rooms/${(session as { id: number }).id}`);
+  };
+
+  const allProposedDecided =
+    proposal?.proposedBots.every((_, idx) => approvedNewBots.has(idx)) ?? true;
+
+  return (
+    <AppLayout>
+      <div className="relative w-full min-h-[calc(100vh-5rem)] bg-background">
+        <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-display font-bold text-primary flex items-center gap-3">
+              <Rocket className="w-8 h-8" />
+              Deploy Task Team
+            </h1>
+            <p className="text-muted-foreground mt-2 font-tech">
+              Describe your business objective and Director Bot will assemble
+              the optimal cross-functional team.
+            </p>
+          </div>
+
+          <Card className="p-6 bg-black/40 border-primary/20 backdrop-blur-md mb-6">
+            <form onSubmit={handleAnalyze} className="flex gap-4">
+              <div className="flex-1">
+                <Input
+                  value={objective}
+                  onChange={(e) => setObjective(e.target.value)}
+                  placeholder="Describe your task... e.g. 'Implement and manage our cookie compliance program'"
+                  className="bg-black/50 border-primary/30 text-primary placeholder:text-primary/30 font-tech"
+                  disabled={analyzeMutation.isPending}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={!objective.trim() || analyzeMutation.isPending}
+                variant="glow"
+                className="font-tech tracking-wider"
+              >
+                {analyzeMutation.isPending ? (
+                  <>
+                    <Brain className="w-4 h-4 animate-pulse mr-2" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Analyze Task
+                  </>
+                )}
+              </Button>
+            </form>
+          </Card>
+
+          {analyzeMutation.isPending && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-16 gap-4"
+            >
+              <Loader2 className="w-12 h-12 animate-spin text-primary" />
+              <p className="text-primary/70 font-tech animate-pulse">
+                Director Bot is analyzing your task...
+              </p>
+            </motion.div>
+          )}
+
+          <AnimatePresence>
+            {proposal && !analyzeMutation.isPending && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <Card className="p-5 bg-primary/5 border-primary/20">
+                  <div className="flex items-start gap-3">
+                    <Brain className="w-5 h-5 text-primary mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-tech font-bold text-primary text-sm mb-1">
+                        Director Bot Analysis
+                      </h3>
+                      <p className="text-sm text-foreground/80">
+                        {proposal.reasoning}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+
+                {proposal.matchedBots.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-tech font-bold text-foreground mb-3 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-primary" />
+                      Confirmed Team ({proposal.matchedBots.length})
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {proposal.matchedBots.map((bot) => (
+                        <Card
+                          key={bot.id}
+                          className="p-4 bg-black/30 border-primary/30 flex items-start gap-3"
+                        >
+                          <div className="w-10 h-10 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0">
+                            <Check className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-tech font-bold text-sm text-foreground truncate">
+                              {bot.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {bot.title}
+                            </p>
+                            <Badge variant="outline" className="mt-1 text-[10px]">
+                              {bot.department}
+                            </Badge>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {proposal.proposedBots.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-tech font-bold text-foreground mb-3 flex items-center gap-2">
+                      <Baby className="w-5 h-5 text-yellow-400" />
+                      Proposed New Bots — CEO Approval Required
+                    </h2>
+                    <div className="grid grid-cols-1 gap-3">
+                      {proposal.proposedBots.map((bot, idx) => {
+                        const decision = approvedNewBots.get(idx);
+                        const isFabricating = fabricatingIdx === idx;
+
+                        return (
+                          <Card
+                            key={idx}
+                            className={`p-5 border transition-colors ${
+                              decision?.approved
+                                ? "bg-primary/10 border-primary/40"
+                                : decision && !decision.approved
+                                  ? "bg-destructive/5 border-destructive/20 opacity-50"
+                                  : "bg-yellow-500/5 border-yellow-500/30"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30 text-[10px]"
+                                  >
+                                    GIVE BIRTH
+                                  </Badge>
+                                  {decision?.approved && (
+                                    <Badge className="bg-primary/20 text-primary text-[10px]">
+                                      CREATED
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="font-tech font-bold text-foreground">
+                                  {bot.name}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {bot.title} — {bot.department}
+                                </p>
+                                <p className="text-xs text-foreground/60 mt-1 italic">
+                                  {bot.personality}
+                                </p>
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {bot.responsibilities.map((r, i) => (
+                                    <Badge
+                                      key={i}
+                                      variant="secondary"
+                                      className="text-[10px]"
+                                    >
+                                      {r}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {!decision && (
+                                <div className="flex gap-2 flex-shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="glow"
+                                    onClick={() => handleApproveBot(idx, bot)}
+                                    disabled={isFabricating}
+                                    className="font-tech text-xs"
+                                  >
+                                    {isFabricating ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Check className="w-3 h-3 mr-1" />
+                                        Approve
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleRejectBot(idx)}
+                                    className="font-tech text-xs"
+                                  >
+                                    <X className="w-3 h-3 mr-1" />
+                                    Reject
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={handleLaunch}
+                    disabled={
+                      !allProposedDecided || createSessionMutation.isPending
+                    }
+                    variant="glow"
+                    size="lg"
+                    className="font-tech tracking-widest text-base"
+                  >
+                    {createSessionMutation.isPending ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : (
+                      <ArrowRight className="w-5 h-5 mr-2" />
+                    )}
+                    LAUNCH TASK ROOM
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}

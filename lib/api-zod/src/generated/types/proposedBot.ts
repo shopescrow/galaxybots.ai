@@ -6,18 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Bot {
-  id: number;
+export interface ProposedBot {
   name: string;
   title: string;
   department: string;
-  category: string;
-  description: string;
-  responsibilities: string[];
   personality: string;
-  /** @nullable */
-  avatar?: string | null;
-  isAvailable: boolean;
-  isAiGenerated: boolean;
-  createdAt: Date;
+  responsibilities: string[];
 }

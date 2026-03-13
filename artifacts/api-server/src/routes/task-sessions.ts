@@ -1,0 +1,495 @@
+import { Router, type IRouter } from "express";
+import {
+  db,
+  botsTable,
+  taskSessionsTable,
+  taskSessionBotsTable,
+  taskSessionMessagesTable,
+} from "@workspace/db";
+import { eq, desc, inArray, and } from "drizzle-orm";
+import {
+  AnalyzeTaskBody,
+  CreateTaskSessionBody,
+  SendTaskSessionMessageBody,
+  GetTaskSessionParams,
+  GetTaskSessionMessagesParams,
+  SendTaskSessionMessageParams,
+  GetTaskSessionAlertsParams,
+  ExpandTaskSessionParams,
+  ExpandTaskSessionBody,
+  FabricateBotBody,
+} from "@workspace/api-zod";
+import { openai } from "@workspace/integrations-openai-ai-server";
+
+const router: IRouter = Router();
+
+async function getSessionWithBots(sessionId: number) {
+  const [session] = await db
+    .select()
+    .from(taskSessionsTable)
+    .where(eq(taskSessionsTable.id, sessionId));
+
+  if (!session) return null;
+
+  const sessionBotRows = await db
+    .select()
+    .from(taskSessionBotsTable)
+    .where(eq(taskSessionBotsTable.sessionId, sessionId));
+
+  const botIds = sessionBotRows.map((sb) => sb.botId);
+  let teamBots: (typeof botsTable.$inferSelect)[] = [];
+  if (botIds.length > 0) {
+    teamBots = await db
+      .select()
+      .from(botsTable)
+      .where(inArray(botsTable.id, botIds));
+  }
+
+  return { ...session, teamBots };
+}
+
+router.post("/task-sessions/analyze", async (req, res): Promise<void> => {
+  const body = AnalyzeTaskBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const allBots = await db.select().from(botsTable);
+
+  const botRoster = allBots
+    .map(
+      (b) =>
+        `ID:${b.id} | ${b.name} | ${b.title} | ${b.department} | ${b.responsibilities.join(", ")}`,
+    )
+    .join("\n");
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    max_completion_tokens: 2000,
+    messages: [
+      {
+        role: "system",
+        content: `You are Director Bot, a corporate task-force assembler. Given a business task/objective and the existing bot roster, you must:
+1. Identify all specialist roles needed for this task
+2. Match roles to existing bots from the roster
+3. Identify any gaps where no existing bot covers the required expertise
+4. For gaps, propose new bot specifications
+
+Respond in valid JSON with this exact structure:
+{
+  "matchedBotIds": [1, 2, 3],
+  "proposedBots": [
+    {
+      "name": "Bot Name",
+      "title": "Job Title",
+      "department": "Department",
+      "personality": "Personality description",
+      "responsibilities": ["resp1", "resp2"]
+    }
+  ],
+  "reasoning": "Brief explanation of why these roles are needed"
+}
+
+Select 3-6 bots total. Only propose new bots if truly no existing bot covers a critical expertise area.`,
+      },
+      {
+        role: "user",
+        content: `TASK: ${body.data.objective}\n\nAVAILABLE BOTS:\n${botRoster}`,
+      },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content ?? "{}";
+  let parsed: {
+    matchedBotIds: number[];
+    proposedBots: Array<{
+      name: string;
+      title: string;
+      department: string;
+      personality: string;
+      responsibilities: string[];
+    }>;
+    reasoning: string;
+  };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = { matchedBotIds: [], proposedBots: [], reasoning: "Analysis failed" };
+  }
+
+  const matchedBots = allBots.filter((b) =>
+    (parsed.matchedBotIds || []).includes(b.id),
+  );
+
+  res.json({
+    objective: body.data.objective,
+    matchedBots,
+    proposedBots: parsed.proposedBots || [],
+    reasoning: parsed.reasoning || "",
+  });
+});
+
+router.post("/bots/fabricate", async (req, res): Promise<void> => {
+  const body = FabricateBotBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [bot] = await db
+    .insert(botsTable)
+    .values({
+      name: body.data.name,
+      title: body.data.title,
+      department: body.data.department,
+      category: body.data.category,
+      description: body.data.description,
+      responsibilities: body.data.responsibilities,
+      personality: body.data.personality,
+      isAvailable: true,
+      isAiGenerated: true,
+    })
+    .returning();
+
+  res.status(201).json(bot);
+});
+
+router.get("/task-sessions", async (_req, res): Promise<void> => {
+  const sessions = await db
+    .select()
+    .from(taskSessionsTable)
+    .orderBy(desc(taskSessionsTable.createdAt));
+
+  const result = await Promise.all(
+    sessions.map(async (s) => {
+      const sessionBotRows = await db
+        .select()
+        .from(taskSessionBotsTable)
+        .where(eq(taskSessionBotsTable.sessionId, s.id));
+      const botIds = sessionBotRows.map((sb) => sb.botId);
+      let teamBots: (typeof botsTable.$inferSelect)[] = [];
+      if (botIds.length > 0) {
+        teamBots = await db
+          .select()
+          .from(botsTable)
+          .where(inArray(botsTable.id, botIds));
+      }
+      return { ...s, teamBots };
+    }),
+  );
+
+  res.json(result);
+});
+
+router.post("/task-sessions", async (req, res): Promise<void> => {
+  const body = CreateTaskSessionBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  if (body.data.botIds.length > 0) {
+    const existingBots = await db
+      .select({ id: botsTable.id })
+      .from(botsTable)
+      .where(inArray(botsTable.id, body.data.botIds));
+    const validIds = new Set(existingBots.map((b) => b.id));
+    const invalidIds = body.data.botIds.filter((id) => !validIds.has(id));
+    if (invalidIds.length > 0) {
+      res.status(400).json({ error: `Invalid bot IDs: ${invalidIds.join(", ")}` });
+      return;
+    }
+  }
+
+  const [session] = await db
+    .insert(taskSessionsTable)
+    .values({ objective: body.data.objective })
+    .returning();
+
+  if (body.data.botIds.length > 0) {
+    const uniqueBotIds = [...new Set(body.data.botIds)];
+    await db.insert(taskSessionBotsTable).values(
+      uniqueBotIds.map((botId) => ({
+        sessionId: session.id,
+        botId,
+      })),
+    );
+  }
+
+  const result = await getSessionWithBots(session.id);
+  res.status(201).json(result);
+});
+
+router.get("/task-sessions/:id", async (req, res): Promise<void> => {
+  const params = GetTaskSessionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const result = await getSessionWithBots(params.data.id);
+  if (!result) {
+    res.status(404).json({ error: "Task session not found" });
+    return;
+  }
+
+  res.json(result);
+});
+
+router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
+  const params = GetTaskSessionMessagesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [session] = await db
+    .select()
+    .from(taskSessionsTable)
+    .where(eq(taskSessionsTable.id, params.data.id));
+  if (!session) {
+    res.status(404).json({ error: "Task session not found" });
+    return;
+  }
+
+  const msgs = await db
+    .select()
+    .from(taskSessionMessagesTable)
+    .where(eq(taskSessionMessagesTable.sessionId, params.data.id))
+    .orderBy(taskSessionMessagesTable.createdAt);
+
+  res.json(msgs);
+});
+
+router.post(
+  "/task-sessions/:id/messages",
+  async (req, res): Promise<void> => {
+    const params = SendTaskSessionMessageParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const body = SendTaskSessionMessageBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+
+    const [session] = await db
+      .select()
+      .from(taskSessionsTable)
+      .where(eq(taskSessionsTable.id, params.data.id));
+    if (!session) {
+      res.status(404).json({ error: "Task session not found" });
+      return;
+    }
+
+    const [userMsg] = await db
+      .insert(taskSessionMessagesTable)
+      .values({
+        sessionId: session.id,
+        role: "user",
+        content: body.data.content,
+        botName: body.data.senderName || "CEO",
+        botTitle: "CEO / Architect",
+      })
+      .returning();
+
+    const sessionBotRows = await db
+      .select()
+      .from(taskSessionBotsTable)
+      .where(eq(taskSessionBotsTable.sessionId, session.id));
+    const botIds = sessionBotRows.map((sb) => sb.botId);
+    let teamBots: (typeof botsTable.$inferSelect)[] = [];
+    if (botIds.length > 0) {
+      teamBots = await db
+        .select()
+        .from(botsTable)
+        .where(inArray(botsTable.id, botIds));
+    }
+
+    const recentMsgs = await db
+      .select()
+      .from(taskSessionMessagesTable)
+      .where(eq(taskSessionMessagesTable.sessionId, session.id))
+      .orderBy(desc(taskSessionMessagesTable.createdAt))
+      .limit(10);
+
+    const contextMessages = recentMsgs
+      .reverse()
+      .map((m) => `${m.botName || "User"}: ${m.content}`)
+      .join("\n");
+
+    const responses: (typeof taskSessionMessagesTable.$inferSelect)[] = [
+      userMsg,
+    ];
+    const teamRoster = teamBots
+      .map((b) => `${b.name} (${b.title})`)
+      .join(", ");
+
+    for (const bot of teamBots) {
+      const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
+Personality: ${bot.personality}
+Your responsibilities: ${bot.responsibilities.join("; ")}
+
+TASK OBJECTIVE: ${session.objective}
+TEAM MEMBERS: ${teamRoster}
+
+You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
+
+IMPORTANT: If you identify that this task requires expertise not currently represented on the team, end your response with exactly this format on a new line:
+[NEED_ROLE: Role Title - brief reason why this expertise is needed]
+Only flag a missing role if it is genuinely critical and not covered by any current team member.`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_completion_tokens: 500,
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Recent discussion:\n${contextMessages}\n\nProvide your expert perspective on the latest message.`,
+          },
+        ],
+      });
+
+      const content =
+        completion.choices[0]?.message?.content ??
+        "Acknowledged. I will incorporate this into my analysis.";
+
+      const flaggedRoles: string[] = [];
+      const roleMatch = content.match(/\[NEED_ROLE:\s*(.+?)(?:\s*-\s*.+?)?\]/g);
+      if (roleMatch) {
+        for (const match of roleMatch) {
+          const extracted = match
+            .replace(/\[NEED_ROLE:\s*/, "")
+            .replace(/\]$/, "");
+          flaggedRoles.push(extracted);
+        }
+      }
+
+      const cleanContent = content.replace(
+        /\[NEED_ROLE:\s*.+?\]/g,
+        "",
+      ).trim();
+
+      const [botMsg] = await db
+        .insert(taskSessionMessagesTable)
+        .values({
+          sessionId: session.id,
+          botId: bot.id,
+          botName: bot.name,
+          botTitle: bot.title,
+          role: "bot",
+          content: cleanContent,
+          flaggedRoles,
+        })
+        .returning();
+
+      responses.push(botMsg);
+    }
+
+    res.status(201).json(responses);
+  },
+);
+
+router.get(
+  "/task-sessions/:id/alerts",
+  async (req, res): Promise<void> => {
+    const params = GetTaskSessionAlertsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const recentMsgs = await db
+      .select()
+      .from(taskSessionMessagesTable)
+      .where(eq(taskSessionMessagesTable.sessionId, params.data.id))
+      .orderBy(desc(taskSessionMessagesTable.createdAt))
+      .limit(20);
+
+    const alerts: Array<{
+      role: string;
+      suggestedBy: string;
+      messageId: number;
+    }> = [];
+
+    for (const msg of recentMsgs) {
+      if (msg.flaggedRoles && msg.flaggedRoles.length > 0) {
+        for (const role of msg.flaggedRoles) {
+          alerts.push({
+            role,
+            suggestedBy: msg.botName || "Unknown",
+            messageId: msg.id,
+          });
+        }
+      }
+    }
+
+    res.json(alerts);
+  },
+);
+
+router.post(
+  "/task-sessions/:id/expand",
+  async (req, res): Promise<void> => {
+    const params = ExpandTaskSessionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const body = ExpandTaskSessionBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+
+    const [session] = await db
+      .select()
+      .from(taskSessionsTable)
+      .where(eq(taskSessionsTable.id, params.data.id));
+    if (!session) {
+      res.status(404).json({ error: "Task session not found" });
+      return;
+    }
+
+    if (body.data.botIds.length > 0) {
+      const existingBots = await db
+        .select({ id: botsTable.id })
+        .from(botsTable)
+        .where(inArray(botsTable.id, body.data.botIds));
+      const validIds = new Set(existingBots.map((b) => b.id));
+      const invalidIds = body.data.botIds.filter((id) => !validIds.has(id));
+      if (invalidIds.length > 0) {
+        res.status(400).json({ error: `Invalid bot IDs: ${invalidIds.join(", ")}` });
+        return;
+      }
+
+      const alreadyAssigned = await db
+        .select({ botId: taskSessionBotsTable.botId })
+        .from(taskSessionBotsTable)
+        .where(eq(taskSessionBotsTable.sessionId, session.id));
+      const assignedSet = new Set(alreadyAssigned.map((r) => r.botId));
+      const newBotIds = [...new Set(body.data.botIds)].filter((id) => !assignedSet.has(id));
+
+      if (newBotIds.length > 0) {
+        await db.insert(taskSessionBotsTable).values(
+          newBotIds.map((botId) => ({
+            sessionId: session.id,
+            botId,
+          })),
+        );
+      }
+    }
+
+    const result = await getSessionWithBots(session.id);
+    res.json(result);
+  },
+);
+
+export default router;
