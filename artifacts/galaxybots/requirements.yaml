@@ -1,0 +1,23 @@
+packages:
+  "framer-motion": "For page transitions, smooth enter animations, and glassmorphism hover effects"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+  "date-fns": "For formatting journal dates and timestamps"
+  "react-hook-form": "For form state management in the chat and client creation"
+  "@hookform/resolvers": "For Zod schema validation with react-hook-form"
+
+images:
+  - path: "artifacts/galaxybots/public/images/hero-bg.png"
+    description: "Deep space nebula background, sleek dark corporate command center feel, subtle glowing cyan and purple nebulas, extremely high quality, dark mode, futuristic"
+    aspect_ratio: "16:9"
+  - path: "artifacts/galaxybots/public/images/boardroom-bg.png"
+    description: "Futuristic artificial intelligence boardroom, glowing data streams, dark obsidian and neon purple aesthetics, large central holographic display table, cinematic lighting"
+    aspect_ratio: "16:9"
+  - path: "artifacts/galaxybots/public/images/logo.png"
+    description: "Minimalist modern abstract logo mark for GalaxyBots, geometric shape combining a star and a corporate shield, cyan and neon purple gradient on completely transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using @workspace/api-client-react for generated TanStack Query hooks.
+  - Using custom wrapper hooks in src/hooks to manage cache invalidation cleanly.
+  - The design is dark-mode only, "Refined Sci-Fi Corporate" aesthetic.

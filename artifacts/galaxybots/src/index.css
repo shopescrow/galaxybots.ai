@@ -1,0 +1,147 @@
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Chakra+Petch:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --font-display: 'Michroma', sans-serif;
+  --font-tech: 'Chakra Petch', sans-serif;
+  --font-sans: 'Outfit', sans-serif;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  
+  --color-gold: hsl(var(--gold));
+  --color-cyan: hsl(var(--cyan));
+  --color-purple: hsl(var(--purple));
+
+  --animate-fade-in: fade-in 0.5s ease-out forwards;
+  --animate-fade-up: fade-up 0.5s ease-out forwards;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-glitch: glitch 3s infinite;
+}
+
+:root {
+  /* Dark Space Tech Theme */
+  --background: 230 45% 4%;
+  --foreground: 210 40% 98%;
+  
+  --card: 230 40% 7%;
+  --card-foreground: 210 40% 98%;
+  
+  --popover: 230 40% 6%;
+  --popover-foreground: 210 40% 98%;
+  
+  --primary: 270 80% 60%;
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 230 30% 15%;
+  --secondary-foreground: 210 40% 98%;
+  
+  --muted: 230 25% 12%;
+  --muted-foreground: 215 20% 65%;
+  
+  --accent: 190 90% 50%;
+  --accent-foreground: 0 0% 10%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  
+  --border: 230 30% 18%;
+  --input: 230 30% 12%;
+  --ring: 270 80% 60%;
+
+  /* Brand specific colors */
+  --gold: 45 100% 55%;
+  --cyan: 190 90% 50%;
+  --purple: 270 80% 60%;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased font-sans selection:bg-primary/30 selection:text-primary-foreground;
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(123, 97, 255, 0.05), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(0, 240, 255, 0.05), transparent 25%);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-wide uppercase;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glitch {
+  0% { transform: translate(0) }
+  20% { transform: translate(-2px, 1px) }
+  40% { transform: translate(-1px, -1px) }
+  60% { transform: translate(2px, 1px) }
+  80% { transform: translate(1px, -1px) }
+  100% { transform: translate(0) }
+}
+
+/* Custom Scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.glass-panel {
+  @apply bg-card/60 backdrop-blur-xl border border-border/50 shadow-2xl;
+}
+
+.neon-border {
+  position: relative;
+}
+.neon-border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--cyan)));
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.neon-border:hover::after {
+  opacity: 0.5;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-purple to-cyan;
+}

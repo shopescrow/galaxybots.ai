@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "GalaxyBots.ai"
+version = "1.0.0"
+id = "artifacts/galaxybots"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 19323
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/galaxybots run dev"
+
+[services.env]
+PORT = "19323"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/galaxybots", "run", "build"]
+publicDir = "artifacts/galaxybots/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

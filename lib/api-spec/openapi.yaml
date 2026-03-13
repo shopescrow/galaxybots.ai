@@ -1,15 +1,24 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: GalaxyBots.ai API - AI-powered corporate bot platform
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bots
+    description: Bot personality operations
+  - name: conversations
+    description: Conversation and chat operations
+  - name: boardroom
+    description: Internal board room communications
+  - name: clients
+    description: Client operations
+  - name: journal
+    description: Daily journal operations
 paths:
   /healthz:
     get:
@@ -24,6 +33,315 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bots:
+    get:
+      operationId: listBots
+      tags: [bots]
+      summary: List all bots
+      description: Returns all bot personalities available in the platform
+      responses:
+        "200":
+          description: List of bots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bot"
+
+  /bots/{id}:
+    get:
+      operationId: getBot
+      tags: [bots]
+      summary: Get a bot by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bot details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+        "404":
+          description: Bot not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List conversations for a client
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: botId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Start a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationBody"
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}/messages:
+    get:
+      operationId: getConversationMessages
+      tags: [conversations]
+      summary: Get messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendMessage
+      tags: [conversations]
+      summary: Send a message in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "201":
+          description: Message sent and bot responds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /boardroom/messages:
+    get:
+      operationId: getBoardroomMessages
+      tags: [boardroom]
+      summary: Get board room messages
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of board room messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardroomMessage"
+    post:
+      operationId: postBoardroomMessage
+      tags: [boardroom]
+      summary: Post a message to the board room (CEO/Architect only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostBoardroomMessageBody"
+      responses:
+        "201":
+          description: Message posted and board responds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardroomMessage"
+
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List all clients
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Create a new client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientBody"
+      responses:
+        "201":
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get a client by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "404":
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /clients/{id}/bots:
+    get:
+      operationId: getClientBots
+      tags: [clients]
+      summary: Get bots hired by a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of bots hired
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bot"
+    post:
+      operationId: hireBot
+      tags: [clients]
+      summary: Hire a bot for a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HireBotBody"
+      responses:
+        "201":
+          description: Bot hired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientBot"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /journal:
+    get:
+      operationId: getJournalEntries
+      tags: [journal]
+      summary: Get daily journal entries
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalEntry"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +352,279 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Bot:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        personality:
+          type: string
+        avatar:
+          type: ["string", "null"]
+        isAvailable:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - title
+        - department
+        - category
+        - description
+        - responsibilities
+        - personality
+        - isAvailable
+        - createdAt
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: ["integer", "null"]
+        botId:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - botId
+        - title
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateConversationBody:
+      type: object
+      properties:
+        clientId:
+          type: ["integer", "null"]
+        botId:
+          type: integer
+        title:
+          type: string
+      required:
+        - botId
+        - title
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+          enum: [user, bot, system]
+        content:
+          type: string
+        senderName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    SendMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+        senderName:
+          type: ["string", "null"]
+      required:
+        - content
+
+    MessageResponse:
+      type: object
+      properties:
+        userMessage:
+          $ref: "#/components/schemas/Message"
+        botResponse:
+          $ref: "#/components/schemas/Message"
+      required:
+        - userMessage
+        - botResponse
+
+    BoardroomMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: ["integer", "null"]
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [bot, ceo, system]
+        contentEncoded:
+          type: string
+        contentEnglish:
+          type: string
+        topic:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - role
+        - contentEncoded
+        - contentEnglish
+        - createdAt
+
+    PostBoardroomMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+        senderName:
+          type: string
+      required:
+        - content
+        - senderName
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+          enum: [single, team, enterprise]
+        status:
+          type: string
+          enum: [active, inactive, trial]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - companyName
+        - contactName
+        - contactEmail
+        - plan
+        - status
+        - createdAt
+
+    CreateClientBody:
+      type: object
+      properties:
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+          enum: [single, team, enterprise]
+      required:
+        - companyName
+        - contactName
+        - contactEmail
+        - plan
+
+    ClientBot:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        botId:
+          type: integer
+        hiredAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, inactive]
+      required:
+        - id
+        - clientId
+        - botId
+        - hiredAt
+        - status
+
+    HireBotBody:
+      type: object
+      properties:
+        botId:
+          type: integer
+      required:
+        - botId
+
+    JournalEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        boardroomHighlights:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - date
+        - title
+        - summary
+        - boardroomHighlights
+        - createdAt
