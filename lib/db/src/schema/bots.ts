@@ -12,6 +12,7 @@ export const botsTable = pgTable("bots", {
   responsibilities: text("responsibilities").array().notNull().default([]),
   personality: text("personality").notNull(),
   avatar: text("avatar"),
+  declaration: text("declaration"),
   isAvailable: boolean("is_available").notNull().default(true),
   isAiGenerated: boolean("is_ai_generated").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

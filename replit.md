@@ -38,7 +38,7 @@ artifacts-monorepo/
 
 ## Database Schema
 
-- `bots` — All 51 AI director personalities with roles, departments, descriptions, personalities (+ `isAiGenerated` flag for fabricated bots)
+- `bots` — All 51 AI director personalities with roles, departments, descriptions, personalities, `declaration` (AI-generated activation statement), `isAiGenerated` flag
 - `conversations` — Chat conversations between users/clients and bots
 - `messages` — Individual messages in conversations (role: user/bot/system)
 - `clients` — Companies that hire bots
@@ -64,7 +64,8 @@ artifacts-monorepo/
 ## Key Features
 
 1. **Landing Page** — Hero with "Fortune 500 Intelligence. Deployed for You." branding
-2. **Bot Roster** — All 51 directors browsable by category with search
+2. **Global Assembly** — Cinematic `/assembly` page where all bots declare their identity via SSE-streamed AI-generated declarations, cached in DB
+3. **Bot Roster** — All 51 directors browsable by category with search
 3. **Chat Interface** — Real AI conversations with each bot via GPT-5.2
 4. **Boardroom** — Internal board communications with encoded + English transcriptions
 5. **Daily Journal** — Operations journal with board session highlights
@@ -101,3 +102,5 @@ Run `pnpm --filter @workspace/scripts run seed-bots` to seed all 51 bot personal
 - `GET /api/task-sessions/:id/alerts` — Get missing-role alerts
 - `POST /api/task-sessions/:id/expand` — Add bots to active session
 - `POST /api/bots/fabricate` — Fabricate a new AI-generated bot
+- `GET /api/bots/declarations` — Get all bots with cached declarations (sorted by department)
+- `POST /api/bots/generate-declarations` — SSE stream: generate AI declarations for all bots

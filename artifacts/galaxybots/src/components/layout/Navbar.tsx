@@ -6,6 +6,7 @@ import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
 
 const NAV_LINKS = [
+  { href: "/assembly", label: "Assembly" },
   { href: "/bots", label: "Roster" },
   { href: "/boardroom", label: "Boardroom" },
   { href: "/task-rooms", label: "Task Rooms" },

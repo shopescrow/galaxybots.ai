@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Network, Shield, Zap } from "lucide-react";
+import { Bot, Network, Shield, Zap, Radio } from "lucide-react";
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion();
@@ -40,8 +40,14 @@ export default function Home() {
               </p>
               
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link href="/assembly">
+                  <Button variant="glow" size="lg" className="w-full sm:w-auto min-h-[44px] gap-2">
+                    <Radio className="w-4 h-4" />
+                    Watch the Assembly
+                  </Button>
+                </Link>
                 <Link href="/hire">
-                  <Button variant="glow" size="lg" className="w-full sm:w-auto min-h-[44px]">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px]">
                     Hire the Full Company
                   </Button>
                 </Link>
