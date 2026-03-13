@@ -17,9 +17,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </motion.div>
       </main>
       
-      <footer className="border-t border-border/40 py-8 bg-background/80 mt-auto">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground font-tech">
-          <p>© 2025 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential.</p>
+      <footer className="border-t border-border/40 py-10 bg-background/80 mt-auto">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-2 mb-4 text-xs font-tech text-muted-foreground">
+            <a href="/how-it-works" className="hover:text-primary transition-colors">How It Works</a>
+            <a href="/blog" className="hover:text-primary transition-colors">Blog</a>
+            <a href="/hire" className="hover:text-primary transition-colors">Hire Directors</a>
+            <a href="/bots" className="hover:text-primary transition-colors">Roster</a>
+            <a href="/partner/bingolingo" className="hover:text-gold transition-colors">BingoLingo.ai Partner</a>
+            <a href="/valuation" className="hover:text-cyan transition-colors">5-Year Projections</a>
+          </div>
+          <p className="text-center text-xs text-muted-foreground font-tech">
+            © 2026 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential. Property of Ahmed Y. Hammoud.
+          </p>
         </div>
       </footer>
     </div>
