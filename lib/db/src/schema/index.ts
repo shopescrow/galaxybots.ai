@@ -11,3 +11,5 @@ export * from "./task-sessions";
 export * from "./world-state";
 export * from "./memory";
 export * from "./compliance";
+export * from "./client-integrations";
+export * from "./tool-activity-log";

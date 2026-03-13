@@ -14,6 +14,7 @@ export interface ToolContext {
   conversationId?: number;
   botId?: number;
   botName?: string;
+  clientId?: number;
 }
 
 const toolMap = new Map<string, ToolDefinition>();

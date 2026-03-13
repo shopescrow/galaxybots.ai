@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/blog", label: "Blog" },
   { href: "/clients", label: "Clients" },
   { href: "/compliance", label: "Compliance" },
+  { href: "/integrations", label: "Integrations" },
 ];
 
 export function Navbar() {

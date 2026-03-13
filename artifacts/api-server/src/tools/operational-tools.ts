@@ -1,0 +1,912 @@
+import { z } from "zod";
+import { registerTool, type ToolContext } from "./registry";
+import { db, clientIntegrationsTable, toolActivityLogTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import * as cheerio from "cheerio";
+import nodemailer from "nodemailer";
+import { decryptCredential } from "../utils/credential-encryption";
+
+async function getClientCredential(clientId: number | undefined, service: string): Promise<string | null> {
+  if (!clientId) return null;
+  const [row] = await db
+    .select()
+    .from(clientIntegrationsTable)
+    .where(and(
+      eq(clientIntegrationsTable.clientId, clientId),
+      eq(clientIntegrationsTable.service, service),
+      eq(clientIntegrationsTable.status, "connected")
+    ));
+  if (!row) return null;
+  return decryptCredential(row.credential);
+}
+
+async function resolveSlackChannel(token: string, channelNameOrId: string): Promise<string | null> {
+  if (channelNameOrId.startsWith("C") && /^C[A-Z0-9]+$/.test(channelNameOrId)) {
+    return channelNameOrId;
+  }
+  const cleanName = channelNameOrId.replace(/^#/, "");
+  try {
+    let cursor: string | undefined;
+    do {
+      const url = `https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=200${cursor ? `&cursor=${cursor}` : ""}`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json() as {
+        ok: boolean;
+        channels?: Array<{ id: string; name: string }>;
+        response_metadata?: { next_cursor?: string };
+      };
+      if (!data.ok) return null;
+      const match = data.channels?.find((c) => c.name === cleanName);
+      if (match) return match.id;
+      cursor = data.response_metadata?.next_cursor || undefined;
+    } while (cursor);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function logToolActivity(toolName: string, context: ToolContext, extra?: { url?: string; metadata?: unknown }) {
+  await db.insert(toolActivityLogTable).values({
+    toolName,
+    clientId: context.clientId ?? null,
+    sessionId: context.sessionId ?? null,
+    botName: context.botName ?? null,
+    url: extra?.url ?? null,
+    metadata: {
+      ...(extra?.metadata as Record<string, unknown> ?? {}),
+      conversationId: context.conversationId ?? null,
+    },
+  });
+}
+
+registerTool({
+  name: "send_email",
+  description: "Send an email using the client's connected Gmail/SMTP credential. Requires the client to have a Gmail integration configured.",
+  inputSchema: z.object({
+    to: z.string().describe("Recipient email address"),
+    subject: z.string().describe("Email subject line"),
+    body: z.string().describe("Email body text"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "gmail");
+
+    if (credential) {
+      try {
+        const response = await fetch("https://www.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${credential}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            raw: Buffer.from(
+              `To: ${input.to}\r\nSubject: ${input.subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${input.body}`
+            ).toString("base64url"),
+          }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          return { success: false, error: `Gmail API error: ${response.status} - ${errText}` };
+        }
+        return { success: true, message: `Email sent to ${input.to} via Gmail` };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : "Failed to send email via Gmail" };
+      }
+    }
+
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = process.env.SMTP_PORT;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpFrom = process.env.SMTP_FROM;
+
+    if (smtpHost && smtpUser && smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: Number(smtpPort) || 587,
+          secure: Number(smtpPort) === 465,
+          auth: { user: smtpUser, pass: smtpPass },
+        });
+        await transporter.sendMail({
+          from: smtpFrom || smtpUser,
+          to: input.to,
+          subject: input.subject,
+          text: input.body,
+        });
+        return { success: true, message: `Email sent to ${input.to} via SMTP` };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : "Failed to send email via SMTP" };
+      }
+    }
+
+    return { success: false, error: "No email credential configured. Connect Gmail in Integrations settings or configure SMTP environment variables (SMTP_HOST, SMTP_USER, SMTP_PASS)." };
+  },
+});
+
+registerTool({
+  name: "read_email",
+  description: "Read the most recent inbox emails using the client's connected Gmail credential. Returns subject, sender, and snippet for each message.",
+  inputSchema: z.object({
+    count: z.number().optional().describe("Number of recent emails to retrieve (default 5, max 20)"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "gmail");
+    if (!credential) {
+      return { success: false, emails: [], error: "No Gmail credential configured for this client." };
+    }
+    const maxResults = Math.min(input.count ?? 5, 20);
+    try {
+      const listRes = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&labelIds=INBOX`, {
+        headers: { Authorization: `Bearer ${credential}` },
+      });
+      if (!listRes.ok) {
+        return { success: false, emails: [], error: `Gmail API error: ${listRes.status}` };
+      }
+      const listData = await listRes.json() as { messages?: Array<{ id: string }> };
+      if (!listData.messages || listData.messages.length === 0) {
+        return { success: true, emails: [], message: "No messages found" };
+      }
+      const emails = await Promise.all(
+        listData.messages.slice(0, maxResults).map(async (msg: { id: string }) => {
+          const msgRes = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`, {
+            headers: { Authorization: `Bearer ${credential}` },
+          });
+          if (!msgRes.ok) return null;
+          const msgData = await msgRes.json() as { snippet?: string; payload?: { headers?: Array<{ name: string; value: string }> } };
+          const headers = msgData.payload?.headers ?? [];
+          return {
+            subject: headers.find((h: { name: string }) => h.name === "Subject")?.value ?? "(no subject)",
+            from: headers.find((h: { name: string }) => h.name === "From")?.value ?? "(unknown)",
+            snippet: msgData.snippet ?? "",
+          };
+        })
+      );
+      return { success: true, emails: emails.filter(Boolean) };
+    } catch (err) {
+      return { success: false, emails: [], error: err instanceof Error ? err.message : "Failed to read emails" };
+    }
+  },
+});
+
+registerTool({
+  name: "post_slack_message",
+  description: "Post a message to a Slack channel using the platform-level Slack Bot Token. Use this to send notifications or updates to team channels.",
+  inputSchema: z.object({
+    channel: z.string().describe("Slack channel name (without #) or channel ID"),
+    text: z.string().describe("Message text to post"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const token = process.env.SLACK_BOT_TOKEN;
+    if (!token) {
+      return { success: false, error: "Slack Bot Token not configured. Set SLACK_BOT_TOKEN environment variable." };
+    }
+    try {
+      const channelId = await resolveSlackChannel(token, input.channel);
+      if (!channelId) {
+        return { success: false, error: `Could not find Slack channel: ${input.channel}` };
+      }
+      const response = await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ channel: channelId, text: input.text }),
+      });
+      const data = await response.json() as { ok: boolean; error?: string; ts?: string };
+      if (!data.ok) {
+        return { success: false, error: `Slack API error: ${data.error}` };
+      }
+      return { success: true, message: `Message posted to #${input.channel}`, timestamp: data.ts };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to post Slack message" };
+    }
+  },
+});
+
+registerTool({
+  name: "read_slack_channel",
+  description: "Read recent messages from a Slack channel using the platform-level Slack Bot Token.",
+  inputSchema: z.object({
+    channel: z.string().describe("Slack channel name (without #) or channel ID"),
+    count: z.number().optional().describe("Number of recent messages to retrieve (default 10, max 50)"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const token = process.env.SLACK_BOT_TOKEN;
+    if (!token) {
+      return { success: false, messages: [], error: "Slack Bot Token not configured." };
+    }
+    const limit = Math.min(input.count ?? 10, 50);
+    try {
+      const channelId = await resolveSlackChannel(token, input.channel);
+      if (!channelId) {
+        return { success: false, messages: [], error: `Could not find Slack channel: ${input.channel}` };
+      }
+      const response = await fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(channelId)}&limit=${limit}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json() as { ok: boolean; error?: string; messages?: Array<{ text: string; user?: string; ts?: string }> };
+      if (!data.ok) {
+        return { success: false, messages: [], error: `Slack API error: ${data.error}` };
+      }
+      return {
+        success: true,
+        messages: (data.messages ?? []).map((m) => ({
+          text: m.text,
+          user: m.user ?? "unknown",
+          timestamp: m.ts,
+        })),
+      };
+    } catch (err) {
+      return { success: false, messages: [], error: err instanceof Error ? err.message : "Failed to read Slack channel" };
+    }
+  },
+});
+
+registerTool({
+  name: "create_document",
+  description: "Create a new Notion page/document using the client's Notion integration token. Creates a page in the workspace with the given title and content.",
+  inputSchema: z.object({
+    title: z.string().describe("Document title"),
+    content: z.string().describe("Document content (plain text)"),
+    parentPageId: z.string().optional().describe("Parent page ID to nest under. If not provided, the first available page in the workspace will be used."),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "notion");
+    if (!credential) {
+      return { success: false, error: "No Notion credential configured for this client." };
+    }
+    const headers = {
+      Authorization: `Bearer ${credential}`,
+      "Content-Type": "application/json",
+      "Notion-Version": "2022-06-28",
+    };
+    try {
+      let parentId = input.parentPageId;
+      if (!parentId) {
+        const searchRes = await fetch("https://api.notion.com/v1/search", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ filter: { value: "page", property: "object" }, page_size: 1 }),
+        });
+        if (searchRes.ok) {
+          const searchData = await searchRes.json() as { results: Array<{ id: string }> };
+          parentId = searchData.results[0]?.id;
+        }
+        if (!parentId) {
+          return { success: false, error: "No parentPageId provided and no pages found in workspace. Please provide a parentPageId." };
+        }
+      }
+      const response = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          parent: { page_id: parentId },
+          properties: {
+            title: { title: [{ text: { content: input.title } }] },
+          },
+          children: [
+            {
+              object: "block",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [{ type: "text", text: { content: input.content } }],
+              },
+            },
+          ],
+        }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, error: `Notion API error: ${response.status} - ${errText}` };
+      }
+      const data = await response.json() as { id: string; url: string };
+      return { success: true, pageId: data.id, url: data.url, title: input.title };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to create Notion document" };
+    }
+  },
+});
+
+registerTool({
+  name: "read_document",
+  description: "Read a Notion page by ID or search for one by title. Returns the page title and text content.",
+  inputSchema: z.object({
+    pageId: z.string().optional().describe("Notion page ID to read directly"),
+    searchTitle: z.string().optional().describe("Search for a page by title (used if pageId not provided)"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "notion");
+    if (!credential) {
+      return { success: false, error: "No Notion credential configured for this client." };
+    }
+    const headers = {
+      Authorization: `Bearer ${credential}`,
+      "Content-Type": "application/json",
+      "Notion-Version": "2022-06-28",
+    };
+    try {
+      let targetPageId = input.pageId;
+      if (!targetPageId && input.searchTitle) {
+        const searchRes = await fetch("https://api.notion.com/v1/search", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query: input.searchTitle, filter: { value: "page", property: "object" }, page_size: 1 }),
+        });
+        if (searchRes.ok) {
+          const searchData = await searchRes.json() as { results: Array<{ id: string }> };
+          targetPageId = searchData.results[0]?.id;
+        }
+      }
+      if (!targetPageId) {
+        return { success: false, error: "Page not found. Provide a pageId or a valid searchTitle." };
+      }
+
+      const pageRes = await fetch(`https://api.notion.com/v1/pages/${targetPageId}`, { headers });
+      let pageTitle = "";
+      if (pageRes.ok) {
+        const pageData = await pageRes.json() as { properties?: { title?: { title?: Array<{ plain_text: string }> }; [key: string]: unknown } };
+        const titleProp = pageData.properties?.title;
+        if (titleProp && "title" in titleProp && Array.isArray(titleProp.title)) {
+          pageTitle = titleProp.title.map((t: { plain_text: string }) => t.plain_text).join("");
+        }
+        if (!pageTitle) {
+          for (const prop of Object.values(pageData.properties ?? {})) {
+            const p = prop as { type?: string; title?: Array<{ plain_text: string }> };
+            if (p.type === "title" && p.title) {
+              pageTitle = p.title.map((t) => t.plain_text).join("");
+              break;
+            }
+          }
+        }
+      }
+
+      const blocksRes = await fetch(`https://api.notion.com/v1/blocks/${targetPageId}/children?page_size=100`, { headers });
+      if (!blocksRes.ok) {
+        return { success: false, error: `Notion API error: ${blocksRes.status}` };
+      }
+      const blocksData = await blocksRes.json() as { results: Array<{ type: string; [key: string]: unknown }> };
+      const textParts: string[] = [];
+      for (const block of blocksData.results) {
+        const blockContent = (block as Record<string, unknown>)[block.type] as { rich_text?: Array<{ plain_text: string }> } | undefined;
+        if (blockContent?.rich_text) {
+          textParts.push(blockContent.rich_text.map((t) => t.plain_text).join(""));
+        }
+      }
+      return { success: true, pageId: targetPageId, title: pageTitle, content: textParts.join("\n") };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to read Notion document" };
+    }
+  },
+});
+
+registerTool({
+  name: "create_calendar_event",
+  description: "Create a Google Calendar event using the client's Google Calendar API credential.",
+  inputSchema: z.object({
+    title: z.string().describe("Event title/summary"),
+    description: z.string().optional().describe("Event description"),
+    startTime: z.string().describe("Event start time in ISO 8601 format (e.g. 2025-01-15T09:00:00-05:00)"),
+    endTime: z.string().describe("Event end time in ISO 8601 format"),
+    attendees: z.array(z.string()).optional().describe("List of attendee email addresses"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "google_calendar");
+    if (!credential) {
+      return { success: false, error: "No Google Calendar credential configured for this client." };
+    }
+    try {
+      const response = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${credential}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          summary: input.title,
+          description: input.description ?? "",
+          start: { dateTime: input.startTime },
+          end: { dateTime: input.endTime },
+          attendees: (input.attendees ?? []).map((email) => ({ email })),
+        }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, error: `Calendar API error: ${response.status} - ${errText}` };
+      }
+      const data = await response.json() as { id: string; htmlLink: string };
+      return { success: true, eventId: data.id, link: data.htmlLink };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to create calendar event" };
+    }
+  },
+});
+
+registerTool({
+  name: "list_calendar_events",
+  description: "List upcoming Google Calendar events using the client's Google Calendar credential.",
+  inputSchema: z.object({
+    count: z.number().optional().describe("Number of upcoming events to retrieve (default 10, max 50)"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "google_calendar");
+    if (!credential) {
+      return { success: false, events: [], error: "No Google Calendar credential configured for this client." };
+    }
+    const maxResults = Math.min(input.count ?? 10, 50);
+    const now = new Date().toISOString();
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=${maxResults}&timeMin=${encodeURIComponent(now)}&orderBy=startTime&singleEvents=true`,
+        { headers: { Authorization: `Bearer ${credential}` } }
+      );
+      if (!response.ok) {
+        return { success: false, events: [], error: `Calendar API error: ${response.status}` };
+      }
+      const data = await response.json() as { items?: Array<{ id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }> };
+      return {
+        success: true,
+        events: (data.items ?? []).map((e) => ({
+          id: e.id,
+          title: e.summary ?? "(no title)",
+          start: e.start?.dateTime ?? e.start?.date ?? "",
+          end: e.end?.dateTime ?? e.end?.date ?? "",
+        })),
+      };
+    } catch (err) {
+      return { success: false, events: [], error: err instanceof Error ? err.message : "Failed to list calendar events" };
+    }
+  },
+});
+
+registerTool({
+  name: "crm_upsert_contact",
+  description: "Create or update a HubSpot contact by email using the client's HubSpot private app token.",
+  inputSchema: z.object({
+    email: z.string().describe("Contact email address"),
+    firstName: z.string().optional().describe("Contact first name"),
+    lastName: z.string().optional().describe("Contact last name"),
+    company: z.string().optional().describe("Contact company name"),
+    phone: z.string().optional().describe("Contact phone number"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "hubspot");
+    if (!credential) {
+      return { success: false, error: "No HubSpot credential configured for this client." };
+    }
+    const headers = {
+      Authorization: `Bearer ${credential}`,
+      "Content-Type": "application/json",
+    };
+    try {
+      const searchRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: input.email }] }],
+          limit: 1,
+        }),
+      });
+      const searchData = await searchRes.json() as { total: number; results: Array<{ id: string }> };
+
+      const properties: Record<string, string> = { email: input.email };
+      if (input.firstName) properties.firstname = input.firstName;
+      if (input.lastName) properties.lastname = input.lastName;
+      if (input.company) properties.company = input.company;
+      if (input.phone) properties.phone = input.phone;
+
+      if (searchData.total > 0) {
+        const contactId = searchData.results[0].id;
+        const updateRes = await fetch(`https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ properties }),
+        });
+        if (!updateRes.ok) {
+          return { success: false, error: `HubSpot update error: ${updateRes.status}` };
+        }
+        return { success: true, action: "updated", contactId };
+      } else {
+        const createRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ properties }),
+        });
+        if (!createRes.ok) {
+          return { success: false, error: `HubSpot create error: ${createRes.status}` };
+        }
+        const data = await createRes.json() as { id: string };
+        return { success: true, action: "created", contactId: data.id };
+      }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to upsert HubSpot contact" };
+    }
+  },
+});
+
+registerTool({
+  name: "crm_create_deal",
+  description: "Create a deal in HubSpot CRM using the client's HubSpot private app token.",
+  inputSchema: z.object({
+    dealName: z.string().describe("Deal name"),
+    stage: z.string().optional().describe("Deal stage (e.g. 'appointmentscheduled', 'qualifiedtobuy', 'closedwon')"),
+    amount: z.number().optional().describe("Deal amount in dollars"),
+    contactEmail: z.string().optional().describe("Associated contact email"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "hubspot");
+    if (!credential) {
+      return { success: false, error: "No HubSpot credential configured for this client." };
+    }
+    const headers = {
+      Authorization: `Bearer ${credential}`,
+      "Content-Type": "application/json",
+    };
+    try {
+      const properties: Record<string, string | number> = { dealname: input.dealName };
+      if (input.stage) properties.dealstage = input.stage;
+      if (input.amount !== undefined) properties.amount = input.amount;
+
+      const response = await fetch("https://api.hubapi.com/crm/v3/objects/deals", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ properties }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, error: `HubSpot deal error: ${response.status} - ${errText}` };
+      }
+      const data = await response.json() as { id: string };
+      return { success: true, dealId: data.id, dealName: input.dealName };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to create HubSpot deal" };
+    }
+  },
+});
+
+registerTool({
+  name: "create_issue",
+  description: "Create an issue in Linear using the platform-level Linear API key. For project management and task tracking.",
+  inputSchema: z.object({
+    title: z.string().describe("Issue title"),
+    description: z.string().optional().describe("Issue description (markdown supported)"),
+    priority: z.number().optional().describe("Priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
+    teamId: z.string().optional().describe("Linear team ID (uses first available team if not provided)"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const apiKey = process.env.LINEAR_API_KEY;
+    if (!apiKey) {
+      return { success: false, error: "Linear API key not configured. Set LINEAR_API_KEY environment variable." };
+    }
+    try {
+      let teamId = input.teamId;
+      if (!teamId) {
+        const teamsRes = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: { Authorization: apiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ query: "{ teams { nodes { id name } } }" }),
+        });
+        const teamsData = await teamsRes.json() as { data?: { teams?: { nodes: Array<{ id: string }> } } };
+        teamId = teamsData.data?.teams?.nodes[0]?.id;
+        if (!teamId) return { success: false, error: "No Linear teams found." };
+      }
+
+      const mutation = `mutation CreateIssue($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title url } } }`;
+      const variables = {
+        input: {
+          title: input.title,
+          description: input.description ?? "",
+          priority: input.priority ?? 0,
+          teamId,
+        },
+      };
+      const response = await fetch("https://api.linear.app/graphql", {
+        method: "POST",
+        headers: { Authorization: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: mutation, variables }),
+      });
+      const data = await response.json() as { data?: { issueCreate?: { success: boolean; issue?: { id: string; identifier: string; title: string; url: string } } } };
+      if (data.data?.issueCreate?.success) {
+        const issue = data.data.issueCreate.issue;
+        return { success: true, issueId: issue?.id, identifier: issue?.identifier, url: issue?.url };
+      }
+      return { success: false, error: "Failed to create Linear issue" };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to create Linear issue" };
+    }
+  },
+});
+
+registerTool({
+  name: "update_issue",
+  description: "Update an existing Linear issue's status using the platform-level Linear API key.",
+  inputSchema: z.object({
+    issueId: z.string().describe("Linear issue ID or identifier (e.g. 'ENG-123')"),
+    status: z.string().optional().describe("New status name (e.g. 'In Progress', 'Done', 'Todo')"),
+    priority: z.number().optional().describe("New priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
+    title: z.string().optional().describe("Updated title"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const apiKey = process.env.LINEAR_API_KEY;
+    if (!apiKey) {
+      return { success: false, error: "Linear API key not configured. Set LINEAR_API_KEY environment variable." };
+    }
+    try {
+      const updateFields: Record<string, unknown> = {};
+      if (input.title) updateFields.title = input.title;
+      if (input.priority !== undefined) updateFields.priority = input.priority;
+
+      if (input.status) {
+        const stateQuery = `{ workflowStates { nodes { id name } } }`;
+        const stateRes = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: { Authorization: apiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ query: stateQuery }),
+        });
+        const stateData = await stateRes.json() as { data?: { workflowStates?: { nodes: Array<{ id: string; name: string }> } } };
+        const matchState = stateData.data?.workflowStates?.nodes.find(
+          (s) => s.name.toLowerCase() === input.status!.toLowerCase()
+        );
+        if (matchState) {
+          updateFields.stateId = matchState.id;
+        }
+      }
+
+      const mutation = `mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { id identifier title url } } }`;
+      const response = await fetch("https://api.linear.app/graphql", {
+        method: "POST",
+        headers: { Authorization: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: mutation, variables: { id: input.issueId, input: updateFields } }),
+      });
+      const data = await response.json() as { data?: { issueUpdate?: { success: boolean; issue?: { id: string; identifier: string; title: string; url: string } } } };
+      if (data.data?.issueUpdate?.success) {
+        const issue = data.data.issueUpdate.issue;
+        return { success: true, issueId: issue?.id, identifier: issue?.identifier };
+      }
+      return { success: false, error: "Failed to update Linear issue" };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to update Linear issue" };
+    }
+  },
+});
+
+registerTool({
+  name: "run_code",
+  description: "Execute sandboxed JavaScript code and return the result. Useful for calculations, data transformations, and quick scripting tasks. Code runs in an isolated VM with a 5-second timeout.",
+  inputSchema: z.object({
+    code: z.string().describe("JavaScript code to execute"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const MAX_OUTPUT_LENGTH = 10000;
+    const TIMEOUT_MS = 5000;
+    const MEMORY_LIMIT_MB = 64;
+
+    const workerCode = `
+      const { parentPort, workerData } = require("worker_threads");
+      const vm = require("vm");
+      const stdoutLogs = [];
+      const stderrLogs = [];
+      const sandbox = {
+        console: {
+          log: (...args) => stdoutLogs.push(args.map(String).join(" ")),
+          error: (...args) => stderrLogs.push(args.map(String).join(" ")),
+          warn: (...args) => stderrLogs.push(args.map(String).join(" ")),
+          info: (...args) => stdoutLogs.push(args.map(String).join(" ")),
+        },
+        Math, Date, JSON, parseInt, parseFloat, isNaN, isFinite,
+        Array, Object, String, Number, Boolean, RegExp, Map, Set,
+        setTimeout: undefined, setInterval: undefined, setImmediate: undefined,
+        process: undefined, require: undefined, global: undefined,
+        globalThis: undefined, fetch: undefined,
+      };
+      try {
+        const ctx = vm.createContext(sandbox);
+        const script = new vm.Script(workerData.code, { timeout: ${TIMEOUT_MS} });
+        const result = script.runInContext(ctx, { timeout: ${TIMEOUT_MS}, breakOnSigint: true });
+        parentPort.postMessage({
+          success: true,
+          stdout: stdoutLogs.join("\\n"),
+          stderr: stderrLogs.join("\\n"),
+          result: result !== undefined ? String(result) : undefined,
+        });
+      } catch (err) {
+        parentPort.postMessage({
+          success: false,
+          stdout: stdoutLogs.join("\\n"),
+          stderr: stderrLogs.join("\\n"),
+          error: err.message || "Code execution failed",
+        });
+      }
+    `;
+
+    try {
+      const { Worker } = await import("worker_threads");
+      const result = await new Promise<{
+        success: boolean;
+        stdout: string;
+        stderr: string;
+        result?: string;
+        error?: string;
+      }>((resolve) => {
+        const worker = new Worker(workerCode, {
+          eval: true,
+          workerData: { code: input.code },
+          resourceLimits: {
+            maxOldGenerationSizeMb: MEMORY_LIMIT_MB,
+            maxYoungGenerationSizeMb: MEMORY_LIMIT_MB / 4,
+            stackSizeMb: 4,
+          },
+        });
+
+        const timer = setTimeout(() => {
+          worker.terminate();
+          resolve({
+            success: false,
+            stdout: "",
+            stderr: "",
+            error: "Code execution timed out (5s limit)",
+          });
+        }, TIMEOUT_MS + 1000);
+
+        worker.on("message", (msg) => {
+          clearTimeout(timer);
+          resolve(msg);
+          worker.terminate();
+        });
+
+        worker.on("error", (err) => {
+          clearTimeout(timer);
+          const isOOM = err.message.includes("out of memory") || err.message.includes("allocation");
+          resolve({
+            success: false,
+            stdout: "",
+            stderr: "",
+            error: isOOM ? "Code execution exceeded memory limit (64MB)" : err.message,
+          });
+        });
+
+        worker.on("exit", (code) => {
+          clearTimeout(timer);
+          if (code !== 0) {
+            resolve({
+              success: false,
+              stdout: "",
+              stderr: "",
+              error: `Worker exited with code ${code}`,
+            });
+          }
+        });
+      });
+
+      await logToolActivity("run_code", context, { metadata: { codeLength: input.code.length } });
+
+      return {
+        success: result.success,
+        stdout: (result.stdout || "").slice(0, MAX_OUTPUT_LENGTH),
+        stderr: (result.stderr || "").slice(0, MAX_OUTPUT_LENGTH),
+        result: result.result?.slice(0, MAX_OUTPUT_LENGTH),
+        error: result.error,
+      };
+    } catch (err) {
+      await logToolActivity("run_code", context, { metadata: { error: true } });
+      return {
+        success: false,
+        stdout: "",
+        stderr: "",
+        error: err instanceof Error ? err.message : "Code execution failed",
+      };
+    }
+  },
+});
+
+function isPrivateIP(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length === 4 && parts.every((p) => p >= 0 && p <= 255)) {
+    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 0) return true;
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true;
+    if (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19)) return true;
+    return false;
+  }
+  const lower = ip.toLowerCase();
+  if (lower === "::1" || lower === "::") return true;
+  if (lower.startsWith("fe80:") || lower.startsWith("fc") || lower.startsWith("fd")) return true;
+  if (lower.startsWith("::ffff:")) {
+    const mapped = lower.slice(7);
+    return isPrivateIP(mapped);
+  }
+  return false;
+}
+
+registerTool({
+  name: "scrape_webpage",
+  description: "Fetch a web page URL and extract its text content. Strips HTML tags and returns clean readable text. Every scrape is logged for compliance.",
+  inputSchema: z.object({
+    url: z.string().describe("The URL to scrape"),
+    maxLength: z.number().optional().describe("Maximum characters to return (default 5000)"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const maxLen = input.maxLength ?? 5000;
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(input.url);
+    } catch {
+      await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { denied: true, reason: "invalid_url" } });
+      return { success: false, error: "Invalid URL." };
+    }
+
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { denied: true, reason: "invalid_protocol" } });
+      return { success: false, error: "Only HTTP and HTTPS URLs are supported." };
+    }
+
+    const hostname = parsedUrl.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    if (hostname === "localhost" || hostname.endsWith(".local") ||
+        hostname.endsWith(".internal") || hostname === "metadata.google.internal") {
+      await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { denied: true, reason: "blocked_hostname" } });
+      return { success: false, error: "Scraping internal/private network addresses is not allowed." };
+    }
+
+    try {
+      const dns = await import("node:dns");
+      const { resolve4, resolve6 } = dns.promises;
+      const ips: string[] = [];
+      try {
+        const v4 = await resolve4(hostname);
+        ips.push(...v4);
+      } catch {}
+      try {
+        const v6 = await resolve6(hostname);
+        ips.push(...v6);
+      } catch {}
+
+      if (ips.length === 0) {
+        await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { denied: true, reason: "dns_failed" } });
+        return { success: false, error: "Could not resolve hostname." };
+      }
+
+      const privateIp = ips.find(isPrivateIP);
+      if (privateIp) {
+        await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { denied: true, reason: "private_ip", resolvedIp: privateIp } });
+        return { success: false, error: "Scraping internal/private network addresses is not allowed." };
+      }
+
+      const response = await fetch(input.url, {
+        headers: { "User-Agent": "GalaxyBots/1.0 (Web Scraper)" },
+        signal: AbortSignal.timeout(15000),
+        redirect: "manual",
+      });
+
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { denied: true, reason: "redirect_blocked", redirectTo: location } });
+        return { success: false, error: "Redirects are not followed for security reasons. Target URL redirects to: " + (location || "unknown") };
+      }
+      if (!response.ok) {
+        await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { httpStatus: response.status } });
+        return { success: false, error: `HTTP ${response.status} from ${input.url}` };
+      }
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      $("script, style, nav, footer, header, noscript, iframe").remove();
+      const text = $("body").text().replace(/\s+/g, " ").trim().slice(0, maxLen);
+      const title = $("title").text().trim();
+
+      await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { title, contentLength: text.length } });
+
+      return { success: true, url: input.url, title, content: text };
+    } catch (err) {
+      await logToolActivity("scrape_webpage", context, { url: input.url, metadata: { error: true } });
+      return { success: false, error: err instanceof Error ? err.message : "Failed to scrape webpage" };
+    }
+  },
+});

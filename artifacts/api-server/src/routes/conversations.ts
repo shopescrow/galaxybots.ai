@@ -156,6 +156,7 @@ You have access to tools that allow you to search the web, read/write shared sta
       conversationId: params.data.id,
       botId: bot.id,
       botName: bot.name,
+      clientId: conv.clientId ?? undefined,
     },
   });
 
@@ -291,6 +292,7 @@ You have access to tools that allow you to search the web, read/write shared sta
         conversationId: params.data.id,
         botId: bot.id,
         botName: bot.name,
+        clientId: conv.clientId ?? undefined,
       },
       onEvent: (event) => {
         sendSSE(event);

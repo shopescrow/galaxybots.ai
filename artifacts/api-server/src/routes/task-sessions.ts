@@ -369,6 +369,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           sessionId: session.id,
           botId: bot.id,
           botName: bot.name,
+          clientId: req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined),
         },
       });
 
@@ -549,6 +550,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
               sessionId: session.id,
               botId: bot.id,
               botName: bot.name,
+              clientId: req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined),
             },
             onEvent: (event) => {
               sendSSE({ ...event, botId: bot.id, botName: bot.name, botTitle: bot.title });
