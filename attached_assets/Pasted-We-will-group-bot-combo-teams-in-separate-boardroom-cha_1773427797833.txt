@@ -1,0 +1,36 @@
+We will group bot combo teams in separate boardroom chats responsible for creating certain functions and progressions of a company.
+The user only needs to prompt what actions are needed to occur and Director Bot deploys a chat team for the user. Every bot required to that task will appear in the chat room.
+If a bot agent required for a particular task then the application must fabricate one. (Give birth) on CEO or Architect approval. Set alarms in place to alert command center.
+
+Live Example: Implementing and managing cookies is not the responsibility of a single company officer, but rather a shared duty that requires a cross-functional team . The specific roles involved depend on the task, but the ultimate legal responsibility lies with the company (the "Data Controller"), not just one person or bot agent.
+
+Here are the key players typically involved in implementing and managing a website's cookies.
+
+👥 The Core Team: A Cross-Functional Effort
+
+Successful and compliant cookie implementation requires collaboration across different departments. The table below outlines who is typically involved and their primary responsibilities .
+
+Role / Team Primary Responsibility in Cookie Implementation
+Legal / Data Protection Officer (DPO) Oversees compliance with privacy laws (e.g., GDPR, CCPA); determines the lawful basis for processing; classifies cookie types (strictly necessary vs. functional); drafts privacy and cookie policies .
+Marketing / Business Owner Defines the business need for cookies (e.g., for analytics, advertising, personalization); decides what user data is necessary for campaigns and measuring success .
+IT / Web Development Handles the technical placement of cookies and pixels on the site; implements the code for the cookie consent banner and ensures it correctly blocks non-essential cookies before consent is given .
+Privacy / Compliance Team Manages the cookie consent solution; conducts regular audits to ensure the banner works correctly and the cookie list is up-to-date; vets third-party vendors .
+
+⚖️ The Ultimate Legal Responsibility: It's the Company's
+
+While many people are involved in the process, the ultimate legal responsibility for compliance rests with the organization itself. This is defined by its role as a Data Controller under laws like the GDPR .
+
+· Data Controller Defined: The Data Controller is the entity that determines the "purposes and means" of data processing—in other words, the why and the how . Your company is the Data Controller because it decides to use cookies for analytics or advertising.
+· Liability for Third-Party Cookies: This responsibility extends to cookies set by third parties (like Google Analytics or Meta Pixel) on your site. Regulators hold your company accountable for what happens on your website, even if a third-party vendor causes a violation. In some cases, you can be jointly liable for their missteps .
+· Regulatory Guidance: Official guidance confirms that the person or company operating the online service and setting the cookie is primarily responsible for compliance .
+
+🔑 Key Actions for Your Governance Program
+
+To ensure this shared responsibility works effectively, your company should take these concrete steps:
+
+Designate a Program Leader: While it's a team effort, designate an individual to own and drive the cookie compliance program forward. This person ensures tasks are completed and the program stays on track .
+Establish a Clear Governance Policy: Create a formal policy that outlines the company's approach to cookies. This should define approved vs. prohibited cookies, rules for vetting third-party vendors, and processes for removing old cookies .
+Conduct Regular Audits and Training: Perform regular audits (monthly or quarterly) to ensure your cookie banner works and accurately reflects the cookies on your site . Crucially, train all employees who might place cookies or handle personal data so they understand the rules .
+I hope this clarifies the shared responsibility involved in cookie implementation. Agents should know more detailed breakdowns of what a cookie governance policy should include and how it applies to their clients industry standards.
+
+All agentic bots must have a university master's degree equivalency of intelligence within their specialty field and know what other bots are needed or required to participate in a tasked solution. Alerting the user to add more thinking power positions to the team if they dont already have them in their subscription.
