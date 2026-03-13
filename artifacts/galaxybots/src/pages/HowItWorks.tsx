@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import { useRef } from "react";
 import { 
   Search, UserCheck, Zap, Building, Globe, ArrowRight, 
@@ -12,13 +12,14 @@ import { Link } from "wouter";
 function AnimatedStep({ step, index }: { step: typeof STEPS[0]; index: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, x: index % 2 === 0 ? -60 : 60 }}
+      initial={prefersReducedMotion ? false : { opacity: 0, x: index % 2 === 0 ? -60 : 60 }}
       animate={isInView ? { opacity: 1, x: 0 } : {}}
-      transition={{ duration: 0.6, delay: 0.1 }}
+      transition={{ duration: prefersReducedMotion ? 0 : 0.6, delay: prefersReducedMotion ? 0 : 0.1 }}
       className={`flex flex-col lg:flex-row items-center gap-12 ${index % 2 !== 0 ? "lg:flex-row-reverse" : ""}`}
     >
       <div className="flex-1 space-y-6">
@@ -227,6 +228,7 @@ export default function HowItWorks() {
   const heroInView = useInView(heroRef, { once: true });
   const statsRef = useRef<HTMLDivElement>(null);
   const statsInView = useInView(statsRef, { once: true });
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <AppLayout>
@@ -235,16 +237,16 @@ export default function HowItWorks() {
         {/* Hero Section */}
         <motion.div
           ref={heroRef}
-          initial={{ opacity: 0, y: 30 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 30 }}
           animate={heroInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.7 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.7 }}
           className="text-center max-w-4xl mx-auto"
         >
           <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-2 text-xs font-tech text-primary uppercase tracking-widest mb-8">
             <Layers className="w-3.5 h-3.5" />
             How It Works
           </div>
-          <h1 className="text-5xl sm:text-6xl font-display font-bold mb-8 leading-tight">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-bold mb-8 leading-tight">
             Fortune 500 Intelligence.<br />
             <span className="text-gradient">Deployed in Minutes.</span>
           </h1>
@@ -267,17 +269,17 @@ export default function HowItWorks() {
         {/* Stats Row */}
         <motion.div
           ref={statsRef}
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           animate={statsInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6, delay: prefersReducedMotion ? 0 : 0.2  }}
           className="grid grid-cols-2 lg:grid-cols-4 gap-6"
         >
           {STATS.map((stat, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9  }}
               animate={statsInView ? { opacity: 1, scale: 1 } : {}}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: i * 0.1  }}
               className="flex flex-col items-center text-center p-6 rounded-2xl bg-card border border-border/50 gap-3"
             >
               <stat.icon className={`w-7 h-7 ${stat.color}`} />
@@ -323,10 +325,10 @@ export default function HowItWorks() {
               ].map((node, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.15 }}
+                  transition={{ delay: i * 0.15  }}
                   className="flex flex-col items-center text-center gap-4"
                 >
                   <div className={`relative w-24 h-24 rounded-2xl border-2 ${node.border} ${node.bg} flex items-center justify-center z-10 bg-background`}>
@@ -344,7 +346,7 @@ export default function HowItWorks() {
 
         {/* CTA */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 30  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="relative overflow-hidden rounded-3xl border border-primary/20 p-12 text-center bg-card"

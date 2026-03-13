@@ -2,12 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { useLanguage, LANGUAGES } from "@/contexts/LanguageContext";
 import { Globe, ChevronDown, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 export function LanguageSelector() {
   const { language, setLanguage, isTranslating } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -24,12 +25,13 @@ export function LanguageSelector() {
       <button
         onClick={() => setOpen(o => !o)}
         className={cn(
-          "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-tech transition-all duration-200",
+          "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-tech transition-all duration-200 min-h-[44px] min-w-[44px] justify-center",
           open
             ? "bg-primary/10 border-primary/40 text-primary"
             : "border-border/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
         )}
         title="Select language"
+        aria-label="Select language"
       >
         {isTranslating ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -44,10 +46,10 @@ export function LanguageSelector() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
             className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-border/60 bg-card shadow-2xl shadow-black/40 overflow-hidden z-50"
           >
             <div className="p-2 border-b border-border/30">
@@ -59,7 +61,7 @@ export function LanguageSelector() {
                   key={lang.code}
                   onClick={() => { setLanguage(lang); setOpen(false); }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors min-h-[44px]",
                     language.code === lang.code
                       ? "bg-primary/10 text-primary"
                       : "text-foreground/80 hover:bg-secondary/60 hover:text-foreground"

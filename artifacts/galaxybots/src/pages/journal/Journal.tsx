@@ -3,9 +3,10 @@ import { useJournal } from "@/hooks/use-journal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Calendar, FileText, ArrowRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 export default function Journal() {
+  const prefersReducedMotion = useReducedMotion();
   const { data: entries, isLoading } = useJournal();
 
   return (
@@ -37,9 +38,9 @@ export default function Journal() {
             {entries?.map((entry, idx) => (
               <motion.div 
                 key={entry.id}
-                initial={{ opacity: 0, x: -20 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.1 }}
+                transition={{ delay: prefersReducedMotion ? 0 : idx * 0.1 }}
                 className="relative"
               >
                 {/* Timeline node */}

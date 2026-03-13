@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Calendar, Clock, ArrowLeft, Tag, BookOpen } from "lucide-react";
@@ -101,6 +101,7 @@ function renderMarkdown(content: string) {
 }
 
 export default function BlogPostPage() {
+  const prefersReducedMotion = useReducedMotion();
   const { slug } = useParams();
 
   const { data: post, isLoading, isError } = useQuery<BlogPost>({
@@ -141,9 +142,9 @@ export default function BlogPostPage() {
       <div className="container mx-auto px-4 py-16">
         
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.5 }}
           className="max-w-3xl mx-auto"
         >
           {/* Back */}
@@ -161,7 +162,7 @@ export default function BlogPostPage() {
           </div>
 
           {/* Title */}
-          <h1 className="text-4xl sm:text-5xl font-display font-bold leading-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold leading-tight mb-6">
             {post.title}
           </h1>
 

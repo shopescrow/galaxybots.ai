@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useState } from "react";
@@ -33,6 +33,7 @@ type FormData = {
 };
 
 export default function PartnerLanding() {
+  const prefersReducedMotion = useReducedMotion();
   const { ref } = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -107,9 +108,9 @@ export default function PartnerLanding() {
       <AppLayout>
         <div className="container mx-auto px-4 py-24 flex items-center justify-center min-h-[60vh]">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.5 }}
             className="text-center max-w-lg space-y-6"
           >
             <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto">
@@ -139,9 +140,9 @@ export default function PartnerLanding() {
         
         {/* Partner Badge */}
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: -10  }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.4  }}
           className="flex justify-center mb-10"
         >
           <div className="flex items-center gap-3 bg-gold/10 border border-gold/30 rounded-full px-6 py-2 text-sm font-tech text-gold">
@@ -155,13 +156,13 @@ export default function PartnerLanding() {
           
           {/* Left: Welcome & Benefits */}
           <motion.div
-            initial={{ opacity: 0, x: -30 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, x: -30  }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
             className="space-y-8"
           >
             <div>
-              <h1 className="text-4xl sm:text-5xl font-display font-bold leading-tight mb-6">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold leading-tight mb-6">
                 Welcome from<br />
                 <span className="text-gradient">{partner.partnerName}</span>
               </h1>
@@ -192,9 +193,9 @@ export default function PartnerLanding() {
               ].map((benefit, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, x: -20  }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 + i * 0.1 }}
+                  transition={{ delay: prefersReducedMotion ? 0 : 0.3 + i * 0.1  }}
                   className="flex items-start gap-4"
                 >
                   <div className={`w-10 h-10 rounded-xl bg-card border border-border/50 flex items-center justify-center shrink-0`}>
@@ -217,9 +218,9 @@ export default function PartnerLanding() {
 
           {/* Right: Registration Form */}
           <motion.div
-            initial={{ opacity: 0, x: 30 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, x: 30  }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.6, delay: prefersReducedMotion ? 0 : 0.1  }}
           >
             <Card className="border-primary/20 shadow-2xl shadow-primary/10">
               <CardHeader>

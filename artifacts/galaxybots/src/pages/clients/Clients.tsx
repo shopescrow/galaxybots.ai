@@ -13,7 +13,7 @@ import { z } from "zod";
 import { CreateClientBodyPlan } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -54,6 +54,7 @@ function formatDate(d: string) {
 }
 
 export default function Clients() {
+  const prefersReducedMotion = useReducedMotion();
   const { data: clients, isLoading } = useClients();
   const createClient = useCreateNewClient();
   const [open, setOpen] = useState(false);
@@ -147,7 +148,7 @@ export default function Clients() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit">
+        <div className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit max-w-full overflow-x-auto">
           {[
             { key: "clients", label: "All Clients", count: clients?.length || 0 },
             { key: "partners", label: "Partner Referrals", count: referrals.length },
@@ -155,7 +156,7 @@ export default function Clients() {
             <button
               key={t.key}
               onClick={() => setTab(t.key as typeof tab)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all duration-200 ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all duration-200 min-h-[44px] whitespace-nowrap ${
                 tab === t.key
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground"
@@ -223,9 +224,9 @@ export default function Clients() {
             
             {/* BingoLingo Partner Section */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.4 }}
               className="rounded-2xl border border-gold/20 bg-card overflow-hidden"
             >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 border-b border-border/40">
@@ -286,25 +287,27 @@ export default function Clients() {
                     <p className="text-sm font-tech">No referrals yet. Share the partner link with BingoLingo.ai users.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-4 text-xs font-tech text-muted-foreground uppercase tracking-wider pb-2 border-b border-border/30 px-2">
-                      <span>Company</span>
-                      <span>Contact</span>
-                      <span>Plan</span>
-                      <span>Registered</span>
-                    </div>
-                    {bingolingoReferrals.map((ref) => (
-                      <div key={ref.id} className="grid grid-cols-4 text-sm py-3 px-2 rounded-xl hover:bg-secondary/30 transition-colors items-center">
-                        <span className="font-medium">{ref.companyName}</span>
-                        <span className="text-muted-foreground truncate pr-4">{ref.contactName}</span>
-                        <span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border font-tech ${PLAN_COLORS[ref.plan] || ""}`}>
-                            {ref.plan}
-                          </span>
-                        </span>
-                        <span className="text-muted-foreground text-xs font-tech">{formatDate(ref.registeredAt)}</span>
+                  <div className="space-y-3 overflow-x-auto">
+                    <div className="min-w-[400px]">
+                      <div className="grid grid-cols-4 text-xs font-tech text-muted-foreground uppercase tracking-wider pb-2 border-b border-border/30 px-2">
+                        <span>Company</span>
+                        <span>Contact</span>
+                        <span>Plan</span>
+                        <span>Registered</span>
                       </div>
-                    ))}
+                      {bingolingoReferrals.map((ref) => (
+                        <div key={ref.id} className="grid grid-cols-4 text-sm py-3 px-2 rounded-xl hover:bg-secondary/30 transition-colors items-center">
+                          <span className="font-medium truncate pr-2">{ref.companyName}</span>
+                          <span className="text-muted-foreground truncate pr-4">{ref.contactName}</span>
+                          <span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full border font-tech ${PLAN_COLORS[ref.plan] || ""}`}>
+                              {ref.plan}
+                            </span>
+                          </span>
+                          <span className="text-muted-foreground text-xs font-tech">{formatDate(ref.registeredAt)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

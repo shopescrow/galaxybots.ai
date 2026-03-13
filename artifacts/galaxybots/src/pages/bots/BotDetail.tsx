@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Send, BotIcon, User, Terminal } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export default function BotDetail() {
   const params = useParams();
@@ -17,8 +18,7 @@ export default function BotDetail() {
   const { data: bot, isLoading: botLoading } = useBot(botId);
   const { data: conversations } = useConversations(null, botId);
   
-  // Find or create active conversation
-  const activeConvo = conversations?.[0]; // Simplification for demo
+  const activeConvo = conversations?.[0];
   
   const startConvo = useStartConversation();
   const [isStarting, setIsStarting] = useState(false);
@@ -37,7 +37,7 @@ export default function BotDetail() {
 
   return (
     <AppLayout>
-      <div className="container mx-auto px-4 py-8 h-[calc(100vh-5rem)]">
+      <div className="container mx-auto px-4 py-4 sm:py-8 h-[calc(100dvh-5rem)]">
         {botLoading ? (
           <div className="h-full flex items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -47,9 +47,8 @@ export default function BotDetail() {
             Bot not found
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-            {/* Left Col: Profile */}
-            <div className="lg:col-span-1 flex flex-col gap-6 overflow-y-auto pr-2 pb-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 h-full min-h-0">
+            <div className="lg:col-span-1 flex flex-col gap-6 overflow-y-auto pr-2 pb-10 min-h-0 max-h-[40vh] lg:max-h-none">
               <Card className="border-primary/20 shadow-[0_0_30px_rgba(123,97,255,0.05)]">
                 <CardHeader className="text-center pb-2">
                   <div className="mx-auto w-24 h-24 rounded-2xl bg-secondary flex items-center justify-center border-2 border-primary/30 mb-4 shadow-xl shadow-primary/10">
@@ -91,9 +90,8 @@ export default function BotDetail() {
               </Card>
             </div>
 
-            {/* Right Col: Chat Interface */}
-            <div className="lg:col-span-2 h-full flex flex-col">
-              <Card className="flex-1 flex flex-col overflow-hidden border-border/40">
+            <div className="lg:col-span-2 flex flex-col min-h-0 flex-1">
+              <Card className="flex-1 flex flex-col overflow-hidden border-border/40 min-h-0">
                 <CardHeader className="bg-secondary/30 border-b border-border/40 py-4">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-cyan animate-pulse" />
@@ -101,7 +99,7 @@ export default function BotDetail() {
                   </div>
                 </CardHeader>
                 
-                <CardContent className="flex-1 p-0 flex flex-col h-full overflow-hidden relative">
+                <CardContent className="flex-1 p-0 flex flex-col overflow-hidden relative min-h-0">
                   {!activeConvo ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background/50">
                       <BotIcon className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
@@ -109,7 +107,7 @@ export default function BotDetail() {
                       <p className="text-muted-foreground mb-6 max-w-md">
                         Open a secure communication channel with this director to request analysis, strategies, or operational tasks.
                       </p>
-                      <Button variant="glow" onClick={handleStartChat} disabled={isStarting}>
+                      <Button variant="glow" onClick={handleStartChat} disabled={isStarting} className="min-h-[44px]">
                         {isStarting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Terminal className="w-4 h-4 mr-2" />}
                         Open Channel
                       </Button>
@@ -127,7 +125,6 @@ export default function BotDetail() {
   );
 }
 
-// Extracted chat interface component
 function ChatInterface({ conversationId, botName }: { conversationId: number, botName: string }) {
   const { data: messages, isLoading } = useChatMessages(conversationId);
   const sendMessage = useSendChatMessage();
@@ -154,11 +151,10 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full relative">
+    <div className="flex-1 flex flex-col min-h-0 relative">
       <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.03] pointer-events-none" />
       
-      {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-6 z-10">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-6 z-10 min-h-0">
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -184,7 +180,7 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
 
             return (
               <div key={msg.id} className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
-                <div className={cn("flex gap-3 max-w-[85%] sm:max-w-[75%]", isUser ? "flex-row-reverse" : "flex-row")}>
+                <div className={cn("flex gap-3 max-w-[90%] sm:max-w-[75%]", isUser ? "flex-row-reverse" : "flex-row")}>
                   
                   <div className="shrink-0 mt-1">
                     <div className={cn(
@@ -218,17 +214,16 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 border-t border-border/40 bg-background/80 backdrop-blur-md z-10">
+      <div className="p-4 border-t border-border/40 bg-background/80 supports-[backdrop-filter]:backdrop-blur-md z-10" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
         <form onSubmit={handleSend} className="flex gap-3 max-w-4xl mx-auto relative">
           <Input 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Issue directive..." 
-            className="flex-1 bg-secondary/50 border-border shadow-inner font-tech"
+            className="flex-1 bg-secondary/50 border-border shadow-inner font-tech min-h-[44px]"
             disabled={sendMessage.isPending}
           />
-          <Button type="submit" disabled={!input.trim() || sendMessage.isPending} className="px-6 shrink-0 w-16" variant={input.trim() ? "glow" : "secondary"}>
+          <Button type="submit" disabled={!input.trim() || sendMessage.isPending} className="px-6 shrink-0 min-w-[44px] min-h-[44px]" variant={input.trim() ? "glow" : "secondary"}>
             {sendMessage.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </Button>
         </form>

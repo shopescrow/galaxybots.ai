@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import { Search, Loader2, BotIcon } from "lucide-react";
 import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 export default function BotRoster() {
   const { data: bots, isLoading } = useBots();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   const categories = useMemo(() => {
     if (!bots) return [];
@@ -34,39 +35,40 @@ export default function BotRoster() {
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Corporate Roster</h1>
-            <p className="text-muted-foreground text-lg">Your elite team of AI directors and specialists.</p>
+            <h1 className="text-3xl sm:text-4xl font-bold mb-2">Corporate Roster</h1>
+            <p className="text-muted-foreground text-base sm:text-lg">Your elite team of AI directors and specialists.</p>
           </div>
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground" />
             <Input 
               placeholder="Search directors..." 
-              className="pl-10"
+              className="pl-10 min-h-[44px]"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Category Filters */}
-        <div className="flex flex-wrap gap-2 mb-10">
-          <Badge 
-            variant={categoryFilter === null ? "glow" : "secondary"}
-            className="cursor-pointer px-4 py-1.5 text-sm"
-            onClick={() => setCategoryFilter(null)}
-          >
-            All Departments
-          </Badge>
-          {categories.map(cat => (
+        <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 mb-10">
+          <div className="flex gap-2 w-max">
             <Badge 
-              key={cat}
-              variant={categoryFilter === cat ? "glow" : "outline"}
-              className="cursor-pointer px-4 py-1.5 text-sm"
-              onClick={() => setCategoryFilter(cat)}
+              variant={categoryFilter === null ? "glow" : "secondary"}
+              className="cursor-pointer px-4 py-1.5 text-sm min-h-[44px] flex items-center whitespace-nowrap"
+              onClick={() => setCategoryFilter(null)}
             >
-              {cat}
+              All Departments
             </Badge>
-          ))}
+            {categories.map(cat => (
+              <Badge 
+                key={cat}
+                variant={categoryFilter === cat ? "glow" : "outline"}
+                className="cursor-pointer px-4 py-1.5 text-sm min-h-[44px] flex items-center whitespace-nowrap"
+                onClick={() => setCategoryFilter(cat)}
+              >
+                {cat}
+              </Badge>
+            ))}
+          </div>
         </div>
 
         {isLoading ? (
@@ -74,13 +76,13 @@ export default function BotRoster() {
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredBots.map((bot, i) => (
               <motion.div
                 key={bot.id}
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: prefersReducedMotion ? 0 : i * 0.05 }}
               >
                 <Link href={`/bots/${bot.id}`}>
                   <Card className="h-full cursor-pointer group hover:border-primary/50 transition-colors relative overflow-hidden">

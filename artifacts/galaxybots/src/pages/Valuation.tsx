@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import { useRef } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -109,6 +109,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function Valuation() {
   const headerRef = useRef<HTMLDivElement>(null);
   const headerInView = useInView(headerRef, { once: true });
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <AppLayout>
@@ -117,16 +118,16 @@ export default function Valuation() {
         {/* HERO */}
         <motion.div
           ref={headerRef}
-          initial={{ opacity: 0, y: 30 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 30 }}
           animate={headerInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.7 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.7 }}
           className="text-center max-w-4xl mx-auto"
         >
           <div className="inline-flex items-center gap-2 bg-gold/10 border border-gold/30 rounded-full px-4 py-2 text-xs font-tech text-gold uppercase tracking-widest mb-8">
             <TrendingUp className="w-3.5 h-3.5" />
             5-Year Financial Projections · Confidential
           </div>
-          <h1 className="text-5xl sm:text-6xl font-display font-bold mb-6 leading-tight">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-bold mb-6 leading-tight">
             GalaxyBots.ai<br />
             <span className="text-gradient">Valuation Outlook</span>
           </h1>
@@ -144,9 +145,9 @@ export default function Valuation() {
             ].map((kpi, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
                 animate={headerInView ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: 0.3 + i * 0.1 }}
+                transition={{ delay: prefersReducedMotion ? 0 : 0.3 + i * 0.1  }}
                 className={`p-5 rounded-2xl border ${kpi.border} ${kpi.bg} text-center`}
               >
                 <div className={`text-2xl sm:text-3xl font-display font-bold ${kpi.color}`}>{kpi.value}</div>
@@ -158,10 +159,10 @@ export default function Valuation() {
 
         {/* ── SECTION 1: Revenue + Profit Overview ── */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
         >
           <SectionHeader
             label="Revenue & Profitability"
@@ -198,43 +199,45 @@ export default function Valuation() {
           </div>
 
           {/* Year-by-year table */}
-          <div className="mt-6 rounded-2xl border border-border/40 bg-card overflow-hidden">
-            <div className="grid grid-cols-6 text-xs font-tech uppercase tracking-wider text-muted-foreground px-6 py-4 border-b border-border/40 bg-secondary/30">
-              <span>Year</span>
-              <span className="text-right">Clients</span>
-              <span className="text-right text-primary">Revenue</span>
-              <span className="text-right text-red-400">Expenses</span>
-              <span className="text-right text-cyan">Net Profit</span>
-              <span className="text-right">Margin</span>
+          <div className="mt-6 rounded-2xl border border-border/40 bg-card overflow-x-auto">
+            <div className="min-w-[500px]">
+              <div className="grid grid-cols-6 text-xs font-tech uppercase tracking-wider text-muted-foreground px-4 sm:px-6 py-4 border-b border-border/40 bg-secondary/30">
+                <span>Year</span>
+                <span className="text-right">Clients</span>
+                <span className="text-right text-primary">Revenue</span>
+                <span className="text-right text-red-400">Expenses</span>
+                <span className="text-right text-cyan">Net Profit</span>
+                <span className="text-right">Margin</span>
+              </div>
+              {projections.map((p, i) => (
+                <motion.div
+                  key={p.year}
+                  initial={prefersReducedMotion ? false : { opacity: 0, x: -20  }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08  }}
+                  className="grid grid-cols-6 px-4 sm:px-6 py-4 border-b border-border/20 last:border-0 hover:bg-secondary/20 transition-colors"
+                >
+                  <span className="font-display font-bold text-foreground">{p.year}</span>
+                  <span className="text-right font-tech text-foreground/80">{p.clients.toLocaleString()}</span>
+                  <span className="text-right font-bold text-primary">{fmt(p.revenue)}</span>
+                  <span className="text-right text-red-400">{fmt(p.expenses)}</span>
+                  <span className="text-right font-bold text-cyan">{fmt(p.netProfit)}</span>
+                  <span className="text-right font-tech text-foreground/70">
+                    {Math.round((p.netProfit / p.revenue) * 100)}%
+                  </span>
+                </motion.div>
+              ))}
             </div>
-            {projections.map((p, i) => (
-              <motion.div
-                key={p.year}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-                className="grid grid-cols-6 px-6 py-4 border-b border-border/20 last:border-0 hover:bg-secondary/20 transition-colors"
-              >
-                <span className="font-display font-bold text-foreground">{p.year}</span>
-                <span className="text-right font-tech text-foreground/80">{p.clients.toLocaleString()}</span>
-                <span className="text-right font-bold text-primary">{fmt(p.revenue)}</span>
-                <span className="text-right text-red-400">{fmt(p.expenses)}</span>
-                <span className="text-right font-bold text-cyan">{fmt(p.netProfit)}</span>
-                <span className="text-right font-tech text-foreground/70">
-                  {Math.round((p.netProfit / p.revenue) * 100)}%
-                </span>
-              </motion.div>
-            ))}
           </div>
         </motion.section>
 
         {/* ── SECTION 2: Valuation Scenarios ── */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
         >
           <SectionHeader
             label="Valuation Analysis"
@@ -294,10 +297,10 @@ export default function Valuation() {
             ].map((scenario, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: i * 0.1  }}
                 className={`relative p-6 rounded-2xl border ${scenario.border} ${scenario.bg}`}
               >
                 {scenario.recommended && (
@@ -316,10 +319,10 @@ export default function Valuation() {
 
         {/* ── SECTION 3: Expense Breakdown ── */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
         >
           <SectionHeader
             label="Cost Structure"
@@ -344,7 +347,7 @@ export default function Valuation() {
           </div>
 
           {/* Expense legend detail */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">
             {[
               { key: "team", label: "Team & Salaries", pct: "39%", desc: "Engineering, Sales, CS, Operations" },
               { key: "marketing", label: "Sales & Marketing", pct: "21%", desc: "Ads, partners, content, events" },
@@ -366,10 +369,10 @@ export default function Valuation() {
 
         {/* ── SECTION 4: Revenue Mix ── */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
         >
           <SectionHeader
             label="Revenue Mix"
@@ -412,10 +415,10 @@ export default function Valuation() {
               {revenueByTier2030.map((tier, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, x: 30 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, x: 30  }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
+                  transition={{ delay: i * 0.1  }}
                   className="flex items-center gap-5 p-5 rounded-2xl border border-border/30 bg-card"
                 >
                   <div className="w-4 h-full min-h-[50px] rounded-full shrink-0" style={{ background: tier.color }} />
@@ -437,10 +440,10 @@ export default function Valuation() {
 
         {/* ── SECTION 5: Client Growth ── */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
         >
           <SectionHeader
             label="Client Growth"
@@ -476,10 +479,10 @@ export default function Valuation() {
 
         {/* ── SECTION 6: Assumptions ── */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6  }}
         >
           <SectionHeader
             label="Model Assumptions"
@@ -489,10 +492,10 @@ export default function Valuation() {
             {assumptions.map((a, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 15 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 15  }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.07 }}
+                transition={{ delay: i * 0.07  }}
                 className="flex items-start gap-4 p-5 rounded-2xl border border-border/30 bg-card"
               >
                 <a.icon className="w-5 h-5 text-primary shrink-0 mt-0.5" />

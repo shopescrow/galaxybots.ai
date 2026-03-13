@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useLanguage, LANGUAGES, useTranslatedStrings } from "@/contexts/LanguageContext";
 import { Globe, Zap, MessageSquare, CheckCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ const DEMO_PHRASES = [
 ];
 
 function TranslationDemo() {
+  const prefersReducedMotion = useReducedMotion();
   const { language } = useLanguage();
   const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
   const [translations, setTranslations] = useState<Record<string, string[]>>({});
@@ -83,9 +84,9 @@ function TranslationDemo() {
         {currentTexts.map((text, i) => (
           <motion.div
             key={`${selectedLang.code}-${i}`}
-            initial={{ opacity: 0, y: 5 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 5  }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
+            transition={{ delay: prefersReducedMotion ? 0 : i * 0.1   }}
             className="flex items-start gap-3"
           >
             <span className="text-lg">{selectedLang.flag}</span>
@@ -111,6 +112,7 @@ const STAT_STRINGS = [
 ];
 
 export default function Global() {
+  const prefersReducedMotion = useReducedMotion();
   const translated = useTranslatedStrings(STAT_STRINGS);
 
   const regions = [
@@ -126,16 +128,16 @@ export default function Global() {
 
         {/* Hero */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.7 }}
           className="text-center max-w-4xl mx-auto"
         >
           <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-2 text-xs font-tech text-primary uppercase tracking-widest mb-8">
             <Globe className="w-3.5 h-3.5" />
             Multilingual Intelligence Platform
           </div>
-          <h1 className="text-5xl sm:text-6xl font-display font-bold mb-6 leading-tight">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-bold mb-6 leading-tight">
             One Board.<br />
             <span className="text-gradient">Every Language.</span>
           </h1>
@@ -154,10 +156,10 @@ export default function Global() {
           ].map((stat, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 20 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: prefersReducedMotion ? 0 : i * 0.1   }}
               className="p-5 rounded-2xl border border-border/40 bg-card text-center"
             >
               <stat.icon className={`w-6 h-6 ${stat.color} mx-auto mb-3`} />
@@ -169,7 +171,7 @@ export default function Global() {
 
         {/* Live Translation Demo */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
         >
@@ -183,7 +185,7 @@ export default function Global() {
 
         {/* Regional Coverage */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
         >
@@ -195,10 +197,10 @@ export default function Global() {
             {regions.map((region, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: prefersReducedMotion ? 0 : i * 0.1   }}
                 className={`p-5 rounded-2xl border ${region.border} ${region.bg}`}
               >
                 <div className={`text-sm font-display font-bold uppercase tracking-wide ${region.color} mb-4`}>{region.name}</div>
@@ -217,7 +219,7 @@ export default function Global() {
 
         {/* Language Grid */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
         >
@@ -229,10 +231,10 @@ export default function Global() {
             {LANGUAGES.map((lang, i) => (
               <motion.div
                 key={lang.code}
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.9  }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: prefersReducedMotion ? 0 : i * 0.05   }}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border/30 bg-card hover:border-primary/30 transition-colors group"
               >
                 <span className="text-3xl">{lang.flag}</span>
@@ -247,7 +249,7 @@ export default function Global() {
 
         {/* How It Works */}
         <motion.section
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="rounded-3xl border border-primary/20 bg-card p-10"
@@ -290,10 +292,10 @@ export default function Global() {
               ].map((msg, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, x: msg.from === "user" ? -20 : 20 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, x: msg.from === "user" ? -20 : 20  }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.15 }}
+                  transition={{ delay: prefersReducedMotion ? 0 : i * 0.15   }}
                   className={`flex gap-3 ${msg.from === "bot" ? "justify-end" : ""}`}
                 >
                   {msg.from === "user" && (
@@ -317,7 +319,7 @@ export default function Global() {
 
         {/* CTA */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20  }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="text-center space-y-4"

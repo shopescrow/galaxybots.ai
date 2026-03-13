@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -41,6 +41,7 @@ function readingTime(content: string) {
 }
 
 export default function Blog() {
+  const prefersReducedMotion = useReducedMotion();
   const [activeCategory, setActiveCategory] = useState<string>("All");
 
   const { data: posts = [], isLoading } = useQuery<BlogPost[]>({
@@ -64,16 +65,16 @@ export default function Blog() {
         
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.5 }}
           className="text-center max-w-3xl mx-auto mb-16"
         >
           <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-2 text-xs font-tech text-primary uppercase tracking-widest mb-6">
             <BookOpen className="w-3.5 h-3.5" />
             Intelligence Briefings
           </div>
-          <h1 className="text-4xl sm:text-5xl font-display font-bold mb-6">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold mb-6">
             The GalaxyBots <span className="text-gradient">Journal</span>
           </h1>
           <p className="text-xl text-muted-foreground">
@@ -87,7 +88,7 @@ export default function Blog() {
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-2 rounded-full text-sm font-tech border transition-all duration-200 ${
+              className={`px-4 py-2 rounded-full text-sm font-tech border transition-all duration-200 min-h-[44px] ${
                 activeCategory === cat
                   ? "bg-primary/20 text-primary border-primary/50"
                   : "text-muted-foreground border-border/50 hover:border-primary/30 hover:text-foreground"
@@ -107,9 +108,9 @@ export default function Blog() {
             {/* Featured Post */}
             {featured && activeCategory === "All" && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.5, delay: prefersReducedMotion ? 0 : 0.1 }}
                 className="mb-12"
               >
                 <Link href={`/blog/${featured.slug}`}>
@@ -156,9 +157,9 @@ export default function Blog() {
               {(activeCategory === "All" ? rest : posts).map((post, i) => (
                 <motion.div
                   key={post.id}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: i * 0.08 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.4, delay: prefersReducedMotion ? 0 : i * 0.08 }}
                 >
                   <Link href={`/blog/${post.slug}`}>
                     <div className="group h-full rounded-2xl border border-border/50 bg-card hover:border-primary/30 transition-all duration-300 p-6 cursor-pointer flex flex-col">
