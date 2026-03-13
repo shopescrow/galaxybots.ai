@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/bots", label: "Roster" },
   { href: "/boardroom", label: "Boardroom" },
   { href: "/journal", label: "Journal" },
+  { href: "/blog", label: "Blog" },
   { href: "/clients", label: "Clients" },
 ];
 
@@ -48,7 +49,10 @@ export function Navbar() {
           </nav>
         </div>
 
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-3">
+          <Link href="/how-it-works">
+            <Button variant="outline" size="sm" className="font-tech text-xs">How It Works</Button>
+          </Link>
           <Link href="/hire">
             <Button variant="glow">Hire Directors</Button>
           </Link>
@@ -82,6 +86,9 @@ export function Navbar() {
             </Link>
           ))}
           <div className="h-px bg-border/50 my-2" />
+          <Link href="/how-it-works" onClick={() => setIsOpen(false)}>
+            <Button variant="outline" className="w-full font-tech text-sm">How It Works</Button>
+          </Link>
           <Link href="/hire" onClick={() => setIsOpen(false)}>
             <Button variant="glow" className="w-full">Hire Directors</Button>
           </Link>

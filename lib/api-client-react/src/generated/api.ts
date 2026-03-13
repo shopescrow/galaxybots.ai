@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  BlogPost,
   BoardroomMessage,
   Bot,
   Client,
@@ -27,13 +28,19 @@ import type {
   ErrorResponse,
   GetBoardroomMessagesParams,
   GetJournalEntriesParams,
+  GetPartnerLinkParams,
   HealthStatus,
   HireBotBody,
   JournalEntry,
+  ListBlogPostsParams,
   ListConversationsParams,
+  ListPartnerReferralsParams,
   Message,
   MessageResponse,
+  PartnerInfo,
+  PartnerRegistration,
   PostBoardroomMessageBody,
+  RegisterPartnerUserBody,
   SendMessageBody,
 } from "./api.schemas";
 
@@ -47,7 +54,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -123,7 +129,6 @@ export function useHealthCheck<
 }
 
 /**
- * Returns all bot personalities available in the platform
  * @summary List all bots
  */
 export const getListBotsUrl = () => {
@@ -264,7 +269,7 @@ export function useGetBot<
 }
 
 /**
- * @summary List conversations for a client
+ * @summary List conversations
  */
 export const getListConversationsUrl = (params?: ListConversationsParams) => {
   const normalizedParams = new URLSearchParams();
@@ -334,7 +339,7 @@ export type ListConversationsQueryResult = NonNullable<
 export type ListConversationsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List conversations for a client
+ * @summary List conversations
  */
 
 export function useListConversations<
@@ -723,7 +728,7 @@ export function useGetBoardroomMessages<
 }
 
 /**
- * @summary Post a message to the board room (CEO/Architect only)
+ * @summary Post a message to the board room
  */
 export const getPostBoardroomMessageUrl = () => {
   return `/api/boardroom/messages`;
@@ -787,7 +792,7 @@ export type PostBoardroomMessageMutationBody =
 export type PostBoardroomMessageMutationError = ErrorType<unknown>;
 
 /**
- * @summary Post a message to the board room (CEO/Architect only)
+ * @summary Post a message to the board room
  */
 export const usePostBoardroomMessage = <
   TError = ErrorType<unknown>,
@@ -1316,6 +1321,470 @@ export function useGetJournalEntries<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetJournalEntriesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all published blog posts
+ */
+export const getListBlogPostsUrl = (params?: ListBlogPostsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/blog?${stringifiedParams}`
+    : `/api/blog`;
+};
+
+export const listBlogPosts = async (
+  params?: ListBlogPostsParams,
+  options?: RequestInit,
+): Promise<BlogPost[]> => {
+  return customFetch<BlogPost[]>(getListBlogPostsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBlogPostsQueryKey = (params?: ListBlogPostsParams) => {
+  return [`/api/blog`, ...(params ? [params] : [])] as const;
+};
+
+export const getListBlogPostsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBlogPosts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListBlogPostsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBlogPosts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBlogPostsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBlogPosts>>> = ({
+    signal,
+  }) => listBlogPosts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBlogPosts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBlogPostsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBlogPosts>>
+>;
+export type ListBlogPostsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all published blog posts
+ */
+
+export function useListBlogPosts<
+  TData = Awaited<ReturnType<typeof listBlogPosts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListBlogPostsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listBlogPosts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBlogPostsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a blog post by slug
+ */
+export const getGetBlogPostUrl = (slug: string) => {
+  return `/api/blog/${slug}`;
+};
+
+export const getBlogPost = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<BlogPost> => {
+  return customFetch<BlogPost>(getGetBlogPostUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBlogPostQueryKey = (slug: string) => {
+  return [`/api/blog/${slug}`] as const;
+};
+
+export const getGetBlogPostQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBlogPost>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBlogPost>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBlogPostQueryKey(slug);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBlogPost>>> = ({
+    signal,
+  }) => getBlogPost(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBlogPost>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBlogPostQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBlogPost>>
+>;
+export type GetBlogPostQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a blog post by slug
+ */
+
+export function useGetBlogPost<
+  TData = Awaited<ReturnType<typeof getBlogPost>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBlogPost>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBlogPostQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Resolve a partner referral link
+ */
+export const getGetPartnerLinkUrl = (params: GetPartnerLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/partner/link?${stringifiedParams}`
+    : `/api/partner/link`;
+};
+
+export const getPartnerLink = async (
+  params: GetPartnerLinkParams,
+  options?: RequestInit,
+): Promise<PartnerInfo> => {
+  return customFetch<PartnerInfo>(getGetPartnerLinkUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPartnerLinkQueryKey = (params?: GetPartnerLinkParams) => {
+  return [`/api/partner/link`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPartnerLinkQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPartnerLink>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetPartnerLinkParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerLink>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPartnerLinkQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPartnerLink>>> = ({
+    signal,
+  }) => getPartnerLink(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPartnerLink>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPartnerLinkQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPartnerLink>>
+>;
+export type GetPartnerLinkQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Resolve a partner referral link
+ */
+
+export function useGetPartnerLink<
+  TData = Awaited<ReturnType<typeof getPartnerLink>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetPartnerLinkParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPartnerLink>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPartnerLinkQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register a user referred from a partner
+ */
+export const getRegisterPartnerUserUrl = () => {
+  return `/api/partner/register`;
+};
+
+export const registerPartnerUser = async (
+  registerPartnerUserBody: RegisterPartnerUserBody,
+  options?: RequestInit,
+): Promise<PartnerRegistration> => {
+  return customFetch<PartnerRegistration>(getRegisterPartnerUserUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(registerPartnerUserBody),
+  });
+};
+
+export const getRegisterPartnerUserMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPartnerUser>>,
+    TError,
+    { data: BodyType<RegisterPartnerUserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerPartnerUser>>,
+  TError,
+  { data: BodyType<RegisterPartnerUserBody> },
+  TContext
+> => {
+  const mutationKey = ["registerPartnerUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerPartnerUser>>,
+    { data: BodyType<RegisterPartnerUserBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerPartnerUser(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterPartnerUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerPartnerUser>>
+>;
+export type RegisterPartnerUserMutationBody = BodyType<RegisterPartnerUserBody>;
+export type RegisterPartnerUserMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Register a user referred from a partner
+ */
+export const useRegisterPartnerUser = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPartnerUser>>,
+    TError,
+    { data: BodyType<RegisterPartnerUserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof registerPartnerUser>>,
+  TError,
+  { data: BodyType<RegisterPartnerUserBody> },
+  TContext
+> => {
+  return useMutation(getRegisterPartnerUserMutationOptions(options));
+};
+
+/**
+ * @summary List all partner referrals (admin/CEO only)
+ */
+export const getListPartnerReferralsUrl = (
+  params?: ListPartnerReferralsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/partner/referrals?${stringifiedParams}`
+    : `/api/partner/referrals`;
+};
+
+export const listPartnerReferrals = async (
+  params?: ListPartnerReferralsParams,
+  options?: RequestInit,
+): Promise<PartnerRegistration[]> => {
+  return customFetch<PartnerRegistration[]>(
+    getListPartnerReferralsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPartnerReferralsQueryKey = (
+  params?: ListPartnerReferralsParams,
+) => {
+  return [`/api/partner/referrals`, ...(params ? [params] : [])] as const;
+};
+
+export const getListPartnerReferralsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPartnerReferrals>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPartnerReferralsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerReferrals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPartnerReferralsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPartnerReferrals>>
+  > = ({ signal }) =>
+    listPartnerReferrals(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPartnerReferrals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPartnerReferralsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPartnerReferrals>>
+>;
+export type ListPartnerReferralsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all partner referrals (admin/CEO only)
+ */
+
+export function useListPartnerReferrals<
+  TData = Awaited<ReturnType<typeof listPartnerReferrals>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPartnerReferralsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPartnerReferrals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPartnerReferralsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

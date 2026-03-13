@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./blogPost";
 export * from "./boardroomMessage";
 export * from "./boardroomMessageRole";
 export * from "./bot";
@@ -21,12 +22,19 @@ export * from "./createConversationBody";
 export * from "./errorResponse";
 export * from "./getBoardroomMessagesParams";
 export * from "./getJournalEntriesParams";
+export * from "./getPartnerLinkParams";
 export * from "./healthStatus";
 export * from "./hireBotBody";
 export * from "./journalEntry";
+export * from "./listBlogPostsParams";
 export * from "./listConversationsParams";
+export * from "./listPartnerReferralsParams";
 export * from "./message";
 export * from "./messageResponse";
 export * from "./messageRole";
+export * from "./partnerInfo";
+export * from "./partnerRegistration";
 export * from "./postBoardroomMessageBody";
+export * from "./registerPartnerUserBody";
+export * from "./registerPartnerUserBodyPlan";
 export * from "./sendMessageBody";

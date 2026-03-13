@@ -11,6 +11,10 @@ import Boardroom from "@/pages/boardroom/Boardroom";
 import Journal from "@/pages/journal/Journal";
 import Clients from "@/pages/clients/Clients";
 import Hire from "@/pages/hire/Hire";
+import HowItWorks from "@/pages/HowItWorks";
+import Blog from "@/pages/blog/Blog";
+import BlogPost from "@/pages/blog/BlogPost";
+import PartnerLanding from "@/pages/partner/PartnerLanding";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -32,6 +36,10 @@ function Router() {
       <Route path="/journal" component={Journal} />
       <Route path="/clients" component={Clients} />
       <Route path="/hire" component={Hire} />
+      <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/blog" component={Blog} />
+      <Route path="/blog/:slug" component={BlogPost} />
+      <Route path="/partner/:ref" component={PartnerLanding} />
       <Route component={NotFound} />
     </Switch>
   );

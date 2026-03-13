@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,7 +15,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Returns all bot personalities available in the platform
  * @summary List all bots
  */
 export const ListBotsResponseItem = zod.object({
@@ -56,7 +54,7 @@ export const GetBotResponse = zod.object({
 });
 
 /**
- * @summary List conversations for a client
+ * @summary List conversations
  */
 export const ListConversationsQueryParams = zod.object({
   clientId: zod.coerce.number().nullish(),
@@ -139,7 +137,7 @@ export const GetBoardroomMessagesResponse = zod.array(
 );
 
 /**
- * @summary Post a message to the board room (CEO/Architect only)
+ * @summary Post a message to the board room
  */
 export const PostBoardroomMessageBody = zod.object({
   content: zod.string(),
@@ -237,4 +235,97 @@ export const GetJournalEntriesResponseItem = zod.object({
 });
 export const GetJournalEntriesResponse = zod.array(
   GetJournalEntriesResponseItem,
+);
+
+/**
+ * @summary List all published blog posts
+ */
+export const ListBlogPostsQueryParams = zod.object({
+  category: zod.coerce.string().nullish(),
+});
+
+export const ListBlogPostsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string(),
+  content: zod.string(),
+  author: zod.string(),
+  category: zod.string(),
+  coverImage: zod.string().nullish(),
+  publishedAt: zod.date(),
+  createdAt: zod.date(),
+});
+export const ListBlogPostsResponse = zod.array(ListBlogPostsResponseItem);
+
+/**
+ * @summary Get a blog post by slug
+ */
+export const GetBlogPostParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetBlogPostResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string(),
+  content: zod.string(),
+  author: zod.string(),
+  category: zod.string(),
+  coverImage: zod.string().nullish(),
+  publishedAt: zod.date(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Resolve a partner referral link
+ */
+export const GetPartnerLinkQueryParams = zod.object({
+  ref: zod.coerce.string(),
+  source: zod.coerce.string().nullish(),
+});
+
+export const GetPartnerLinkResponse = zod.object({
+  ref: zod.string(),
+  partnerName: zod.string(),
+  partnerLogo: zod.string().nullish(),
+  welcomeMessage: zod.string(),
+  offer: zod.string().nullish(),
+  isActive: zod.boolean(),
+});
+
+/**
+ * @summary Register a user referred from a partner
+ */
+export const RegisterPartnerUserBody = zod.object({
+  partnerRef: zod.string(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  contactEmail: zod.string(),
+  plan: zod.enum(["single", "team", "enterprise"]),
+  source: zod.string().nullish(),
+});
+
+/**
+ * @summary List all partner referrals (admin/CEO only)
+ */
+export const ListPartnerReferralsQueryParams = zod.object({
+  partnerRef: zod.coerce.string().nullish(),
+});
+
+export const ListPartnerReferralsResponseItem = zod.object({
+  id: zod.number(),
+  partnerRef: zod.string(),
+  clientId: zod.number(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  contactEmail: zod.string(),
+  plan: zod.string(),
+  source: zod.string().nullish(),
+  status: zod.string(),
+  registeredAt: zod.date(),
+});
+export const ListPartnerReferralsResponse = zod.array(
+  ListPartnerReferralsResponseItem,
 );

@@ -5,6 +5,8 @@ import conversationsRouter from "./conversations";
 import boardroomRouter from "./boardroom";
 import clientsRouter from "./clients";
 import journalRouter from "./journal";
+import blogRouter from "./blog";
+import partnerRouter from "./partner";
 
 const router: IRouter = Router();
 
@@ -14,5 +16,7 @@ router.use(conversationsRouter);
 router.use(boardroomRouter);
 router.use(clientsRouter);
 router.use(journalRouter);
+router.use(blogRouter);
+router.use(partnerRouter);
 
 export default router;

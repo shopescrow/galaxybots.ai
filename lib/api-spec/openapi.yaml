@@ -19,13 +19,16 @@ tags:
     description: Client operations
   - name: journal
     description: Daily journal operations
+  - name: blog
+    description: Blog post operations
+  - name: partner
+    description: Partner integration operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -39,7 +42,6 @@ paths:
       operationId: listBots
       tags: [bots]
       summary: List all bots
-      description: Returns all bot personalities available in the platform
       responses:
         "200":
           description: List of bots
@@ -79,7 +81,7 @@ paths:
     get:
       operationId: listConversations
       tags: [conversations]
-      summary: List conversations for a client
+      summary: List conversations
       parameters:
         - name: clientId
           in: query
@@ -139,7 +141,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/Message"
         "404":
-          description: Conversation not found
+          description: Not found
           content:
             application/json:
               schema:
@@ -168,7 +170,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
         "404":
-          description: Conversation not found
+          description: Not found
           content:
             application/json:
               schema:
@@ -197,7 +199,7 @@ paths:
     post:
       operationId: postBoardroomMessage
       tags: [boardroom]
-      summary: Post a message to the board room (CEO/Architect only)
+      summary: Post a message to the board room
       requestBody:
         required: true
         content:
@@ -206,7 +208,7 @@ paths:
               $ref: "#/components/schemas/PostBoardroomMessageBody"
       responses:
         "201":
-          description: Message posted and board responds
+          description: Message posted
           content:
             application/json:
               schema:
@@ -265,7 +267,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Client"
         "404":
-          description: Client not found
+          description: Not found
           content:
             application/json:
               schema:
@@ -284,7 +286,7 @@ paths:
             type: integer
       responses:
         "200":
-          description: List of bots hired
+          description: Bots hired
           content:
             application/json:
               schema:
@@ -342,6 +344,128 @@ paths:
                 items:
                   $ref: "#/components/schemas/JournalEntry"
 
+  /blog:
+    get:
+      operationId: listBlogPosts
+      tags: [blog]
+      summary: List all published blog posts
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of blog posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlogPost"
+
+  /blog/{slug}:
+    get:
+      operationId: getBlogPost
+      tags: [blog]
+      summary: Get a blog post by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Blog post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner/link:
+    get:
+      operationId: getPartnerLink
+      tags: [partner]
+      summary: Resolve a partner referral link
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Partner info resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerInfo"
+        "404":
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner/register:
+    post:
+      operationId: registerPartnerUser
+      tags: [partner]
+      summary: Register a user referred from a partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPartnerUserBody"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerRegistration"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner/referrals:
+    get:
+      operationId: listPartnerReferrals
+      tags: [partner]
+      summary: List all partner referrals (admin/CEO only)
+      parameters:
+        - name: partnerRef
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Partner referrals list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartnerRegistration"
+
 components:
   schemas:
     HealthStatus:
@@ -349,16 +473,14 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-      required:
-        - error
+      required: [error]
 
     Bot:
       type: object
@@ -388,17 +510,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required:
-        - id
-        - name
-        - title
-        - department
-        - category
-        - description
-        - responsibilities
-        - personality
-        - isAvailable
-        - createdAt
+      required: [id, name, title, department, category, description, responsibilities, personality, isAvailable, createdAt]
 
     Conversation:
       type: object
@@ -419,13 +531,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required:
-        - id
-        - botId
-        - title
-        - status
-        - createdAt
-        - updatedAt
+      required: [id, botId, title, status, createdAt, updatedAt]
 
     CreateConversationBody:
       type: object
@@ -436,9 +542,7 @@ components:
           type: integer
         title:
           type: string
-      required:
-        - botId
-        - title
+      required: [botId, title]
 
     Message:
       type: object
@@ -457,12 +561,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required:
-        - id
-        - conversationId
-        - role
-        - content
-        - createdAt
+      required: [id, conversationId, role, content, createdAt]
 
     SendMessageBody:
       type: object
@@ -471,8 +570,7 @@ components:
           type: string
         senderName:
           type: ["string", "null"]
-      required:
-        - content
+      required: [content]
 
     MessageResponse:
       type: object
@@ -481,9 +579,7 @@ components:
           $ref: "#/components/schemas/Message"
         botResponse:
           $ref: "#/components/schemas/Message"
-      required:
-        - userMessage
-        - botResponse
+      required: [userMessage, botResponse]
 
     BoardroomMessage:
       type: object
@@ -508,12 +604,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required:
-        - id
-        - role
-        - contentEncoded
-        - contentEnglish
-        - createdAt
+      required: [id, role, contentEncoded, contentEnglish, createdAt]
 
     PostBoardroomMessageBody:
       type: object
@@ -522,9 +613,7 @@ components:
           type: string
         senderName:
           type: string
-      required:
-        - content
-        - senderName
+      required: [content, senderName]
 
     Client:
       type: object
@@ -546,14 +635,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required:
-        - id
-        - companyName
-        - contactName
-        - contactEmail
-        - plan
-        - status
-        - createdAt
+      required: [id, companyName, contactName, contactEmail, plan, status, createdAt]
 
     CreateClientBody:
       type: object
@@ -567,11 +649,7 @@ components:
         plan:
           type: string
           enum: [single, team, enterprise]
-      required:
-        - companyName
-        - contactName
-        - contactEmail
-        - plan
+      required: [companyName, contactName, contactEmail, plan]
 
     ClientBot:
       type: object
@@ -588,20 +666,14 @@ components:
         status:
           type: string
           enum: [active, inactive]
-      required:
-        - id
-        - clientId
-        - botId
-        - hiredAt
-        - status
+      required: [id, clientId, botId, hiredAt, status]
 
     HireBotBody:
       type: object
       properties:
         botId:
           type: integer
-      required:
-        - botId
+      required: [botId]
 
     JournalEntry:
       type: object
@@ -621,10 +693,92 @@ components:
         createdAt:
           type: string
           format: date-time
-      required:
-        - id
-        - date
-        - title
-        - summary
-        - boardroomHighlights
-        - createdAt
+      required: [id, date, title, summary, boardroomHighlights, createdAt]
+
+    BlogPost:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+        content:
+          type: string
+        author:
+          type: string
+        category:
+          type: string
+        coverImage:
+          type: ["string", "null"]
+        publishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, slug, excerpt, content, author, category, publishedAt, createdAt]
+
+    PartnerInfo:
+      type: object
+      properties:
+        ref:
+          type: string
+        partnerName:
+          type: string
+        partnerLogo:
+          type: ["string", "null"]
+        welcomeMessage:
+          type: string
+        offer:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+      required: [ref, partnerName, welcomeMessage, isActive]
+
+    RegisterPartnerUserBody:
+      type: object
+      properties:
+        partnerRef:
+          type: string
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+          enum: [single, team, enterprise]
+        source:
+          type: ["string", "null"]
+      required: [partnerRef, companyName, contactName, contactEmail, plan]
+
+    PartnerRegistration:
+      type: object
+      properties:
+        id:
+          type: integer
+        partnerRef:
+          type: string
+        clientId:
+          type: integer
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+        source:
+          type: ["string", "null"]
+        status:
+          type: string
+        registeredAt:
+          type: string
+          format: date-time
+      required: [id, partnerRef, clientId, companyName, contactName, contactEmail, plan, status, registeredAt]

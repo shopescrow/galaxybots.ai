@@ -176,6 +176,64 @@ export interface JournalEntry {
   createdAt: string;
 }
 
+export interface BlogPost {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  author: string;
+  category: string;
+  /** @nullable */
+  coverImage?: string | null;
+  publishedAt: string;
+  createdAt: string;
+}
+
+export interface PartnerInfo {
+  ref: string;
+  partnerName: string;
+  /** @nullable */
+  partnerLogo?: string | null;
+  welcomeMessage: string;
+  /** @nullable */
+  offer?: string | null;
+  isActive: boolean;
+}
+
+export type RegisterPartnerUserBodyPlan =
+  (typeof RegisterPartnerUserBodyPlan)[keyof typeof RegisterPartnerUserBodyPlan];
+
+export const RegisterPartnerUserBodyPlan = {
+  single: "single",
+  team: "team",
+  enterprise: "enterprise",
+} as const;
+
+export interface RegisterPartnerUserBody {
+  partnerRef: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  plan: RegisterPartnerUserBodyPlan;
+  /** @nullable */
+  source?: string | null;
+}
+
+export interface PartnerRegistration {
+  id: number;
+  partnerRef: string;
+  clientId: number;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  plan: string;
+  /** @nullable */
+  source?: string | null;
+  status: string;
+  registeredAt: string;
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -199,4 +257,26 @@ export type GetJournalEntriesParams = {
    * @nullable
    */
   date?: string | null;
+};
+
+export type ListBlogPostsParams = {
+  /**
+   * @nullable
+   */
+  category?: string | null;
+};
+
+export type GetPartnerLinkParams = {
+  ref: string;
+  /**
+   * @nullable
+   */
+  source?: string | null;
+};
+
+export type ListPartnerReferralsParams = {
+  /**
+   * @nullable
+   */
+  partnerRef?: string | null;
 };

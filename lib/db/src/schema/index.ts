@@ -5,3 +5,5 @@ export * from "./clients";
 export * from "./client_bots";
 export * from "./boardroom";
 export * from "./journal";
+export * from "./blog_posts";
+export * from "./partner_registrations";
