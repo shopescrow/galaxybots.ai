@@ -10,6 +10,7 @@ import partnerRouter from "./partner";
 import translateRouter from "./translate";
 import taskSessionsRouter from "./task-sessions";
 import memoryRouter from "./memory";
+import complianceRouter from "./compliance";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(partnerRouter);
 router.use(translateRouter);
 router.use(taskSessionsRouter);
 router.use(memoryRouter);
+router.use(complianceRouter);
 
 export default router;

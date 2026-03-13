@@ -434,6 +434,97 @@ export interface ConsolidationResult {
   memories?: BotMemory[];
 }
 
+export type ComplianceInboundBodyStatus =
+  (typeof ComplianceInboundBodyStatus)[keyof typeof ComplianceInboundBodyStatus];
+
+export const ComplianceInboundBodyStatus = {
+  compliant: "compliant",
+  non_compliant: "non_compliant",
+  pending: "pending",
+  expired: "expired",
+} as const;
+
+export interface ComplianceInboundBody {
+  standardName: string;
+  category: string;
+  status: ComplianceInboundBodyStatus;
+  certificationId?: string;
+  issuedBy?: string;
+  details?: string;
+  expiresAt?: string;
+}
+
+export interface PlatformComplianceRecord {
+  id: number;
+  standardName: string;
+  category: string;
+  status: string;
+  /** @nullable */
+  certificationId?: string | null;
+  /** @nullable */
+  issuedBy?: string | null;
+  /** @nullable */
+  details?: string | null;
+  receivedAt: string;
+  /** @nullable */
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+export type ComplianceConfigPayloadExample = { [key: string]: unknown };
+
+export interface ComplianceConfig {
+  endpointUrl?: string;
+  method?: string;
+  apiKeyHeader?: string;
+  apiKeyConfigured?: boolean;
+  payloadExample?: ComplianceConfigPayloadExample;
+}
+
+export interface ClientComplianceRequirement {
+  id: number;
+  clientId: number;
+  name: string;
+  category: string;
+  status: string;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateClientComplianceBodyStatus =
+  (typeof CreateClientComplianceBodyStatus)[keyof typeof CreateClientComplianceBodyStatus];
+
+export const CreateClientComplianceBodyStatus = {
+  met: "met",
+  pending: "pending",
+  not_applicable: "not_applicable",
+} as const;
+
+export interface CreateClientComplianceBody {
+  name: string;
+  category: string;
+  status?: CreateClientComplianceBodyStatus;
+  notes?: string;
+}
+
+export type UpdateClientComplianceBodyStatus =
+  (typeof UpdateClientComplianceBodyStatus)[keyof typeof UpdateClientComplianceBodyStatus];
+
+export const UpdateClientComplianceBodyStatus = {
+  met: "met",
+  pending: "pending",
+  not_applicable: "not_applicable",
+} as const;
+
+export interface UpdateClientComplianceBody {
+  name?: string;
+  category?: string;
+  status?: UpdateClientComplianceBodyStatus;
+  notes?: string;
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -496,4 +587,8 @@ export type DeleteBotAssignment200 = {
 export type ListBackgroundReportsParams = {
   botId?: number;
   limit?: number;
+};
+
+export type DeleteClientCompliance200 = {
+  success?: boolean;
 };

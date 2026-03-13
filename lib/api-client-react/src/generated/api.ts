@@ -26,13 +26,18 @@ import type {
   BotMemory,
   Client,
   ClientBot,
+  ClientComplianceRequirement,
+  ComplianceConfig,
+  ComplianceInboundBody,
   ConsolidationResult,
   Conversation,
   CreateBotAssignmentBody,
   CreateClientBody,
+  CreateClientComplianceBody,
   CreateConversationBody,
   CreateTaskSessionBody,
   DeleteBotAssignment200,
+  DeleteClientCompliance200,
   DeleteMemory200,
   ErrorResponse,
   ExpandTaskSessionBody,
@@ -53,6 +58,7 @@ import type {
   MessageResponse,
   PartnerInfo,
   PartnerRegistration,
+  PlatformComplianceRecord,
   PostBoardroomMessageBody,
   RegisterPartnerUserBody,
   SendMessageBody,
@@ -62,6 +68,7 @@ import type {
   TaskSessionMessage,
   TeamProposal,
   UpdateBotAssignmentBody,
+  UpdateClientComplianceBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -3638,3 +3645,615 @@ export function useListBackgroundReports<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Push compliance data from external app
+ */
+export const getPushComplianceInboundUrl = () => {
+  return `/api/compliance/inbound`;
+};
+
+export const pushComplianceInbound = async (
+  complianceInboundBody: ComplianceInboundBody,
+  options?: RequestInit,
+): Promise<PlatformComplianceRecord> => {
+  return customFetch<PlatformComplianceRecord>(getPushComplianceInboundUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(complianceInboundBody),
+  });
+};
+
+export const getPushComplianceInboundMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pushComplianceInbound>>,
+    TError,
+    { data: BodyType<ComplianceInboundBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pushComplianceInbound>>,
+  TError,
+  { data: BodyType<ComplianceInboundBody> },
+  TContext
+> => {
+  const mutationKey = ["pushComplianceInbound"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pushComplianceInbound>>,
+    { data: BodyType<ComplianceInboundBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return pushComplianceInbound(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PushComplianceInboundMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pushComplianceInbound>>
+>;
+export type PushComplianceInboundMutationBody = BodyType<ComplianceInboundBody>;
+export type PushComplianceInboundMutationError = ErrorType<void>;
+
+/**
+ * @summary Push compliance data from external app
+ */
+export const usePushComplianceInbound = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pushComplianceInbound>>,
+    TError,
+    { data: BodyType<ComplianceInboundBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof pushComplianceInbound>>,
+  TError,
+  { data: BodyType<ComplianceInboundBody> },
+  TContext
+> => {
+  return useMutation(getPushComplianceInboundMutationOptions(options));
+};
+
+/**
+ * @summary Get platform compliance status
+ */
+export const getGetPlatformComplianceUrl = () => {
+  return `/api/compliance/platform`;
+};
+
+export const getPlatformCompliance = async (
+  options?: RequestInit,
+): Promise<PlatformComplianceRecord[]> => {
+  return customFetch<PlatformComplianceRecord[]>(
+    getGetPlatformComplianceUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPlatformComplianceQueryKey = () => {
+  return [`/api/compliance/platform`] as const;
+};
+
+export const getGetPlatformComplianceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPlatformCompliance>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlatformCompliance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPlatformComplianceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPlatformCompliance>>
+  > = ({ signal }) => getPlatformCompliance({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPlatformCompliance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPlatformComplianceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPlatformCompliance>>
+>;
+export type GetPlatformComplianceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get platform compliance status
+ */
+
+export function useGetPlatformCompliance<
+  TData = Awaited<ReturnType<typeof getPlatformCompliance>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlatformCompliance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPlatformComplianceQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get compliance API configuration
+ */
+export const getGetPlatformComplianceConfigUrl = () => {
+  return `/api/compliance/platform/config`;
+};
+
+export const getPlatformComplianceConfig = async (
+  options?: RequestInit,
+): Promise<ComplianceConfig> => {
+  return customFetch<ComplianceConfig>(getGetPlatformComplianceConfigUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPlatformComplianceConfigQueryKey = () => {
+  return [`/api/compliance/platform/config`] as const;
+};
+
+export const getGetPlatformComplianceConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPlatformComplianceConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlatformComplianceConfig>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPlatformComplianceConfigQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPlatformComplianceConfig>>
+  > = ({ signal }) =>
+    getPlatformComplianceConfig({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPlatformComplianceConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPlatformComplianceConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPlatformComplianceConfig>>
+>;
+export type GetPlatformComplianceConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get compliance API configuration
+ */
+
+export function useGetPlatformComplianceConfig<
+  TData = Awaited<ReturnType<typeof getPlatformComplianceConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlatformComplianceConfig>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPlatformComplianceConfigQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List client compliance requirements
+ */
+export const getListClientComplianceUrl = (clientId: number) => {
+  return `/api/compliance/client/${clientId}`;
+};
+
+export const listClientCompliance = async (
+  clientId: number,
+  options?: RequestInit,
+): Promise<ClientComplianceRequirement[]> => {
+  return customFetch<ClientComplianceRequirement[]>(
+    getListClientComplianceUrl(clientId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListClientComplianceQueryKey = (clientId: number) => {
+  return [`/api/compliance/client/${clientId}`] as const;
+};
+
+export const getListClientComplianceQueryOptions = <
+  TData = Awaited<ReturnType<typeof listClientCompliance>>,
+  TError = ErrorType<unknown>,
+>(
+  clientId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listClientCompliance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListClientComplianceQueryKey(clientId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listClientCompliance>>
+  > = ({ signal }) =>
+    listClientCompliance(clientId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!clientId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listClientCompliance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListClientComplianceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listClientCompliance>>
+>;
+export type ListClientComplianceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List client compliance requirements
+ */
+
+export function useListClientCompliance<
+  TData = Awaited<ReturnType<typeof listClientCompliance>>,
+  TError = ErrorType<unknown>,
+>(
+  clientId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listClientCompliance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListClientComplianceQueryOptions(clientId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a client compliance requirement
+ */
+export const getCreateClientComplianceUrl = (clientId: number) => {
+  return `/api/compliance/client/${clientId}`;
+};
+
+export const createClientCompliance = async (
+  clientId: number,
+  createClientComplianceBody: CreateClientComplianceBody,
+  options?: RequestInit,
+): Promise<ClientComplianceRequirement> => {
+  return customFetch<ClientComplianceRequirement>(
+    getCreateClientComplianceUrl(clientId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createClientComplianceBody),
+    },
+  );
+};
+
+export const getCreateClientComplianceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createClientCompliance>>,
+    TError,
+    { clientId: number; data: BodyType<CreateClientComplianceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createClientCompliance>>,
+  TError,
+  { clientId: number; data: BodyType<CreateClientComplianceBody> },
+  TContext
+> => {
+  const mutationKey = ["createClientCompliance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createClientCompliance>>,
+    { clientId: number; data: BodyType<CreateClientComplianceBody> }
+  > = (props) => {
+    const { clientId, data } = props ?? {};
+
+    return createClientCompliance(clientId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateClientComplianceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createClientCompliance>>
+>;
+export type CreateClientComplianceMutationBody =
+  BodyType<CreateClientComplianceBody>;
+export type CreateClientComplianceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a client compliance requirement
+ */
+export const useCreateClientCompliance = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createClientCompliance>>,
+    TError,
+    { clientId: number; data: BodyType<CreateClientComplianceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createClientCompliance>>,
+  TError,
+  { clientId: number; data: BodyType<CreateClientComplianceBody> },
+  TContext
+> => {
+  return useMutation(getCreateClientComplianceMutationOptions(options));
+};
+
+/**
+ * @summary Update a client compliance requirement
+ */
+export const getUpdateClientComplianceUrl = (clientId: number, id: number) => {
+  return `/api/compliance/client/${clientId}/${id}`;
+};
+
+export const updateClientCompliance = async (
+  clientId: number,
+  id: number,
+  updateClientComplianceBody: UpdateClientComplianceBody,
+  options?: RequestInit,
+): Promise<ClientComplianceRequirement> => {
+  return customFetch<ClientComplianceRequirement>(
+    getUpdateClientComplianceUrl(clientId, id),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateClientComplianceBody),
+    },
+  );
+};
+
+export const getUpdateClientComplianceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClientCompliance>>,
+    TError,
+    {
+      clientId: number;
+      id: number;
+      data: BodyType<UpdateClientComplianceBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateClientCompliance>>,
+  TError,
+  { clientId: number; id: number; data: BodyType<UpdateClientComplianceBody> },
+  TContext
+> => {
+  const mutationKey = ["updateClientCompliance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateClientCompliance>>,
+    { clientId: number; id: number; data: BodyType<UpdateClientComplianceBody> }
+  > = (props) => {
+    const { clientId, id, data } = props ?? {};
+
+    return updateClientCompliance(clientId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateClientComplianceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateClientCompliance>>
+>;
+export type UpdateClientComplianceMutationBody =
+  BodyType<UpdateClientComplianceBody>;
+export type UpdateClientComplianceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a client compliance requirement
+ */
+export const useUpdateClientCompliance = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClientCompliance>>,
+    TError,
+    {
+      clientId: number;
+      id: number;
+      data: BodyType<UpdateClientComplianceBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateClientCompliance>>,
+  TError,
+  { clientId: number; id: number; data: BodyType<UpdateClientComplianceBody> },
+  TContext
+> => {
+  return useMutation(getUpdateClientComplianceMutationOptions(options));
+};
+
+/**
+ * @summary Delete a client compliance requirement
+ */
+export const getDeleteClientComplianceUrl = (clientId: number, id: number) => {
+  return `/api/compliance/client/${clientId}/${id}`;
+};
+
+export const deleteClientCompliance = async (
+  clientId: number,
+  id: number,
+  options?: RequestInit,
+): Promise<DeleteClientCompliance200> => {
+  return customFetch<DeleteClientCompliance200>(
+    getDeleteClientComplianceUrl(clientId, id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteClientComplianceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteClientCompliance>>,
+    TError,
+    { clientId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteClientCompliance>>,
+  TError,
+  { clientId: number; id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteClientCompliance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteClientCompliance>>,
+    { clientId: number; id: number }
+  > = (props) => {
+    const { clientId, id } = props ?? {};
+
+    return deleteClientCompliance(clientId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteClientComplianceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteClientCompliance>>
+>;
+
+export type DeleteClientComplianceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a client compliance requirement
+ */
+export const useDeleteClientCompliance = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteClientCompliance>>,
+    TError,
+    { clientId: number; id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteClientCompliance>>,
+  TError,
+  { clientId: number; id: number },
+  TContext
+> => {
+  return useMutation(getDeleteClientComplianceMutationOptions(options));
+};

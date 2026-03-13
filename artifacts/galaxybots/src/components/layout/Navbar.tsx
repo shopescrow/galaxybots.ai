@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/journal", label: "Journal" },
   { href: "/blog", label: "Blog" },
   { href: "/clients", label: "Clients" },
+  { href: "/compliance", label: "Compliance" },
 ];
 
 export function Navbar() {

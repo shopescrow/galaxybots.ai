@@ -22,6 +22,7 @@ import TaskSessions from "@/pages/task-sessions/TaskSessions";
 import DeployTeam from "@/pages/task-sessions/DeployTeam";
 import TaskBoardroom from "@/pages/task-sessions/TaskBoardroom";
 import Assembly from "@/pages/Assembly";
+import Compliance from "@/pages/compliance/Compliance";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/deploy-team" component={DeployTeam} />
       <Route path="/task-rooms/:id" component={TaskBoardroom} />
       <Route path="/assembly" component={Assembly} />
+      <Route path="/compliance" component={Compliance} />
       <Route component={NotFound} />
     </Switch>
   );

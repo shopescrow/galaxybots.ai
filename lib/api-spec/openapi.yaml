@@ -25,6 +25,8 @@ tags:
     description: Partner integration operations
   - name: task-sessions
     description: Task-based bot team deployment operations
+  - name: compliance
+    description: Compliance management operations
 paths:
   /healthz:
     get:
@@ -936,6 +938,160 @@ paths:
                 items:
                   $ref: "#/components/schemas/BackgroundReport"
 
+  /compliance/inbound:
+    post:
+      operationId: pushComplianceInbound
+      tags: [compliance]
+      summary: Push compliance data from external app
+      parameters:
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComplianceInboundBody"
+      responses:
+        "201":
+          description: Compliance record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformComplianceRecord"
+        "401":
+          description: Unauthorized
+
+  /compliance/platform:
+    get:
+      operationId: getPlatformCompliance
+      tags: [compliance]
+      summary: Get platform compliance status
+      responses:
+        "200":
+          description: List of compliance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformComplianceRecord"
+
+  /compliance/platform/config:
+    get:
+      operationId: getPlatformComplianceConfig
+      tags: [compliance]
+      summary: Get compliance API configuration
+      responses:
+        "200":
+          description: API configuration details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceConfig"
+
+  /compliance/client/{clientId}:
+    get:
+      operationId: listClientCompliance
+      tags: [compliance]
+      summary: List client compliance requirements
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of client compliance requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClientComplianceRequirement"
+    post:
+      operationId: createClientCompliance
+      tags: [compliance]
+      summary: Create a client compliance requirement
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientComplianceBody"
+      responses:
+        "201":
+          description: Client compliance requirement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientComplianceRequirement"
+
+  /compliance/client/{clientId}/{id}:
+    put:
+      operationId: updateClientCompliance
+      tags: [compliance]
+      summary: Update a client compliance requirement
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientComplianceBody"
+      responses:
+        "200":
+          description: Updated client compliance requirement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientComplianceRequirement"
+    delete:
+      operationId: deleteClientCompliance
+      tags: [compliance]
+      summary: Delete a client compliance requirement
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
 components:
   schemas:
     HealthStatus:
@@ -1559,3 +1715,116 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BotMemory"
+
+    ComplianceInboundBody:
+      type: object
+      properties:
+        standardName:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [compliant, non_compliant, pending, expired]
+        certificationId:
+          type: string
+        issuedBy:
+          type: string
+        details:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required: [standardName, category, status]
+
+    PlatformComplianceRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        standardName:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+        certificationId:
+          type: ["string", "null"]
+        issuedBy:
+          type: ["string", "null"]
+        details:
+          type: ["string", "null"]
+        receivedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, standardName, category, status, receivedAt, createdAt]
+
+    ComplianceConfig:
+      type: object
+      properties:
+        endpointUrl:
+          type: string
+        method:
+          type: string
+        apiKeyHeader:
+          type: string
+        apiKeyConfigured:
+          type: boolean
+        payloadExample:
+          type: object
+
+    ClientComplianceRequirement:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, clientId, name, category, status, createdAt, updatedAt]
+
+    CreateClientComplianceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [met, pending, not_applicable]
+        notes:
+          type: string
+      required: [name, category]
+
+    UpdateClientComplianceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [met, pending, not_applicable]
+        notes:
+          type: string

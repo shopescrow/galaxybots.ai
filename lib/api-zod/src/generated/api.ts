@@ -757,3 +757,123 @@ export const ListBackgroundReportsResponseItem = zod.object({
 export const ListBackgroundReportsResponse = zod.array(
   ListBackgroundReportsResponseItem,
 );
+
+/**
+ * @summary Push compliance data from external app
+ */
+export const PushComplianceInboundHeader = zod.object({
+  "x-api-key": zod.string(),
+});
+
+export const PushComplianceInboundBody = zod.object({
+  standardName: zod.string(),
+  category: zod.string(),
+  status: zod.enum(["compliant", "non_compliant", "pending", "expired"]),
+  certificationId: zod.string().optional(),
+  issuedBy: zod.string().optional(),
+  details: zod.string().optional(),
+  expiresAt: zod.date().optional(),
+});
+
+/**
+ * @summary Get platform compliance status
+ */
+export const GetPlatformComplianceResponseItem = zod.object({
+  id: zod.number(),
+  standardName: zod.string(),
+  category: zod.string(),
+  status: zod.string(),
+  certificationId: zod.string().nullish(),
+  issuedBy: zod.string().nullish(),
+  details: zod.string().nullish(),
+  receivedAt: zod.date(),
+  expiresAt: zod.date().nullish(),
+  createdAt: zod.date(),
+});
+export const GetPlatformComplianceResponse = zod.array(
+  GetPlatformComplianceResponseItem,
+);
+
+/**
+ * @summary Get compliance API configuration
+ */
+export const GetPlatformComplianceConfigResponse = zod.object({
+  endpointUrl: zod.string().optional(),
+  method: zod.string().optional(),
+  apiKeyHeader: zod.string().optional(),
+  apiKeyConfigured: zod.boolean().optional(),
+  payloadExample: zod.object({}).passthrough().optional(),
+});
+
+/**
+ * @summary List client compliance requirements
+ */
+export const ListClientComplianceParams = zod.object({
+  clientId: zod.coerce.number(),
+});
+
+export const ListClientComplianceResponseItem = zod.object({
+  id: zod.number(),
+  clientId: zod.number(),
+  name: zod.string(),
+  category: zod.string(),
+  status: zod.string(),
+  notes: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListClientComplianceResponse = zod.array(
+  ListClientComplianceResponseItem,
+);
+
+/**
+ * @summary Create a client compliance requirement
+ */
+export const CreateClientComplianceParams = zod.object({
+  clientId: zod.coerce.number(),
+});
+
+export const CreateClientComplianceBody = zod.object({
+  name: zod.string(),
+  category: zod.string(),
+  status: zod.enum(["met", "pending", "not_applicable"]).optional(),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary Update a client compliance requirement
+ */
+export const UpdateClientComplianceParams = zod.object({
+  clientId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const UpdateClientComplianceBody = zod.object({
+  name: zod.string().optional(),
+  category: zod.string().optional(),
+  status: zod.enum(["met", "pending", "not_applicable"]).optional(),
+  notes: zod.string().optional(),
+});
+
+export const UpdateClientComplianceResponse = zod.object({
+  id: zod.number(),
+  clientId: zod.number(),
+  name: zod.string(),
+  category: zod.string(),
+  status: zod.string(),
+  notes: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a client compliance requirement
+ */
+export const DeleteClientComplianceParams = zod.object({
+  clientId: zod.coerce.number(),
+  id: zod.coerce.number(),
+});
+
+export const DeleteClientComplianceResponse = zod.object({
+  success: zod.boolean().optional(),
+});
