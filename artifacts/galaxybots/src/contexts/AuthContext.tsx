@@ -65,11 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, clearAuth]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch(`${BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      throw new Error("Login failed. Please try again.");
+    }
 
     if (!res.ok) {
       let message = "Login failed. Please try again.";
@@ -87,11 +92,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const register = useCallback(async (registerData: RegisterData) => {
-    const res = await fetch(`${BASE}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(registerData),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerData),
+      });
+    } catch {
+      throw new Error("Registration failed. Please try again.");
+    }
 
     if (!res.ok) {
       let message = "Registration failed. Please try again.";
