@@ -117,6 +117,11 @@ router.get("/integrations/piratemonster/scores/:clientId", async (req, res): Pro
     return;
   }
 
+  if (clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
   try {
     const scores = await db
       .select()

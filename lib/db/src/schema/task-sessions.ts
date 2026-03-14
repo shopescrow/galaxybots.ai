@@ -2,9 +2,11 @@ import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
 
 export const taskSessionsTable = pgTable("task_sessions", {
   id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
   objective: text("objective").notNull(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

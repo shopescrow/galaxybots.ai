@@ -3,6 +3,7 @@ import { db, botsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { GetBotParams, ListBotsResponse, GetBotResponse } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
+import { llmRateLimit } from "../middleware/rate-limit";
 
 const router: IRouter = Router();
 
@@ -48,7 +49,7 @@ router.get("/bots/declarations", async (_req, res): Promise<void> => {
   res.json(result);
 });
 
-router.post("/bots/generate-declarations", async (req, res): Promise<void> => {
+router.post("/bots/generate-declarations", llmRateLimit, async (req, res): Promise<void> => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",

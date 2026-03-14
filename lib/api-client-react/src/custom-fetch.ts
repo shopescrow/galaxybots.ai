@@ -297,6 +297,13 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  if (!headers.has("authorization")) {
+    const token = typeof localStorage !== "undefined" ? localStorage.getItem("auth_token") : null;
+    if (token) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });

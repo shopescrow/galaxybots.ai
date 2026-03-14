@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { partnerRegistrationsTable, clientsTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { requireRole } from "../middleware/auth";
 
 const router = Router();
 
@@ -71,18 +72,11 @@ router.post("/partner/register", async (req, res) => {
   }
 });
 
-router.get("/partner/referrals", async (req, res) => {
+router.get("/partner/referrals", requireRole("owner", "admin"), async (req, res) => {
   try {
-    const { partnerRef } = req.query;
-    let referrals;
-    if (partnerRef && typeof partnerRef === "string") {
-      referrals = await db.select().from(partnerRegistrationsTable)
-        .where(eq(partnerRegistrationsTable.partnerRef, partnerRef.toLowerCase()))
-        .orderBy(desc(partnerRegistrationsTable.registeredAt));
-    } else {
-      referrals = await db.select().from(partnerRegistrationsTable)
-        .orderBy(desc(partnerRegistrationsTable.registeredAt));
-    }
+    const referrals = await db.select().from(partnerRegistrationsTable)
+      .where(eq(partnerRegistrationsTable.clientId, req.user!.clientId))
+      .orderBy(desc(partnerRegistrationsTable.registeredAt));
     res.json(referrals);
   } catch (error) {
     console.error("Error fetching partner referrals:", error);

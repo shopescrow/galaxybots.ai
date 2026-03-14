@@ -16,6 +16,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 export async function storeMemory(params: {
   botId: number;
+  clientId?: number;
   sourceType: string;
   sourceId?: number;
   sessionId?: number;
@@ -29,6 +30,7 @@ export async function storeMemory(params: {
     .insert(botMemoriesTable)
     .values({
       botId: params.botId,
+      clientId: params.clientId ?? null,
       sourceType: params.sourceType,
       sourceId: params.sourceId ?? null,
       sessionId: params.sessionId ?? null,
@@ -44,16 +46,23 @@ export async function storeMemory(params: {
 
 export async function retrieveMemories(params: {
   botId: number;
+  clientId?: number;
   query: string;
   limit?: number;
 }) {
   const queryEmbedding = await generateEmbedding(params.query);
   const limit = params.limit ?? 5;
 
+  const conditions = [eq(botMemoriesTable.botId, params.botId)];
+  if (params.clientId !== undefined) {
+    conditions.push(eq(botMemoriesTable.clientId, params.clientId));
+  }
+
   const memories = await db
     .select({
       id: botMemoriesTable.id,
       botId: botMemoriesTable.botId,
+      clientId: botMemoriesTable.clientId,
       sourceType: botMemoriesTable.sourceType,
       sourceId: botMemoriesTable.sourceId,
       sessionId: botMemoriesTable.sessionId,
@@ -64,7 +73,7 @@ export async function retrieveMemories(params: {
       similarity: sql<number>`1 - (${botMemoriesTable.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector)`.as("similarity"),
     })
     .from(botMemoriesTable)
-    .where(eq(botMemoriesTable.botId, params.botId))
+    .where(and(...conditions))
     .orderBy(sql`${botMemoriesTable.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector`)
     .limit(limit);
 
@@ -73,6 +82,7 @@ export async function retrieveMemories(params: {
 
 export async function consolidateSession(params: {
   sessionId: number;
+  clientId?: number;
   objective: string;
   messages: Array<{ botId?: number | null; botName?: string | null; role: string; content: string }>;
   botIds: number[];
@@ -127,6 +137,7 @@ export async function consolidateSession(params: {
   for (const botId of params.botIds) {
     const memory = await storeMemory({
       botId,
+      clientId: params.clientId,
       sourceType: "session_consolidation",
       sessionId: params.sessionId,
       content: conversationText.substring(0, 5000),
@@ -139,11 +150,17 @@ export async function consolidateSession(params: {
   return { summary: parsed, memories };
 }
 
-export async function getMemoriesForBot(botId: number, limit = 20) {
+export async function getMemoriesForBot(botId: number, limit = 20, clientId?: number) {
+  const conditions = [eq(botMemoriesTable.botId, botId)];
+  if (clientId !== undefined) {
+    conditions.push(eq(botMemoriesTable.clientId, clientId));
+  }
+
   return db
     .select({
       id: botMemoriesTable.id,
       botId: botMemoriesTable.botId,
+      clientId: botMemoriesTable.clientId,
       sourceType: botMemoriesTable.sourceType,
       sourceId: botMemoriesTable.sourceId,
       sessionId: botMemoriesTable.sessionId,
@@ -153,7 +170,7 @@ export async function getMemoriesForBot(botId: number, limit = 20) {
       createdAt: botMemoriesTable.createdAt,
     })
     .from(botMemoriesTable)
-    .where(eq(botMemoriesTable.botId, botId))
+    .where(and(...conditions))
     .orderBy(desc(botMemoriesTable.createdAt))
     .limit(limit);
 }
@@ -164,8 +181,8 @@ export async function deleteMemory(memoryId: number) {
     .where(eq(botMemoriesTable.id, memoryId));
 }
 
-export async function buildMemoryContext(botId: number, query: string): Promise<string> {
-  const memories = await retrieveMemories({ botId, query, limit: 5 });
+export async function buildMemoryContext(botId: number, query: string, clientId?: number): Promise<string> {
+  const memories = await retrieveMemories({ botId, clientId, query, limit: 5 });
   if (memories.length === 0) return "";
 
   const memoryBlock = memories

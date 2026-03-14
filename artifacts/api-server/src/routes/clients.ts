@@ -2,42 +2,37 @@ import { Router, type IRouter } from "express";
 import { db, clientsTable, clientBotsTable, botsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
-  CreateClientBody,
-  GetClientParams,
   GetClientBotsParams,
-  HireBotParams,
   HireBotBody,
-  ListClientsResponse,
   GetClientResponse,
   GetClientBotsResponse,
 } from "@workspace/api-zod";
+import { requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
 
-router.get("/clients", async (_req, res): Promise<void> => {
-  const clients = await db.select().from(clientsTable).orderBy(clientsTable.createdAt);
-  res.json(ListClientsResponse.parse(clients));
-});
-
-router.post("/clients", async (req, res): Promise<void> => {
-  const parsed = CreateClientBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+router.get("/clients", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId));
+  if (!client) {
+    res.status(404).json({ error: "Client not found" });
     return;
   }
+  res.json([client]);
+});
 
-  const [client] = await db.insert(clientsTable).values(parsed.data).returning();
-  res.status(201).json(client);
+router.post("/clients", requireRole("owner"), async (req, res): Promise<void> => {
+  res.status(403).json({ error: "Clients are created during registration" });
 });
 
 router.get("/clients/:id", async (req, res): Promise<void> => {
-  const params = GetClientParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+  const id = Number(req.params.id);
+  if (isNaN(id) || id !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
-  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, params.data.id));
+  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, id));
   if (!client) {
     res.status(404).json({ error: "Client not found" });
     return;
@@ -47,9 +42,9 @@ router.get("/clients/:id", async (req, res): Promise<void> => {
 });
 
 router.get("/clients/:id/bots", async (req, res): Promise<void> => {
-  const params = GetClientBotsParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+  const id = Number(req.params.id);
+  if (isNaN(id) || id !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
@@ -57,27 +52,21 @@ router.get("/clients/:id/bots", async (req, res): Promise<void> => {
     .select({ bot: botsTable })
     .from(clientBotsTable)
     .innerJoin(botsTable, eq(clientBotsTable.botId, botsTable.id))
-    .where(eq(clientBotsTable.clientId, params.data.id));
+    .where(eq(clientBotsTable.clientId, id));
 
   res.json(GetClientBotsResponse.parse(hiredBots.map(r => r.bot)));
 });
 
-router.post("/clients/:id/bots", async (req, res): Promise<void> => {
-  const params = HireBotParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+router.post("/clients/:id/bots", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || id !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
   const body = HireBotBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, params.data.id));
-  if (!client) {
-    res.status(404).json({ error: "Client not found" });
     return;
   }
 
@@ -88,7 +77,7 @@ router.post("/clients/:id/bots", async (req, res): Promise<void> => {
   }
 
   const [clientBot] = await db.insert(clientBotsTable).values({
-    clientId: params.data.id,
+    clientId: id,
     botId: body.data.botId,
     status: "active",
   }).returning();

@@ -1,5 +1,6 @@
 import {
   db,
+  pool,
   botAssignmentsTable,
   backgroundReportsTable,
   botsTable,
@@ -7,24 +8,28 @@ import {
 import { eq, and, lte, isNull, or } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
+const SCHEDULER_LOCK_ID = 999999;
+
 const SCHEDULE_INTERVALS: Record<string, number> = {
   hourly: 60 * 60 * 1000,
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
 };
 
-let sseClients: Array<{ id: string; res: import("express").Response }> = [];
+let sseClients: Array<{ id: string; clientId: number; res: import("express").Response }> = [];
 
-export function addSSEClient(id: string, res: import("express").Response) {
-  sseClients.push({ id, res });
+export function addSSEClient(id: string, res: import("express").Response, clientId: number) {
+  sseClients.push({ id, clientId, res });
   res.on("close", () => {
     sseClients = sseClients.filter((c) => c.id !== id);
   });
 }
 
-export function broadcastSSE(event: string, data: unknown) {
+export function broadcastSSE(event: string, data: Record<string, unknown>) {
+  const targetClientId = data.clientId as number | undefined;
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of sseClients) {
+    if (targetClientId !== undefined && client.clientId !== targetClientId) continue;
     try {
       client.res.write(payload);
     } catch (_e) {}
@@ -86,6 +91,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     .values({
       assignmentId: assignment.id,
       botId: assignment.botId,
+      clientId: assignment.clientId,
       content,
       summary,
       deliveredAt: new Date(),
@@ -102,6 +108,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     assignmentId: assignment.id,
     botId: bot.id,
     botName: bot.name,
+    clientId: assignment.clientId,
     summary,
   });
 
@@ -141,8 +148,28 @@ async function checkDueAssignments() {
 
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
-export function startScheduler() {
+async function tryAcquireSchedulerLock(): Promise<boolean> {
+  try {
+    const result = await pool.query(
+      `SELECT pg_try_advisory_lock($1) AS acquired`,
+      [SCHEDULER_LOCK_ID],
+    );
+    return result.rows[0]?.acquired === true;
+  } catch (err) {
+    console.error("Failed to acquire scheduler advisory lock:", err);
+    return false;
+  }
+}
+
+export async function startScheduler() {
   if (schedulerInterval) return;
+
+  const acquired = await tryAcquireSchedulerLock();
+  if (!acquired) {
+    console.log("Scheduler lock not acquired — another instance is running scheduled jobs");
+    return;
+  }
+
   console.log("Background autonomy scheduler started (checking every 5 minutes)");
   schedulerInterval = setInterval(() => {
     checkDueAssignments().catch((err) =>

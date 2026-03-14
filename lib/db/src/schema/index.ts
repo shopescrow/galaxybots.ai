@@ -15,3 +15,5 @@ export * from "./client-integrations";
 export * from "./tool-activity-log";
 export * from "./aeo-scores";
 export * from "./receptionist";
+export * from "./users";
+export * from "./audit-log";

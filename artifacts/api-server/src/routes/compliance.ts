@@ -107,6 +107,11 @@ router.get("/compliance/client/:clientId", async (req, res): Promise<void> => {
     return;
   }
 
+  if (params.data.clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
   try {
     const requirements = await db
       .select()
@@ -125,6 +130,11 @@ router.post("/compliance/client/:clientId", async (req, res): Promise<void> => {
   const params = CreateClientComplianceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (params.data.clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
 
@@ -158,6 +168,11 @@ router.put("/compliance/client/:clientId/:id", async (req, res): Promise<void> =
   const params = UpdateClientComplianceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (params.data.clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
 
@@ -207,6 +222,11 @@ router.delete("/compliance/client/:clientId/:id", async (req, res): Promise<void
   const params = DeleteClientComplianceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (params.data.clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
 

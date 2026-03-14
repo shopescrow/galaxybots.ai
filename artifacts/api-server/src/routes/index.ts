@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import botsRouter from "./bots";
 import conversationsRouter from "./conversations";
 import boardroomRouter from "./boardroom";
@@ -14,10 +15,14 @@ import complianceRouter from "./compliance";
 import clientIntegrationsRouter from "./client-integrations";
 import piratemonsterRouter from "./piratemonster";
 import receptionistRouter from "./receptionist";
+import auditRouter from "./audit";
+import { llmRateLimit } from "../middleware/rate-limit";
+import { requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(botsRouter);
 router.use(conversationsRouter);
 router.use(boardroomRouter);
@@ -32,5 +37,6 @@ router.use(complianceRouter);
 router.use(clientIntegrationsRouter);
 router.use(piratemonsterRouter);
 router.use(receptionistRouter);
+router.use(auditRouter);
 
 export default router;

@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, clientIntegrationsTable, clientsTable } from "@workspace/db";
+import { db, clientIntegrationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { encryptCredential } from "../utils/credential-encryption";
+import { requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -9,23 +10,10 @@ const REDACTED = "••••••••";
 
 const VALID_SERVICES = ["gmail", "google_calendar", "hubspot", "notion", "piratemonster", "salesforce"] as const;
 
-async function verifyClientOwnership(clientId: number): Promise<boolean> {
-  const [client] = await db
-    .select({ id: clientsTable.id })
-    .from(clientsTable)
-    .where(eq(clientsTable.id, clientId));
-  return !!client;
-}
-
 router.get("/client-integrations/:clientId", async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
-  if (isNaN(clientId)) {
-    res.status(400).json({ error: "Invalid client ID" });
-    return;
-  }
-
-  if (!(await verifyClientOwnership(clientId))) {
-    res.status(404).json({ error: "Client not found" });
+  if (isNaN(clientId) || clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
@@ -42,22 +30,17 @@ router.get("/client-integrations/:clientId", async (req, res): Promise<void> => 
   res.json(redacted);
 });
 
-router.post("/client-integrations", async (req, res): Promise<void> => {
-  const { clientId, service, credential, label } = req.body;
+router.post("/client-integrations", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { service, credential, label } = req.body;
+  const clientId = req.user!.clientId;
 
-  if (!clientId || !service || !credential) {
-    res.status(400).json({ error: "clientId, service, and credential are required" });
+  if (!service || !credential) {
+    res.status(400).json({ error: "service and credential are required" });
     return;
   }
 
   if (!VALID_SERVICES.includes(service)) {
     res.status(400).json({ error: `Invalid service. Must be one of: ${VALID_SERVICES.join(", ")}` });
-    return;
-  }
-
-  const numericClientId = Number(clientId);
-  if (!(await verifyClientOwnership(numericClientId))) {
-    res.status(404).json({ error: "Client not found" });
     return;
   }
 
@@ -67,7 +50,7 @@ router.post("/client-integrations", async (req, res): Promise<void> => {
     .select()
     .from(clientIntegrationsTable)
     .where(and(
-      eq(clientIntegrationsTable.clientId, numericClientId),
+      eq(clientIntegrationsTable.clientId, clientId),
       eq(clientIntegrationsTable.service, service)
     ));
 
@@ -82,7 +65,7 @@ router.post("/client-integrations", async (req, res): Promise<void> => {
     const [created] = await db
       .insert(clientIntegrationsTable)
       .values({
-        clientId: numericClientId,
+        clientId,
         service,
         credential: encrypted,
         label: label ?? null,
@@ -93,16 +76,12 @@ router.post("/client-integrations", async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/client-integrations/:clientId/:id", async (req, res): Promise<void> => {
+router.delete("/client-integrations/:clientId/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
   const id = Number(req.params.id);
-  if (isNaN(clientId) || isNaN(id)) {
-    res.status(400).json({ error: "Invalid client ID or integration ID" });
-    return;
-  }
 
-  if (!(await verifyClientOwnership(clientId))) {
-    res.status(404).json({ error: "Client not found" });
+  if (isNaN(clientId) || isNaN(id) || clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 

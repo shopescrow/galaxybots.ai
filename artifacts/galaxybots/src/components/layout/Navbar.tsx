@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Hexagon, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import logoImg from "@assets/galaxybots-logo-transparent.png";
 
 const NAV_LINKS = [
   { href: "/assembly", label: "Assembly" },
@@ -31,10 +32,7 @@ export function Navbar() {
         
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 group-hover:border-primary transition-colors">
-              <Hexagon className="w-6 h-6 text-primary" />
-              <div className="absolute inset-0 bg-primary/20 blur-md rounded-full group-hover:bg-primary/40 transition-all opacity-0 group-hover:opacity-100" />
-            </div>
+            <img src={logoImg} alt="GalaxyBots.ai" className="w-10 h-10 rounded-xl object-cover" />
             <span className="font-display font-bold text-xl tracking-wider text-foreground">
               GALAXY<span className="text-primary">BOTS</span>
             </span>

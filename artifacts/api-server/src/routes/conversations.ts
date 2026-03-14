@@ -16,17 +16,13 @@ import { buildMemoryContext } from "../services/memory";
 const router: IRouter = Router();
 
 router.get("/conversations", async (req, res): Promise<void> => {
-  const clientId = req.query.clientId ? Number(req.query.clientId) : null;
+  const tenantClientId = req.user!.clientId;
   const botId = req.query.botId ? Number(req.query.botId) : null;
 
-  let query = db.select().from(conversations);
-  const conditions = [];
-  if (clientId !== null) conditions.push(eq(conversations.clientId, clientId));
+  const conditions = [eq(conversations.clientId, tenantClientId)];
   if (botId !== null) conditions.push(eq(conversations.botId, botId));
 
-  const results = conditions.length
-    ? await db.select().from(conversations).where(and(...conditions)).orderBy(conversations.updatedAt)
-    : await db.select().from(conversations).orderBy(conversations.updatedAt);
+  const results = await db.select().from(conversations).where(and(...conditions)).orderBy(conversations.updatedAt);
 
   res.json(ListConversationsResponse.parse(results));
 });
@@ -39,7 +35,7 @@ router.post("/conversations", async (req, res): Promise<void> => {
   }
 
   const [conv] = await db.insert(conversations).values({
-    clientId: parsed.data.clientId ?? null,
+    clientId: req.user!.clientId,
     botId: parsed.data.botId,
     title: parsed.data.title,
   }).returning();
@@ -54,7 +50,9 @@ router.get("/conversations/:id/messages", async (req, res): Promise<void> => {
     return;
   }
 
-  const [conv] = await db.select().from(conversations).where(eq(conversations.id, params.data.id));
+  const [conv] = await db.select().from(conversations).where(
+    and(eq(conversations.id, params.data.id), eq(conversations.clientId, req.user!.clientId))
+  );
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -82,7 +80,9 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     return;
   }
 
-  const [conv] = await db.select().from(conversations).where(eq(conversations.id, params.data.id));
+  const [conv] = await db.select().from(conversations).where(
+    and(eq(conversations.id, params.data.id), eq(conversations.clientId, req.user!.clientId))
+  );
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -121,7 +121,7 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
 
   let memoryContext = "";
   try {
-    memoryContext = await buildMemoryContext(bot.id, body.data.content);
+    memoryContext = await buildMemoryContext(bot.id, body.data.content, req.user!.clientId);
   } catch (_e) {}
 
   const systemPrompt = `You are ${bot.name}, the ${bot.title} at GalaxyBots.ai — a world-class AI corporate director.
@@ -156,7 +156,8 @@ You have access to tools that allow you to search the web, read/write shared sta
       conversationId: params.data.id,
       botId: bot.id,
       botName: bot.name,
-      clientId: conv.clientId ?? undefined,
+      clientId: req.user!.clientId,
+      userId: req.user!.userId,
     },
   });
 
@@ -211,7 +212,9 @@ router.post("/conversations/:id/messages/stream", async (req, res): Promise<void
     return;
   }
 
-  const [conv] = await db.select().from(conversations).where(eq(conversations.id, params.data.id));
+  const [conv] = await db.select().from(conversations).where(
+    and(eq(conversations.id, params.data.id), eq(conversations.clientId, req.user!.clientId))
+  );
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -292,7 +295,8 @@ You have access to tools that allow you to search the web, read/write shared sta
         conversationId: params.data.id,
         botId: bot.id,
         botName: bot.name,
-        clientId: conv.clientId ?? undefined,
+        clientId: req.user!.clientId,
+        userId: req.user!.userId,
       },
       onEvent: (event) => {
         sendSSE(event);

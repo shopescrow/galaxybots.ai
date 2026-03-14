@@ -1,10 +1,10 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-// Pages
 import Home from "@/pages/Home";
 import BotRoster from "@/pages/bots/BotRoster";
 import BotDetail from "@/pages/bots/BotDetail";
@@ -27,6 +27,10 @@ import Compliance from "@/pages/compliance/Compliance";
 import Integrations from "@/pages/integrations/Integrations";
 import AIReceptionist from "@/pages/bots/AIReceptionist";
 import NotFound from "@/pages/not-found";
+import Login from "@/pages/auth/Login";
+import Register from "@/pages/auth/Register";
+import ForgotUsername from "@/pages/auth/ForgotUsername";
+import ForgotPassword from "@/pages/auth/ForgotPassword";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,7 +41,21 @@ const queryClient = new QueryClient({
   },
 });
 
-function Router() {
+function AuthenticatedRoutes() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="text-white text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
   return (
     <Switch>
       <Route path="/" component={Home} />
@@ -66,17 +84,33 @@ function Router() {
   );
 }
 
+function AppRouter() {
+  return (
+    <Switch>
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+      <Route path="/forgot-username" component={ForgotUsername} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route>
+        <AuthenticatedRoutes />
+      </Route>
+    </Switch>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <LanguageProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </LanguageProvider>
+      <AuthProvider>
+        <LanguageProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AppRouter />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </LanguageProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

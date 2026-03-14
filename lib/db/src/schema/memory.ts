@@ -2,10 +2,12 @@ import { pgTable, serial, text, timestamp, integer, vector, index } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
 
 export const botMemoriesTable = pgTable("bot_memories", {
   id: serial("id").primaryKey(),
   botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
   sourceType: text("source_type").notNull(),
   sourceId: integer("source_id"),
   sessionId: integer("session_id"),
@@ -16,11 +18,13 @@ export const botMemoriesTable = pgTable("bot_memories", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("bot_memories_bot_id_idx").on(table.botId),
+  index("bot_memories_client_id_idx").on(table.clientId),
 ]);
 
 export const botAssignmentsTable = pgTable("bot_assignments", {
   id: serial("id").primaryKey(),
   botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
   objective: text("objective").notNull(),
   schedule: text("schedule").notNull().default("daily"),
   isActive: text("is_active").notNull().default("true"),
@@ -32,6 +36,7 @@ export const backgroundReportsTable = pgTable("background_reports", {
   id: serial("id").primaryKey(),
   assignmentId: integer("assignment_id").notNull().references(() => botAssignmentsTable.id, { onDelete: "cascade" }),
   botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   summary: text("summary").notNull(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),

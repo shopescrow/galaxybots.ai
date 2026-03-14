@@ -22,6 +22,8 @@ import {
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { runAgenticLoop, type AgenticEvent } from "../tools";
 import { buildMemoryContext } from "../services/memory";
+import { requireRole } from "../middleware/auth";
+import { llmRateLimit } from "../middleware/rate-limit";
 
 const router: IRouter = Router();
 
@@ -50,7 +52,7 @@ async function getSessionWithBots(sessionId: number) {
   return { ...session, teamBots };
 }
 
-router.post("/task-sessions/analyze", async (req, res): Promise<void> => {
+router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
   const body = AnalyzeTaskBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -133,7 +135,7 @@ Select 3-6 bots total. Only propose new bots if truly no existing bot covers a c
   });
 });
 
-router.post("/bots/fabricate", async (req, res): Promise<void> => {
+router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
   const body = FabricateBotBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -158,10 +160,12 @@ router.post("/bots/fabricate", async (req, res): Promise<void> => {
   res.status(201).json(bot);
 });
 
-router.get("/task-sessions", async (_req, res): Promise<void> => {
+router.get("/task-sessions", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
   const sessions = await db
     .select()
     .from(taskSessionsTable)
+    .where(eq(taskSessionsTable.clientId, clientId))
     .orderBy(desc(taskSessionsTable.createdAt));
 
   const result = await Promise.all(
@@ -185,7 +189,7 @@ router.get("/task-sessions", async (_req, res): Promise<void> => {
   res.json(result);
 });
 
-router.post("/task-sessions", async (req, res): Promise<void> => {
+router.post("/task-sessions", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
   const body = CreateTaskSessionBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -207,7 +211,7 @@ router.post("/task-sessions", async (req, res): Promise<void> => {
 
   const [session] = await db
     .insert(taskSessionsTable)
-    .values({ objective: body.data.objective })
+    .values({ objective: body.data.objective, clientId: req.user!.clientId })
     .returning();
 
   if (body.data.botIds.length > 0) {
@@ -232,7 +236,7 @@ router.get("/task-sessions/:id", async (req, res): Promise<void> => {
   }
 
   const result = await getSessionWithBots(params.data.id);
-  if (!result) {
+  if (!result || result.clientId !== req.user!.clientId) {
     res.status(404).json({ error: "Task session not found" });
     return;
   }
@@ -250,7 +254,7 @@ router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
   const [session] = await db
     .select()
     .from(taskSessionsTable)
-    .where(eq(taskSessionsTable.id, params.data.id));
+    .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
   if (!session) {
     res.status(404).json({ error: "Task session not found" });
     return;
@@ -267,6 +271,7 @@ router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
 
 router.post(
   "/task-sessions/:id/messages",
+  llmRateLimit,
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {
@@ -283,7 +288,7 @@ router.post(
     const [session] = await db
       .select()
       .from(taskSessionsTable)
-      .where(eq(taskSessionsTable.id, params.data.id));
+      .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
     if (!session) {
       res.status(404).json({ error: "Task session not found" });
       return;
@@ -336,7 +341,7 @@ router.post(
     for (const bot of teamBots) {
       let memoryContext = "";
       try {
-        memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`);
+        memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`, req.user!.clientId);
       } catch (_e) {}
 
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
@@ -369,7 +374,8 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           sessionId: session.id,
           botId: bot.id,
           botName: bot.name,
-          clientId: req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined),
+          clientId: req.user!.clientId,
+          userId: req.user!.userId,
         },
       });
 
@@ -440,6 +446,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
 
 router.post(
   "/task-sessions/:id/messages/stream",
+  llmRateLimit,
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {
@@ -456,7 +463,7 @@ router.post(
     const [session] = await db
       .select()
       .from(taskSessionsTable)
-      .where(eq(taskSessionsTable.id, params.data.id));
+      .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
     if (!session) {
       res.status(404).json({ error: "Task session not found" });
       return;
@@ -550,7 +557,8 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
               sessionId: session.id,
               botId: bot.id,
               botName: bot.name,
-              clientId: req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined),
+              clientId: req.user!.clientId,
+              userId: req.user!.userId,
             },
             onEvent: (event) => {
               sendSSE({ ...event, botId: bot.id, botName: bot.name, botTitle: bot.title });
@@ -634,6 +642,15 @@ router.get(
       return;
     }
 
+    const [session] = await db
+      .select()
+      .from(taskSessionsTable)
+      .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
+    if (!session) {
+      res.status(404).json({ error: "Task session not found" });
+      return;
+    }
+
     const recentMsgs = await db
       .select()
       .from(taskSessionMessagesTable)
@@ -681,7 +698,7 @@ router.post(
     const [session] = await db
       .select()
       .from(taskSessionsTable)
-      .where(eq(taskSessionsTable.id, params.data.id));
+      .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
     if (!session) {
       res.status(404).json({ error: "Task session not found" });
       return;

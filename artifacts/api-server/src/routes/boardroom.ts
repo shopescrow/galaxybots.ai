@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, boardroomMessagesTable, botsTable } from "@workspace/db";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, and, sql } from "drizzle-orm";
 import { PostBoardroomMessageBody, GetBoardroomMessagesResponse } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { llmRateLimit } from "../middleware/rate-limit";
 
 const router: IRouter = Router();
 
@@ -25,13 +26,14 @@ router.get("/boardroom/messages", async (req, res): Promise<void> => {
   const msgs = await db
     .select()
     .from(boardroomMessagesTable)
+    .where(eq(boardroomMessagesTable.clientId, req.user!.clientId))
     .orderBy(desc(boardroomMessagesTable.createdAt))
     .limit(limit);
 
   res.json(GetBoardroomMessagesResponse.parse(msgs.reverse()));
 });
 
-router.post("/boardroom/messages", async (req, res): Promise<void> => {
+router.post("/boardroom/messages", llmRateLimit, async (req, res): Promise<void> => {
   const body = PostBoardroomMessageBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -39,6 +41,7 @@ router.post("/boardroom/messages", async (req, res): Promise<void> => {
   }
 
   const [ceoMsg] = await db.insert(boardroomMessagesTable).values({
+    clientId: req.user!.clientId,
     role: "ceo",
     contentEncoded: `[CEO::${Buffer.from(body.data.content.substring(0, 40)).toString("base64")}]`,
     contentEnglish: body.data.content,
@@ -76,6 +79,7 @@ The CEO has raised a topic. Respond with a brief, professional boardroom perspec
     const encodedContent = generateEncodedMessage(englishContent, bot.title);
 
     const [botMsg] = await db.insert(boardroomMessagesTable).values({
+      clientId: req.user!.clientId,
       botId: bot.id,
       botName: bot.name,
       botTitle: bot.title,

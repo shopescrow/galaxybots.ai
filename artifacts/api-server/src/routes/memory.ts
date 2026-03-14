@@ -29,8 +29,9 @@ router.get("/bots/:botId/memories", async (req, res): Promise<void> => {
     return;
   }
 
+  const tenantClientId = req.user!.clientId;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
-  const memories = await getMemoriesForBot(botId, limit);
+  const memories = await getMemoriesForBot(botId, limit, tenantClientId);
   res.json(memories);
 });
 
@@ -38,6 +39,14 @@ router.delete("/memories/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid memory ID" });
+    return;
+  }
+
+  const [memory] = await db.select().from(botMemoriesTable).where(
+    and(eq(botMemoriesTable.id, id), eq(botMemoriesTable.clientId, req.user!.clientId))
+  );
+  if (!memory) {
+    res.status(404).json({ error: "Memory not found" });
     return;
   }
 
@@ -58,7 +67,7 @@ router.post("/bots/:botId/memories/search", async (req, res): Promise<void> => {
     return;
   }
 
-  const memories = await retrieveMemories({ botId, query, limit });
+  const memories = await retrieveMemories({ botId, clientId: req.user!.clientId, query, limit });
   res.json(memories);
 });
 
@@ -72,7 +81,7 @@ router.post("/task-sessions/:id/consolidate", async (req, res): Promise<void> =>
   const [session] = await db
     .select()
     .from(taskSessionsTable)
-    .where(eq(taskSessionsTable.id, sessionId));
+    .where(and(eq(taskSessionsTable.id, sessionId), eq(taskSessionsTable.clientId, req.user!.clientId)));
   if (!session) {
     res.status(404).json({ error: "Session not found" });
     return;
@@ -92,6 +101,7 @@ router.post("/task-sessions/:id/consolidate", async (req, res): Promise<void> =>
 
   const result = await consolidateSession({
     sessionId,
+    clientId: req.user!.clientId,
     objective: session.objective,
     messages: msgs,
     botIds,
@@ -100,11 +110,12 @@ router.post("/task-sessions/:id/consolidate", async (req, res): Promise<void> =>
   res.json(result);
 });
 
-router.get("/bot-assignments", async (_req, res): Promise<void> => {
+router.get("/bot-assignments", async (req, res): Promise<void> => {
   const assignments = await db
     .select({
       id: botAssignmentsTable.id,
       botId: botAssignmentsTable.botId,
+      clientId: botAssignmentsTable.clientId,
       objective: botAssignmentsTable.objective,
       schedule: botAssignmentsTable.schedule,
       isActive: botAssignmentsTable.isActive,
@@ -115,6 +126,7 @@ router.get("/bot-assignments", async (_req, res): Promise<void> => {
     })
     .from(botAssignmentsTable)
     .leftJoin(botsTable, eq(botAssignmentsTable.botId, botsTable.id))
+    .where(eq(botAssignmentsTable.clientId, req.user!.clientId))
     .orderBy(desc(botAssignmentsTable.createdAt));
 
   res.json(assignments);
@@ -146,6 +158,7 @@ router.post("/bot-assignments", async (req, res): Promise<void> => {
     .insert(botAssignmentsTable)
     .values({
       botId,
+      clientId: req.user!.clientId,
       objective,
       schedule: schedule || "daily",
     })
@@ -168,7 +181,7 @@ router.patch("/bot-assignments/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(botAssignmentsTable)
     .set(updates)
-    .where(eq(botAssignmentsTable.id, id))
+    .where(and(eq(botAssignmentsTable.id, id), eq(botAssignmentsTable.clientId, req.user!.clientId)))
     .returning();
 
   if (!updated) {
@@ -186,17 +199,28 @@ router.delete("/bot-assignments/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  await db
+  const [deleted] = await db
     .delete(botAssignmentsTable)
-    .where(eq(botAssignmentsTable.id, id));
+    .where(and(eq(botAssignmentsTable.id, id), eq(botAssignmentsTable.clientId, req.user!.clientId)))
+    .returning();
+  if (!deleted) {
+    res.status(404).json({ error: "Assignment not found" });
+    return;
+  }
   res.json({ success: true });
 });
 
 router.get("/background-reports", async (req, res): Promise<void> => {
   const botId = req.query.botId ? parseInt(req.query.botId as string) : null;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+  const tenantClientId = req.user!.clientId;
 
-  let query = db
+  const conditions = [eq(backgroundReportsTable.clientId, tenantClientId)];
+  if (botId) {
+    conditions.push(eq(backgroundReportsTable.botId, botId));
+  }
+
+  const results = await db
     .select({
       id: backgroundReportsTable.id,
       assignmentId: backgroundReportsTable.assignmentId,
@@ -212,34 +236,10 @@ router.get("/background-reports", async (req, res): Promise<void> => {
     .from(backgroundReportsTable)
     .leftJoin(botsTable, eq(backgroundReportsTable.botId, botsTable.id))
     .leftJoin(botAssignmentsTable, eq(backgroundReportsTable.assignmentId, botAssignmentsTable.id))
+    .where(and(...conditions))
     .orderBy(desc(backgroundReportsTable.createdAt))
     .limit(limit);
 
-  if (botId) {
-    const results = await db
-      .select({
-        id: backgroundReportsTable.id,
-        assignmentId: backgroundReportsTable.assignmentId,
-        botId: backgroundReportsTable.botId,
-        content: backgroundReportsTable.content,
-        summary: backgroundReportsTable.summary,
-        deliveredAt: backgroundReportsTable.deliveredAt,
-        createdAt: backgroundReportsTable.createdAt,
-        botName: botsTable.name,
-        botTitle: botsTable.title,
-        objective: botAssignmentsTable.objective,
-      })
-      .from(backgroundReportsTable)
-      .leftJoin(botsTable, eq(backgroundReportsTable.botId, botsTable.id))
-      .leftJoin(botAssignmentsTable, eq(backgroundReportsTable.assignmentId, botAssignmentsTable.id))
-      .where(eq(backgroundReportsTable.botId, botId))
-      .orderBy(desc(backgroundReportsTable.createdAt))
-      .limit(limit);
-    res.json(results);
-    return;
-  }
-
-  const results = await query;
   res.json(results);
 });
 
@@ -253,7 +253,7 @@ router.post("/bot-assignments/:id/run", async (req, res): Promise<void> => {
   const [assignment] = await db
     .select()
     .from(botAssignmentsTable)
-    .where(eq(botAssignmentsTable.id, id));
+    .where(and(eq(botAssignmentsTable.id, id), eq(botAssignmentsTable.clientId, req.user!.clientId)));
   if (!assignment) {
     res.status(404).json({ error: "Assignment not found" });
     return;
@@ -308,6 +308,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     .values({
       assignmentId: assignment.id,
       botId: assignment.botId,
+      clientId: req.user!.clientId,
       content,
       summary,
       deliveredAt: new Date(),
@@ -324,6 +325,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     assignmentId: assignment.id,
     botId: bot.id,
     botName: bot.name,
+    clientId: req.user!.clientId,
     summary,
   });
 
@@ -337,10 +339,11 @@ router.get("/events/background", (req, res) => {
     "Connection": "keep-alive",
   });
 
-  const clientId = `sse-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-  addSSEClient(clientId, res);
+  const sseId = `sse-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  const tenantClientId = req.user!.clientId;
+  addSSEClient(sseId, res, tenantClientId);
 
-  res.write(`event: connected\ndata: ${JSON.stringify({ clientId })}\n\n`);
+  res.write(`event: connected\ndata: ${JSON.stringify({ clientId: sseId })}\n\n`);
 
   req.on("close", () => {
     res.end();

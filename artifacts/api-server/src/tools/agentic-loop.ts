@@ -2,8 +2,36 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { isRateLimitError } from "@workspace/integrations-openai-ai-server";
 import { getTool, getOpenAIToolDefinitions, type ToolContext } from "./registry";
+import { db, platformAuditLogTable } from "@workspace/db";
 import pLimit from "p-limit";
 import pRetry from "p-retry";
+
+function auditToolExecution(
+  context: ToolContext,
+  toolName: string,
+  success: boolean,
+) {
+  if (!context.clientId) return;
+  db.insert(platformAuditLogTable)
+    .values({
+      clientId: context.clientId,
+      userId: context.userId ?? null,
+      action: "tool_execution",
+      resource: "tool",
+      resourceId: toolName,
+      metadata: {
+        toolName,
+        success,
+        sessionId: context.sessionId,
+        botId: context.botId,
+        botName: context.botName,
+      },
+      ipAddress: null,
+    })
+    .catch((err: unknown) => {
+      console.error("Tool audit log write failed:", err);
+    });
+}
 
 export interface AgenticEvent {
   type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done";
@@ -190,6 +218,9 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<{
               result = { error: err instanceof Error ? err.message : "Tool execution failed" };
             }
           }
+
+          const isError = typeof result === "object" && result !== null && "error" in result;
+          auditToolExecution(context, toolName, !isError);
 
           const resultEvent: AgenticEvent = {
             type: "tool_result",
