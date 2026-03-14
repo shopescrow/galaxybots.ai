@@ -12,6 +12,7 @@ import taskSessionsRouter from "./task-sessions";
 import memoryRouter from "./memory";
 import complianceRouter from "./compliance";
 import clientIntegrationsRouter from "./client-integrations";
+import piratemonsterRouter from "./piratemonster";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(taskSessionsRouter);
 router.use(memoryRouter);
 router.use(complianceRouter);
 router.use(clientIntegrationsRouter);
+router.use(piratemonsterRouter);
 
 export default router;

@@ -209,7 +209,9 @@ export default function Clients() {
                       <span className="text-foreground truncate ml-4">{client.contactEmail}</span>
                     </div>
                     <div className="mt-4 pt-4 border-t border-border/30">
-                      <Button variant="outline" size="sm" className="w-full font-tech">Manage Allocation</Button>
+                      <Link href={`/clients/${client.id}`}>
+                        <Button variant="outline" size="sm" className="w-full font-tech">Manage Allocation</Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>

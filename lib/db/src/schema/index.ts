@@ -13,3 +13,4 @@ export * from "./memory";
 export * from "./compliance";
 export * from "./client-integrations";
 export * from "./tool-activity-log";
+export * from "./aeo-scores";

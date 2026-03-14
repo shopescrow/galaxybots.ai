@@ -11,6 +11,7 @@ import BotDetail from "@/pages/bots/BotDetail";
 import Boardroom from "@/pages/boardroom/Boardroom";
 import Journal from "@/pages/journal/Journal";
 import Clients from "@/pages/clients/Clients";
+import ClientDetail from "@/pages/clients/ClientDetail";
 import Hire from "@/pages/hire/Hire";
 import HowItWorks from "@/pages/HowItWorks";
 import Blog from "@/pages/blog/Blog";
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/boardroom" component={Boardroom} />
       <Route path="/journal" component={Journal} />
       <Route path="/clients" component={Clients} />
+      <Route path="/clients/:id" component={ClientDetail} />
       <Route path="/hire" component={Hire} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/blog" component={Blog} />
