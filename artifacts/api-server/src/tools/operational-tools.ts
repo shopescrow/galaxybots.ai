@@ -911,8 +911,8 @@ registerTool({
   },
 });
 
-const SABRINA_SUPABASE_URL = "https://fnrmbtzxuuzmydocnpux.supabase.co";
-const SABRINA_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZucm1idHp4dXV6bXlkb2NucHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4MDcyMDMsImV4cCI6MjA1MjM4MzIwM30.JGSHiFLJkrhFnVNJp5BLrFxNOaQEcGNqhbtkbeJBOQ0";
+const SABRINA_SUPABASE_URL = process.env.SABRINA_SUPABASE_URL ?? "https://fnrmbtzxuuzmydocnpux.supabase.co";
+const SABRINA_ANON_KEY = process.env.SABRINA_ANON_KEY ?? "";
 
 registerTool({
   name: "browse_sabrina_automations",
