@@ -30,7 +30,7 @@ export default function Home() {
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 SYSTEM ONLINE. WAITING FOR DIRECTIVES.
               </div>
-              <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-8">
+              <h1 className="text-2xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-8">
                 Fortune 500 Intelligence.<br/>
                 <span className="text-gradient">Deployed for You.</span>
               </h1>

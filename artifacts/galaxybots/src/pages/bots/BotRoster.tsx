@@ -35,7 +35,7 @@ export default function BotRoster() {
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold mb-2">Corporate Roster</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold mb-2">Corporate Roster</h1>
             <p className="text-muted-foreground text-base sm:text-lg">Your elite team of AI directors and specialists.</p>
           </div>
           <div className="relative w-full md:w-72">

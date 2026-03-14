@@ -74,7 +74,7 @@ export default function Blog() {
             <BookOpen className="w-3.5 h-3.5" />
             Intelligence Briefings
           </div>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold mb-6">
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-display font-bold mb-6">
             The GalaxyBots <span className="text-gradient">Journal</span>
           </h1>
           <p className="text-xl text-muted-foreground">

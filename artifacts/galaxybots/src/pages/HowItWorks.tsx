@@ -246,7 +246,7 @@ export default function HowItWorks() {
             <Layers className="w-3.5 h-3.5" />
             How It Works
           </div>
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-bold mb-8 leading-tight">
+          <h1 className="text-2xl sm:text-5xl lg:text-6xl font-display font-bold mb-8 leading-tight">
             Fortune 500 Intelligence.<br />
             <span className="text-gradient">Deployed in Minutes.</span>
           </h1>
@@ -308,7 +308,7 @@ export default function HowItWorks() {
         {/* Visual Flow Diagram */}
         <div className="relative">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-display font-bold mb-4">The Deployment Pipeline</h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-bold mb-4">The Deployment Pipeline</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">From first contact to full deployment — 4 steps, under 10 minutes.</p>
           </div>
 
@@ -354,7 +354,7 @@ export default function HowItWorks() {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-cyan/5" />
           <div className="relative z-10">
             <Globe className="w-12 h-12 text-gold mx-auto mb-6" />
-            <h2 className="text-4xl font-display font-bold mb-4">
+            <h2 className="text-2xl sm:text-4xl font-display font-bold mb-4">
               Ready to Deploy?
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">

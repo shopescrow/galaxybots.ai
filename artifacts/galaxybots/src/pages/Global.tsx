@@ -137,7 +137,7 @@ export default function Global() {
             <Globe className="w-3.5 h-3.5" />
             Multilingual Intelligence Platform
           </div>
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-bold mb-6 leading-tight">
+          <h1 className="text-2xl sm:text-5xl lg:text-6xl font-display font-bold mb-6 leading-tight">
             One Board.<br />
             <span className="text-gradient">Every Language.</span>
           </h1>
@@ -177,7 +177,7 @@ export default function Global() {
         >
           <div className="mb-6">
             <div className="text-xs font-tech uppercase tracking-widest text-primary mb-2">Live Demo</div>
-            <h2 className="text-3xl font-display font-bold">See It In Action</h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-bold">See It In Action</h2>
             <p className="text-muted-foreground mt-2">Click any language to instantly translate GalaxyBots.ai content in real time using our AI translation engine.</p>
           </div>
           <TranslationDemo />
@@ -191,7 +191,7 @@ export default function Global() {
         >
           <div className="mb-8">
             <div className="text-xs font-tech uppercase tracking-widest text-primary mb-2">Global Coverage</div>
-            <h2 className="text-3xl font-display font-bold">Regions & Languages</h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-bold">Regions & Languages</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {regions.map((region, i) => (
@@ -225,7 +225,7 @@ export default function Global() {
         >
           <div className="mb-8">
             <div className="text-xs font-tech uppercase tracking-widest text-primary mb-2">All Languages</div>
-            <h2 className="text-3xl font-display font-bold">15 Supported Languages</h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-bold">15 Supported Languages</h2>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             {LANGUAGES.map((lang, i) => (
@@ -258,7 +258,7 @@ export default function Global() {
             <div className="space-y-6">
               <div>
                 <div className="text-xs font-tech uppercase tracking-widest text-primary mb-2">How It Works</div>
-                <h2 className="text-3xl font-display font-bold">Powered by AI Translation</h2>
+                <h2 className="text-2xl sm:text-3xl font-display font-bold">Powered by AI Translation</h2>
               </div>
               <p className="text-muted-foreground leading-relaxed">
                 GalaxyBots.ai uses the Replit AI Integration (GPT-5.2) to power real-time translation of the entire platform — including UI text, bot descriptions, and live AI chat responses. No third-party translation API required.
@@ -325,7 +325,7 @@ export default function Global() {
           className="text-center space-y-4"
         >
           <Globe className="w-10 h-10 text-primary mx-auto" />
-          <h2 className="text-3xl font-display font-bold">Your Board Speaks Every Language</h2>
+          <h2 className="text-2xl sm:text-3xl font-display font-bold">Your Board Speaks Every Language</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">Deploy your AI executive team today. Use the language selector in the navbar to get started in your language.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
             <Link href="/hire">

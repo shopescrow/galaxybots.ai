@@ -350,7 +350,7 @@ export default function Integrations() {
     <AppLayout>
       <div className="mx-auto max-w-4xl space-y-6 p-6">
         <div>
-          <h1 className="text-3xl font-bold">Integrations</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Integrations</h1>
           <p className="text-muted-foreground mt-1">
             Connect your accounts so agents can perform actions on your behalf — send emails, manage calendar events, update CRM records, and create documents.
           </p>

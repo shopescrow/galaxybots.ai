@@ -328,7 +328,7 @@ export default function Assembly() {
               transition={{ duration: 0.8 }}
               className="text-center mb-12"
             >
-              <h1 className="text-3xl sm:text-5xl font-bold mb-4 tracking-tight">
+              <h1 className="text-2xl sm:text-5xl font-bold mb-4 tracking-tight">
                 <span className="text-gradient">Global Assembly</span>
               </h1>
               <p className="text-muted-foreground text-sm sm:text-base max-w-xl mx-auto font-tech">

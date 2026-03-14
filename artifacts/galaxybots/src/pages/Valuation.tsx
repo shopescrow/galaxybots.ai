@@ -127,7 +127,7 @@ export default function Valuation() {
             <TrendingUp className="w-3.5 h-3.5" />
             5-Year Financial Projections · Confidential
           </div>
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-bold mb-6 leading-tight">
+          <h1 className="text-2xl sm:text-5xl lg:text-6xl font-display font-bold mb-6 leading-tight">
             GalaxyBots.ai<br />
             <span className="text-gradient">Valuation Outlook</span>
           </h1>

@@ -49,7 +49,7 @@ function renderMarkdown(content: string) {
     const line = lines[i];
 
     if (line.startsWith("# ")) {
-      elements.push(<h1 key={i} className="text-4xl font-display font-bold mt-10 mb-6 text-foreground">{line.slice(2)}</h1>);
+      elements.push(<h1 key={i} className="text-2xl sm:text-4xl font-display font-bold mt-10 mb-6 text-foreground">{line.slice(2)}</h1>);
     } else if (line.startsWith("## ")) {
       elements.push(<h2 key={i} className="text-2xl font-display font-bold mt-8 mb-4 text-foreground">{line.slice(3)}</h2>);
     } else if (line.startsWith("### ")) {

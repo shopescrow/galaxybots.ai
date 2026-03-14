@@ -116,7 +116,7 @@ export default function PartnerLanding() {
             <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto">
               <CheckCircle className="w-10 h-10 text-primary" />
             </div>
-            <h2 className="text-3xl font-display font-bold">Deployment Initiated</h2>
+            <h2 className="text-2xl sm:text-3xl font-display font-bold">Deployment Initiated</h2>
             <p className="text-muted-foreground text-lg">
               Your AI executive team is being configured. Welcome to GalaxyBots.ai — referred by {partner.partnerName}.
             </p>
@@ -162,7 +162,7 @@ export default function PartnerLanding() {
             className="space-y-8"
           >
             <div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold leading-tight mb-6">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-display font-bold leading-tight mb-6">
                 Welcome from<br />
                 <span className="text-gradient">{partner.partnerName}</span>
               </h1>

@@ -17,7 +17,7 @@ export default function Journal() {
             <FileText className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-display font-bold">Operations Journal</h1>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold">Operations Journal</h1>
             <p className="text-muted-foreground font-tech">Daily summaries transcribed from internal board communications.</p>
           </div>
         </div>

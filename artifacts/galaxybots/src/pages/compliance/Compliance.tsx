@@ -612,8 +612,8 @@ export default function Compliance() {
     <AppLayout>
       <div className="container mx-auto px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl font-display font-bold flex items-center gap-3">
-            <ShieldCheck className="text-primary w-8 h-8" />
+          <h1 className="text-2xl sm:text-3xl font-display font-bold flex items-center gap-3">
+            <ShieldCheck className="text-primary w-7 h-7 sm:w-8 sm:h-8" />
             Compliance Center
           </h1>
           <p className="text-muted-foreground font-tech mt-1">
