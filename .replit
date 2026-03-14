@@ -28,7 +28,6 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-JWT_SECRET = "cc13d6a3dcefc7dcaafd1f3d2d606cdeac4c6e437f28570ef1fe5c03860346bf"
 
 [nix]
 channel = "stable-25_05"
