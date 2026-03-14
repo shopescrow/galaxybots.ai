@@ -18,6 +18,7 @@ import receptionistRouter from "./receptionist";
 import auditRouter from "./audit";
 import { llmRateLimit } from "../middleware/rate-limit";
 import { requireRole } from "../middleware/auth";
+import roiRouter from "./roi";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(clientIntegrationsRouter);
 router.use(piratemonsterRouter);
 router.use(receptionistRouter);
 router.use(auditRouter);
+router.use(roiRouter);
 
 export default router;

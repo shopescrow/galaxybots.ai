@@ -17,3 +17,4 @@ export * from "./aeo-scores";
 export * from "./receptionist";
 export * from "./users";
 export * from "./audit-log";
+export * from "./session-outcomes";

@@ -7,6 +7,7 @@ import {
   taskSessionMessagesTable,
 } from "@workspace/db";
 import { eq, desc, inArray, and } from "drizzle-orm";
+import { captureSessionOutcome } from "../services/outcome-capture";
 import {
   AnalyzeTaskBody,
   CreateTaskSessionBody,
@@ -440,6 +441,11 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
       responses.push(botMsg);
     }
 
+    const cId = req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined);
+    captureSessionOutcome(session.id, session.objective, cId).catch((err) =>
+      console.error("Outcome capture error:", err)
+    );
+
     res.status(201).json(responses);
   },
 );
@@ -625,6 +631,11 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
       );
 
       sendSSE({ type: "done", content: "All bots have responded" });
+
+      const clientId = req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined);
+      captureSessionOutcome(session.id, session.objective, clientId).catch((err) =>
+        console.error("Outcome capture error:", err)
+      );
     } catch (err) {
       sendSSE({ type: "error", content: err instanceof Error ? err.message : "Stream error" });
     } finally {

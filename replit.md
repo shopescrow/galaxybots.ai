@@ -1,47 +1,31 @@
-# Workspace
+# Overview
 
-## Overview
+GalaxyBots.ai is a white-label AI-powered corporate bot platform offering AI personalities representing Fortune 500 director-level positions. These bots provide expert professional perspectives through chat interactions. The platform aims to deploy Fortune 500 intelligence for businesses, enabling cross-functional bot teams for business objectives, long-term memory retention for bots, and background autonomous assignments. Key capabilities include a chat interface for real AI conversations, an internal boardroom for communications, client management, task rooms for team-based operations, and a robust proof-of-value engine with an ROI dashboard. The project also integrates with external compliance applications and provides a comprehensive compliance center.
 
-GalaxyBots.ai — A white-label AI-powered corporate bot platform. Users can hire AI personalities representing every director-level position in a Fortune 500 corporation. Bots provide expert professional perspective from their domain when engaged in chat.
+# User Preferences
 
-## Stack
+I prefer iterative development, with a focus on delivering functional components that can be tested and refined. When making changes or adding features, please provide clear explanations of the architectural choices and how they align with the overall system design. I value modular and maintainable code.
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **AI**: OpenAI GPT-5.2 via Replit AI Integrations
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-- **Frontend**: React + Vite, TailwindCSS, Framer Motion, TanStack Query
+# System Architecture
 
-## Structure
+The project is built as a monorepo using `pnpm workspaces`, Node.js 24, TypeScript 5.9, and Express 5 for the API server. The frontend is a React application utilizing Vite, TailwindCSS, Framer Motion, and TanStack Query. Data persistence is handled by PostgreSQL with Drizzle ORM. AI capabilities are powered by OpenAI GPT-5.2 through Replit AI Integrations. Data validation uses Zod and `drizzle-zod`, while API client code is generated from an OpenAPI spec using Orval. The build process uses esbuild for CJS bundles.
 
-```text
-artifacts-monorepo/
-├── artifacts/
-│   ├── api-server/         # Express API server
-│   └── galaxybots/         # GalaxyBots.ai React frontend (at /)
-├── lib/
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   ├── db/                 # Drizzle ORM schema + DB connection
-│   ├── integrations-openai-ai-server/  # OpenAI server-side client
-│   └── integrations-openai-ai-react/   # OpenAI React hooks
-├── scripts/
-│   └── src/seed-bots.ts    # Seeds 51 bot personalities into DB
-```
+**UI/UX Decisions:**
+- **Landing Page:** Features a "Fortune 500 Intelligence. Deployed for You." branding.
+- **Global Assembly:** A cinematic `/assembly` page showcases bots declaring their identity with SSE-streamed, AI-generated declarations.
+- **Bot Roster:** Bots are browsable by category with search functionality.
+- **Task Rooms:** Features an AI-powered task analysis for team proposals, a "Give Birth" bot fabrication process with CEO approval, and a dedicated chat interface for assigned teams. Alerts for missing roles ("Add Thinking Power") are integrated.
+- **Integrations Settings:** A client-facing page (`/integrations`) manages credentials with connection status badges.
+- **ROI Dashboard:** Visualizes cumulative metrics, charts (sessions over time, savings by department, top bots, tool usage), and generates weekly executive briefings.
+- **Compliance Center:** Provides both a platform status view from external compliance apps and a client-specific requirements management interface.
+- **Agentic Tool System UI:** Collapsible tool step cards with a working pulse indicator provide real-time feedback during tool executions.
 
-## Database Schema
+**Technical Implementations & Feature Specifications:**
 
 - `bots` — All 51+ AI director personalities with roles, departments, descriptions, personalities, `declaration` (AI-generated activation statement), `isAiGenerated` flag, `addon_type` (null for standard bots, "receptionist" for AI Receptionist)
 - `conversations` — Chat conversations between users/clients and bots
 - `messages` — Individual messages in conversations (role: user/bot/system)
-- `clients` — Companies that hire bots
+- `clients` — Companies that hire bots, with configurable `hourly_rate` (default $150/hr) for ROI calculations
 - `client_bots` — Junction table for which bots a client has hired
 - `boardroom_messages` — Internal board communications (encoded + English)
 - `journal_entries` — Daily operations journal with board highlights
@@ -56,6 +40,8 @@ artifacts-monorepo/
 - `client_compliance_requirements` — Client-defined compliance standards with status tracking (name, category, status: met/pending/not_applicable, notes)
 - `client_integrations` — Per-client OAuth tokens/API keys for external services (Gmail, Google Calendar, HubSpot, Notion, PirateMonster). Referenced by clientId with cascade delete.
 - `aeo_scores` — AEO scan results from PirateMonster per URL: overallScore (0-100), engineScores (jsonb with 9 AI engines), citationCount, recommendations (jsonb array), scannedAt. Optional FK to clients.
+- `session_outcomes` — Per-task-session outcome tracking: sessionId (unique), clientId, botsDeployed (jsonb), toolsExecuted (jsonb count by type), toolsExecutedTotal, durationMinutes, estimatedHoursSaved, outcomeSummary, department. Upsert semantics for idempotent capture.
+- `roi_shareable_reports` — Shareable ROI reports: clientId, shareToken (unique), title, dateFrom, dateTo, reportData (jsonb with full ROI metrics), recommendation
 - `tool_activity_log` — Audit log for tool executions (scrape_webpage, run_code) with toolName, clientId, sessionId, botName, URL, metadata, timestamp
 - `receptionist_configs` — AI Receptionist configuration per client: ElevenLabs agent ID, Twilio number, business name/hours, knowledge base prompt, notification email, CRM type (hubspot/salesforce/custom_webhook/none), webhook URL, field mapping, self-improvement tracking
 - `call_logs` — Call records: Twilio SID, recording URL, direction, phone numbers, status, duration, transcript, summary, CRM sync status, email sent status
@@ -124,7 +110,14 @@ artifacts-monorepo/
     - PirateMonster panel on Integrations page shows connection status, webhook URL, and key configuration
     - Recommendation endpoint for PirateMonster to request strategic AEO advice from bots
     - Agentic tools: `analyze_aeo_score` and `aeo_recommend` available to all bots
-12. **Compliance Center** — Two-sided compliance management at `/compliance`
+12. **Proof-of-Value Engine & ROI Dashboard** — Tracks outcomes from every Task Session and quantifies business value
+    - Automatic outcome capture at session close (bots deployed, tools used, estimated hours saved, AI-generated summary)
+    - Per-client ROI dashboard at `/clients/:id/roi` with cumulative metrics, charts (sessions over time, savings by department, top bots pie chart, tool usage)
+    - Configurable hourly rate per client (default $150/hr) for dollar savings calculation
+    - Weekly Executive Briefing generated by AI Chief of Staff with highlights and recommendations
+    - Shareable Proof-of-Value report via public token URL at `/roi/shared/:token`
+    - API endpoints: `GET /api/roi/client/:id`, `GET /api/roi/client/:id/briefing`, `POST /api/roi/client/:id/shareable`, `GET /api/roi/shared/:token`, `PATCH /api/roi/client/:id/hourly-rate`
+13. **Compliance Center** — Two-sided compliance management at `/compliance`
     - **Platform Status**: Shows compliance data received from external compliance apps via secured webhook
     - **Client Requirements**: Per-client compliance standards management (add/edit/delete, status tracking: met/pending/N/A)
     - Inbound webhook at `/api/compliance/inbound` secured with API key (COMPLIANCE_API_KEY env var)
@@ -193,6 +186,12 @@ Run `pnpm --filter @workspace/scripts run seed-bots` to seed all 51 bot personal
 - `GET /api/client-integrations/:clientId` — List client integrations (credentials redacted, client ownership verified)
 - `POST /api/client-integrations` — Save/update client integration credential (service enum validated, client ownership verified)
 - `DELETE /api/client-integrations/:clientId/:id` — Remove a client integration (ownership-scoped delete)
+- `GET /api/roi/client/:id` — Get ROI metrics for a client (filterable by date range)
+- `GET /api/roi/client/:id/briefing` — Generate weekly executive briefing for a client
+- `POST /api/roi/client/:id/shareable` — Create a shareable Proof-of-Value report
+- `GET /api/roi/shared/:token` — Get a shareable report by public token
+- `PATCH /api/roi/client/:id/hourly-rate` — Update client's hourly rate for ROI calculations
+- `POST /api/roi/capture-outcome` — Manually capture session outcome
 
 ## Agentic Tool System
 
@@ -234,10 +233,30 @@ Key files:
 - `artifacts/api-server/src/tools/operational-tools.ts` — Operational tools (email, Slack, Notion, Calendar, HubSpot, Linear, code execution, web scrape)
 - `artifacts/api-server/src/tools/aeo-tools.ts` — AEO intelligence tools (analyze_aeo_score, aeo_recommend)
 - `artifacts/api-server/src/routes/piratemonster.ts` — PirateMonster AEO integration API routes
-- `artifacts/galaxybots/src/pages/clients/ClientDetail.tsx` — Client detail page with AEO Intelligence tab
+- `artifacts/galaxybots/src/pages/clients/ClientDetail.tsx` — Client detail page with AEO Intelligence and Value Report tabs
 - `artifacts/galaxybots/src/pages/clients/AeoIntelligenceTab.tsx` — AEO Intelligence tab component
 - `artifacts/api-server/src/tools/agentic-loop.ts` — Agentic loop with p-retry/p-limit
 - `artifacts/api-server/src/routes/client-integrations.ts` — Client integrations CRUD API
+- `artifacts/api-server/src/routes/roi.ts` — ROI dashboard API routes (metrics, briefing, shareable reports, hourly rate config)
+- `artifacts/api-server/src/services/roi.ts` — ROI calculation service (aggregation, weekly briefing, shareable report generation)
+- `artifacts/api-server/src/services/outcome-capture.ts` — Session outcome capture service (idempotent upsert)
+- `artifacts/galaxybots/src/pages/roi/ROIDashboard.tsx` — Client ROI dashboard with charts and executive briefing
+- `artifacts/galaxybots/src/pages/roi/SharedReport.tsx` — Public shareable Value Report page
 - `artifacts/galaxybots/src/pages/integrations/Integrations.tsx` — Client-facing integrations settings UI
 - `artifacts/galaxybots/src/hooks/use-sse.ts` — SSE stream consumption hook
 - `artifacts/galaxybots/src/components/ToolStepCard.tsx` — Collapsible tool step UI components
+
+# External Dependencies
+
+- **OpenAI GPT-5.2:** Utilized for AI capabilities and bot intelligence via Replit AI Integrations.
+- **PostgreSQL:** Primary database for all application data.
+- **ElevenLabs:** Used for AI voice generation in the Vera AI Receptionist bot.
+- **Twilio:** Integrated for calling functionality within the Vera AI Receptionist bot.
+- **DuckDuckGo Instant Answer API:** Powers the `web_search` agentic tool.
+- **Gmail API:** Integrated for `send_email` and `read_email` agentic tools.
+- **Google Calendar API:** Integrated for `create_calendar_event` and `list_calendar_events` agentic tools.
+- **HubSpot API:** Integrated for `crm_upsert_contact` and `crm_create_deal` agentic tools.
+- **Notion API:** Integrated for `create_document` and `read_document` agentic tools.
+- **PirateMonster.com:** An AEO intelligence platform with bidirectional data bridging for AEO score analysis and recommendations.
+- **Slack:** Platform-level integration for `post_slack_message` and `read_slack_channel` agentic tools.
+- **Linear:** Platform-level integration for `create_issue` and `update_issue` agentic tools.

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { Loader2, ArrowLeft, Building, Zap, ExternalLink } from "lucide-react";
+import { Loader2, ArrowLeft, Building, Zap, ExternalLink, BarChart3 } from "lucide-react";
 import { AeoIntelligenceTab } from "./AeoIntelligenceTab";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -99,6 +99,12 @@ export default function ClientDetail() {
               <Zap className="w-4 h-4" />
               AEO Intelligence
             </div>
+            <Link href={`/clients/${clientId}/roi`}>
+              <div className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer">
+                <BarChart3 className="w-4 h-4" />
+                Value Report
+              </div>
+            </Link>
           </div>
         </div>
 

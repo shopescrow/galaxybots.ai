@@ -4,9 +4,11 @@ import {
   botAssignmentsTable,
   backgroundReportsTable,
   botsTable,
+  clientsTable,
 } from "@workspace/db";
 import { eq, and, lte, isNull, or } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { generateWeeklyBriefing } from "./roi";
 
 const SCHEDULER_LOCK_ID = 999999;
 
@@ -146,6 +148,35 @@ async function checkDueAssignments() {
   }
 }
 
+let lastWeeklyBriefingCheck = 0;
+const WEEKLY_BRIEFING_INTERVAL = 7 * 24 * 60 * 60 * 1000;
+
+async function checkWeeklyBriefings() {
+  const now = Date.now();
+  if (now - lastWeeklyBriefingCheck < WEEKLY_BRIEFING_INTERVAL) return;
+  lastWeeklyBriefingCheck = now;
+
+  try {
+    const clients = await db.select().from(clientsTable);
+    for (const client of clients) {
+      try {
+        const briefing = await generateWeeklyBriefing(client.id);
+        broadcastSSE("weekly-briefing", {
+          clientId: client.id,
+          companyName: client.companyName,
+          briefing: briefing.briefing,
+          highlights: briefing.highlights,
+          recommendation: briefing.recommendation,
+        });
+      } catch (err) {
+        console.error(`Weekly briefing error for client ${client.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("Weekly briefing check error:", err);
+  }
+}
+
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
 async function tryAcquireSchedulerLock(): Promise<boolean> {
@@ -174,6 +205,9 @@ export async function startScheduler() {
   schedulerInterval = setInterval(() => {
     checkDueAssignments().catch((err) =>
       console.error("Scheduler tick error:", err)
+    );
+    checkWeeklyBriefings().catch((err) =>
+      console.error("Weekly briefing tick error:", err)
     );
   }, 5 * 60 * 1000);
 }
