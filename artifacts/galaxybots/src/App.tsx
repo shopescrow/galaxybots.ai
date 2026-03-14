@@ -28,6 +28,7 @@ import Integrations from "@/pages/integrations/Integrations";
 import AIReceptionist from "@/pages/bots/AIReceptionist";
 import ROIDashboard from "@/pages/roi/ROIDashboard";
 import SharedReport from "@/pages/roi/SharedReport";
+import Billing from "@/pages/Billing";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -83,6 +84,7 @@ function AuthenticatedRoutes() {
       <Route path="/integrations" component={Integrations} />
       <Route path="/clients/:id/roi" component={ROIDashboard} />
       <Route path="/roi/shared/:token" component={SharedReport} />
+      <Route path="/billing" component={Billing} />
       <Route component={NotFound} />
     </Switch>
   );
