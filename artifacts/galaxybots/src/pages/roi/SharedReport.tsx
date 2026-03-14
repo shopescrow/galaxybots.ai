@@ -118,7 +118,7 @@ export default function SharedReport() {
             <BarChart3 className="w-3 h-3 mr-1" />
             Proof of Value Report
           </Badge>
-          <h1 className="text-3xl sm:text-4xl font-display font-bold mb-2">{report.title}</h1>
+          <h1 className="text-2xl sm:text-4xl font-display font-bold mb-2">{report.title}</h1>
           <p className="text-muted-foreground font-tech text-sm">{dateRange}</p>
           <p className="text-xs text-muted-foreground mt-2">Powered by GalaxyBots.ai</p>
         </div>
