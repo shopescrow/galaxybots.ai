@@ -30,7 +30,7 @@ const SERVICES = [
     description: "Send and read emails on behalf of the client using Gmail API.",
     icon: Mail,
     credentialLabel: "Gmail OAuth Access Token",
-    credentialPlaceholder: "ya29.a0AfH6SM...",
+    credentialPlaceholder: "Paste your OAuth access token here...",
   },
   {
     key: "google_calendar",
@@ -38,7 +38,7 @@ const SERVICES = [
     description: "Create and list calendar events using Google Calendar API.",
     icon: Calendar,
     credentialLabel: "Google Calendar OAuth Access Token",
-    credentialPlaceholder: "ya29.a0AfH6SM...",
+    credentialPlaceholder: "Paste your OAuth access token here...",
   },
   {
     key: "hubspot",
