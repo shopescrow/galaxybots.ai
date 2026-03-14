@@ -15,6 +15,7 @@ const DEPARTMENT_ORDER = [
   "Technology & Product",
   "Human Resources",
   "Strategy & Innovation",
+  "Voice & Communications",
 ];
 
 function sortByDepartment<T extends { department: string; name: string }>(bots: T[]): T[] {

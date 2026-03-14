@@ -8,13 +8,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetConversationMessagesQueryKey } from "@workspace/api-client-react";
 import { MemoryAudit } from "@/components/memory/MemoryAudit";
+import { Link } from "wouter";
+
+const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
+
+interface ImprovementRun {
+  id: number;
+  configId: number;
+  callsAnalyzed: number;
+  previousPromptSnapshot: string | null;
+  newPromptSnapshot: string | null;
+  improvementNotes: string | null;
+  createdAt: string;
+}
 
 export default function BotDetail() {
   const params = useParams();
@@ -81,6 +94,18 @@ export default function BotDetail() {
                     <p className="text-sm leading-relaxed">{bot.description}</p>
                   </div>
                   
+                  {bot.addonType === "receptionist" && (
+                    <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+                      <Link href="/bots/ai-receptionist">
+                        <Button variant="glow" className="w-full gap-2">
+                          <Phone className="w-4 h-4" />
+                          Configure Receptionist
+                        </Button>
+                      </Link>
+                      <ReceptionistImprovementHistory />
+                    </div>
+                  )}
+
                   <div className="mt-4 pt-4 border-t border-border/50">
                     <p className="text-sm text-muted-foreground mb-3 uppercase tracking-wider font-tech">Core Responsibilities</p>
                     <ul className="space-y-2">
@@ -288,6 +313,68 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
           </Button>
         </form>
       </div>
+    </div>
+  );
+}
+
+const DEFAULT_CLIENT_ID = 1; // Platform-wide default: no auth system exists yet. Replace with auth context when added.
+
+function ReceptionistImprovementHistory() {
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: config } = useQuery({
+    queryKey: ["receptionist-config", DEFAULT_CLIENT_ID],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/receptionist/config/${DEFAULT_CLIENT_ID}`);
+      if (!res.ok) return null;
+      return res.json() as Promise<{ id: number } | null>;
+    },
+  });
+
+  const { data: runs } = useQuery<ImprovementRun[]>({
+    queryKey: ["improvement-history", config?.id],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/receptionist/improvement-history/${config!.id}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!config?.id,
+  });
+
+  if (!runs || runs.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground mt-2 p-2 rounded bg-secondary/30">
+        <Brain className="w-3 h-3 inline mr-1" />
+        No self-improvement runs yet. Improvement triggers after every 10 completed calls.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Brain className="w-3 h-3" />
+        <span>Self-Improvement History ({runs.length} runs)</span>
+        {expanded ? <ChevronUp className="w-3 h-3 ml-auto" /> : <ChevronDown className="w-3 h-3 ml-auto" />}
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+          {runs.map(run => (
+            <div key={run.id} className="p-2 rounded bg-secondary/30 border border-border/30 text-xs">
+              <div className="flex justify-between text-muted-foreground mb-1">
+                <span>{run.callsAnalyzed} calls analyzed</span>
+                <span>{format(new Date(run.createdAt), "MMM d, yyyy HH:mm")}</span>
+              </div>
+              {run.improvementNotes && (
+                <p className="text-foreground/80">{run.improvementNotes}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import TaskBoardroom from "@/pages/task-sessions/TaskBoardroom";
 import Assembly from "@/pages/Assembly";
 import Compliance from "@/pages/compliance/Compliance";
 import Integrations from "@/pages/integrations/Integrations";
+import AIReceptionist from "@/pages/bots/AIReceptionist";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -41,6 +42,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/bots" component={BotRoster} />
+      <Route path="/bots/ai-receptionist" component={AIReceptionist} />
       <Route path="/bots/:id" component={BotDetail} />
       <Route path="/boardroom" component={Boardroom} />
       <Route path="/journal" component={Journal} />

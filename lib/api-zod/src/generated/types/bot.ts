@@ -17,6 +17,8 @@ export interface Bot {
   personality: string;
   /** @nullable */
   avatar?: string | null;
+  /** @nullable */
+  addonType?: string | null;
   isAvailable: boolean;
   isAiGenerated: boolean;
   createdAt: Date;

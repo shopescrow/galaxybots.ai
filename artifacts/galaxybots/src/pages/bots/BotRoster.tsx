@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
-import { Search, Loader2, BotIcon } from "lucide-react";
+import { Search, Loader2, BotIcon, Mic } from "lucide-react";
 import { useState, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
@@ -84,7 +84,7 @@ export default function BotRoster() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: prefersReducedMotion ? 0 : i * 0.05 }}
               >
-                <Link href={`/bots/${bot.id}`}>
+                <Link href={bot.addonType === "receptionist" ? "/bots/ai-receptionist" : `/bots/${bot.id}`}>
                   <Card className="h-full cursor-pointer group hover:border-primary/50 transition-colors relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/20 transition-all" />
                     <CardHeader className="pb-4 relative z-10">
@@ -96,9 +96,16 @@ export default function BotRoster() {
                             <BotIcon className="w-6 h-6 text-muted-foreground group-hover:text-primary" />
                           )}
                         </div>
-                        <Badge variant={bot.isAvailable ? "cyan" : "secondary"}>
-                          {bot.isAvailable ? "Available" : "Assigned"}
-                        </Badge>
+                        <div className="flex gap-1.5">
+                          {bot.addonType === "receptionist" && (
+                            <Badge variant="glow" className="gap-1">
+                              <Mic className="w-3 h-3" /> Voice
+                            </Badge>
+                          )}
+                          <Badge variant={bot.isAvailable ? "cyan" : "secondary"}>
+                            {bot.isAvailable ? "Available" : "Assigned"}
+                          </Badge>
+                        </div>
                       </div>
                       <CardTitle className="mb-1 group-hover:text-primary transition-colors">{bot.name}</CardTitle>
                       <CardDescription className="text-cyan">{bot.title}</CardDescription>

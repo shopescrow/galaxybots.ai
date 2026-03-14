@@ -24,6 +24,10 @@ import type {
   Bot,
   BotAssignment,
   BotMemory,
+  CallImprovementRun,
+  CallLogListResponse,
+  CallStatus200,
+  CallStatusBody,
   Client,
   ClientBot,
   ClientComplianceRequirement,
@@ -35,6 +39,7 @@ import type {
   CreateClientBody,
   CreateClientComplianceBody,
   CreateConversationBody,
+  CreateReceptionistConfigBody,
   CreateTaskSessionBody,
   DeleteBotAssignment200,
   DeleteClientCompliance200,
@@ -44,15 +49,20 @@ import type {
   FabricateBotBody,
   GetBoardroomMessagesParams,
   GetBotMemoriesParams,
+  GetCallLogsParams,
   GetJournalEntriesParams,
   GetPartnerLinkParams,
+  HandleCallStreamBody,
   HealthStatus,
   HireBotBody,
+  IncomingCallBody,
   JournalEntry,
   ListBackgroundReportsParams,
   ListBlogPostsParams,
   ListConversationsParams,
   ListPartnerReferralsParams,
+  MakeOutboundCall200,
+  MakeOutboundCallBody,
   MemorySearchBody,
   Message,
   MessageResponse,
@@ -60,6 +70,9 @@ import type {
   PartnerRegistration,
   PlatformComplianceRecord,
   PostBoardroomMessageBody,
+  ReceptionistConfig,
+  RecordingStatus200,
+  RecordingStatusBody,
   RegisterPartnerUserBody,
   SendMessageBody,
   SendTaskSessionMessageBody,
@@ -67,8 +80,11 @@ import type {
   TaskSessionAlert,
   TaskSessionMessage,
   TeamProposal,
+  TestReceptionistConnection200,
+  TestReceptionistConnectionBody,
   UpdateBotAssignmentBody,
   UpdateClientComplianceBody,
+  UpdateReceptionistConfigBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -4256,4 +4272,1033 @@ export const useDeleteClientCompliance = <
   TContext
 > => {
   return useMutation(getDeleteClientComplianceMutationOptions(options));
+};
+
+/**
+ * @summary Create receptionist configuration
+ */
+export const getCreateReceptionistConfigUrl = () => {
+  return `/api/receptionist/config`;
+};
+
+export const createReceptionistConfig = async (
+  createReceptionistConfigBody: CreateReceptionistConfigBody,
+  options?: RequestInit,
+): Promise<ReceptionistConfig> => {
+  return customFetch<ReceptionistConfig>(getCreateReceptionistConfigUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createReceptionistConfigBody),
+  });
+};
+
+export const getCreateReceptionistConfigMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createReceptionistConfig>>,
+    TError,
+    { data: BodyType<CreateReceptionistConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createReceptionistConfig>>,
+  TError,
+  { data: BodyType<CreateReceptionistConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["createReceptionistConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createReceptionistConfig>>,
+    { data: BodyType<CreateReceptionistConfigBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createReceptionistConfig(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateReceptionistConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createReceptionistConfig>>
+>;
+export type CreateReceptionistConfigMutationBody =
+  BodyType<CreateReceptionistConfigBody>;
+export type CreateReceptionistConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create receptionist configuration
+ */
+export const useCreateReceptionistConfig = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createReceptionistConfig>>,
+    TError,
+    { data: BodyType<CreateReceptionistConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createReceptionistConfig>>,
+  TError,
+  { data: BodyType<CreateReceptionistConfigBody> },
+  TContext
+> => {
+  return useMutation(getCreateReceptionistConfigMutationOptions(options));
+};
+
+/**
+ * @summary Get receptionist configuration for a client
+ */
+export const getGetReceptionistConfigUrl = (clientId: number) => {
+  return `/api/receptionist/config/${clientId}`;
+};
+
+export const getReceptionistConfig = async (
+  clientId: number,
+  options?: RequestInit,
+): Promise<ReceptionistConfig | null> => {
+  return customFetch<ReceptionistConfig | null>(
+    getGetReceptionistConfigUrl(clientId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetReceptionistConfigQueryKey = (clientId: number) => {
+  return [`/api/receptionist/config/${clientId}`] as const;
+};
+
+export const getGetReceptionistConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReceptionistConfig>>,
+  TError = ErrorType<unknown>,
+>(
+  clientId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReceptionistConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReceptionistConfigQueryKey(clientId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReceptionistConfig>>
+  > = ({ signal }) =>
+    getReceptionistConfig(clientId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!clientId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReceptionistConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReceptionistConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReceptionistConfig>>
+>;
+export type GetReceptionistConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get receptionist configuration for a client
+ */
+
+export function useGetReceptionistConfig<
+  TData = Awaited<ReturnType<typeof getReceptionistConfig>>,
+  TError = ErrorType<unknown>,
+>(
+  clientId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReceptionistConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReceptionistConfigQueryOptions(clientId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update receptionist configuration
+ */
+export const getUpdateReceptionistConfigUrl = (clientId: number) => {
+  return `/api/receptionist/config/${clientId}`;
+};
+
+export const updateReceptionistConfig = async (
+  clientId: number,
+  updateReceptionistConfigBody: UpdateReceptionistConfigBody,
+  options?: RequestInit,
+): Promise<ReceptionistConfig> => {
+  return customFetch<ReceptionistConfig>(
+    getUpdateReceptionistConfigUrl(clientId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateReceptionistConfigBody),
+    },
+  );
+};
+
+export const getUpdateReceptionistConfigMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReceptionistConfig>>,
+    TError,
+    { clientId: number; data: BodyType<UpdateReceptionistConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateReceptionistConfig>>,
+  TError,
+  { clientId: number; data: BodyType<UpdateReceptionistConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["updateReceptionistConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateReceptionistConfig>>,
+    { clientId: number; data: BodyType<UpdateReceptionistConfigBody> }
+  > = (props) => {
+    const { clientId, data } = props ?? {};
+
+    return updateReceptionistConfig(clientId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateReceptionistConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateReceptionistConfig>>
+>;
+export type UpdateReceptionistConfigMutationBody =
+  BodyType<UpdateReceptionistConfigBody>;
+export type UpdateReceptionistConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update receptionist configuration
+ */
+export const useUpdateReceptionistConfig = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReceptionistConfig>>,
+    TError,
+    { clientId: number; data: BodyType<UpdateReceptionistConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateReceptionistConfig>>,
+  TError,
+  { clientId: number; data: BodyType<UpdateReceptionistConfigBody> },
+  TContext
+> => {
+  return useMutation(getUpdateReceptionistConfigMutationOptions(options));
+};
+
+/**
+ * @summary Test ElevenLabs agent ID and webhook connectivity
+ */
+export const getTestReceptionistConnectionUrl = () => {
+  return `/api/receptionist/config/test`;
+};
+
+export const testReceptionistConnection = async (
+  testReceptionistConnectionBody: TestReceptionistConnectionBody,
+  options?: RequestInit,
+): Promise<TestReceptionistConnection200> => {
+  return customFetch<TestReceptionistConnection200>(
+    getTestReceptionistConnectionUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(testReceptionistConnectionBody),
+    },
+  );
+};
+
+export const getTestReceptionistConnectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testReceptionistConnection>>,
+    TError,
+    { data: BodyType<TestReceptionistConnectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof testReceptionistConnection>>,
+  TError,
+  { data: BodyType<TestReceptionistConnectionBody> },
+  TContext
+> => {
+  const mutationKey = ["testReceptionistConnection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof testReceptionistConnection>>,
+    { data: BodyType<TestReceptionistConnectionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return testReceptionistConnection(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TestReceptionistConnectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof testReceptionistConnection>>
+>;
+export type TestReceptionistConnectionMutationBody =
+  BodyType<TestReceptionistConnectionBody>;
+export type TestReceptionistConnectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Test ElevenLabs agent ID and webhook connectivity
+ */
+export const useTestReceptionistConnection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testReceptionistConnection>>,
+    TError,
+    { data: BodyType<TestReceptionistConnectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof testReceptionistConnection>>,
+  TError,
+  { data: BodyType<TestReceptionistConnectionBody> },
+  TContext
+> => {
+  return useMutation(getTestReceptionistConnectionMutationOptions(options));
+};
+
+/**
+ * @summary Initiate an outbound call
+ */
+export const getMakeOutboundCallUrl = () => {
+  return `/api/receptionist/outbound-call`;
+};
+
+export const makeOutboundCall = async (
+  makeOutboundCallBody: MakeOutboundCallBody,
+  options?: RequestInit,
+): Promise<MakeOutboundCall200> => {
+  return customFetch<MakeOutboundCall200>(getMakeOutboundCallUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(makeOutboundCallBody),
+  });
+};
+
+export const getMakeOutboundCallMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof makeOutboundCall>>,
+    TError,
+    { data: BodyType<MakeOutboundCallBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof makeOutboundCall>>,
+  TError,
+  { data: BodyType<MakeOutboundCallBody> },
+  TContext
+> => {
+  const mutationKey = ["makeOutboundCall"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof makeOutboundCall>>,
+    { data: BodyType<MakeOutboundCallBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return makeOutboundCall(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MakeOutboundCallMutationResult = NonNullable<
+  Awaited<ReturnType<typeof makeOutboundCall>>
+>;
+export type MakeOutboundCallMutationBody = BodyType<MakeOutboundCallBody>;
+export type MakeOutboundCallMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Initiate an outbound call
+ */
+export const useMakeOutboundCall = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof makeOutboundCall>>,
+    TError,
+    { data: BodyType<MakeOutboundCallBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof makeOutboundCall>>,
+  TError,
+  { data: BodyType<MakeOutboundCallBody> },
+  TContext
+> => {
+  return useMutation(getMakeOutboundCallMutationOptions(options));
+};
+
+/**
+ * @summary Get paginated call logs with filters
+ */
+export const getGetCallLogsUrl = (params?: GetCallLogsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/receptionist/call-logs?${stringifiedParams}`
+    : `/api/receptionist/call-logs`;
+};
+
+export const getCallLogs = async (
+  params?: GetCallLogsParams,
+  options?: RequestInit,
+): Promise<CallLogListResponse> => {
+  return customFetch<CallLogListResponse>(getGetCallLogsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCallLogsQueryKey = (params?: GetCallLogsParams) => {
+  return [`/api/receptionist/call-logs`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCallLogsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCallLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetCallLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCallLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCallLogsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCallLogs>>> = ({
+    signal,
+  }) => getCallLogs(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCallLogs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCallLogsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCallLogs>>
+>;
+export type GetCallLogsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get paginated call logs with filters
+ */
+
+export function useGetCallLogs<
+  TData = Awaited<ReturnType<typeof getCallLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetCallLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCallLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCallLogsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get self-improvement run history
+ */
+export const getGetImprovementHistoryUrl = (configId: number) => {
+  return `/api/receptionist/improvement-history/${configId}`;
+};
+
+export const getImprovementHistory = async (
+  configId: number,
+  options?: RequestInit,
+): Promise<CallImprovementRun[]> => {
+  return customFetch<CallImprovementRun[]>(
+    getGetImprovementHistoryUrl(configId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetImprovementHistoryQueryKey = (configId: number) => {
+  return [`/api/receptionist/improvement-history/${configId}`] as const;
+};
+
+export const getGetImprovementHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getImprovementHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  configId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getImprovementHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetImprovementHistoryQueryKey(configId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getImprovementHistory>>
+  > = ({ signal }) =>
+    getImprovementHistory(configId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!configId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getImprovementHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetImprovementHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getImprovementHistory>>
+>;
+export type GetImprovementHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get self-improvement run history
+ */
+
+export function useGetImprovementHistory<
+  TData = Awaited<ReturnType<typeof getImprovementHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  configId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getImprovementHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetImprovementHistoryQueryOptions(configId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Twilio webhook for incoming calls
+ */
+export const getIncomingCallUrl = () => {
+  return `/api/receptionist/incoming-call`;
+};
+
+export const incomingCall = async (
+  incomingCallBody: IncomingCallBody,
+  options?: RequestInit,
+): Promise<string> => {
+  const formUrlEncoded = new URLSearchParams();
+  if (incomingCallBody.CallSid !== undefined) {
+    formUrlEncoded.append(`CallSid`, incomingCallBody.CallSid);
+  }
+  if (incomingCallBody.From !== undefined) {
+    formUrlEncoded.append(`From`, incomingCallBody.From);
+  }
+  if (incomingCallBody.To !== undefined) {
+    formUrlEncoded.append(`To`, incomingCallBody.To);
+  }
+  if (incomingCallBody.CallStatus !== undefined) {
+    formUrlEncoded.append(`CallStatus`, incomingCallBody.CallStatus);
+  }
+
+  return customFetch<string>(getIncomingCallUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...options?.headers,
+    },
+    body: formUrlEncoded,
+  });
+};
+
+export const getIncomingCallMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof incomingCall>>,
+    TError,
+    { data: BodyType<IncomingCallBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof incomingCall>>,
+  TError,
+  { data: BodyType<IncomingCallBody> },
+  TContext
+> => {
+  const mutationKey = ["incomingCall"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof incomingCall>>,
+    { data: BodyType<IncomingCallBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return incomingCall(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IncomingCallMutationResult = NonNullable<
+  Awaited<ReturnType<typeof incomingCall>>
+>;
+export type IncomingCallMutationBody = BodyType<IncomingCallBody>;
+export type IncomingCallMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Twilio webhook for incoming calls
+ */
+export const useIncomingCall = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof incomingCall>>,
+    TError,
+    { data: BodyType<IncomingCallBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof incomingCall>>,
+  TError,
+  { data: BodyType<IncomingCallBody> },
+  TContext
+> => {
+  return useMutation(getIncomingCallMutationOptions(options));
+};
+
+/**
+ * @summary Twilio webhook for maintaining call stream loop
+ */
+export const getHandleCallStreamUrl = () => {
+  return `/api/receptionist/handle-call-stream`;
+};
+
+export const handleCallStream = async (
+  handleCallStreamBody?: HandleCallStreamBody,
+  options?: RequestInit,
+): Promise<string> => {
+  const formUrlEncoded = new URLSearchParams();
+
+  return customFetch<string>(getHandleCallStreamUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...options?.headers,
+    },
+    body: formUrlEncoded,
+  });
+};
+
+export const getHandleCallStreamMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof handleCallStream>>,
+    TError,
+    { data: BodyType<HandleCallStreamBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof handleCallStream>>,
+  TError,
+  { data: BodyType<HandleCallStreamBody> },
+  TContext
+> => {
+  const mutationKey = ["handleCallStream"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof handleCallStream>>,
+    { data: BodyType<HandleCallStreamBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return handleCallStream(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type HandleCallStreamMutationResult = NonNullable<
+  Awaited<ReturnType<typeof handleCallStream>>
+>;
+export type HandleCallStreamMutationBody = BodyType<HandleCallStreamBody>;
+export type HandleCallStreamMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Twilio webhook for maintaining call stream loop
+ */
+export const useHandleCallStream = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof handleCallStream>>,
+    TError,
+    { data: BodyType<HandleCallStreamBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof handleCallStream>>,
+  TError,
+  { data: BodyType<HandleCallStreamBody> },
+  TContext
+> => {
+  return useMutation(getHandleCallStreamMutationOptions(options));
+};
+
+/**
+ * @summary Twilio webhook for call status updates
+ */
+export const getCallStatusUrl = () => {
+  return `/api/receptionist/call-status`;
+};
+
+export const callStatus = async (
+  callStatusBody: CallStatusBody,
+  options?: RequestInit,
+): Promise<CallStatus200> => {
+  const formUrlEncoded = new URLSearchParams();
+  if (callStatusBody.CallSid !== undefined) {
+    formUrlEncoded.append(`CallSid`, callStatusBody.CallSid);
+  }
+  if (callStatusBody.CallStatus !== undefined) {
+    formUrlEncoded.append(`CallStatus`, callStatusBody.CallStatus);
+  }
+  if (callStatusBody.CallDuration !== undefined) {
+    formUrlEncoded.append(`CallDuration`, callStatusBody.CallDuration);
+  }
+
+  return customFetch<CallStatus200>(getCallStatusUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...options?.headers,
+    },
+    body: formUrlEncoded,
+  });
+};
+
+export const getCallStatusMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof callStatus>>,
+    TError,
+    { data: BodyType<CallStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof callStatus>>,
+  TError,
+  { data: BodyType<CallStatusBody> },
+  TContext
+> => {
+  const mutationKey = ["callStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof callStatus>>,
+    { data: BodyType<CallStatusBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return callStatus(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CallStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof callStatus>>
+>;
+export type CallStatusMutationBody = BodyType<CallStatusBody>;
+export type CallStatusMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Twilio webhook for call status updates
+ */
+export const useCallStatus = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof callStatus>>,
+    TError,
+    { data: BodyType<CallStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof callStatus>>,
+  TError,
+  { data: BodyType<CallStatusBody> },
+  TContext
+> => {
+  return useMutation(getCallStatusMutationOptions(options));
+};
+
+/**
+ * @summary Twilio webhook for recording completion
+ */
+export const getRecordingStatusUrl = () => {
+  return `/api/receptionist/recording-status`;
+};
+
+export const recordingStatus = async (
+  recordingStatusBody: RecordingStatusBody,
+  options?: RequestInit,
+): Promise<RecordingStatus200> => {
+  const formUrlEncoded = new URLSearchParams();
+  if (recordingStatusBody.CallSid !== undefined) {
+    formUrlEncoded.append(`CallSid`, recordingStatusBody.CallSid);
+  }
+  if (recordingStatusBody.RecordingUrl !== undefined) {
+    formUrlEncoded.append(`RecordingUrl`, recordingStatusBody.RecordingUrl);
+  }
+  if (recordingStatusBody.RecordingStatus !== undefined) {
+    formUrlEncoded.append(
+      `RecordingStatus`,
+      recordingStatusBody.RecordingStatus,
+    );
+  }
+
+  return customFetch<RecordingStatus200>(getRecordingStatusUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...options?.headers,
+    },
+    body: formUrlEncoded,
+  });
+};
+
+export const getRecordingStatusMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordingStatus>>,
+    TError,
+    { data: BodyType<RecordingStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordingStatus>>,
+  TError,
+  { data: BodyType<RecordingStatusBody> },
+  TContext
+> => {
+  const mutationKey = ["recordingStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordingStatus>>,
+    { data: BodyType<RecordingStatusBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recordingStatus(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordingStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordingStatus>>
+>;
+export type RecordingStatusMutationBody = BodyType<RecordingStatusBody>;
+export type RecordingStatusMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Twilio webhook for recording completion
+ */
+export const useRecordingStatus = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordingStatus>>,
+    TError,
+    { data: BodyType<RecordingStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordingStatus>>,
+  TError,
+  { data: BodyType<RecordingStatusBody> },
+  TContext
+> => {
+  return useMutation(getRecordingStatusMutationOptions(options));
 };

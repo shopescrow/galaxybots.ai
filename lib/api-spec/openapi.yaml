@@ -27,6 +27,8 @@ tags:
     description: Task-based bot team deployment operations
   - name: compliance
     description: Compliance management operations
+  - name: receptionist
+    description: AI Receptionist voice call operations
 paths:
   /healthz:
     get:
@@ -1092,6 +1094,305 @@ paths:
                   success:
                     type: boolean
 
+  /receptionist/config:
+    post:
+      operationId: createReceptionistConfig
+      tags: [receptionist]
+      summary: Create receptionist configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceptionistConfigBody"
+      responses:
+        "201":
+          description: Created config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceptionistConfig"
+
+  /receptionist/config/{clientId}:
+    get:
+      operationId: getReceptionistConfig
+      tags: [receptionist]
+      summary: Get receptionist configuration for a client
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Receptionist config (or null if none exists)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ReceptionistConfig"
+                  - type: "null"
+    put:
+      operationId: updateReceptionistConfig
+      tags: [receptionist]
+      summary: Update receptionist configuration
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReceptionistConfigBody"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceptionistConfig"
+
+  /receptionist/config/test:
+    post:
+      operationId: testReceptionistConnection
+      tags: [receptionist]
+      summary: Test ElevenLabs agent ID and webhook connectivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                elevenlabsAgentId:
+                  type: string
+                crmType:
+                  type: string
+                crmWebhookUrl:
+                  type: string
+      responses:
+        "200":
+          description: Test results
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /receptionist/outbound-call:
+    post:
+      operationId: makeOutboundCall
+      tags: [receptionist]
+      summary: Initiate an outbound call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phoneNumber:
+                  type: string
+                configId:
+                  type: integer
+                contextNotes:
+                  type: string
+              required: [phoneNumber]
+      responses:
+        "200":
+          description: Call initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  callLog:
+                    $ref: "#/components/schemas/CallLog"
+
+  /receptionist/call-logs:
+    get:
+      operationId: getCallLogs
+      tags: [receptionist]
+      summary: Get paginated call logs with filters
+      parameters:
+        - name: configId
+          in: query
+          schema:
+            type: integer
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+          description: Client ID for tenant scoping (required if configId not provided)
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [inbound, outbound]
+        - name: crmSynced
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated call logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLogListResponse"
+
+  /receptionist/improvement-history/{configId}:
+    get:
+      operationId: getImprovementHistory
+      tags: [receptionist]
+      summary: Get self-improvement run history
+      parameters:
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Improvement history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallImprovementRun"
+
+  /receptionist/incoming-call:
+    post:
+      operationId: incomingCall
+      tags: [receptionist]
+      summary: Twilio webhook for incoming calls
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                CallSid:
+                  type: string
+                From:
+                  type: string
+                To:
+                  type: string
+                CallStatus:
+                  type: string
+      responses:
+        "200":
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /receptionist/handle-call-stream:
+    post:
+      operationId: handleCallStream
+      tags: [receptionist]
+      summary: Twilio webhook for maintaining call stream loop
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /receptionist/call-status:
+    post:
+      operationId: callStatus
+      tags: [receptionist]
+      summary: Twilio webhook for call status updates
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                CallSid:
+                  type: string
+                CallStatus:
+                  type: string
+                CallDuration:
+                  type: string
+      responses:
+        "200":
+          description: Status acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /receptionist/recording-status:
+    post:
+      operationId: recordingStatus
+      tags: [receptionist]
+      summary: Twilio webhook for recording completion
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                CallSid:
+                  type: string
+                RecordingUrl:
+                  type: string
+                RecordingStatus:
+                  type: string
+      responses:
+        "200":
+          description: Status acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
 components:
   schemas:
     HealthStatus:
@@ -1130,6 +1431,8 @@ components:
         personality:
           type: string
         avatar:
+          type: ["string", "null"]
+        addonType:
           type: ["string", "null"]
         isAvailable:
           type: boolean
@@ -1828,3 +2131,173 @@ components:
           enum: [met, pending, not_applicable]
         notes:
           type: string
+
+    ReceptionistConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        elevenlabsAgentId:
+          type: ["string", "null"]
+        twilioPhoneNumber:
+          type: ["string", "null"]
+        businessName:
+          type: ["string", "null"]
+        businessHoursJson:
+          type: ["object", "null"]
+        knowledgeBasePrompt:
+          type: ["string", "null"]
+        notificationEmail:
+          type: ["string", "null"]
+        crmType:
+          type: string
+          enum: [hubspot, salesforce, custom_webhook, none]
+        crmWebhookUrl:
+          type: ["string", "null"]
+        crmFieldMapJson:
+          type: ["object", "null"]
+        isActive:
+          type: boolean
+        improvementCallCount:
+          type: integer
+        lastImprovedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, clientId, crmType, isActive, improvementCallCount, createdAt, updatedAt]
+
+    CreateReceptionistConfigBody:
+      type: object
+      properties:
+        clientId:
+          type: integer
+        elevenlabsAgentId:
+          type: string
+        twilioPhoneNumber:
+          type: string
+        businessName:
+          type: string
+        businessHoursJson:
+          type: object
+        knowledgeBasePrompt:
+          type: string
+        notificationEmail:
+          type: string
+        crmType:
+          type: string
+          enum: [hubspot, salesforce, custom_webhook, none]
+        crmWebhookUrl:
+          type: string
+        crmFieldMapJson:
+          type: object
+        isActive:
+          type: boolean
+      required: [clientId]
+
+    UpdateReceptionistConfigBody:
+      type: object
+      properties:
+        elevenlabsAgentId:
+          type: string
+        twilioPhoneNumber:
+          type: string
+        businessName:
+          type: string
+        businessHoursJson:
+          type: object
+        knowledgeBasePrompt:
+          type: string
+        notificationEmail:
+          type: string
+        crmType:
+          type: string
+          enum: [hubspot, salesforce, custom_webhook, none]
+        crmWebhookUrl:
+          type: string
+        crmFieldMapJson:
+          type: object
+        isActive:
+          type: boolean
+
+    CallLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        configId:
+          type: integer
+        twilioCallSid:
+          type: ["string", "null"]
+        twilioRecordingUrl:
+          type: ["string", "null"]
+        direction:
+          type: string
+        fromNumber:
+          type: ["string", "null"]
+        toNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+        durationSeconds:
+          type: ["integer", "null"]
+        transcriptText:
+          type: ["string", "null"]
+        transcriptSummary:
+          type: ["string", "null"]
+        crmSynced:
+          type: boolean
+        crmSyncError:
+          type: ["string", "null"]
+        emailSent:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, configId, direction, status, crmSynced, emailSent, createdAt]
+
+    CallLogListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallLog"
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+      required: [data, pagination]
+
+    CallImprovementRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        configId:
+          type: integer
+        callsAnalyzed:
+          type: integer
+        oldPromptSnapshot:
+          type: ["string", "null"]
+        newPrompt:
+          type: ["string", "null"]
+        improvementNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, configId, callsAnalyzed, createdAt]

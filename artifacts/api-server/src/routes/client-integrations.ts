@@ -7,7 +7,7 @@ const router: IRouter = Router();
 
 const REDACTED = "••••••••";
 
-const VALID_SERVICES = ["gmail", "google_calendar", "hubspot", "notion", "piratemonster"] as const;
+const VALID_SERVICES = ["gmail", "google_calendar", "hubspot", "notion", "piratemonster", "salesforce"] as const;
 
 async function verifyClientOwnership(clientId: number): Promise<boolean> {
   const [client] = await db

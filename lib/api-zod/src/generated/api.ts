@@ -27,6 +27,7 @@ export const ListBotsResponseItem = zod.object({
   responsibilities: zod.array(zod.string()),
   personality: zod.string(),
   avatar: zod.string().nullish(),
+  addonType: zod.string().nullish(),
   isAvailable: zod.boolean(),
   isAiGenerated: zod.boolean(),
   createdAt: zod.date(),
@@ -50,6 +51,7 @@ export const GetBotResponse = zod.object({
   responsibilities: zod.array(zod.string()),
   personality: zod.string(),
   avatar: zod.string().nullish(),
+  addonType: zod.string().nullish(),
   isAvailable: zod.boolean(),
   isAiGenerated: zod.boolean(),
   createdAt: zod.date(),
@@ -210,6 +212,7 @@ export const GetClientBotsResponseItem = zod.object({
   responsibilities: zod.array(zod.string()),
   personality: zod.string(),
   avatar: zod.string().nullish(),
+  addonType: zod.string().nullish(),
   isAvailable: zod.boolean(),
   isAiGenerated: zod.boolean(),
   createdAt: zod.date(),
@@ -359,6 +362,7 @@ export const AnalyzeTaskResponse = zod.object({
       responsibilities: zod.array(zod.string()),
       personality: zod.string(),
       avatar: zod.string().nullish(),
+      addonType: zod.string().nullish(),
       isAvailable: zod.boolean(),
       isAiGenerated: zod.boolean(),
       createdAt: zod.date(),
@@ -394,6 +398,7 @@ export const ListTaskSessionsResponseItem = zod.object({
       responsibilities: zod.array(zod.string()),
       personality: zod.string(),
       avatar: zod.string().nullish(),
+      addonType: zod.string().nullish(),
       isAvailable: zod.boolean(),
       isAiGenerated: zod.boolean(),
       createdAt: zod.date(),
@@ -434,6 +439,7 @@ export const GetTaskSessionResponse = zod.object({
       responsibilities: zod.array(zod.string()),
       personality: zod.string(),
       avatar: zod.string().nullish(),
+      addonType: zod.string().nullish(),
       isAvailable: zod.boolean(),
       isAiGenerated: zod.boolean(),
       createdAt: zod.date(),
@@ -549,6 +555,7 @@ export const ExpandTaskSessionResponse = zod.object({
       responsibilities: zod.array(zod.string()),
       personality: zod.string(),
       avatar: zod.string().nullish(),
+      addonType: zod.string().nullish(),
       isAvailable: zod.boolean(),
       isAiGenerated: zod.boolean(),
       createdAt: zod.date(),
@@ -875,5 +882,221 @@ export const DeleteClientComplianceParams = zod.object({
 });
 
 export const DeleteClientComplianceResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Create receptionist configuration
+ */
+export const CreateReceptionistConfigBody = zod.object({
+  clientId: zod.number(),
+  elevenlabsAgentId: zod.string().optional(),
+  twilioPhoneNumber: zod.string().optional(),
+  businessName: zod.string().optional(),
+  businessHoursJson: zod.object({}).passthrough().optional(),
+  knowledgeBasePrompt: zod.string().optional(),
+  notificationEmail: zod.string().optional(),
+  crmType: zod
+    .enum(["hubspot", "salesforce", "custom_webhook", "none"])
+    .optional(),
+  crmWebhookUrl: zod.string().optional(),
+  crmFieldMapJson: zod.object({}).passthrough().optional(),
+  isActive: zod.boolean().optional(),
+});
+
+/**
+ * @summary Get receptionist configuration for a client
+ */
+export const GetReceptionistConfigParams = zod.object({
+  clientId: zod.coerce.number(),
+});
+
+export const GetReceptionistConfigResponse = zod.union([
+  zod.object({
+    id: zod.number(),
+    clientId: zod.number(),
+    elevenlabsAgentId: zod.string().nullish(),
+    twilioPhoneNumber: zod.string().nullish(),
+    businessName: zod.string().nullish(),
+    businessHoursJson: zod.object({}).passthrough().nullish(),
+    knowledgeBasePrompt: zod.string().nullish(),
+    notificationEmail: zod.string().nullish(),
+    crmType: zod.enum(["hubspot", "salesforce", "custom_webhook", "none"]),
+    crmWebhookUrl: zod.string().nullish(),
+    crmFieldMapJson: zod.object({}).passthrough().nullish(),
+    isActive: zod.boolean(),
+    improvementCallCount: zod.number(),
+    lastImprovedAt: zod.date().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  }),
+  zod.null(),
+]);
+
+/**
+ * @summary Update receptionist configuration
+ */
+export const UpdateReceptionistConfigParams = zod.object({
+  clientId: zod.coerce.number(),
+});
+
+export const UpdateReceptionistConfigBody = zod.object({
+  elevenlabsAgentId: zod.string().optional(),
+  twilioPhoneNumber: zod.string().optional(),
+  businessName: zod.string().optional(),
+  businessHoursJson: zod.object({}).passthrough().optional(),
+  knowledgeBasePrompt: zod.string().optional(),
+  notificationEmail: zod.string().optional(),
+  crmType: zod
+    .enum(["hubspot", "salesforce", "custom_webhook", "none"])
+    .optional(),
+  crmWebhookUrl: zod.string().optional(),
+  crmFieldMapJson: zod.object({}).passthrough().optional(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdateReceptionistConfigResponse = zod.object({
+  id: zod.number(),
+  clientId: zod.number(),
+  elevenlabsAgentId: zod.string().nullish(),
+  twilioPhoneNumber: zod.string().nullish(),
+  businessName: zod.string().nullish(),
+  businessHoursJson: zod.object({}).passthrough().nullish(),
+  knowledgeBasePrompt: zod.string().nullish(),
+  notificationEmail: zod.string().nullish(),
+  crmType: zod.enum(["hubspot", "salesforce", "custom_webhook", "none"]),
+  crmWebhookUrl: zod.string().nullish(),
+  crmFieldMapJson: zod.object({}).passthrough().nullish(),
+  isActive: zod.boolean(),
+  improvementCallCount: zod.number(),
+  lastImprovedAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Test ElevenLabs agent ID and webhook connectivity
+ */
+export const TestReceptionistConnectionBody = zod.object({
+  elevenlabsAgentId: zod.string().optional(),
+  crmType: zod.string().optional(),
+  crmWebhookUrl: zod.string().optional(),
+});
+
+export const TestReceptionistConnectionResponse = zod.object({}).passthrough();
+
+/**
+ * @summary Initiate an outbound call
+ */
+export const MakeOutboundCallBody = zod.object({
+  phoneNumber: zod.string(),
+  configId: zod.number().optional(),
+  contextNotes: zod.string().optional(),
+});
+
+export const MakeOutboundCallResponse = zod.object({
+  success: zod.boolean().optional(),
+  callLog: zod
+    .object({
+      id: zod.number(),
+      configId: zod.number(),
+      twilioCallSid: zod.string().nullish(),
+      twilioRecordingUrl: zod.string().nullish(),
+      direction: zod.string(),
+      fromNumber: zod.string().nullish(),
+      toNumber: zod.string().nullish(),
+      status: zod.string(),
+      durationSeconds: zod.number().nullish(),
+      transcriptText: zod.string().nullish(),
+      transcriptSummary: zod.string().nullish(),
+      crmSynced: zod.boolean(),
+      crmSyncError: zod.string().nullish(),
+      emailSent: zod.boolean(),
+      createdAt: zod.date(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Get paginated call logs with filters
+ */
+export const getCallLogsQueryPageDefault = 1;
+export const getCallLogsQueryLimitDefault = 20;
+
+export const GetCallLogsQueryParams = zod.object({
+  configId: zod.coerce.number().optional(),
+  clientId: zod.coerce
+    .number()
+    .optional()
+    .describe(
+      "Client ID for tenant scoping (required if configId not provided)",
+    ),
+  direction: zod.enum(["inbound", "outbound"]).optional(),
+  crmSynced: zod.coerce.string().optional(),
+  startDate: zod.date().optional(),
+  endDate: zod.date().optional(),
+  page: zod.coerce.number().default(getCallLogsQueryPageDefault),
+  limit: zod.coerce.number().default(getCallLogsQueryLimitDefault),
+});
+
+export const GetCallLogsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      configId: zod.number(),
+      twilioCallSid: zod.string().nullish(),
+      twilioRecordingUrl: zod.string().nullish(),
+      direction: zod.string(),
+      fromNumber: zod.string().nullish(),
+      toNumber: zod.string().nullish(),
+      status: zod.string(),
+      durationSeconds: zod.number().nullish(),
+      transcriptText: zod.string().nullish(),
+      transcriptSummary: zod.string().nullish(),
+      crmSynced: zod.boolean(),
+      crmSyncError: zod.string().nullish(),
+      emailSent: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+  pagination: zod.object({
+    page: zod.number().optional(),
+    limit: zod.number().optional(),
+    total: zod.number().optional(),
+    totalPages: zod.number().optional(),
+  }),
+});
+
+/**
+ * @summary Get self-improvement run history
+ */
+export const GetImprovementHistoryParams = zod.object({
+  configId: zod.coerce.number(),
+});
+
+export const GetImprovementHistoryResponseItem = zod.object({
+  id: zod.number(),
+  configId: zod.number(),
+  callsAnalyzed: zod.number(),
+  oldPromptSnapshot: zod.string().nullish(),
+  newPrompt: zod.string().nullish(),
+  improvementNotes: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const GetImprovementHistoryResponse = zod.array(
+  GetImprovementHistoryResponseItem,
+);
+
+/**
+ * @summary Twilio webhook for call status updates
+ */
+export const CallStatusResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary Twilio webhook for recording completion
+ */
+export const RecordingStatusResponse = zod.object({
   success: zod.boolean().optional(),
 });

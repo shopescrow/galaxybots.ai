@@ -14,3 +14,4 @@ export * from "./compliance";
 export * from "./client-integrations";
 export * from "./tool-activity-log";
 export * from "./aeo-scores";
+export * from "./receptionist";

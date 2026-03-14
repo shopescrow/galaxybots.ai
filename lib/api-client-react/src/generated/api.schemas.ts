@@ -24,6 +24,8 @@ export interface Bot {
   personality: string;
   /** @nullable */
   avatar?: string | null;
+  /** @nullable */
+  addonType?: string | null;
   isAvailable: boolean;
   isAiGenerated: boolean;
   createdAt: string;
@@ -525,6 +527,172 @@ export interface UpdateClientComplianceBody {
   notes?: string;
 }
 
+/**
+ * @nullable
+ */
+export type ReceptionistConfigBusinessHoursJson = {
+  [key: string]: unknown;
+} | null;
+
+export type ReceptionistConfigCrmType =
+  (typeof ReceptionistConfigCrmType)[keyof typeof ReceptionistConfigCrmType];
+
+export const ReceptionistConfigCrmType = {
+  hubspot: "hubspot",
+  salesforce: "salesforce",
+  custom_webhook: "custom_webhook",
+  none: "none",
+} as const;
+
+/**
+ * @nullable
+ */
+export type ReceptionistConfigCrmFieldMapJson = {
+  [key: string]: unknown;
+} | null;
+
+export interface ReceptionistConfig {
+  id: number;
+  clientId: number;
+  /** @nullable */
+  elevenlabsAgentId?: string | null;
+  /** @nullable */
+  twilioPhoneNumber?: string | null;
+  /** @nullable */
+  businessName?: string | null;
+  /** @nullable */
+  businessHoursJson?: ReceptionistConfigBusinessHoursJson;
+  /** @nullable */
+  knowledgeBasePrompt?: string | null;
+  /** @nullable */
+  notificationEmail?: string | null;
+  crmType: ReceptionistConfigCrmType;
+  /** @nullable */
+  crmWebhookUrl?: string | null;
+  /** @nullable */
+  crmFieldMapJson?: ReceptionistConfigCrmFieldMapJson;
+  isActive: boolean;
+  improvementCallCount: number;
+  /** @nullable */
+  lastImprovedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateReceptionistConfigBodyBusinessHoursJson = {
+  [key: string]: unknown;
+};
+
+export type CreateReceptionistConfigBodyCrmType =
+  (typeof CreateReceptionistConfigBodyCrmType)[keyof typeof CreateReceptionistConfigBodyCrmType];
+
+export const CreateReceptionistConfigBodyCrmType = {
+  hubspot: "hubspot",
+  salesforce: "salesforce",
+  custom_webhook: "custom_webhook",
+  none: "none",
+} as const;
+
+export type CreateReceptionistConfigBodyCrmFieldMapJson = {
+  [key: string]: unknown;
+};
+
+export interface CreateReceptionistConfigBody {
+  clientId: number;
+  elevenlabsAgentId?: string;
+  twilioPhoneNumber?: string;
+  businessName?: string;
+  businessHoursJson?: CreateReceptionistConfigBodyBusinessHoursJson;
+  knowledgeBasePrompt?: string;
+  notificationEmail?: string;
+  crmType?: CreateReceptionistConfigBodyCrmType;
+  crmWebhookUrl?: string;
+  crmFieldMapJson?: CreateReceptionistConfigBodyCrmFieldMapJson;
+  isActive?: boolean;
+}
+
+export type UpdateReceptionistConfigBodyBusinessHoursJson = {
+  [key: string]: unknown;
+};
+
+export type UpdateReceptionistConfigBodyCrmType =
+  (typeof UpdateReceptionistConfigBodyCrmType)[keyof typeof UpdateReceptionistConfigBodyCrmType];
+
+export const UpdateReceptionistConfigBodyCrmType = {
+  hubspot: "hubspot",
+  salesforce: "salesforce",
+  custom_webhook: "custom_webhook",
+  none: "none",
+} as const;
+
+export type UpdateReceptionistConfigBodyCrmFieldMapJson = {
+  [key: string]: unknown;
+};
+
+export interface UpdateReceptionistConfigBody {
+  elevenlabsAgentId?: string;
+  twilioPhoneNumber?: string;
+  businessName?: string;
+  businessHoursJson?: UpdateReceptionistConfigBodyBusinessHoursJson;
+  knowledgeBasePrompt?: string;
+  notificationEmail?: string;
+  crmType?: UpdateReceptionistConfigBodyCrmType;
+  crmWebhookUrl?: string;
+  crmFieldMapJson?: UpdateReceptionistConfigBodyCrmFieldMapJson;
+  isActive?: boolean;
+}
+
+export interface CallLog {
+  id: number;
+  configId: number;
+  /** @nullable */
+  twilioCallSid?: string | null;
+  /** @nullable */
+  twilioRecordingUrl?: string | null;
+  direction: string;
+  /** @nullable */
+  fromNumber?: string | null;
+  /** @nullable */
+  toNumber?: string | null;
+  status: string;
+  /** @nullable */
+  durationSeconds?: number | null;
+  /** @nullable */
+  transcriptText?: string | null;
+  /** @nullable */
+  transcriptSummary?: string | null;
+  crmSynced: boolean;
+  /** @nullable */
+  crmSyncError?: string | null;
+  emailSent: boolean;
+  createdAt: string;
+}
+
+export type CallLogListResponsePagination = {
+  page?: number;
+  limit?: number;
+  total?: number;
+  totalPages?: number;
+};
+
+export interface CallLogListResponse {
+  data: CallLog[];
+  pagination: CallLogListResponsePagination;
+}
+
+export interface CallImprovementRun {
+  id: number;
+  configId: number;
+  callsAnalyzed: number;
+  /** @nullable */
+  oldPromptSnapshot?: string | null;
+  /** @nullable */
+  newPrompt?: string | null;
+  /** @nullable */
+  improvementNotes?: string | null;
+  createdAt: string;
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -590,5 +758,75 @@ export type ListBackgroundReportsParams = {
 };
 
 export type DeleteClientCompliance200 = {
+  success?: boolean;
+};
+
+export type TestReceptionistConnectionBody = {
+  elevenlabsAgentId?: string;
+  crmType?: string;
+  crmWebhookUrl?: string;
+};
+
+export type TestReceptionistConnection200 = { [key: string]: unknown };
+
+export type MakeOutboundCallBody = {
+  phoneNumber: string;
+  configId?: number;
+  contextNotes?: string;
+};
+
+export type MakeOutboundCall200 = {
+  success?: boolean;
+  callLog?: CallLog;
+};
+
+export type GetCallLogsParams = {
+  configId?: number;
+  /**
+   * Client ID for tenant scoping (required if configId not provided)
+   */
+  clientId?: number;
+  direction?: GetCallLogsDirection;
+  crmSynced?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type GetCallLogsDirection =
+  (typeof GetCallLogsDirection)[keyof typeof GetCallLogsDirection];
+
+export const GetCallLogsDirection = {
+  inbound: "inbound",
+  outbound: "outbound",
+} as const;
+
+export type IncomingCallBody = {
+  CallSid?: string;
+  From?: string;
+  To?: string;
+  CallStatus?: string;
+};
+
+export type HandleCallStreamBody = { [key: string]: unknown };
+
+export type CallStatusBody = {
+  CallSid?: string;
+  CallStatus?: string;
+  CallDuration?: string;
+};
+
+export type CallStatus200 = {
+  success?: boolean;
+};
+
+export type RecordingStatusBody = {
+  CallSid?: string;
+  RecordingUrl?: string;
+  RecordingStatus?: string;
+};
+
+export type RecordingStatus200 = {
   success?: boolean;
 };

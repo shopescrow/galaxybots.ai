@@ -38,7 +38,7 @@ artifacts-monorepo/
 
 ## Database Schema
 
-- `bots` — All 51 AI director personalities with roles, departments, descriptions, personalities, `declaration` (AI-generated activation statement), `isAiGenerated` flag
+- `bots` — All 51+ AI director personalities with roles, departments, descriptions, personalities, `declaration` (AI-generated activation statement), `isAiGenerated` flag, `addon_type` (null for standard bots, "receptionist" for AI Receptionist)
 - `conversations` — Chat conversations between users/clients and bots
 - `messages` — Individual messages in conversations (role: user/bot/system)
 - `clients` — Companies that hire bots
@@ -57,6 +57,9 @@ artifacts-monorepo/
 - `client_integrations` — Per-client OAuth tokens/API keys for external services (Gmail, Google Calendar, HubSpot, Notion, PirateMonster). Referenced by clientId with cascade delete.
 - `aeo_scores` — AEO scan results from PirateMonster per URL: overallScore (0-100), engineScores (jsonb with 9 AI engines), citationCount, recommendations (jsonb array), scannedAt. Optional FK to clients.
 - `tool_activity_log` — Audit log for tool executions (scrape_webpage, run_code) with toolName, clientId, sessionId, botName, URL, metadata, timestamp
+- `receptionist_configs` — AI Receptionist configuration per client: ElevenLabs agent ID, Twilio number, business name/hours, knowledge base prompt, notification email, CRM type (hubspot/salesforce/custom_webhook/none), webhook URL, field mapping, self-improvement tracking
+- `call_logs` — Call records: Twilio SID, recording URL, direction, phone numbers, status, duration, transcript, summary, CRM sync status, email sent status
+- `call_improvement_runs` — Self-improvement history: calls analyzed, old/new prompts, improvement notes
 
 ## Bot Categories
 
@@ -69,6 +72,7 @@ artifacts-monorepo/
 - **Human Resources**: HR Director, Talent Acquisition, L&D, Total Rewards, DEI, Employee Relations
 - **Creative & Design**: Creative Director, Art Director, Design Director, UX/UI Director
 - **Specialized**: Medical Director, Clinical Operations, Research (R&D), Construction, Facilities, Development (Non-Profit)
+- **Voice & Communications**: Vera (AI Receptionist — add-on bot with ElevenLabs voice + Twilio calling, multi-CRM sync, self-improving knowledge base)
 
 ## Key Features
 

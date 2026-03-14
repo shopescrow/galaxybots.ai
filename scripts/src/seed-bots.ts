@@ -730,6 +730,23 @@ const bots = [
     personality: "Mission-driven, relationship builder, compelling storyteller. Every dollar raised changes lives.",
     isAvailable: true,
   },
+  {
+    name: "Vera",
+    title: "AI Receptionist",
+    department: "Voice & Communications",
+    category: "Voice & Communications",
+    description: "Handles inbound and outbound phone calls with real-time voice AI. Logs every call to your CRM, emails post-call summaries with transcripts and recordings, and automatically refines her knowledge base over time based on call outcomes.",
+    responsibilities: [
+      "Answers inbound phone calls with natural, professional voice AI via ElevenLabs",
+      "Records every call for QA and compliance purposes",
+      "Logs call data and transcripts to HubSpot, Salesforce, or custom webhook CRMs",
+      "Sends post-call email summaries with full transcripts and recording links",
+      "Self-improves her knowledge base prompt by analyzing call patterns and gaps",
+    ],
+    personality: "Professional, warm, adaptive. Speaks clearly and confidently. Puts callers at ease instantly. Learns from every interaction to get better over time.",
+    isAvailable: true,
+    addonType: "receptionist",
+  },
 ];
 
 async function seedBots() {

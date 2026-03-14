@@ -13,6 +13,7 @@ import memoryRouter from "./memory";
 import complianceRouter from "./compliance";
 import clientIntegrationsRouter from "./client-integrations";
 import piratemonsterRouter from "./piratemonster";
+import receptionistRouter from "./receptionist";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(memoryRouter);
 router.use(complianceRouter);
 router.use(clientIntegrationsRouter);
 router.use(piratemonsterRouter);
+router.use(receptionistRouter);
 
 export default router;
