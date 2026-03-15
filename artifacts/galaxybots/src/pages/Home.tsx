@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Network, Shield, Zap, Radio } from "lucide-react";
+import { Bot, Network, Shield, Zap, Radio, Crosshair } from "lucide-react";
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion();
@@ -49,6 +49,12 @@ export default function Home() {
                 <Link href="/hire">
                   <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px]">
                     Hire the Full Company
+                  </Button>
+                </Link>
+                <Link href="/scenarios">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px] gap-2">
+                    <Crosshair className="w-4 h-4" />
+                    Mission Library
                   </Button>
                 </Link>
                 <Link href="/bots">

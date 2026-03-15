@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/bots", label: "Roster" },
   { href: "/boardroom", label: "Boardroom" },
   { href: "/task-rooms", label: "Task Rooms" },
+  { href: "/scenarios", label: "Scenarios" },
   { href: "/journal", label: "Journal" },
   { href: "/blog", label: "Blog" },
   { href: "/clients", label: "Clients" },

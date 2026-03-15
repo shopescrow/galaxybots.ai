@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
-import { Loader2, ArrowLeft, Building, Zap, ExternalLink, BarChart3, Globe, Save, Briefcase, MapPin } from "lucide-react";
+import { useParams, Link, useLocation } from "wouter";
+import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket } from "lucide-react";
 import { AeoIntelligenceTab } from "./AeoIntelligenceTab";
+import { SCENARIOS, SCENARIO_CLIENTS } from "@/data/scenarios";
 import { useState, useEffect } from "react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -27,10 +28,40 @@ interface Client {
   createdAt: string;
 }
 
+const DIFFICULTY_STYLES: Record<string, string> = {
+  Tactical: "text-green-400 border-green-500/30 bg-green-500/10",
+  Strategic: "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
+  Critical: "text-red-400 border-red-500/30 bg-red-500/10",
+};
+
+const CLIENT_NAME_MAP: Record<string, string> = {
+  "7 lawn 11": "7lawn11",
+  "7lawn11": "7lawn11",
+  "7 lawn11": "7lawn11",
+  "lawn 11": "7lawn11",
+  "family movers canada": "family-movers",
+  "family movers": "family-movers",
+  "familymoverscanada": "family-movers",
+};
+
+function findClientSlug(companyName: string): string | null {
+  const normalized = companyName.toLowerCase().trim();
+  if (CLIENT_NAME_MAP[normalized]) return CLIENT_NAME_MAP[normalized];
+  for (const [key, slug] of Object.entries(CLIENT_NAME_MAP)) {
+    if (normalized === key) return slug;
+  }
+  for (const c of SCENARIO_CLIENTS) {
+    if (normalized === c.name.toLowerCase()) return c.slug;
+  }
+  return null;
+}
+
 export default function ClientDetail() {
   const params = useParams<{ id: string }>();
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "missions">("intelligence");
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
@@ -42,7 +73,6 @@ export default function ClientDetail() {
     enabled: !isNaN(clientId),
   });
 
-  const [tab, setTab] = useState<"intelligence" | "profile">("intelligence");
   const [editContext, setEditContext] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editIndustry, setEditIndustry] = useState("");
@@ -83,6 +113,11 @@ export default function ClientDetail() {
       businessContext: editContext || null,
     });
   };
+
+  const clientSlug = client ? findClientSlug(client.companyName) : null;
+  const clientScenarios = clientSlug
+    ? SCENARIOS.filter((s) => s.clientSlug === clientSlug)
+    : [];
 
   if (isLoading) {
     return (
@@ -177,9 +212,9 @@ export default function ClientDetail() {
         <div className="mb-6">
           <div className="flex gap-1 p-1 rounded-xl bg-card border border-border/40 w-fit">
             <button
-              onClick={() => setTab("intelligence")}
+              onClick={() => setActiveTab("intelligence")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
-                tab === "intelligence"
+                activeTab === "intelligence"
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -188,9 +223,9 @@ export default function ClientDetail() {
               AEO Intelligence
             </button>
             <button
-              onClick={() => setTab("profile")}
+              onClick={() => setActiveTab("profile")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
-                tab === "profile"
+                activeTab === "profile"
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -204,12 +239,28 @@ export default function ClientDetail() {
                 Value Report
               </div>
             </Link>
+            {clientScenarios.length > 0 && (
+              <button
+                onClick={() => setActiveTab("missions")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
+                  activeTab === "missions"
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                <Crosshair className="w-4 h-4" />
+                Missions
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary">
+                  {clientScenarios.length}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
-        {tab === "intelligence" && <AeoIntelligenceTab clientId={clientId} />}
+        {activeTab === "intelligence" && <AeoIntelligenceTab clientId={clientId} />}
 
-        {tab === "profile" && (
+        {activeTab === "profile" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -287,6 +338,45 @@ export default function ClientDetail() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {activeTab === "missions" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {clientScenarios.map((scenario) => (
+              <Card
+                key={scenario.id}
+                className="p-5 bg-black/30 border-primary/20 hover:border-primary/40 transition-all flex flex-col"
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <Badge variant="outline" className="text-[10px]">
+                    {scenario.category}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${DIFFICULTY_STYLES[scenario.difficulty]}`}
+                  >
+                    {scenario.difficulty}
+                  </Badge>
+                </div>
+                <h3 className="font-tech font-bold text-foreground text-lg mb-2">
+                  {scenario.title}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4 flex-1">
+                  {scenario.situation}
+                </p>
+                <Button
+                  variant="glow"
+                  className="w-full font-tech tracking-wider"
+                  onClick={() =>
+                    navigate(`/deploy-team?scenario=${encodeURIComponent(scenario.id)}`)
+                  }
+                >
+                  <Rocket className="w-4 h-4 mr-2" />
+                  Launch Mission
+                </Button>
+              </Card>
+            ))}
           </div>
         )}
       </div>

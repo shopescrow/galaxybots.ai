@@ -9,9 +9,10 @@ import {
   useCreateTaskSessionMutation,
   useFabricateBotMutation,
 } from "@/hooks/use-task-sessions";
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { getScenarioById } from "@/data/scenarios";
 import {
   Loader2,
   Rocket,
@@ -44,6 +45,7 @@ interface MatchedBot {
 export default function DeployTeam() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const [objective, setObjective] = useState("");
   const [proposal, setProposal] = useState<{
     objective: string;
@@ -55,10 +57,37 @@ export default function DeployTeam() {
     Map<number, { approved: boolean; botId?: number }>
   >(new Map());
   const [fabricatingIdx, setFabricatingIdx] = useState<number | null>(null);
+  const [lastPrefillScenarioId, setLastPrefillScenarioId] = useState<string | null>(null);
 
   const analyzeMutation = useAnalyzeTaskMutation();
   const createSessionMutation = useCreateTaskSessionMutation();
   const fabricateMutation = useFabricateBotMutation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const scenarioId = params.get("scenario");
+    if (scenarioId && scenarioId !== lastPrefillScenarioId) {
+      const scenario = getScenarioById(scenarioId);
+      if (scenario) {
+        setObjective(scenario.missionObjective);
+        setProposal(null);
+        setApprovedNewBots(new Map());
+        setLastPrefillScenarioId(scenarioId);
+        analyzeMutation
+          .mutateAsync({ data: { objective: scenario.missionObjective } })
+          .then((result) => {
+            setProposal(result as typeof proposal);
+          })
+          .catch(() => {
+            toast({
+              title: "Analysis Failed",
+              description: "Could not auto-analyze the mission. Please try manually.",
+              variant: "destructive",
+            });
+          });
+      }
+    }
+  }, [searchString, lastPrefillScenarioId]);
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();

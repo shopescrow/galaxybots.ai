@@ -3,9 +3,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTaskSessions } from "@/hooks/use-task-sessions";
+import { MissionDebrief } from "@/components/task-sessions/MissionDebrief";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
 import {
   Loader2,
   Rocket,
@@ -14,11 +16,14 @@ import {
   Plus,
   Target,
   Clock,
+  FileBarChart,
+  X,
 } from "lucide-react";
 import { AssignmentsPanel } from "@/components/memory/AssignmentsPanel";
 
 export default function TaskSessions() {
   const { data: sessions, isLoading } = useTaskSessions();
+  const [debriefSessionId, setDebriefSessionId] = useState<number | null>(null);
 
   return (
     <AppLayout>
@@ -45,6 +50,35 @@ export default function TaskSessions() {
           <div className="mb-8">
             <AssignmentsPanel />
           </div>
+
+          <AnimatePresence>
+            {debriefSessionId !== null && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-8 overflow-hidden"
+              >
+                <Card className="p-6 bg-black/40 border-primary/20">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-tech font-bold text-primary flex items-center gap-2">
+                      <FileBarChart className="w-5 h-5" />
+                      Mission Debrief
+                    </h2>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDebriefSessionId(null)}
+                      className="text-muted-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <MissionDebrief sessionId={debriefSessionId} />
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -78,45 +112,61 @@ export default function TaskSessions() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.05 }}
                   >
-                    <Link href={`/task-rooms/${session.id}`}>
-                      <Card className="p-5 bg-black/30 border-primary/20 hover:border-primary/40 hover:bg-black/40 transition-all cursor-pointer group">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] ${
-                                  session.status === "active"
-                                    ? "text-green-400 border-green-500/30"
-                                    : "text-muted-foreground border-border"
-                                }`}
-                              >
-                                {session.status?.toUpperCase()}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground font-tech flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {format(
-                                  new Date(session.createdAt),
-                                  "MMM d, yyyy HH:mm",
-                                )}
-                              </span>
-                            </div>
-                            <h3 className="font-tech font-bold text-foreground group-hover:text-primary transition-colors mb-2">
-                              {session.objective}
-                            </h3>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Users className="w-3 h-3" />
-                                {teamBots.length} specialists
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MessageSquare className="w-3 h-3" />
-                                Active session
-                              </span>
-                            </div>
+                    <Card className="p-5 bg-black/30 border-primary/20 hover:border-primary/40 hover:bg-black/40 transition-all group">
+                      <div className="flex items-start justify-between gap-4">
+                        <Link href={`/task-rooms/${session.id}`} className="flex-1 min-w-0 cursor-pointer">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${
+                                session.status === "active"
+                                  ? "text-green-400 border-green-500/30"
+                                  : "text-muted-foreground border-border"
+                              }`}
+                            >
+                              {session.status?.toUpperCase()}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground font-tech flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {format(
+                                new Date(session.createdAt),
+                                "MMM d, yyyy HH:mm",
+                              )}
+                            </span>
                           </div>
+                          <h3 className="font-tech font-bold text-foreground group-hover:text-primary transition-colors mb-2">
+                            {session.objective}
+                          </h3>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Users className="w-3 h-3" />
+                              {teamBots.length} specialists
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MessageSquare className="w-3 h-3" />
+                              Active session
+                            </span>
+                          </div>
+                        </Link>
 
-                          <div className="flex -space-x-2 flex-shrink-0">
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs font-tech"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDebriefSessionId(
+                                debriefSessionId === session.id ? null : session.id
+                              );
+                            }}
+                          >
+                            <FileBarChart className="w-3 h-3 mr-1" />
+                            Debrief
+                          </Button>
+
+                          <div className="flex -space-x-2">
                             {teamBots.slice(0, 4).map((bot) => (
                               <div
                                 key={bot.id}
@@ -137,8 +187,8 @@ export default function TaskSessions() {
                             )}
                           </div>
                         </div>
-                      </Card>
-                    </Link>
+                      </div>
+                    </Card>
                   </motion.div>
                 );
               })}
