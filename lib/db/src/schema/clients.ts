@@ -10,6 +10,12 @@ export const clientsTable = pgTable("clients", {
   plan: text("plan").notNull().default("single"),
   status: text("status").notNull().default("trial"),
   hourlyRate: numeric("hourly_rate").notNull().default("150"),
+  websiteUrl: text("website_url"),
+  industry: text("industry"),
+  servicesList: text("services_list").array(),
+  targetMarket: text("target_market"),
+  businessContext: text("business_context"),
+  webhookSecret: text("webhook_secret"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

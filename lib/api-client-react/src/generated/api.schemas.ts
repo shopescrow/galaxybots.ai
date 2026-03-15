@@ -148,6 +148,11 @@ export interface Client {
   contactEmail: string;
   plan: ClientPlan;
   status: ClientStatus;
+  websiteUrl?: string | null;
+  industry?: string | null;
+  servicesList?: string[] | null;
+  targetMarket?: string | null;
+  businessContext?: string | null;
   createdAt: string;
 }
 

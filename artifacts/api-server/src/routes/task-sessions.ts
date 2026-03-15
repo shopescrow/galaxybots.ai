@@ -26,6 +26,8 @@ import { buildMemoryContext } from "../services/memory";
 import { requireRole } from "../middleware/auth";
 import { llmRateLimit } from "../middleware/rate-limit";
 
+import { buildClientContext } from "../services/client-context";
+
 const router: IRouter = Router();
 
 async function getSessionWithBots(sessionId: number) {
@@ -69,6 +71,8 @@ router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimi
     )
     .join("\n");
 
+  const clientContext = await buildClientContext(req.user!.clientId);
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     max_completion_tokens: 2000,
@@ -80,7 +84,7 @@ router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimi
 2. Match roles to existing bots from the roster
 3. Identify any gaps where no existing bot covers the required expertise
 4. For gaps, propose new bot specifications
-
+${clientContext}
 Respond in valid JSON with this exact structure:
 {
   "matchedBotIds": [1, 2, 3],
@@ -339,6 +343,8 @@ router.post(
       .map((b) => `${b.name} (${b.title})`)
       .join(", ");
 
+    const clientContext = await buildClientContext(req.user!.clientId);
+
     for (const bot of teamBots) {
       let memoryContext = "";
       try {
@@ -348,7 +354,7 @@ router.post(
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
-
+${clientContext}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
 ${memoryContext}
@@ -530,13 +536,15 @@ router.post(
         .map((b) => `${b.name} (${b.title})`)
         .join(", ");
 
+      const clientContext = await buildClientContext(req.user!.clientId);
+
       await batchProcessWithSSE(
         teamBots,
         async (bot) => {
           const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
-
+${clientContext}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
 

@@ -164,6 +164,11 @@ export const ListClientsResponseItem = zod.object({
   contactEmail: zod.string(),
   plan: zod.enum(["single", "team", "enterprise"]),
   status: zod.enum(["active", "inactive", "trial"]),
+  websiteUrl: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  servicesList: zod.array(zod.string()).nullish(),
+  targetMarket: zod.string().nullish(),
+  businessContext: zod.string().nullish(),
   createdAt: zod.date(),
 });
 export const ListClientsResponse = zod.array(ListClientsResponseItem);
@@ -192,6 +197,11 @@ export const GetClientResponse = zod.object({
   contactEmail: zod.string(),
   plan: zod.enum(["single", "team", "enterprise"]),
   status: zod.enum(["active", "inactive", "trial"]),
+  websiteUrl: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  servicesList: zod.array(zod.string()).nullish(),
+  targetMarket: zod.string().nullish(),
+  businessContext: zod.string().nullish(),
   createdAt: zod.date(),
 });
 

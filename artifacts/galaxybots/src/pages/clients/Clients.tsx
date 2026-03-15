@@ -208,6 +208,27 @@ export default function Clients() {
                       <span>Email:</span>
                       <span className="text-foreground truncate ml-4">{client.contactEmail}</span>
                     </div>
+                    {client.industry && (
+                      <div className="flex justify-between">
+                        <span>Industry:</span>
+                        <span className="text-foreground">{client.industry}</span>
+                      </div>
+                    )}
+                    {client.targetMarket && (
+                      <div className="flex justify-between">
+                        <span>Market:</span>
+                        <span className="text-foreground">{client.targetMarket}</span>
+                      </div>
+                    )}
+                    {client.websiteUrl && (
+                      <div className="flex justify-between items-center">
+                        <span>Website:</span>
+                        <a href={client.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate ml-4 flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          {client.websiteUrl.replace(/^https?:\/\//, '')}
+                        </a>
+                      </div>
+                    )}
                     <div className="mt-4 pt-4 border-t border-border/30">
                       <Link href={`/clients/${client.id}`}>
                         <Button variant="outline" size="sm" className="w-full font-tech">Manage Allocation</Button>

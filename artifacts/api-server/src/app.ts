@@ -55,9 +55,13 @@ const PUBLIC_PATHS = [
   "/api/partner/register",
 ];
 
+const PUBLIC_PATH_PREFIXES = [
+  "/api/webhooks/lead/",
+];
+
 app.use("/api", (req, res, next) => {
   const fullPath = `/api${req.path}`;
-  if (PUBLIC_PATHS.includes(fullPath)) {
+  if (PUBLIC_PATHS.includes(fullPath) || PUBLIC_PATH_PREFIXES.some(p => fullPath.startsWith(p))) {
     return next();
   }
   return authenticate(req, res, next);

@@ -27,6 +27,8 @@ tags:
     description: Task-based bot team deployment operations
   - name: compliance
     description: Compliance management operations
+  - name: webhooks
+    description: Webhook endpoints for external integrations
   - name: receptionist
     description: AI Receptionist voice call operations
 paths:
@@ -274,6 +276,75 @@ paths:
                 $ref: "#/components/schemas/Client"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update client business profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientBody"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /webhooks/lead/{clientId}:
+    post:
+      operationId: ingestLead
+      tags: [webhooks]
+      summary: Ingest a lead from a client website
+      description: Accepts a lead payload and triggers a bot qualification mission. Auth uses a per-client webhook secret as Bearer token (not JWT user auth).
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadWebhookBody"
+      responses:
+        "201":
+          description: Lead ingested and mission triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadWebhookResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -1569,6 +1640,23 @@ components:
         status:
           type: string
           enum: [active, inactive, trial]
+        websiteUrl:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        servicesList:
+          type: array
+          items:
+            type: string
+          nullable: true
+        targetMarket:
+          type: string
+          nullable: true
+        businessContext:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1587,6 +1675,62 @@ components:
           type: string
           enum: [single, team, enterprise]
       required: [companyName, contactName, contactEmail, plan]
+
+    UpdateClientBody:
+      type: object
+      properties:
+        websiteUrl:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        servicesList:
+          type: array
+          items:
+            type: string
+          nullable: true
+        targetMarket:
+          type: string
+          nullable: true
+        businessContext:
+          type: string
+          nullable: true
+
+    LeadWebhookBody:
+      type: object
+      properties:
+        name:
+          type: string
+        contact:
+          type: string
+        serviceInterest:
+          type: string
+        message:
+          type: string
+      required: [name, contact]
+
+    LeadWebhookResponse:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+        objective:
+          type: string
+        assignedBots:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              title:
+                type: string
+        message:
+          type: string
+      required: [sessionId, objective, assignedBots, message]
 
     ClientBot:
       type: object

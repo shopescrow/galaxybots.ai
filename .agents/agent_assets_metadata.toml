@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Yo8sgXmYVnJ-Cdon0Ewem"
+uri = "file://7lawn11_autonomous_operations_consulting_report.md"
+type = "text"
+title = "7 Lawn 11 — AI Consulting Team Analysis Report"

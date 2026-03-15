@@ -20,6 +20,7 @@ import { llmRateLimit } from "../middleware/rate-limit";
 import { requireRole } from "../middleware/auth";
 import roiRouter from "./roi";
 import billingRouter from "./billing";
+import webhooksRouter from "./webhooks";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(receptionistRouter);
 router.use(auditRouter);
 router.use(roiRouter);
 router.use(billingRouter);
+router.use(webhooksRouter);
 
 export default router;
