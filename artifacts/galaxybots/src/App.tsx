@@ -30,6 +30,7 @@ import ROIDashboard from "@/pages/roi/ROIDashboard";
 import SharedReport from "@/pages/roi/SharedReport";
 import Billing from "@/pages/Billing";
 import Scenarios from "@/pages/scenarios/Scenarios";
+import Prospects from "@/pages/prospects/Prospects";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -87,6 +88,7 @@ function AuthenticatedRoutes() {
       <Route path="/roi/shared/:token" component={SharedReport} />
       <Route path="/billing" component={Billing} />
       <Route path="/scenarios" component={Scenarios} />
+      <Route path="/prospects" component={Prospects} />
       <Route component={NotFound} />
     </Switch>
   );

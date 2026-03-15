@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { href: "/clients", label: "Clients" },
   { href: "/compliance", label: "Compliance" },
   { href: "/integrations", label: "Integrations" },
+  { href: "/prospects", label: "Prospects" },
   { href: "/billing", label: "Billing" },
 ];
 

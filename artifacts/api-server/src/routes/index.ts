@@ -21,6 +21,7 @@ import { requireRole } from "../middleware/auth";
 import roiRouter from "./roi";
 import billingRouter from "./billing";
 import webhooksRouter from "./webhooks";
+import prospectsRouter from "./prospects";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(auditRouter);
 router.use(roiRouter);
 router.use(billingRouter);
 router.use(webhooksRouter);
+router.use(prospectsRouter);
 
 export default router;
