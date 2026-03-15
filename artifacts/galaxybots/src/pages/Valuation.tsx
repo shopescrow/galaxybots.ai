@@ -511,7 +511,7 @@ export default function Valuation() {
         {/* Disclaimer */}
         <div className="text-center text-xs text-muted-foreground font-tech border-t border-border/30 pt-8 max-w-3xl mx-auto">
           <Shield className="w-4 h-4 mx-auto mb-2 opacity-40" />
-          These projections are internal strategic estimates for planning purposes only. They are not financial advice, audited financials, or a guarantee of future performance. Actual results will vary based on market conditions, competition, execution, and macroeconomic factors. Strictly confidential — property of Ahmed Y. Hammoud / GalaxyBots.ai.
+          These projections are internal strategic estimates for planning purposes only. They are not financial advice, audited financials, or a guarantee of future performance. Actual results will vary based on market conditions, competition, execution, and macroeconomic factors. Strictly confidential — property of Gifted Productions Inc. / GalaxyBots.ai.
         </div>
       </div>
     </AppLayout>

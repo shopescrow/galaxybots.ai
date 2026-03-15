@@ -30,7 +30,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <a href="/valuation" className="hover:text-cyan transition-colors min-h-[44px] flex items-center">5-Year Projections</a>
           </div>
           <p className="text-center text-xs text-muted-foreground font-tech">
-            © 2026 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential. Property of Ahmed Y. Hammoud.
+            © 2026 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential. Property of Gifted Productions Inc.
           </p>
         </div>
       </footer>
