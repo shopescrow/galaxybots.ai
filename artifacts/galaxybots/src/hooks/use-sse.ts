@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 
 export interface AgenticEvent {
-  type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done";
+  type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done" | "moa_progress" | "moa_synthesizing";
   botId?: number;
   botName?: string;
   botTitle?: string;
@@ -11,6 +11,8 @@ export interface AgenticEvent {
   output?: unknown;
   content?: string;
   iteration?: number;
+  moaIndex?: number;
+  moaTotal?: number;
 }
 
 export interface UseSSEStreamOptions {

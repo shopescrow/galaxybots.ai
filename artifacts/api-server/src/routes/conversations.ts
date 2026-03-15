@@ -282,50 +282,120 @@ You have access to tools that allow you to search the web, read/write shared sta
         content: m.content,
       }));
 
-    const { finalContent, events } = await runAgenticLoop({
-      model: "gpt-4o",
-      maxIterations: 10,
-      maxTokens: 8192,
-      systemPrompt,
-      messages: [
+    const isMoA = req.body.moa === true;
+    let botResponseContent: string;
+
+    if (isMoA) {
+      const MOA_COUNT = 10;
+      const temperatures = Array.from({ length: MOA_COUNT }, (_, i) =>
+        parseFloat((0.3 + i * 0.12).toFixed(2))
+      );
+
+      const userTurn = [
         ...chatMessages,
         { role: "user" as const, content: body.data.content },
-      ],
-      context: {
-        conversationId: params.data.id,
-        botId: bot.id,
-        botName: bot.name,
-        clientId: req.user!.clientId,
-        userId: req.user!.userId,
-      },
-      onEvent: (event) => {
-        sendSSE(event);
-      },
-    });
+      ];
 
-    for (const event of events) {
-      if (event.type === "tool_call") {
-        await db.insert(messages).values({
+      const perspectives: string[] = new Array(MOA_COUNT).fill("");
+      let completed = 0;
+
+      sendSSE({ type: "moa_progress", moaIndex: 0, moaTotal: MOA_COUNT, content: "Spawning 10 parallel perspectives…" });
+
+      await Promise.all(
+        temperatures.map(async (temp, i) => {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            temperature: temp,
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...userTurn,
+            ],
+          });
+          perspectives[i] = completion.choices[0]?.message?.content ?? "";
+          completed++;
+          sendSSE({
+            type: "moa_progress",
+            moaIndex: completed,
+            moaTotal: MOA_COUNT,
+            content: `Perspective ${completed}/${MOA_COUNT} captured`,
+          });
+        })
+      );
+
+      sendSSE({ type: "moa_synthesizing", content: "Synthesizing all 10 perspectives into one definitive response…" });
+
+      const synthesisPrompt = `You are ${bot.name}, ${bot.title}. You have just produced 10 independent analytical perspectives on the same question, each at a different creative temperature. Your task is to synthesize them into a single, definitive, authoritative response.
+
+Rules:
+- Integrate the strongest reasoning from all perspectives
+- Resolve any contradictions by choosing the most defensible position
+- Capture edge cases or nuances raised in multiple perspectives
+- Eliminate redundancy and write as a single unified voice
+- The output should feel like your single best possible answer, not a summary of drafts
+- Stay fully in character as ${bot.name}${langInstruction}
+
+The 10 perspectives follow, delimited by ---:
+
+${perspectives.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
+
+Now write the single definitive synthesized response:`;
+
+      const synthesis = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: synthesisPrompt },
+          { role: "user", content: body.data.content },
+        ],
+      });
+
+      botResponseContent = synthesis.choices[0]?.message?.content
+        ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";
+    } else {
+      const { finalContent, events } = await runAgenticLoop({
+        model: "gpt-4o",
+        maxIterations: 10,
+        maxTokens: 8192,
+        systemPrompt,
+        messages: [
+          ...chatMessages,
+          { role: "user" as const, content: body.data.content },
+        ],
+        context: {
           conversationId: params.data.id,
-          role: "bot",
-          content: `Using tool: ${event.toolName}`,
-          senderName: bot.name,
-          messageType: "tool_call",
-          toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
-        });
-      } else if (event.type === "tool_result") {
-        await db.insert(messages).values({
-          conversationId: params.data.id,
-          role: "bot",
-          content: `Tool result: ${event.toolName}`,
-          senderName: bot.name,
-          messageType: "tool_result",
-          toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
-        });
+          botId: bot.id,
+          botName: bot.name,
+          clientId: req.user!.clientId,
+          userId: req.user!.userId,
+        },
+        onEvent: (event) => {
+          sendSSE(event);
+        },
+      });
+
+      for (const event of events) {
+        if (event.type === "tool_call") {
+          await db.insert(messages).values({
+            conversationId: params.data.id,
+            role: "bot",
+            content: `Using tool: ${event.toolName}`,
+            senderName: bot.name,
+            messageType: "tool_call",
+            toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
+          });
+        } else if (event.type === "tool_result") {
+          await db.insert(messages).values({
+            conversationId: params.data.id,
+            role: "bot",
+            content: `Tool result: ${event.toolName}`,
+            senderName: bot.name,
+            messageType: "tool_result",
+            toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
+          });
+        }
       }
-    }
 
-    const botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
+      botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
+    }
 
     await db.insert(messages).values({
       conversationId: params.data.id,
@@ -333,6 +403,7 @@ You have access to tools that allow you to search the web, read/write shared sta
       content: botResponseContent,
       senderName: bot.name,
       messageType: "text",
+      toolData: isMoA ? { moa: true } : undefined,
     });
 
     sendSSE({ type: "done", content: botResponseContent });

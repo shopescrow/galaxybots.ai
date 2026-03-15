@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -183,9 +183,55 @@ export default function BotDetail() {
   );
 }
 
+function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botName: string }) {
+  const progressEvents = events.filter(e => e.type === "moa_progress");
+  const isSynthesizing = events.some(e => e.type === "moa_synthesizing");
+  const latest = progressEvents[progressEvents.length - 1];
+  const completed = latest?.moaIndex ?? 0;
+  const total = latest?.moaTotal ?? 10;
+
+  if (isSynthesizing) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
+        <Sparkles className="w-4 h-4 text-purple-400 animate-pulse shrink-0" />
+        <div className="flex flex-col gap-1 flex-1 min-w-0">
+          <span className="text-xs font-tech text-purple-300">Synthesizing all 10 perspectives…</span>
+          <div className="w-full bg-purple-500/20 rounded-full h-1">
+            <div className="bg-purple-400 h-1 rounded-full w-full animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (progressEvents.length > 0) {
+    const pct = Math.round((completed / total) * 100);
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
+        <Brain className="w-4 h-4 text-purple-400 animate-pulse shrink-0" />
+        <div className="flex flex-col gap-1 flex-1 min-w-0">
+          <span className="text-xs font-tech text-purple-300">
+            Deep Thinking — {completed}/{total} perspectives captured
+          </span>
+          <div className="w-full bg-purple-500/20 rounded-full h-1">
+            <div
+              className="bg-purple-400 h-1 rounded-full transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+        <span className="text-xs font-tech text-purple-400 shrink-0">{pct}%</span>
+      </div>
+    );
+  }
+
+  return <WorkingIndicator botName={botName} />;
+}
+
 function ChatInterface({ conversationId, botName }: { conversationId: number, botName: string }) {
   const { data: messages, isLoading } = useChatMessages(conversationId);
   const [input, setInput] = useState("");
+  const [moaEnabled, setMoaEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -198,6 +244,8 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
   const { isStreaming, events: streamEvents, startStream } = useSSEStream({
     onComplete: onStreamComplete,
   });
+
+  const hasMoaEvents = streamEvents.some(e => e.type === "moa_progress" || e.type === "moa_synthesizing");
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -215,6 +263,7 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
     await startStream(`/api/conversations/${conversationId}/messages/stream`, {
       content,
       senderName: "CEO",
+      moa: moaEnabled,
     });
   };
 
@@ -236,7 +285,8 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
             const isUser = msg.role === 'user';
             const isSystem = msg.role === 'system';
             const msgType = (msg as { messageType?: string }).messageType || "text";
-            const toolData = (msg as { toolData?: unknown }).toolData;
+            const toolData = (msg as { toolData?: unknown }).toolData as Record<string, unknown> | null | undefined;
+            const isMoaResponse = !isUser && toolData?.moa === true;
 
             if (msgType === "tool_call" || msgType === "tool_result") {
               return (
@@ -263,24 +313,31 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
                   <div className="shrink-0 mt-1">
                     <div className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center border",
-                      isUser ? "bg-cyan/20 border-cyan/50" : "bg-primary/20 border-primary/50"
+                      isUser ? "bg-cyan/20 border-cyan/50" : isMoaResponse ? "bg-purple-500/20 border-purple-500/50" : "bg-primary/20 border-primary/50"
                     )}>
-                      {isUser ? <User className="w-4 h-4 text-cyan" /> : <BotIcon className="w-4 h-4 text-primary" />}
+                      {isUser ? <User className="w-4 h-4 text-cyan" /> : isMoaResponse ? <Sparkles className="w-4 h-4 text-purple-400" /> : <BotIcon className="w-4 h-4 text-primary" />}
                     </div>
                   </div>
 
-                  <div className={cn(
-                    "flex flex-col",
-                    isUser ? "items-end" : "items-start"
-                  )}>
-                    <span className="text-xs text-muted-foreground font-tech mb-1 px-1">
-                      {isUser ? msg.senderName || "CEO" : botName} • {format(new Date(msg.createdAt), 'HH:mm')}
-                    </span>
+                  <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
+                    <div className="flex items-center gap-2 mb-1 px-1">
+                      <span className="text-xs text-muted-foreground font-tech">
+                        {isUser ? msg.senderName || "CEO" : botName} • {format(new Date(msg.createdAt), 'HH:mm')}
+                      </span>
+                      {isMoaResponse && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-tech">
+                          <Sparkles className="w-2.5 h-2.5" />
+                          DEEP THINKING
+                        </span>
+                      )}
+                    </div>
                     <div className={cn(
                       "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
                       isUser 
                         ? "bg-cyan/10 border border-cyan/20 text-foreground rounded-tr-sm" 
-                        : "bg-secondary border border-border/50 text-foreground rounded-tl-sm shadow-md"
+                        : isMoaResponse
+                          ? "bg-purple-500/5 border border-purple-500/20 text-foreground rounded-tl-sm shadow-md shadow-purple-500/5"
+                          : "bg-secondary border border-border/50 text-foreground rounded-tl-sm shadow-md"
                     )}>
                       {msg.content}
                     </div>
@@ -293,25 +350,62 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
 
         {isStreaming && (
           <div className="space-y-2 ml-12">
-            <ToolStepsDisplay events={streamEvents} />
-            <WorkingIndicator botName={botName} />
+            {hasMoaEvents ? (
+              <MoAWorkingIndicator events={streamEvents} botName={botName} />
+            ) : (
+              <>
+                <ToolStepsDisplay events={streamEvents} />
+                <WorkingIndicator botName={botName} />
+              </>
+            )}
           </div>
         )}
       </div>
 
-      <div className="p-4 border-t border-border/40 bg-background/80 supports-[backdrop-filter]:backdrop-blur-md z-10" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
-        <form onSubmit={handleSend} className="flex gap-3 max-w-4xl mx-auto relative">
-          <Input 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Issue directive..." 
-            className="flex-1 bg-secondary/50 border-border shadow-inner font-tech min-h-[44px]"
-            disabled={isStreaming}
-          />
-          <Button type="submit" disabled={!input.trim() || isStreaming} className="px-6 shrink-0 min-w-[44px] min-h-[44px]" variant={input.trim() ? "glow" : "secondary"}>
-            {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </Button>
-        </form>
+      <div className="border-t border-border/40 bg-background/80 supports-[backdrop-filter]:backdrop-blur-md z-10" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
+        {moaEnabled && (
+          <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30">
+              <Sparkles className="w-3 h-3 text-purple-400" />
+              <span className="text-xs font-tech text-purple-300">Deep Thinking active — 10 parallel perspectives</span>
+            </div>
+          </div>
+        )}
+        <div className="p-4 pt-3">
+          <form onSubmit={handleSend} className="flex gap-3 max-w-4xl mx-auto relative items-center">
+            <button
+              type="button"
+              onClick={() => setMoaEnabled(v => !v)}
+              title={moaEnabled ? "Deep Thinking ON — click to disable" : "Enable Deep Thinking (MoA)"}
+              className={cn(
+                "shrink-0 flex items-center justify-center w-9 h-9 rounded-lg border transition-all duration-200",
+                moaEnabled
+                  ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                  : "bg-secondary/50 border-border text-muted-foreground hover:border-purple-500/40 hover:text-purple-400"
+              )}
+            >
+              <Brain className="w-4 h-4" />
+            </button>
+            <Input 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={moaEnabled ? "Issue directive for deep analysis…" : "Issue directive..."} 
+              className={cn(
+                "flex-1 bg-secondary/50 border-border shadow-inner font-tech min-h-[44px] transition-colors",
+                moaEnabled && "border-purple-500/30 focus-visible:ring-purple-500/30"
+              )}
+              disabled={isStreaming}
+            />
+            <Button
+              type="submit"
+              disabled={!input.trim() || isStreaming}
+              className={cn("px-6 shrink-0 min-w-[44px] min-h-[44px]", moaEnabled && "bg-purple-600 hover:bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]")}
+              variant={input.trim() && !moaEnabled ? "glow" : "secondary"}
+            >
+              {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );
