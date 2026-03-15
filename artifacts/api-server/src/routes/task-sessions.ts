@@ -79,7 +79,7 @@ router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimi
     messages: [
       {
         role: "system",
-        content: `You are Director Bot, a corporate task-force assembler. Given a business task/objective and the existing bot roster, you must:
+        content: `You are Optima Prime, a corporate task-force assembler. Given a business task/objective and the existing bot roster, you must:
 1. Identify all specialist roles needed for this task
 2. Match roles to existing bots from the roster
 3. Identify any gaps where no existing bot covers the required expertise

@@ -183,7 +183,7 @@ export default function DeployTeam() {
               Deploy Task Team
             </h1>
             <p className="text-muted-foreground mt-2 font-tech">
-              Describe your business objective and Director Bot will assemble
+              Describe your business objective and Optima Prime will assemble
               the optimal cross-functional team.
             </p>
           </div>
@@ -228,7 +228,7 @@ export default function DeployTeam() {
             >
               <Loader2 className="w-12 h-12 animate-spin text-primary" />
               <p className="text-primary/70 font-tech animate-pulse">
-                Director Bot is analyzing your task...
+                Optima Prime is analyzing your task...
               </p>
             </motion.div>
           )}
@@ -246,7 +246,7 @@ export default function DeployTeam() {
                     <Brain className="w-5 h-5 text-primary mt-1 flex-shrink-0" />
                     <div>
                       <h3 className="font-tech font-bold text-primary text-sm mb-1">
-                        Director Bot Analysis
+                        Optima Prime Analysis
                       </h3>
                       <p className="text-sm text-foreground/80">
                         {proposal.reasoning}
