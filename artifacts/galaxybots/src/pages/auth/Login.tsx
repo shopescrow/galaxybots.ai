@@ -47,15 +47,16 @@ export default function Login() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-300">Email</Label>
+              <Label htmlFor="email" className="text-slate-300">Email or Username</Label>
               <Input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-slate-700/50 border-slate-600 text-white"
-                placeholder="you@company.com"
+                placeholder="you@company.com or your username"
+                autoComplete="username"
               />
             </div>
             <div className="space-y-2">

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db, usersTable, clientsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or, ilike } from "drizzle-orm";
 import { signToken, authenticate } from "../middleware/auth";
 import { authRateLimit } from "../middleware/rate-limit";
 
@@ -85,17 +85,24 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    res.status(400).json({ error: "email and password are required" });
+    res.status(400).json({ error: "email/username and password are required" });
     return;
   }
+
+  const identifier = String(email).trim();
+  const isEmail = identifier.includes("@");
 
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()));
+    .where(
+      isEmail
+        ? eq(usersTable.email, identifier.toLowerCase())
+        : ilike(usersTable.displayName, identifier)
+    );
 
   if (!user) {
-    res.status(401).json({ error: "Invalid email or password" });
+    res.status(401).json({ error: "Invalid email, username, or password" });
     return;
   }
 
