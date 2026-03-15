@@ -7,12 +7,16 @@
     "hello": "tsx ./src/hello.ts",
     "seed-bots": "tsx ./src/seed-bots.ts",
     "seed-blog": "tsx ./src/seed-blog.ts",
+    "seed-kilopro": "tsx ./src/seed-kilopro.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@workspace/db": "workspace:*"
+    "@workspace/db": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "catalog:",
     "tsx": "catalog:"
   }
