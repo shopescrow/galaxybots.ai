@@ -188,6 +188,40 @@ export default function DeployTeam() {
             </p>
           </div>
 
+          <Card className="p-6 bg-black/40 border-primary/30 backdrop-blur-md mb-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                <Brain className="w-6 h-6 text-primary" />
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <h2 className="font-display font-bold text-primary text-lg tracking-wider">Optima Prime</h2>
+                  <p className="text-xs text-primary/50 font-tech uppercase tracking-widest mt-0.5">Task-Force Intelligence Commander</p>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-tech font-bold text-primary/70 uppercase tracking-widest">Optima</p>
+                    <p className="text-sm text-foreground/75 font-tech leading-relaxed">
+                      From Latin <span className="italic text-primary/80">optimus</span> — the most favorable conditions; the best possible state achievable given the constraints. Optima represents the point at which every variable aligns for maximum outcome.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-tech font-bold text-primary/70 uppercase tracking-widest">Prime</p>
+                    <p className="text-sm text-foreground/75 font-tech leading-relaxed">
+                      From Latin <span className="italic text-primary/80">primus</span> — first in rank, order, and importance. Prime denotes supremacy: the highest grade, the foremost authority, the one that precedes all others.
+                    </p>
+                  </div>
+                </div>
+                <div className="border-t border-primary/10 pt-4">
+                  <p className="text-xs font-tech font-bold text-primary/70 uppercase tracking-widest mb-1">Combined</p>
+                  <p className="text-sm text-foreground/80 font-tech leading-relaxed">
+                    <span className="text-primary font-bold">Optima Prime</span> is the supreme intelligence of optimal outcomes — the first-order system that reads any business objective, identifies every specialist role required, and assembles the ideal cross-functional team to execute it. Where others see complexity, Optima Prime sees composition. Every mission begins here.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <Card className="p-6 bg-black/40 border-primary/20 backdrop-blur-md mb-6">
             <form onSubmit={handleAnalyze} className="flex gap-4">
               <div className="flex-1">
