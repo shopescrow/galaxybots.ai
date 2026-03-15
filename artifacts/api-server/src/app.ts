@@ -5,6 +5,7 @@ import router from "./routes";
 import { authenticate } from "./middleware/auth";
 import { auditLogger } from "./middleware/audit";
 import { generalRateLimit } from "./middleware/rate-limit";
+import { stripeWebhookHandler } from "./routes/billing";
 
 const app: Express = express();
 
@@ -29,6 +30,12 @@ app.use(
           credentials: true,
         },
   ),
+);
+
+app.post(
+  "/api/billing/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler
 );
 
 app.use(cookieParser());

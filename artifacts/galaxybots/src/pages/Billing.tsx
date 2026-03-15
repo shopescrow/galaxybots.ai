@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Zap, Building, Globe, ExternalLink, CreditCard } from "lucide-react";
+import { Check, Zap, Building, Globe, CreditCard, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -77,6 +77,7 @@ export default function Billing() {
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [subscribing, setSubscribing] = useState<string | null>(null);
 
   useEffect(() => {
     const headers: Record<string, string> = {};
@@ -94,12 +95,32 @@ export default function Billing() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const handleSubscribe = (link: string | null, planName: string) => {
-    if (!link) {
-      alert(`Payment link for the ${planName} plan has not been configured yet. Please contact support.`);
-      return;
+  const handleSubscribe = async (planKey: string, planName: string) => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    setSubscribing(planKey);
+    try {
+      const res = await fetch(`${BASE}/api/billing/stripe/checkout`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ plan: planKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || `Failed to start checkout for the ${planName} plan. Please try again.`);
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setSubscribing(null);
     }
-    window.open(link, "_blank", "noopener,noreferrer");
   };
 
   const planKeys = ["single", "team", "enterprise"] as const;
@@ -110,13 +131,13 @@ export default function Billing() {
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary font-tech text-sm mb-6">
             <CreditCard className="w-3.5 h-3.5" />
-            <span>Powered by Kort Payments</span>
+            <span>Powered by Stripe</span>
           </div>
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-display font-bold mb-6">
             Choose Your <span className="text-gradient">Command Tier</span>
           </h1>
           <p className="text-lg text-muted-foreground">
-            Secure, seamless checkout via Kort Payments. Select a plan and you'll be taken to
+            Secure, seamless checkout via Stripe. Select a plan and you'll be taken to
             our payment partner to complete your subscription.
           </p>
 
@@ -151,6 +172,7 @@ export default function Billing() {
               const plan = links.plans[key];
               const Icon = PLAN_ICONS[key];
               const isCurrentPlan = status?.plan === key;
+              const isSubscribing = subscribing === key;
 
               return (
                 <Card
@@ -200,10 +222,17 @@ export default function Billing() {
                       <Button
                         className="w-full gap-2"
                         variant={key === "team" ? "default" : "outline"}
-                        onClick={() => handleSubscribe(plan.link, plan.name)}
+                        onClick={() => handleSubscribe(key, plan.name)}
+                        disabled={isSubscribing}
                       >
-                        Subscribe via Kort Payments
-                        <ExternalLink className="w-4 h-4" />
+                        {isSubscribing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Redirecting…
+                          </>
+                        ) : (
+                          "Subscribe Now"
+                        )}
                       </Button>
                     )}
                   </CardFooter>
@@ -217,12 +246,12 @@ export default function Billing() {
           <p>
             Payments are securely processed by{" "}
             <a
-              href="https://kortpayments.com"
+              href="https://stripe.com"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
             >
-              Kort Payments
+              Stripe
             </a>
             . You will be redirected to their secure hosted checkout page to complete your
             subscription.

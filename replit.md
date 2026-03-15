@@ -46,3 +46,4 @@ The project is built as a monorepo using `pnpm workspaces`, Node.js 24, TypeScri
 - **PirateMonster.com:** An AEO intelligence platform for AEO score analysis and recommendations, integrated via webhooks and specific agentic tools (`analyze_aeo_score`, `aeo_recommend`).
 - **Slack:** Platform-level integration for messaging agentic tools (`post_slack_message`, `read_slack_channel`).
 - **Linear:** Platform-level integration for issue management agentic tools (`create_issue`, `update_issue`).
+- **Stripe:** Payment processing for subscription billing. Checkout sessions redirect users to Stripe-hosted payment pages, and a webhook (`POST /api/billing/stripe/webhook`) auto-activates accounts on successful payment. Requires env secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_SINGLE`, `STRIPE_PRICE_ID_TEAM`, `STRIPE_PRICE_ID_ENTERPRISE`. An optional `APP_URL` env var controls redirect URLs after checkout.

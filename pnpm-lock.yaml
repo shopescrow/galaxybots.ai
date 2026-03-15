@@ -208,6 +208,9 @@ importers:
       p-retry:
         specifier: ^7.1.1
         version: 7.1.1
+      stripe:
+        specifier: ^20.4.1
+        version: 20.4.1(@types/node@25.3.5)
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -3050,6 +3053,15 @@ packages:
     resolution: {integrity: sha512-aulFJcD6YK8V1G7iRB5tigAP4TsHBZZrOV8pjV++zdUwmeV8uzbY7yn6h9MswN62adStNZFuCIx4haBnRuMDaw==}
     engines: {node: '>=18'}
 
+  stripe@20.4.1:
+    resolution: {integrity: sha512-axCguHItc8Sxt0HC6aSkdVRPffjYPV7EQqZRb2GkIa8FzWDycE7nHJM19C6xAIynH1Qp1/BHiopSi96jGBxT0w==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      '@types/node': '>=16'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   tailwind-merge@3.5.0:
     resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
 
@@ -5720,6 +5732,10 @@ snapshots:
       ansi-regex: 5.0.1
 
   strip-final-newline@4.0.0: {}
+
+  stripe@20.4.1(@types/node@25.3.5):
+    optionalDependencies:
+      '@types/node': 25.3.5
 
   tailwind-merge@3.5.0: {}
 

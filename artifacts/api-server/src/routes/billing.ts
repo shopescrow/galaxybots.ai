@@ -1,34 +1,48 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
+import Stripe from "stripe";
 import { db, clientsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { authenticate, requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
 
-const PLAN_LINKS: Record<string, string | undefined> = {
-  single: process.env["KORT_PAYMENT_LINK_SINGLE"],
-  team: process.env["KORT_PAYMENT_LINK_TEAM"],
-  enterprise: process.env["KORT_PAYMENT_LINK_ENTERPRISE"],
+const VALID_PLANS = ["single", "team", "enterprise"];
+
+const STRIPE_PRICE_IDS: Record<string, string | undefined> = {
+  single: process.env["STRIPE_PRICE_ID_SINGLE"],
+  team: process.env["STRIPE_PRICE_ID_TEAM"],
+  enterprise: process.env["STRIPE_PRICE_ID_ENTERPRISE"],
 };
+
+function getStripe(): Stripe | null {
+  const key = process.env["STRIPE_SECRET_KEY"];
+  if (!key) return null;
+  return new Stripe(key);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 router.get("/billing/links", authenticate, (_req, res): void => {
   res.json({
-    provider: "Kort Payments",
+    provider: "Stripe",
     plans: {
       single: {
         name: "Single Director",
         price: 999,
-        link: PLAN_LINKS.single || null,
+        link: null,
       },
       team: {
         name: "Department Team",
         price: 2999,
-        link: PLAN_LINKS.team || null,
+        link: null,
       },
       enterprise: {
         name: "Enterprise Command",
         price: 7999,
-        link: PLAN_LINKS.enterprise || null,
+        link: null,
       },
     },
   });
@@ -48,6 +62,97 @@ router.get("/billing/status", authenticate, async (req, res): Promise<void> => {
   res.json({ plan: client.plan, status: client.status });
 });
 
+router.post("/billing/stripe/checkout", authenticate, async (req, res): Promise<void> => {
+  const stripe = getStripe();
+  if (!stripe) {
+    res.status(503).json({ error: "Stripe is not configured" });
+    return;
+  }
+
+  const { plan } = req.body;
+  if (!plan || !VALID_PLANS.includes(plan)) {
+    res.status(400).json({ error: `plan must be one of: ${VALID_PLANS.join(", ")}` });
+    return;
+  }
+
+  const priceId = STRIPE_PRICE_IDS[plan];
+  if (!priceId) {
+    res.status(503).json({ error: `Stripe Price ID not configured for the ${plan} plan` });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+  const appUrl = process.env["APP_URL"] || req.headers.origin || "";
+  const billingUrl = `${appUrl}/billing`;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { clientId: String(clientId), plan },
+      success_url: `${billingUrl}?checkout=success`,
+      cancel_url: `${billingUrl}?checkout=cancelled`,
+    });
+
+    if (!session.url) {
+      res.status(500).json({ error: "Stripe did not return a checkout URL" });
+      return;
+    }
+    res.json({ url: session.url });
+  } catch (error: unknown) {
+    console.error("Stripe checkout session creation failed:", getErrorMessage(error));
+    res.status(500).json({ error: "Failed to create checkout session" });
+  }
+});
+
+export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
+  const webhookSecret = process.env["STRIPE_WEBHOOK_SECRET"];
+  const stripeKey = process.env["STRIPE_SECRET_KEY"];
+  if (!webhookSecret || !stripeKey) {
+    res.status(503).json({ error: "Stripe webhook not configured" });
+    return;
+  }
+
+  const stripe = new Stripe(stripeKey);
+  const sig = req.headers["stripe-signature"];
+  if (!sig) {
+    res.status(400).json({ error: "Missing stripe-signature header" });
+    return;
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (error: unknown) {
+    console.error("Stripe webhook signature verification failed:", getErrorMessage(error));
+    res.status(400).json({ error: "Invalid signature" });
+    return;
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const clientId = session.metadata?.clientId;
+    const plan = session.metadata?.plan;
+    if (clientId && plan && VALID_PLANS.includes(plan)) {
+      try {
+        await db
+          .update(clientsTable)
+          .set({ plan, status: "active" })
+          .where(eq(clientsTable.id, Number(clientId)));
+        console.log(`Stripe webhook: activated client ${clientId} with plan ${plan}`);
+      } catch (error: unknown) {
+        console.error("Stripe webhook DB update failed:", getErrorMessage(error));
+        res.status(500).json({ error: "Database update failed" });
+        return;
+      }
+    } else {
+      console.error("Stripe webhook: missing or invalid metadata", { clientId, plan });
+    }
+  }
+
+  res.json({ received: true });
+}
+
 router.post(
   "/billing/activate",
   authenticate,
@@ -60,9 +165,8 @@ router.post(
       return;
     }
 
-    const validPlans = ["single", "team", "enterprise"];
-    if (!validPlans.includes(plan)) {
-      res.status(400).json({ error: `plan must be one of: ${validPlans.join(", ")}` });
+    if (!VALID_PLANS.includes(plan)) {
+      res.status(400).json({ error: `plan must be one of: ${VALID_PLANS.join(", ")}` });
       return;
     }
 
