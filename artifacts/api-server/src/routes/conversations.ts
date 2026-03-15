@@ -283,6 +283,18 @@ You have access to tools that allow you to search the web, read/write shared sta
       }));
 
     const isMoA = req.body.moa === true;
+
+    if (isMoA) {
+      const plan = req.user!.plan;
+      const bypass = req.user!.bypassPayment;
+      const moaPlans = ["team", "enterprise"];
+      if (!bypass && (!plan || !moaPlans.includes(plan))) {
+        sendSSE({ type: "error", content: "Deep Thinking requires a Team or Enterprise plan. Upgrade at /billing." });
+        res.end();
+        return;
+      }
+    }
+
     let botResponseContent: string;
 
     if (isMoA) {

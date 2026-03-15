@@ -273,7 +273,12 @@ router.get("/auth/me", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(user);
+  const [client] = await db
+    .select({ plan: clientsTable.plan })
+    .from(clientsTable)
+    .where(eq(clientsTable.id, user.clientId));
+
+  res.json({ ...user, plan: client?.plan ?? "trial" });
 });
 
 export default router;

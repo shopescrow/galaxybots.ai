@@ -8,6 +8,8 @@ interface AuthUser {
   clientId: number;
   role: string;
   displayName?: string | null;
+  plan?: string;
+  bypassPayment?: boolean;
 }
 
 interface AuthContextType {

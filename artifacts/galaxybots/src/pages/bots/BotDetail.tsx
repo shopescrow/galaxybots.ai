@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetConversationMessagesQueryKey } from "@workspace/api-client-react";
 import { MemoryAudit } from "@/components/memory/MemoryAudit";
 import { Link } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
@@ -32,7 +33,11 @@ interface ImprovementRun {
 export default function BotDetail() {
   const params = useParams();
   const botId = parseInt(params.id || "0");
-  
+  const { user } = useAuth();
+
+  const MOA_PLANS = ["team", "enterprise"];
+  const canUseMoA = !!(user?.bypassPayment || (user?.plan && MOA_PLANS.includes(user.plan)));
+
   const { data: bot, isLoading: botLoading } = useBot(botId);
   const { data: conversations } = useConversations(null, botId);
   
@@ -166,7 +171,7 @@ export default function BotDetail() {
                         </Button>
                       </div>
                     ) : (
-                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} />
+                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} canUseMoA={canUseMoA} />
                     )}
                   </CardContent>
                 </Card>
@@ -228,10 +233,11 @@ function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botN
   return <WorkingIndicator botName={botName} />;
 }
 
-function ChatInterface({ conversationId, botName }: { conversationId: number, botName: string }) {
+function ChatInterface({ conversationId, botName, canUseMoA }: { conversationId: number, botName: string, canUseMoA: boolean }) {
   const { data: messages, isLoading } = useChatMessages(conversationId);
   const [input, setInput] = useState("");
   const [moaEnabled, setMoaEnabled] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -363,7 +369,7 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
       </div>
 
       <div className="border-t border-border/40 bg-background/80 supports-[backdrop-filter]:backdrop-blur-md z-10" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
-        {moaEnabled && (
+        {moaEnabled && canUseMoA && (
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30">
               <Sparkles className="w-3 h-3 text-purple-400" />
@@ -371,20 +377,38 @@ function ChatInterface({ conversationId, botName }: { conversationId: number, bo
             </div>
           </div>
         )}
+        {showUpgrade && (
+          <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-1">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex-1">
+              <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-xs font-tech text-amber-300">Deep Thinking requires Team or Enterprise plan</span>
+              <Link href="/billing" className="ml-auto text-xs font-tech text-amber-400 underline hover:text-amber-300 shrink-0">
+                Upgrade →
+              </Link>
+            </div>
+            <button type="button" onClick={() => setShowUpgrade(false)} className="text-muted-foreground hover:text-foreground text-xs shrink-0">✕</button>
+          </div>
+        )}
         <div className="p-4 pt-3">
           <form onSubmit={handleSend} className="flex gap-3 max-w-4xl mx-auto relative items-center">
             <button
               type="button"
-              onClick={() => setMoaEnabled(v => !v)}
-              title={moaEnabled ? "Deep Thinking ON — click to disable" : "Enable Deep Thinking (MoA)"}
+              onClick={() => {
+                if (!canUseMoA) { setShowUpgrade(true); return; }
+                setShowUpgrade(false);
+                setMoaEnabled(v => !v);
+              }}
+              title={!canUseMoA ? "Deep Thinking — Team/Enterprise plan required" : moaEnabled ? "Deep Thinking ON — click to disable" : "Enable Deep Thinking (MoA)"}
               className={cn(
                 "shrink-0 flex items-center justify-center w-9 h-9 rounded-lg border transition-all duration-200",
-                moaEnabled
-                  ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)]"
-                  : "bg-secondary/50 border-border text-muted-foreground hover:border-purple-500/40 hover:text-purple-400"
+                !canUseMoA
+                  ? "bg-secondary/50 border-border text-muted-foreground/50 cursor-not-allowed"
+                  : moaEnabled
+                    ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                    : "bg-secondary/50 border-border text-muted-foreground hover:border-purple-500/40 hover:text-purple-400"
               )}
             >
-              <Brain className="w-4 h-4" />
+              {!canUseMoA ? <Lock className="w-3.5 h-3.5" /> : <Brain className="w-4 h-4" />}
             </button>
             <Input 
               value={input}
