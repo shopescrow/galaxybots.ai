@@ -18,22 +18,22 @@ export const healthcarePack: VerticalPack = {
   ],
   botOverlays: [
     {
-      botTitle: "Chief Strategy Officer",
+      botTitle: "Managing Director",
       overlayPrompt:
         "You are advising a healthcare or wellness business. Frame strategy around patient volume growth, payer mix optimization, service line expansion, and geographic reach. Understand the shift toward value-based care, the competitive dynamics with hospital systems and private equity roll-ups, and the regulatory landscape (state licensing, scope of practice, CON laws). Reference MGMA benchmarks for the practice's specialty.",
     },
     {
-      botTitle: "Chief Financial Officer",
+      botTitle: "Finance Director",
       overlayPrompt:
         "You are advising a healthcare or wellness business. Financial analysis should focus on revenue per visit, collections rate, payer mix (commercial vs. Medicare vs. Medicaid vs. self-pay), overhead ratio, and provider compensation models (productivity-based vs. salary). Understand RVU (Relative Value Unit) compensation, A/R aging by payer, denial rates, and the impact of fee schedule changes. Reference MGMA cost and revenue benchmarks.",
     },
     {
-      botTitle: "Chief Marketing Officer",
+      botTitle: "Director of Marketing",
       overlayPrompt:
         "You are advising a healthcare or wellness business. Marketing must comply with healthcare advertising regulations and avoid making unsubstantiated clinical claims. Focus on patient experience marketing, online reputation management (Healthgrades, Vitals, Google Reviews), physician referral network building, community health events, and educational content marketing. Understand patient decision-making in healthcare (referral-driven vs. self-directed care).",
     },
     {
-      botTitle: "Chief Operations Officer",
+      botTitle: "Director of Operations",
       overlayPrompt:
         "You are advising a healthcare or wellness business. Operations should focus on patient throughput optimization, scheduling efficiency (minimize no-shows and maximize provider utilization), clinical workflow standardization, EHR optimization, and supply chain management for medical supplies. Understand the front desk to checkout patient journey and identify friction points that impact both patient satisfaction and revenue capture.",
     },
@@ -54,9 +54,9 @@ export const healthcarePack: VerticalPack = {
       missionObjective:
         "Conduct a patient acquisition cost analysis for this healthcare practice. Calculate cost-per-new-patient across all marketing channels (Google Ads, social media, physician referrals, community events, insurance directories). Analyze conversion rates at each stage (impression → website visit → appointment request → show rate → retained patient). Benchmark against MGMA specialty averages and recommend a channel mix that reduces overall acquisition cost by 20%.",
       recommendedBots: [
-        "Chief Marketing Officer",
-        "Chief Financial Officer",
-        "Chief Strategy Officer",
+        "Director of Marketing",
+        "Finance Director",
+        "Managing Director",
       ],
     },
     {
@@ -74,8 +74,8 @@ export const healthcarePack: VerticalPack = {
       missionObjective:
         "Conduct a payer mix and reimbursement optimization analysis for this healthcare practice. Map reimbursement rates by payer and CPT code, identify coding optimization opportunities (undercoding, missed modifiers), model the revenue impact of renegotiating the top 3 commercial contracts, and recommend a payer mix strategy that improves average reimbursement per visit by 10%+ while maintaining patient access.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Operations Officer",
+        "Finance Director",
+        "Director of Operations",
       ],
     },
     {
@@ -93,8 +93,8 @@ export const healthcarePack: VerticalPack = {
       missionObjective:
         "Analyze practice efficiency and provider productivity for this healthcare practice. Benchmark each provider on patients/day, RVUs generated, revenue per visit, and patient satisfaction scores. Map the complete patient journey (arrival → intake → exam → checkout → follow-up) and identify bottleneck points. Design optimized scheduling templates and recommend workflow changes to bring all providers within 15% of top-performer productivity.",
       recommendedBots: [
-        "Chief Operations Officer",
-        "Chief Strategy Officer",
+        "Director of Operations",
+        "Managing Director",
       ],
     },
   ],
@@ -104,17 +104,17 @@ export const healthcarePack: VerticalPack = {
       triggerType: "manual",
       steps: [
         {
-          botTitle: "Chief Financial Officer",
+          botTitle: "Finance Director",
           instruction:
             "Generate the monthly practice financial report: total collections, revenue per visit by payer, A/R aging summary, denial rate, and overhead ratio. Compare to prior month and same month last year. Flag any payer with denial rate above 5% or A/R above 60 days.",
         },
         {
-          botTitle: "Chief Operations Officer",
+          botTitle: "Director of Operations",
           instruction:
             "Based on financial data, analyze operational performance: provider productivity (patients/day), no-show rate, average wait time, and scheduling utilization. Recommend 2-3 operational improvements for the coming month.",
         },
         {
-          botTitle: "Chief Strategy Officer",
+          botTitle: "Managing Director",
           instruction:
             "Synthesize financial and operational data into a practice leadership brief. Identify top strategic priorities, any competitive threats from new market entrants, and growth opportunities (new services, extended hours, satellite locations).",
         },

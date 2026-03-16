@@ -18,22 +18,22 @@ export const legalPack: VerticalPack = {
   ],
   botOverlays: [
     {
-      botTitle: "Chief Strategy Officer",
+      botTitle: "Managing Director",
       overlayPrompt:
         "You are advising a legal or professional services firm. Frame strategy around practice area profitability, partner leverage ratios, realization rates, and client concentration risk. Reference Am Law 200 benchmarks and legal industry trends (alternative fee arrangements, legal tech adoption, AI impact on billable work). Consider the tension between traditional partnership models and modern firm management.",
     },
     {
-      botTitle: "Chief Financial Officer",
+      botTitle: "Finance Director",
       overlayPrompt:
         "You are advising a legal or professional services firm. Financial analysis should focus on revenue per lawyer (RPL), profit per equity partner (PPEP), realization rate, collection rate, and leverage ratio. Understand the billable hour model, alternative fee arrangements, and contingency fee structures. Track WIP (work in progress) and accounts receivable aging. Reference Am Law profitability benchmarks.",
     },
     {
-      botTitle: "Chief Marketing Officer",
+      botTitle: "Director of Marketing",
       overlayPrompt:
         "You are advising a legal or professional services firm. Marketing must respect bar association advertising rules and ethics opinions. Focus on thought leadership, speaking engagements, legal directories (Chambers, Legal 500), client alerts, and referral network cultivation. Understand the partner-driven rainmaking model and how to scale business development beyond individual relationships.",
     },
     {
-      botTitle: "Chief Operations Officer",
+      botTitle: "Director of Operations",
       overlayPrompt:
         "You are advising a legal or professional services firm. Operations focus on matter management, document management systems, e-billing compliance, time entry enforcement, and paralegal leverage. Understand the technology stack (practice management, document review, e-discovery) and process optimization opportunities that don't compromise quality or compliance.",
     },
@@ -54,9 +54,9 @@ export const legalPack: VerticalPack = {
       missionObjective:
         "Conduct a practice area profitability analysis for this law firm. Break down revenue, direct costs, and overhead allocation by practice group. Benchmark utilization rates, realization rates, and RPL against Am Law 200 medians. Identify underperforming practice areas and recommend structural changes (staffing, pricing, or practice area mergers) to improve firm-wide profitability.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Strategy Officer",
-        "Chief Operations Officer",
+        "Finance Director",
+        "Managing Director",
+        "Director of Operations",
       ],
     },
     {
@@ -74,9 +74,9 @@ export const legalPack: VerticalPack = {
       missionObjective:
         "Redesign the client intake and conflict-check workflow for this law firm. Map the current 5-day process, identify automation opportunities, design a streamlined workflow that reduces intake to under 48 hours while maintaining compliance with bar association conflict-of-interest rules. Include engagement letter automation and a digital onboarding experience.",
       recommendedBots: [
-        "Chief Operations Officer",
-        "Chief Technology Officer",
-        "Chief Strategy Officer",
+        "Director of Operations",
+        "Technical Director",
+        "Managing Director",
       ],
     },
     {
@@ -94,8 +94,8 @@ export const legalPack: VerticalPack = {
       missionObjective:
         "Build a comprehensive ROI model for a lateral partner hire at this law firm. Model 3-year economics including: guaranteed compensation, expected portable book ($2M claimed), client portability discount (typically 60-70% in year 1), conflicts displacement risk, integration costs, and support staff requirements. Deliver a risk-adjusted recommendation with scenarios for best case, expected case, and worst case.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Strategy Officer",
+        "Finance Director",
+        "Managing Director",
       ],
     },
   ],
@@ -105,17 +105,17 @@ export const legalPack: VerticalPack = {
       triggerType: "manual",
       steps: [
         {
-          botTitle: "Chief Financial Officer",
+          botTitle: "Finance Director",
           instruction:
             "Generate the monthly firm performance report: total revenue, realization rate, collection rate, WIP aging, and utilization by practice group. Flag any practice group below 85% utilization or below 90% realization rate.",
         },
         {
-          botTitle: "Chief Operations Officer",
+          botTitle: "Director of Operations",
           instruction:
             "Based on the CFO's report, analyze operational bottlenecks affecting underperforming practice groups. Review matter staffing efficiency and recommend process improvements.",
         },
         {
-          botTitle: "Chief Strategy Officer",
+          botTitle: "Managing Director",
           instruction:
             "Synthesize financial and operational data into a managing partner brief. Identify top strategic priorities for the coming month, including any lateral recruiting or practice area investment opportunities.",
         },

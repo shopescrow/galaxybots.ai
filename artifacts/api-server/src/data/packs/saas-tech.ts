@@ -18,27 +18,27 @@ export const saasTechPack: VerticalPack = {
   ],
   botOverlays: [
     {
-      botTitle: "Chief Strategy Officer",
+      botTitle: "Managing Director",
       overlayPrompt:
         "You are advising a SaaS/technology company. Frame all strategic analysis around SaaS metrics: MRR, ARR, net revenue retention, CAC payback period, LTV:CAC ratio, and logo vs. revenue churn. Reference industry benchmarks from Bessemer Cloud Index, KeyBanc SaaS Survey, and OpenView benchmarks. Consider product-led growth vs. sales-led motions and advise on the right GTM mix for the company's stage.",
     },
     {
-      botTitle: "Chief Financial Officer",
+      botTitle: "Finance Director",
       overlayPrompt:
         "You are advising a SaaS/technology company. All financial analysis should use SaaS-specific metrics: Rule of 40, burn multiple, magic number, gross margin (target 70%+), net dollar retention. Model subscription revenue with monthly and annual cohorts. Understand cloud infrastructure costs (AWS/GCP/Azure) as primary COGS. Reference typical SaaS benchmarks for the company's ARR range.",
     },
     {
-      botTitle: "Chief Marketing Officer",
+      botTitle: "Director of Marketing",
       overlayPrompt:
         "You are advising a SaaS/technology company. Focus on product-qualified leads (PQLs), free trial conversion, content marketing for developer audiences, SEO for technical keywords, and community-led growth. Understand the B2B SaaS buying committee (champion, economic buyer, technical evaluator). Reference channels like Product Hunt, Hacker News, dev communities, and LinkedIn for distribution.",
     },
     {
-      botTitle: "VP of Sales",
+      botTitle: "Director of Sales",
       overlayPrompt:
         "You are advising a SaaS/technology company. Structure sales guidance around the SaaS sales cycle: demo → trial → POC → procurement → close. Understand seat-based vs. usage-based pricing implications. Advise on sales-assisted PLG, expansion revenue strategies, and enterprise vs. SMB segmentation. Reference typical SaaS sales cycles, close rates, and ACV benchmarks.",
     },
     {
-      botTitle: "Chief Technology Officer",
+      botTitle: "Technical Director",
       overlayPrompt:
         "You are advising a SaaS/technology company. Focus on technical architecture decisions, build vs. buy trade-offs, API-first design, multi-tenancy, SOC 2 compliance, uptime SLAs, and engineering team velocity metrics. Understand cloud cost optimization, CI/CD best practices, and technical debt management.",
     },
@@ -59,9 +59,9 @@ export const saasTechPack: VerticalPack = {
       missionObjective:
         "Conduct a comprehensive pricing analysis for this SaaS company. Analyze current tier utilization patterns, benchmark against 5+ competitor pricing models, and model the revenue impact of switching to usage-based, seat-based, or hybrid pricing. Deliver a recommended pricing architecture with a customer migration plan that minimizes churn risk.",
       recommendedBots: [
-        "Chief Strategy Officer",
-        "Chief Financial Officer",
-        "VP of Sales",
+        "Managing Director",
+        "Finance Director",
+        "Director of Sales",
       ],
     },
     {
@@ -79,9 +79,9 @@ export const saasTechPack: VerticalPack = {
       missionObjective:
         "Design a product-led growth strategy for this SaaS company. Audit the current free-to-paid funnel, identify the 'aha moment' activation milestones, design in-product growth loops, and build a PQL scoring framework that triggers sales-assist at the right moment. Target: 5%+ free-to-paid conversion rate.",
       recommendedBots: [
-        "Chief Marketing Officer",
-        "Chief Strategy Officer",
-        "Chief Technology Officer",
+        "Director of Marketing",
+        "Managing Director",
+        "Technical Director",
       ],
     },
     {
@@ -99,9 +99,9 @@ export const saasTechPack: VerticalPack = {
       missionObjective:
         "Conduct a competitive feature analysis against the top 5 competitors in this SaaS company's market. Map feature parity, cross-reference with lost-deal data, and deliver a prioritized product roadmap recommendation scored by competitive impact vs. engineering effort.",
       recommendedBots: [
-        "Chief Technology Officer",
-        "VP of Sales",
-        "Chief Strategy Officer",
+        "Technical Director",
+        "Director of Sales",
+        "Managing Director",
       ],
     },
     {
@@ -119,8 +119,8 @@ export const saasTechPack: VerticalPack = {
       missionObjective:
         "Prepare this SaaS company for a Series B fundraise. Build an investor-grade metrics package (ARR, NRR, CAC payback, burn multiple, Rule of 40), draft the fundraising narrative with TAM/SAM/SOM analysis, create a 3-scenario financial model, and compile a ranked target investor list with thesis alignment notes.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Strategy Officer",
+        "Finance Director",
+        "Managing Director",
       ],
     },
   ],
@@ -130,17 +130,17 @@ export const saasTechPack: VerticalPack = {
       triggerType: "manual",
       steps: [
         {
-          botTitle: "Chief Financial Officer",
+          botTitle: "Finance Director",
           instruction:
             "Generate this week's SaaS metrics summary: MRR movement (new, expansion, contraction, churn), net revenue retention trend, runway update, and cash flow forecast. Flag any metrics that deviate more than 10% from the 4-week average.",
         },
         {
-          botTitle: "Chief Marketing Officer",
+          botTitle: "Director of Marketing",
           instruction:
             "Based on the CFO's metrics briefing, analyze the top-of-funnel performance: trial starts, PQL conversion, and marketing-sourced pipeline. Recommend 2-3 tactical adjustments for the coming week.",
         },
         {
-          botTitle: "Chief Strategy Officer",
+          botTitle: "Managing Director",
           instruction:
             "Synthesize the financial and marketing updates into an executive brief. Highlight the top 3 strategic priorities for the week and any competitive signals that require attention.",
         },

@@ -18,22 +18,22 @@ export const restaurantPack: VerticalPack = {
   ],
   botOverlays: [
     {
-      botTitle: "Chief Strategy Officer",
+      botTitle: "Managing Director",
       overlayPrompt:
         "You are advising a restaurant or hospitality business. Frame strategy around unit economics, same-store sales growth, average check size, table turnover rate, and concept differentiation. Understand the lifecycle of restaurant concepts, the franchise vs. corporate model decision, and multi-unit expansion planning. Reference NRA (National Restaurant Association) data and industry trends.",
     },
     {
-      botTitle: "Chief Financial Officer",
+      botTitle: "Finance Director",
       overlayPrompt:
         "You are advising a restaurant or hospitality business. Financial analysis should focus on the prime cost model: food cost % (target 28-32%) + labor cost % (target 25-30%) = prime cost (target <60%). Track daily sales reports, PMIX (product mix) analysis, waste tracking, and cash flow with high seasonal variability. Understand tip credit laws, beverage cost targets (18-24%), and lease structures common in food service.",
     },
     {
-      botTitle: "Chief Marketing Officer",
+      botTitle: "Director of Marketing",
       overlayPrompt:
         "You are advising a restaurant or hospitality business. Marketing strategy should focus on local SEO (Google Business Profile optimization), social media (Instagram/TikTok for visual food content), reputation management (Yelp, Google Reviews, TripAdvisor), and community engagement. Understand seasonal promotions, limited-time offers (LTOs), loyalty programs, and the power of user-generated content in driving covers.",
     },
     {
-      botTitle: "Chief Operations Officer",
+      botTitle: "Director of Operations",
       overlayPrompt:
         "You are advising a restaurant or hospitality business. Operations should focus on kitchen workflow, front-of-house service standards, inventory management (FIFO, par levels, vendor relationships), labor scheduling optimization, and health code compliance. Understand POS system data, cover counts, speed of service metrics, and the back-of-house to front-of-house coordination that drives guest satisfaction.",
     },
@@ -54,9 +54,9 @@ export const restaurantPack: VerticalPack = {
       missionObjective:
         "Conduct a comprehensive menu engineering analysis for this restaurant. Classify all menu items using the BCG-style matrix (stars, puzzles, plowhorses, dogs) based on popularity and profitability. Calculate actual vs. target food cost percentages. Recommend specific price adjustments, menu redesign strategies, and seasonal rotation plans to bring food cost back below 32%.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Operations Officer",
-        "Chief Strategy Officer",
+        "Finance Director",
+        "Director of Operations",
+        "Managing Director",
       ],
     },
     {
@@ -74,9 +74,9 @@ export const restaurantPack: VerticalPack = {
       missionObjective:
         "Design a comprehensive summer traffic-building campaign for this restaurant. Analyze historical Q3 sales drop patterns, create targeted promotions (happy hour specials, prix fixe menus, live events), build a 12-week social media content calendar, and design a loyalty program push to retain regular customers. Target: reduce seasonal revenue decline from 20% to under 10%.",
       recommendedBots: [
-        "Chief Marketing Officer",
-        "Chief Strategy Officer",
-        "Chief Financial Officer",
+        "Director of Marketing",
+        "Managing Director",
+        "Finance Director",
       ],
     },
     {
@@ -94,8 +94,8 @@ export const restaurantPack: VerticalPack = {
       missionObjective:
         "Conduct a labor cost optimization analysis for this restaurant. Map labor hours against revenue by daypart (breakfast, lunch, dinner) and day of week. Identify overstaffing/understaffing patterns, design optimized scheduling templates based on covers forecasting, and recommend retention strategies. Target: reduce labor cost from 33% to below 28% without impacting service quality.",
       recommendedBots: [
-        "Chief Operations Officer",
-        "Chief Financial Officer",
+        "Director of Operations",
+        "Finance Director",
       ],
     },
     {
@@ -113,9 +113,9 @@ export const restaurantPack: VerticalPack = {
       missionObjective:
         "Build a multi-unit expansion feasibility study for this restaurant. Analyze the original location's unit economics for replicability, define site selection criteria, model the full P&L for a second unit (build-out costs, ramp timeline, break-even analysis), and outline the operational changes needed for multi-unit management. Deliver a go/no-go recommendation with risk factors.",
       recommendedBots: [
-        "Chief Strategy Officer",
-        "Chief Financial Officer",
-        "Chief Operations Officer",
+        "Managing Director",
+        "Finance Director",
+        "Director of Operations",
       ],
     },
   ],
@@ -125,12 +125,12 @@ export const restaurantPack: VerticalPack = {
       triggerType: "manual",
       steps: [
         {
-          botTitle: "Chief Financial Officer",
+          botTitle: "Finance Director",
           instruction:
             "Generate the weekly P&L summary: total revenue by daypart, food cost %, labor cost %, prime cost, covers count, and average check. Compare to prior week and same week last year. Flag any cost category exceeding target thresholds.",
         },
         {
-          botTitle: "Chief Marketing Officer",
+          botTitle: "Director of Marketing",
           instruction:
             "Based on the financial briefing, analyze which promotions and marketing channels drove this week's traffic. Recommend 2-3 tactical marketing actions for the coming week to address any revenue gaps.",
         },

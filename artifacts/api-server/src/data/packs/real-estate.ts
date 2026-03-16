@@ -18,22 +18,22 @@ export const realEstatePack: VerticalPack = {
   ],
   botOverlays: [
     {
-      botTitle: "Chief Strategy Officer",
+      botTitle: "Managing Director",
       overlayPrompt:
         "You are advising a real estate company. Frame strategy around market cycle positioning (expansion, hyper-supply, recession, recovery), geographic diversification, asset class mix, and transaction volume growth. Understand brokerage models (traditional, discount, team-based), PropTech disruption, and the shift to hybrid commission structures. Reference NAR data and local MLS statistics.",
     },
     {
-      botTitle: "Chief Financial Officer",
+      botTitle: "Finance Director",
       overlayPrompt:
         "You are advising a real estate company. Financial analysis should cover commission revenue forecasting, agent split structures, cap rates, NOI, cash-on-cash return, GRM (gross rent multiplier), and debt service coverage ratio. For property management, track rent collection rates, vacancy rates, and maintenance cost per unit. For brokerages, focus on per-agent productivity and desk cost analysis.",
     },
     {
-      botTitle: "Chief Marketing Officer",
+      botTitle: "Director of Marketing",
       overlayPrompt:
         "You are advising a real estate company. Marketing should focus on listing presentation strategies, digital presence (Zillow, Realtor.com, social media), open house optimization, sphere-of-influence marketing, and hyperlocal content. Understand the importance of Google Business Profile, virtual tours, drone photography ROI, and the role of personal branding for agents. All marketing must comply with fair housing advertising rules.",
     },
     {
-      botTitle: "VP of Sales",
+      botTitle: "Director of Sales",
       overlayPrompt:
         "You are advising a real estate company. Sales guidance should cover lead conversion funnels (online lead → showing → offer → close), buyer consultation processes, listing presentation scripts, objection handling for commission discussions, and pipeline management. Understand the typical real estate sales cycle (30-90 days), seasonal patterns, and the importance of speed-to-lead response times.",
     },
@@ -54,9 +54,9 @@ export const realEstatePack: VerticalPack = {
       missionObjective:
         "Conduct a comprehensive local real estate market analysis. Track days on market trends, sale-to-list price ratios, active inventory levels, and absorption rate over the past 6 months. Build a pricing strategy framework by property type and price band. Create a seller-facing market update that helps set realistic pricing expectations in a shifting market.",
       recommendedBots: [
-        "Chief Strategy Officer",
-        "Chief Financial Officer",
-        "VP of Sales",
+        "Managing Director",
+        "Finance Director",
+        "Director of Sales",
       ],
     },
     {
@@ -74,9 +74,9 @@ export const realEstatePack: VerticalPack = {
       missionObjective:
         "Design a comprehensive agent recruitment and retention strategy for this real estate brokerage. Benchmark commission splits, technology offerings, and training programs against top 5 local competitors. Build a compelling value proposition, design an accelerated onboarding program, and create a performance-based retention framework that reduces agent attrition by 50%.",
       recommendedBots: [
-        "Chief Strategy Officer",
-        "Chief Operations Officer",
-        "Chief Marketing Officer",
+        "Managing Director",
+        "Director of Operations",
+        "Director of Marketing",
       ],
     },
     {
@@ -94,8 +94,8 @@ export const realEstatePack: VerticalPack = {
       missionObjective:
         "Conduct a real estate investment portfolio analysis for a 12-property rental portfolio. Calculate NOI, cap rate, cash-on-cash return, and DSCR for each property. Identify underperformers for disposition, score potential acquisition submarkets, and model 3 portfolio rebalancing scenarios with 5-year cash flow projections. Deliver a clear buy/hold/sell recommendation for each asset.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Strategy Officer",
+        "Finance Director",
+        "Managing Director",
       ],
     },
   ],
@@ -105,17 +105,17 @@ export const realEstatePack: VerticalPack = {
       triggerType: "manual",
       steps: [
         {
-          botTitle: "Chief Financial Officer",
+          botTitle: "Finance Director",
           instruction:
             "Generate the monthly market data summary: median sale price by property type, DOM trends, inventory levels, absorption rate, and mortgage rate impact analysis. Compare to prior month and same month last year.",
         },
         {
-          botTitle: "Chief Marketing Officer",
+          botTitle: "Director of Marketing",
           instruction:
             "Based on the market data, create a market update narrative for agents to share with their sphere. Include 3 key talking points and social media content suggestions.",
         },
         {
-          botTitle: "Chief Strategy Officer",
+          botTitle: "Managing Director",
           instruction:
             "Synthesize market data and marketing positioning into a strategic brief for brokerage leadership. Highlight any market shifts that require strategic adjustments to recruiting, training, or business model.",
         },

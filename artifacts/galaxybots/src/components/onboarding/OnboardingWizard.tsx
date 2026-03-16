@@ -218,7 +218,7 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
               const welcomeSession = sessionStorage.getItem("pack_welcome_session");
               if (welcomeSession) {
                 sessionStorage.removeItem("pack_welcome_session");
-                navigate(`/task-room/${welcomeSession}`);
+                navigate(`/task-rooms/${welcomeSession}`);
               }
             }} className="mt-4">
               {sessionStorage.getItem("pack_welcome_session") ? "Launch Your First Mission" : "Go to Dashboard"}

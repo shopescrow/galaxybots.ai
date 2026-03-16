@@ -18,22 +18,22 @@ export const agencyPack: VerticalPack = {
   ],
   botOverlays: [
     {
-      botTitle: "Chief Strategy Officer",
+      botTitle: "Managing Director",
       overlayPrompt:
         "You are advising a marketing agency, consulting firm, or professional services company. Frame strategy around client concentration risk (no client >25% of revenue), service line expansion, geographic reach, and the build vs. buy decision for new capabilities. Understand the agency lifecycle (founder-led → process-driven → scalable) and when to specialize vs. generalize. Reference Agency Management Institute and SPI Research benchmarks.",
     },
     {
-      botTitle: "Chief Financial Officer",
+      botTitle: "Finance Director",
       overlayPrompt:
         "You are advising a marketing agency, consulting firm, or professional services company. Financial analysis should focus on average billable rate (ABR), effective bill rate (EBR), utilization rate (target 65-75%), project profitability by client and service line, and the retainer vs. project revenue mix. Understand scope creep economics, change order management, and the cash flow challenges of milestone billing. Track AGI (adjusted gross income) not just topline revenue.",
     },
     {
-      botTitle: "Chief Marketing Officer",
+      botTitle: "Director of Marketing",
       overlayPrompt:
         "You are advising a marketing agency, consulting firm, or professional services company. Agency marketing should practice what it preaches: thought leadership, case study marketing, award submissions, speaking engagements, and strategic partnerships. Focus on niche positioning, ideal client profile (ICP) refinement, and inbound content that demonstrates expertise. Understand the irony of agencies struggling with their own marketing and help break that pattern.",
     },
     {
-      botTitle: "VP of Sales",
+      botTitle: "Director of Sales",
       overlayPrompt:
         "You are advising a marketing agency, consulting firm, or professional services company. Sales guidance should cover the consultative sales process: discovery → audit → proposal → negotiation → close. Understand proposal pricing strategies (fixed bid, T&M, value-based, retainer), the RFP response process, and how to qualify prospects based on budget, timeline, and decision-making authority. Focus on expanding existing client relationships through upsell and cross-sell.",
     },
@@ -54,9 +54,9 @@ export const agencyPack: VerticalPack = {
       missionObjective:
         "Conduct a comprehensive client profitability audit for this agency. Analyze each active client account by billed revenue, actual hours invested, effective bill rate, and project profitability margin. Identify the top 3 accounts with scope creep issues and quantify the revenue leakage. Design a change order process and recommend contract restructuring to protect margins on unprofitable accounts.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Operations Officer",
-        "VP of Sales",
+        "Finance Director",
+        "Director of Operations",
+        "Director of Sales",
       ],
     },
     {
@@ -74,9 +74,9 @@ export const agencyPack: VerticalPack = {
       missionObjective:
         "Design a systematic new business pipeline for this agency. Audit current referral sources, win rates, and pipeline velocity. Build an inbound content strategy targeting the agency's ideal client profile, design a strategic partnership program, and create a monthly BD cadence for senior team members. Target: reduce referral dependency from 80% to 50% and create 3-month pipeline visibility.",
       recommendedBots: [
-        "Chief Marketing Officer",
-        "VP of Sales",
-        "Chief Strategy Officer",
+        "Director of Marketing",
+        "Director of Sales",
+        "Managing Director",
       ],
     },
     {
@@ -94,9 +94,9 @@ export const agencyPack: VerticalPack = {
       missionObjective:
         "Build a capacity planning and hiring model for this agency. Forecast capacity needs based on current retainers, pipeline, and seasonal patterns. Compare the economics of 3 staffing models (full-time hire, freelance contractor, white-label partner) across cost, quality, and scalability dimensions. Deliver a recommended hybrid model with role-specific break-even analysis and a hiring timeline.",
       recommendedBots: [
-        "Chief Financial Officer",
-        "Chief Operations Officer",
-        "Chief Strategy Officer",
+        "Finance Director",
+        "Director of Operations",
+        "Managing Director",
       ],
     },
     {
@@ -114,9 +114,9 @@ export const agencyPack: VerticalPack = {
       missionObjective:
         "Design a service line expansion strategy for this agency. Analyze client demand data and revenue potential for SEO, paid media, and web development. Evaluate build (hire), partner (white-label), and acquire options for each service. Create a phased rollout plan with pricing packages that bundle new and existing services. Project the impact on client LTV, average contract value, and agency margins over 12 months.",
       recommendedBots: [
-        "Chief Strategy Officer",
-        "Chief Financial Officer",
-        "VP of Sales",
+        "Managing Director",
+        "Finance Director",
+        "Director of Sales",
       ],
     },
   ],
@@ -126,17 +126,17 @@ export const agencyPack: VerticalPack = {
       triggerType: "manual",
       steps: [
         {
-          botTitle: "Chief Financial Officer",
+          botTitle: "Finance Director",
           instruction:
             "Generate the monthly agency financial report: total revenue, AGI (adjusted gross income), utilization rate, effective bill rate, and profitability by client. Flag any client with profitability below 30% or utilization above 85% (capacity risk).",
         },
         {
-          botTitle: "VP of Sales",
+          botTitle: "Director of Sales",
           instruction:
             "Based on the financial report, review the pipeline: new opportunities, proposal status, and projected close dates. Identify any revenue gaps in the next 90 days and recommend BD actions to fill them.",
         },
         {
-          botTitle: "Chief Strategy Officer",
+          botTitle: "Managing Director",
           instruction:
             "Synthesize financial and pipeline data into a leadership brief. Highlight capacity constraints, client concentration risks, and strategic opportunities for the coming quarter.",
         },
