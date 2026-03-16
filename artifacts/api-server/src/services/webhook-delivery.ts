@@ -166,7 +166,11 @@ let deliveryInterval: ReturnType<typeof setInterval> | null = null;
 export function startWebhookDeliveryWorker() {
   if (deliveryInterval) return;
   console.log("[WebhookWorker] Starting webhook delivery worker (10s interval, exponential backoff)");
-  deliveryInterval = setInterval(processDeliveries, DELIVERY_INTERVAL_MS);
+  deliveryInterval = setInterval(() => {
+    processDeliveries().catch((err) => {
+      console.error("[WebhookWorker] Unhandled error in delivery tick (will retry next interval):", err);
+    });
+  }, DELIVERY_INTERVAL_MS);
 }
 
 export function stopWebhookDeliveryWorker() {

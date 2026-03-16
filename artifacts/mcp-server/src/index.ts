@@ -1,3 +1,4 @@
+import type http from "node:http";
 import express from "express";
 import crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -5,6 +6,22 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { registerAllTools } from "./tools/index.js";
 import { db, platformApiKeysTable, mcpToolCallsTable } from "@workspace/db";
 import { eq, and, gt, sql } from "drizzle-orm";
+
+let httpServer: http.Server | null = null;
+
+process.on("uncaughtException", (err) => {
+  console.error("[MCP] Uncaught exception — initiating graceful shutdown:", err);
+  if (httpServer) {
+    httpServer.close(() => process.exit(1));
+    setTimeout(() => process.exit(1), 5000);
+  } else {
+    process.exit(1);
+  }
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[MCP] Unhandled rejection (keeping server alive):", reason);
+});
 
 const MCP_API_KEY = process.env.MCP_API_KEY;
 if (!MCP_API_KEY) {
@@ -136,7 +153,15 @@ app.get(`${BASE_PATH}/sse`, authenticate, async (req: AuthenticatedRequest, res)
     version: "1.0.0",
   });
 
-  registerAllTools(server, authResult.callerType, sessionCtx);
+  try {
+    registerAllTools(server, authResult.callerType, sessionCtx);
+  } catch (err) {
+    console.error("[MCP] Error registering tools:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to initialize MCP session" });
+    }
+    return;
+  }
 
   const transport = new SSEServerTransport(`${BASE_PATH}/messages`, res);
   transports.set(transport.sessionId, transport);
@@ -149,7 +174,16 @@ app.get(`${BASE_PATH}/sse`, authenticate, async (req: AuthenticatedRequest, res)
   });
 
   console.log(`[MCP] SSE connection established: ${transport.sessionId} (caller: ${authResult.callerType})`);
-  await server.connect(transport);
+  try {
+    await server.connect(transport);
+  } catch (err) {
+    console.error(`[MCP] Error connecting transport for session ${transport.sessionId}:`, err);
+    transports.delete(transport.sessionId);
+    sessionAuthMap.delete(transport.sessionId);
+    if (!res.writableEnded) {
+      res.end();
+    }
+  }
 });
 
 app.post(`${BASE_PATH}/messages`, authenticate, async (req: AuthenticatedRequest, res) => {
@@ -167,15 +201,50 @@ app.post(`${BASE_PATH}/messages`, authenticate, async (req: AuthenticatedRequest
     return;
   }
 
-  await transport.handlePostMessage(req, res);
+  try {
+    await transport.handlePostMessage(req, res);
+  } catch (err) {
+    console.error(`[MCP] Error handling message for session ${sessionId}:`, err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
 });
 
 app.get(`${BASE_PATH}/health`, (_req, res) => {
   res.json({ status: "ok", service: "galaxybots-mcp" });
 });
 
-app.listen(port, () => {
-  console.log(`[MCP] GalaxyBots MCP Server listening on port ${port}`);
-  console.log(`[MCP] SSE endpoint: ${BASE_PATH}/sse`);
-  console.log(`[MCP] Messages endpoint: ${BASE_PATH}/messages`);
+async function verifyDbConnection(): Promise<boolean> {
+  try {
+    await db.execute(sql`SELECT 1`);
+    console.log("[MCP] Database connection verified");
+    return true;
+  } catch (err) {
+    console.error("[MCP] Database connection failed:", err);
+    return false;
+  }
+}
+
+async function startServer() {
+  const dbOk = await verifyDbConnection();
+  if (!dbOk) {
+    console.error("[MCP] Cannot start: database connection failed");
+    process.exit(1);
+  }
+
+  httpServer = app.listen(port, () => {
+    console.log(`[MCP] GalaxyBots MCP Server listening on port ${port}`);
+    console.log(`[MCP] SSE endpoint: ${BASE_PATH}/sse`);
+    console.log(`[MCP] Messages endpoint: ${BASE_PATH}/messages`);
+  });
+
+  httpServer.on("error", (err) => {
+    console.error("[MCP] Server error:", err);
+  });
+}
+
+startServer().catch((err) => {
+  console.error("[MCP] Fatal startup error:", err);
+  process.exit(1);
 });
