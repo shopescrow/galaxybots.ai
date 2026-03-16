@@ -4,6 +4,7 @@ import { Menu, X, Settings } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
@@ -81,6 +82,7 @@ export function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
+          <NotificationBell />
           <LanguageSelector />
           <Link href="/settings">
             <Button variant="ghost" size="sm" className="font-tech text-xs min-h-[44px] gap-1">

@@ -10,6 +10,7 @@ import { eq, asc, and } from "drizzle-orm";
 import { runAgenticLoop } from "../tools";
 import { buildClientContext } from "./client-context";
 import { getPackOverlayForBot } from "./pack-overlays";
+import { createNotification } from "./notifications";
 
 export async function executePipelineRun(pipelineId: number, triggerType: string, triggerData: Record<string, unknown> = {}) {
   const [pipeline] = await db
@@ -163,6 +164,16 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
     triggerDownstreamPipelines(pipeline.id, pipeline.clientId, previousOutput).catch((err) => {
       console.error(`Downstream pipeline trigger error for pipeline ${pipeline.id}:`, err);
     });
+  } else {
+    createNotification({
+      clientId: pipeline.clientId,
+      category: "pipeline",
+      severity: "critical",
+      title: `Pipeline "${pipeline.name}" failed`,
+      body: `Pipeline run #${runId} failed during execution`,
+      link: "/pipelines",
+      metadata: { pipelineId: pipeline.id, runId },
+    }).catch((e) => console.error("[notifications] Failed to create pipeline failure notification:", e));
   }
 }
 

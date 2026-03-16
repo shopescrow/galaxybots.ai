@@ -59,6 +59,7 @@ import TemplateDetail from "@/pages/marketplace/TemplateDetail";
 import AdminModeration from "@/pages/marketplace/AdminModeration";
 import SSOCallback from "@/pages/auth/SSOCallback";
 import OrgAdmin from "@/pages/settings/OrgAdmin";
+import NotificationsPage from "@/pages/notifications/NotificationsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -149,6 +150,7 @@ function AuthenticatedRoutes() {
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/admin/marketplace" component={AdminModeration} />
       <Route path="/settings/org" component={OrgAdmin} />
+      <Route path="/notifications" component={NotificationsPage} />
       <Route component={NotFound} />
     </Switch>
     </>

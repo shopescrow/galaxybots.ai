@@ -19,6 +19,7 @@ import {
 } from "../services/memory";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { addSSEClient, broadcastSSE } from "../services/scheduler";
+import { createNotification } from "../services/notifications";
 import { runAgenticLoop } from "../tools/agentic-loop";
 
 const router: IRouter = Router();
@@ -407,6 +408,16 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     runStatus,
   });
 
+  createNotification({
+    clientId: req.user!.clientId,
+    category: "bot",
+    severity: "info",
+    title: `Background report from ${bot.name}`,
+    body: summary,
+    link: "/command-center",
+    metadata: { reportId: report.id, botId: bot.id },
+  }).catch((e) => console.error("[notifications] Failed to create background-report notification:", e));
+
   if (runStatus === "failed" || runStatus === "partial") {
     broadcastSSE("assignment-alert", {
       reportId: report.id,
@@ -420,6 +431,18 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
         ? `Standing order failed for ${bot.name}: ${summary}`
         : `Standing order partially completed by ${bot.name}: ${summary}`,
     });
+
+    createNotification({
+      clientId: req.user!.clientId,
+      category: "bot",
+      severity: runStatus === "failed" ? "critical" : "warning",
+      title: runStatus === "failed"
+        ? `Standing order failed for ${bot.name}`
+        : `Standing order partially completed by ${bot.name}`,
+      body: summary,
+      link: "/bots",
+      metadata: { reportId: report.id, assignmentId: assignment.id, botId: bot.id },
+    }).catch((e) => console.error("[notifications] Failed to create assignment-alert notification:", e));
   }
 
   res.status(201).json(report);

@@ -41,6 +41,7 @@ import ssoRouter from "./sso";
 import scimRouter from "./scim";
 import orgAdminRouter from "./org-admin";
 import proposalsRouter from "./proposals";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -84,5 +85,6 @@ router.use(ssoRouter);
 router.use(scimRouter);
 router.use(orgAdminRouter);
 router.use(proposalsRouter);
+router.use(notificationsRouter);
 
 export default router;

@@ -1,6 +1,7 @@
 import { db, llmUsageLogTable, clientCostCapsTable } from "@workspace/db";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { broadcastSSE } from "./scheduler";
+import { createNotification } from "./notifications";
 
 export async function getMonthlySpend(clientId: number): Promise<number> {
   const now = new Date();
@@ -103,6 +104,15 @@ export async function checkCostCapAlerts(clientId: number): Promise<{
       message: `LLM spend has reached 80% of the monthly cap ($${spend.toFixed(2)} / $${capUsd.toFixed(2)})`,
       pctUsed: Math.round(pctUsed),
     });
+    createNotification({
+      clientId,
+      category: "cost",
+      severity: "warning",
+      title: "LLM spend at 80% of monthly cap",
+      body: `LLM spend has reached 80% of the monthly cap ($${spend.toFixed(2)} / $${capUsd.toFixed(2)})`,
+      link: "/analytics",
+      metadata: { pctUsed: Math.round(pctUsed), spend, cap: capUsd },
+    }).catch((e) => console.error("[notifications] Failed to create cost 80% notification:", e));
   }
 
   if (pctUsed >= 100 && !was100) {
@@ -118,6 +128,15 @@ export async function checkCostCapAlerts(clientId: number): Promise<{
       message: `LLM spend has reached 100% of the monthly cap ($${spend.toFixed(2)} / $${capUsd.toFixed(2)})`,
       pctUsed: Math.round(pctUsed),
     });
+    createNotification({
+      clientId,
+      category: "cost",
+      severity: "critical",
+      title: "LLM spend at 100% of monthly cap",
+      body: `LLM spend has reached 100% of the monthly cap ($${spend.toFixed(2)} / $${capUsd.toFixed(2)})`,
+      link: "/analytics",
+      metadata: { pctUsed: Math.round(pctUsed), spend, cap: capUsd },
+    }).catch((e) => console.error("[notifications] Failed to create cost 100% notification:", e));
   }
 
   return {

@@ -4,6 +4,7 @@ import { eq, desc, and, or, gt, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { requireRole } from "../middleware/auth";
+import { createNotification } from "../services/notifications";
 import crypto from "node:crypto";
 
 const router: IRouter = Router();
@@ -208,6 +209,19 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
           scoreDelta: overallScore - previousScore.overallScore,
           scannedAt,
         });
+
+        const scoreDelta = overallScore - previousScore.overallScore;
+        if (clientId) {
+          createNotification({
+            clientId,
+            category: "competitor",
+            severity: scoreDelta < 0 ? "warning" : "info",
+            title: `AEO score ${scoreDelta > 0 ? "improved" : "dropped"}: ${overallScore} (${scoreDelta > 0 ? "+" : ""}${scoreDelta})`,
+            body: `AEO score for ${sourceUrl} changed from ${previousScore.overallScore} to ${overallScore}`,
+            link: clientId ? `/clients/${clientId}` : null,
+            metadata: { sourceUrl, previousScore: previousScore.overallScore, newScore: overallScore, scoreDelta },
+          }).catch((e) => console.error("[notifications] Failed to create competitor-alert notification:", e));
+        }
       }
 
       const gainedEngines: string[] = [];

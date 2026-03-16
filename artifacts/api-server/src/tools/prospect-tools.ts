@@ -2,6 +2,7 @@ import { z } from "zod";
 import { registerTool, type ToolContext } from "./registry";
 import { db, prospectsTable, botsTable, botAssignmentsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { createNotification } from "../services/notifications";
 import * as cheerio from "cheerio";
 import { broadcastSSE } from "../services/scheduler";
 
@@ -788,6 +789,28 @@ registerTool({
       } catch {
         // Non-critical: assignment creation failed but qualification succeeded
       }
+
+      createNotification({
+        clientId: prospect.clientId,
+        category: "prospect",
+        severity: "info",
+        title: `Prospect qualified: ${prospect.companyName}`,
+        body: input.notes || `${prospect.companyName} has been marked as qualified`,
+        link: "/prospects",
+        metadata: { prospectId: input.prospectId },
+      }).catch((e) => console.error("[notifications] Failed to create prospect-qualified notification:", e));
+    }
+
+    if (newStatus === "contacted") {
+      createNotification({
+        clientId: prospect.clientId,
+        category: "prospect",
+        severity: "info",
+        title: `Prospect converted: ${prospect.companyName}`,
+        body: input.notes || `${prospect.companyName} has been converted and contacted`,
+        link: "/roi",
+        metadata: { prospectId: input.prospectId },
+      }).catch((e) => console.error("[notifications] Failed to create prospect-converted notification:", e));
     }
 
     return {

@@ -17,6 +17,7 @@ import { generateWeeklyBriefing } from "./roi";
 import { syncSource } from "./kb-sync";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { shouldPauseAutonomous } from "./cost-caps";
+import { createNotification } from "./notifications";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -164,6 +165,14 @@ async function runAssignment(assignmentId: number) {
         level: "critical",
         message: `Autonomous run skipped for assignment #${assignmentId}: monthly cost cap exceeded`,
       });
+      createNotification({
+        clientId: assignment.clientId,
+        category: "cost",
+        severity: "critical",
+        title: "Autonomous run skipped",
+        body: `Autonomous run skipped for assignment #${assignmentId}: monthly cost cap exceeded`,
+        link: "/analytics",
+      }).catch((e) => console.error("[notifications] Failed to create cost_alert notification:", e));
       return null;
     }
   }
@@ -212,6 +221,16 @@ async function runAssignment(assignmentId: number) {
     actionMode: assignment.actionMode,
   });
 
+  createNotification({
+    clientId: assignment.clientId,
+    category: "bot",
+    severity: "info",
+    title: `Background report from ${bot.name}`,
+    body: reportData.summary,
+    link: "/command-center",
+    metadata: { reportId: report.id, botId: bot.id },
+  }).catch((e) => console.error("[notifications] Failed to create background-report notification:", e));
+
   if (reportData.runStatus === "failed" || reportData.runStatus === "partial") {
     broadcastSSE("assignment-alert", {
       reportId: report.id,
@@ -225,6 +244,18 @@ async function runAssignment(assignmentId: number) {
         ? `Standing order failed for ${bot.name}: ${reportData.summary}`
         : `Standing order partially completed by ${bot.name}: ${reportData.summary}`,
     });
+
+    createNotification({
+      clientId: assignment.clientId,
+      category: "bot",
+      severity: reportData.runStatus === "failed" ? "critical" : "warning",
+      title: reportData.runStatus === "failed"
+        ? `Standing order failed for ${bot.name}`
+        : `Standing order partially completed by ${bot.name}`,
+      body: reportData.summary,
+      link: "/bots",
+      metadata: { reportId: report.id, assignmentId: assignment.id, botId: bot.id },
+    }).catch((e) => console.error("[notifications] Failed to create assignment-alert notification:", e));
   }
 
   return report;
@@ -281,6 +312,15 @@ async function checkWeeklyBriefings() {
           highlights: briefing.highlights,
           recommendation: briefing.recommendation,
         });
+        createNotification({
+          clientId: client.id,
+          category: "system",
+          severity: "info",
+          title: `Weekly briefing for ${client.companyName}`,
+          body: briefing.briefing.substring(0, 500),
+          link: "/roi",
+          metadata: { highlights: briefing.highlights },
+        }).catch((e) => console.error("[notifications] Failed to create weekly-briefing notification:", e));
       } catch (err: unknown) {
         console.error(`[scheduler] Error for client ${client.id}: ${errMsg(err)}`);
       }
