@@ -7,7 +7,7 @@ import pLimit from "p-limit";
 import pRetry from "p-retry";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals } from "../services/governance";
 import { logLlmUsage } from "../services/llm-usage";
-import { isToolSandboxed, getSandboxedToolResponse } from "../routes/demo";
+import { isToolSandboxed, getSandboxedToolResponse } from "../services/demo-sandbox";
 
 function auditToolExecution(
   context: ToolContext,

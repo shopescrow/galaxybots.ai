@@ -62,57 +62,6 @@ const DEMO_INDUSTRY = "Technology / SaaS";
 const DEMO_SERVICES = ["AI-Powered Analytics", "Marketing Automation", "Customer Intelligence Platform"];
 const DEMO_BUSINESS_CONTEXT = "Apex Ventures is a mid-market SaaS company with $12M ARR, 200 enterprise customers, and a 15-person marketing team. Q2 saw a 8% decline in MQL-to-SQL conversion rate and a 12% increase in CAC. The board is pushing for aggressive growth in Q3 while maintaining profitability.";
 
-const SANDBOXED_TOOLS = new Set([
-  "send_email",
-  "post_slack_message",
-  "create_document",
-  "create_calendar_event",
-  "crm_upsert_contact",
-  "crm_create_deal",
-  "create_issue",
-  "update_issue",
-  "create_studio_document",
-]);
-
-const READ_ONLY_TOOLS = new Set([
-  "web_search",
-  "read_world_state",
-  "read_platform_data",
-  "read_email",
-  "read_slack_channel",
-  "read_document",
-  "list_calendar_events",
-  "scrape_webpage",
-  "analyze_aeo_score",
-  "aeo_recommend",
-  "delegate_to_bot",
-  "prospect_search",
-  "get_prospects",
-  "browse_sabrina_automations",
-]);
-
-export function isToolSandboxed(toolName: string): boolean {
-  return !GUEST_ALLOWED_TOOLS.has(toolName);
-}
-
-const GUEST_ALLOWED_TOOLS = new Set([
-  ...READ_ONLY_TOOLS,
-]);
-
-export function getSandboxedToolResponse(toolName: string): unknown {
-  const mockResponses: Record<string, unknown> = {
-    send_email: { success: true, messageId: "demo-mock-001", note: "[SANDBOXED] Email would be sent in a live account." },
-    post_slack_message: { success: true, ts: "demo-mock-ts", note: "[SANDBOXED] Slack message would be posted in a live account." },
-    create_document: { success: true, id: "demo-doc-001", url: "https://notion.so/demo", note: "[SANDBOXED] Document would be created in a live account." },
-    create_calendar_event: { success: true, id: "demo-event-001", note: "[SANDBOXED] Calendar event would be created in a live account." },
-    crm_upsert_contact: { success: true, contactId: "demo-contact-001", note: "[SANDBOXED] CRM contact would be upserted in a live account." },
-    crm_create_deal: { success: true, dealId: "demo-deal-001", note: "[SANDBOXED] CRM deal would be created in a live account." },
-    create_issue: { success: true, issueId: "demo-issue-001", url: "https://linear.app/demo", note: "[SANDBOXED] Issue would be created in a live account." },
-    update_issue: { success: true, note: "[SANDBOXED] Issue would be updated in a live account." },
-    create_studio_document: { success: true, documentId: 0, note: "[SANDBOXED] Studio document would be created in a live account." },
-  };
-  return mockResponses[toolName] || { success: true, note: `[SANDBOXED] ${toolName} would execute in a live account.` };
-}
 
 function hashIp(ip: string): string {
   return crypto.createHash("sha256").update(ip + (process.env.JWT_SECRET || "salt")).digest("hex").slice(0, 32);
@@ -323,7 +272,8 @@ Board Priorities for Q3:
 }
 
 async function cleanupExpiredSessions(): Promise<void> {
-  const deletionThreshold = new Date(Date.now() - DEMO_CLEANUP_THRESHOLD_MS);
+  const now = new Date();
+  const deletionCutoff = new Date(now.getTime() - DEMO_CLEANUP_THRESHOLD_MS);
 
   await db
     .update(guestSessionsTable)
@@ -331,7 +281,7 @@ async function cleanupExpiredSessions(): Promise<void> {
     .where(
       and(
         eq(guestSessionsTable.status, "active"),
-        lte(guestSessionsTable.expiresAt, new Date())
+        lte(guestSessionsTable.expiresAt, now)
       )
     );
 
@@ -341,7 +291,7 @@ async function cleanupExpiredSessions(): Promise<void> {
     .where(
       and(
         eq(guestSessionsTable.status, "expired"),
-        lte(guestSessionsTable.expiresAt, deletionThreshold)
+        lte(guestSessionsTable.createdAt, deletionCutoff)
       )
     );
 

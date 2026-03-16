@@ -133,6 +133,11 @@ export default function LiveDemo() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
+  const completeDemoRef = useRef(completeDemo);
+  completeDemoRef.current = completeDemo;
+  const missionCompletedRef = useRef(missionCompleted);
+  missionCompletedRef.current = missionCompleted;
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
@@ -187,6 +192,9 @@ export default function LiveDemo() {
                 });
               } else if (event.type === "done") {
                 setIsLoadingMessages(false);
+                if (!missionCompletedRef.current) {
+                  completeDemoRef.current();
+                }
               }
             } catch {
               /* skip malformed events */
