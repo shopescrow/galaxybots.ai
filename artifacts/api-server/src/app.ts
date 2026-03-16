@@ -62,6 +62,7 @@ const PUBLIC_PATHS = [
   "/api/partner/register",
   "/api/demo/start",
   "/api/demo/claim",
+  "/api/demo/mission-stream",
 ];
 
 const PUBLIC_PATH_PREFIXES = [

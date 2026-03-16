@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { EventEmitter } from "events";
 import {
   db,
   guestSessionsTable,
@@ -20,6 +21,26 @@ import { buildClientContext } from "../services/client-context";
 
 const router: IRouter = Router();
 
+const missionEmitters = new Map<number, EventEmitter>();
+
+function getMissionEmitter(taskSessionId: number): EventEmitter {
+  let emitter = missionEmitters.get(taskSessionId);
+  if (!emitter) {
+    emitter = new EventEmitter();
+    emitter.setMaxListeners(20);
+    missionEmitters.set(taskSessionId, emitter);
+  }
+  return emitter;
+}
+
+function cleanupMissionEmitter(taskSessionId: number): void {
+  const emitter = missionEmitters.get(taskSessionId);
+  if (emitter) {
+    emitter.removeAllListeners();
+    missionEmitters.delete(taskSessionId);
+  }
+}
+
 const DEMO_COMPANY_NAME = "Apex Ventures";
 const DEMO_CONTACT_NAME = "Demo User";
 const DEMO_CONTACT_EMAIL = "demo@apexventures.example";
@@ -29,10 +50,10 @@ const DEMO_CLEANUP_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 
 const DEMO_MISSION_OBJECTIVE = "Analyze our Q2 marketing performance and recommend a growth strategy for next quarter";
 
-const DEMO_BOT_NAMES = [
-  "Revenue Oracle Max",
-  "Finance Director Vance",
-  "Growth Hacker Kira",
+const DEMO_BOT_ROLES = [
+  { keywords: ["marketing", "cmo", "maya"], department: "marketing" },
+  { keywords: ["finance", "cfo", "vance", "frank"], department: "finance" },
+  { keywords: ["growth", "kira"], department: "growth" },
 ];
 
 const DEMO_INDUSTRY = "Technology / SaaS";
@@ -100,11 +121,16 @@ async function autoLaunchDemoMission(
   clientId: number,
   botIds: number[]
 ): Promise<void> {
+  const emitter = getMissionEmitter(taskSessionId);
   try {
     const bots = botIds.length > 0
       ? await db.select().from(botsTable).where(inArray(botsTable.id, botIds))
       : [];
-    if (bots.length === 0) return;
+    if (bots.length === 0) {
+      emitter.emit("event", { type: "done" });
+      cleanupMissionEmitter(taskSessionId);
+      return;
+    }
 
     await db.insert(taskSessionMessagesTable).values({
       sessionId: taskSessionId,
@@ -114,11 +140,14 @@ async function autoLaunchDemoMission(
       botTitle: "System",
       messageType: "text",
     });
+    emitter.emit("event", { type: "message", role: "user", content: DEMO_MISSION_OBJECTIVE, botName: "Mission Control" });
 
     const clientContext = await buildClientContext(clientId);
     const teamRoster = bots.map((b) => `${b.name} (${b.title})`).join(", ");
 
     for (const bot of bots) {
+      emitter.emit("event", { type: "bot_start", botName: bot.name, botTitle: bot.title });
+
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
@@ -151,27 +180,31 @@ You are participating in a live demo session for a prospective customer. Deliver
 
       for (const event of events) {
         if (event.type === "tool_call") {
-          await db.insert(taskSessionMessagesTable).values({
+          const msg = {
             sessionId: taskSessionId,
             botId: bot.id,
             botName: bot.name,
             botTitle: bot.title,
-            role: "bot",
+            role: "bot" as const,
             content: `Using tool: ${event.toolName}`,
             messageType: "tool_call",
             toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
-          });
+          };
+          await db.insert(taskSessionMessagesTable).values(msg);
+          emitter.emit("event", { type: "tool_call", ...msg });
         } else if (event.type === "tool_result") {
-          await db.insert(taskSessionMessagesTable).values({
+          const msg = {
             sessionId: taskSessionId,
             botId: bot.id,
             botName: bot.name,
             botTitle: bot.title,
-            role: "bot",
+            role: "bot" as const,
             content: `Tool result: ${event.toolName}`,
             messageType: "tool_result",
             toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
-          });
+          };
+          await db.insert(taskSessionMessagesTable).values(msg);
+          emitter.emit("event", { type: "tool_result", ...msg });
         }
       }
 
@@ -185,9 +218,15 @@ You are participating in a live demo session for a prospective customer. Deliver
         content,
         messageType: "text",
       });
+      emitter.emit("event", { type: "message", role: "bot", content, botName: bot.name, botTitle: bot.title, botId: bot.id });
     }
+
+    emitter.emit("event", { type: "done" });
   } catch (err) {
     console.error("[Demo] Auto-launch mission error:", err);
+    emitter.emit("event", { type: "error", content: "Mission auto-launch encountered an error" });
+  } finally {
+    setTimeout(() => cleanupMissionEmitter(taskSessionId), 5000);
   }
 }
 
@@ -218,14 +257,25 @@ async function seedDemoCompany(): Promise<{ clientId: number; botIds: number[] }
     .returning();
 
   const allBots = await db.select().from(botsTable);
-  const matchedBots = allBots.filter(
-    (b) =>
-      DEMO_BOT_NAMES.some((name) => b.name.toLowerCase().includes(name.toLowerCase().split(" ")[0]!))
-  );
+  const selectedBotIds: number[] = [];
 
-  const botIds = matchedBots.length > 0
-    ? matchedBots.map((b) => b.id)
-    : allBots.slice(0, 3).map((b) => b.id);
+  for (const role of DEMO_BOT_ROLES) {
+    const match = allBots.find(
+      (b) =>
+        role.keywords.some((kw) =>
+          b.name.toLowerCase().includes(kw) ||
+          b.title.toLowerCase().includes(kw) ||
+          b.department.toLowerCase().includes(kw)
+        ) && !selectedBotIds.includes(b.id)
+    );
+    if (match) selectedBotIds.push(match.id);
+  }
+
+  if (selectedBotIds.length === 0 && allBots.length > 0) {
+    selectedBotIds.push(...allBots.slice(0, 3).map((b) => b.id));
+  }
+
+  const botIds = selectedBotIds;
 
   return { clientId: client.id, botIds };
 }
@@ -404,6 +454,100 @@ router.post("/demo/start", demoRateLimit, async (req, res): Promise<void> => {
   } catch (err) {
     console.error("Demo start error:", err);
     res.status(500).json({ error: "Failed to start demo session" });
+  }
+});
+
+router.get("/demo/mission-stream", async (req, res): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "No demo session" });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const secret = process.env["JWT_SECRET"];
+    if (!secret) {
+      res.status(500).json({ error: "Server configuration error" });
+      return;
+    }
+
+    let decoded: { guestSessionId?: number; role?: string; clientId?: number };
+    try {
+      decoded = jwt.verify(token, secret) as typeof decoded;
+    } catch {
+      res.status(401).json({ error: "Invalid or expired demo session" });
+      return;
+    }
+
+    if (decoded.role !== "guest" || !decoded.guestSessionId) {
+      res.status(403).json({ error: "Not a guest session" });
+      return;
+    }
+
+    const [guestSession] = await db
+      .select()
+      .from(guestSessionsTable)
+      .where(eq(guestSessionsTable.id, decoded.guestSessionId));
+
+    if (!guestSession || !guestSession.taskSessionId) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const sendSSE = (data: Record<string, unknown>) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const emitter = getMissionEmitter(guestSession.taskSessionId);
+    const onEvent = (event: Record<string, unknown>) => {
+      sendSSE(event);
+      if (event.type === "done" || event.type === "error") {
+        res.end();
+      }
+    };
+
+    emitter.on("event", onEvent);
+
+    req.on("close", () => {
+      emitter.off("event", onEvent);
+    });
+
+    const existingMessages = await db
+      .select()
+      .from(taskSessionMessagesTable)
+      .where(eq(taskSessionMessagesTable.sessionId, guestSession.taskSessionId));
+
+    if (existingMessages.length > 1) {
+      for (const msg of existingMessages) {
+        sendSSE({
+          type: "message",
+          role: msg.role,
+          content: msg.content,
+          botName: msg.botName,
+          botTitle: msg.botTitle,
+          botId: msg.botId,
+          messageType: msg.messageType,
+        });
+      }
+
+      if (!missionEmitters.has(guestSession.taskSessionId)) {
+        sendSSE({ type: "done" });
+        res.end();
+        return;
+      }
+    }
+  } catch (err) {
+    console.error("Demo mission stream error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Stream error" });
+    }
   }
 });
 

@@ -137,41 +137,71 @@ export default function LiveDemo() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const fetchMessages = useCallback(() => {
-    if (!demoSession) return;
-    fetch(`${BASE}/api/task-sessions/${demoSession.taskSessionId}/messages`, {
-      headers: { Authorization: `Bearer ${demoSession.token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setMessages(
-            data.map((m: { id: number; role: string; content: string; botName?: string; botTitle?: string; messageType?: string; toolData?: Record<string, unknown> }) => ({
-              id: String(m.id),
-              role: m.role === "user" ? "user" : "bot",
-              content: m.content,
-              botName: m.botName,
-              botTitle: m.botTitle,
-              messageType: m.messageType,
-              toolData: m.toolData,
-            }))
-          );
-        }
-      })
-      .catch(() => {})
-      .finally(() => setIsLoadingMessages(false));
-  }, [demoSession]);
-
   useEffect(() => {
     if (!demoSession) return;
     setIsLoadingMessages(true);
-    fetchMessages();
 
-    const pollInterval = setInterval(fetchMessages, 4000);
+    const controller = new AbortController();
+
+    fetch(`${BASE}/api/demo/mission-stream`, {
+      headers: { Authorization: `Bearer ${demoSession.token}` },
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok || !res.body) {
+          setIsLoadingMessages(false);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "message") {
+                setMessages((prev) => {
+                  const exists = prev.some((m) => m.content === event.content && m.botName === event.botName);
+                  if (exists) return prev;
+                  return [
+                    ...prev,
+                    {
+                      id: `sse-${Date.now()}-${Math.random()}`,
+                      role: event.role === "user" ? "user" as const : "bot" as const,
+                      content: event.content,
+                      botName: event.botName,
+                      botTitle: event.botTitle,
+                      messageType: event.messageType,
+                    },
+                  ];
+                });
+              } else if (event.type === "done") {
+                setIsLoadingMessages(false);
+              }
+            } catch {
+              /* skip malformed events */
+            }
+          }
+        }
+        setIsLoadingMessages(false);
+      })
+      .catch(() => {
+        setIsLoadingMessages(false);
+      });
+
     return () => {
-      clearInterval(pollInterval);
+      controller.abort();
     };
-  }, [demoSession, fetchMessages]);
+  }, [demoSession]);
 
   const sendMessage = useCallback(async () => {
     if (!demoSession || !inputValue.trim() || isSending) return;
@@ -283,6 +313,16 @@ export default function LiveDemo() {
       setIsSending(false);
     }
   }, [demoSession, inputValue, isSending, messages.length, missionCompleted, completeDemo]);
+
+  useEffect(() => {
+    if (!demoSession || missionCompleted) return;
+    const roiTimer = setTimeout(() => {
+      if (!missionCompleted) {
+        completeDemo();
+      }
+    }, 5 * 60 * 1000);
+    return () => clearTimeout(roiTimer);
+  }, [demoSession, missionCompleted, completeDemo]);
 
   if (!isDemo) {
     return (
