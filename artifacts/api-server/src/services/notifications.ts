@@ -1,6 +1,7 @@
 import { db, notificationsTable } from "@workspace/db";
 import type { InsertNotification } from "@workspace/db";
 import { broadcastSSE } from "./scheduler";
+import { sendPushToClient, sendPushToUser } from "./push-sender";
 
 export async function createNotification(payload: {
   clientId: number | null;
@@ -40,6 +41,27 @@ export async function createNotification(payload: {
     link: notification.link,
     createdAt: notification.createdAt.toISOString(),
   });
+
+  const pushData: Record<string, string> = {};
+  if (payload.link) pushData.route = payload.link;
+
+  try {
+    if (payload.userId) {
+      await sendPushToUser(payload.userId, {
+        title: payload.title,
+        body: payload.body,
+        data: pushData,
+      });
+    } else {
+      await sendPushToClient(payload.clientId, {
+        title: payload.title,
+        body: payload.body,
+        data: pushData,
+      });
+    }
+  } catch (err) {
+    console.error("[notifications] push send failed:", err);
+  }
 
   return notification;
 }

@@ -8,6 +8,7 @@ import {
   Alert,
   Share,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -42,10 +43,19 @@ export default function RoiScreen() {
         },
       );
       const shareUrl = `${API_BASE}roi/shared/${result.shareToken}`;
-      await Share.share({
-        message: `Check out our AI ROI report: ${shareUrl}`,
-        url: shareUrl,
-      });
+      await Clipboard.setStringAsync(shareUrl);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Link Copied", "ROI report link copied to clipboard.", [
+        { text: "OK" },
+        {
+          text: "Share",
+          onPress: () =>
+            Share.share({
+              message: `Check out our AI ROI report: ${shareUrl}`,
+              url: shareUrl,
+            }),
+        },
+      ]);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to generate share link");
     }

@@ -26,7 +26,9 @@ interface AuthState {
   isAuthenticated: boolean;
   biometricAvailable: boolean;
   biometricEnabled: boolean;
+  hasStoredSession: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithBiometric: () => Promise<boolean>;
   logout: () => Promise<void>;
   toggleBiometric: () => Promise<void>;
   authenticateWithBiometric: () => Promise<boolean>;
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
+  const [hasStoredSession, setHasStoredSession] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -59,11 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const token = await getToken();
         if (token) {
-          const data = await apiFetch<User>("auth/me");
-          setUser(data);
+          const enabled = await getBiometricEnabled();
+          if (enabled) {
+            setHasStoredSession(true);
+          } else {
+            const data = await apiFetch<User>("auth/me");
+            setUser(data);
+          }
         }
       } catch {
         await removeToken();
+        setHasStoredSession(false);
       } finally {
         setIsLoading(false);
       }
@@ -77,6 +86,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     await setToken(data.token);
     setUser(data.user);
+    setHasStoredSession(true);
+  }, []);
+
+  const loginWithBiometric = useCallback(async () => {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage: "Authenticate to GalaxyBots",
+      fallbackLabel: "Use password",
+    });
+    if (!result.success) return false;
+
+    const token = await getToken();
+    if (!token) return false;
+
+    try {
+      const data = await apiFetch<User>("auth/me");
+      setUser(data);
+      return true;
+    } catch {
+      await removeToken();
+      setHasStoredSession(false);
+      return false;
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -90,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     await removeToken();
     setUser(null);
+    setHasStoredSession(false);
   }, []);
 
   const toggleBiometric = useCallback(async () => {
@@ -120,7 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         biometricAvailable,
         biometricEnabled,
+        hasStoredSession,
         login,
+        loginWithBiometric,
         logout,
         toggleBiometric,
         authenticateWithBiometric,

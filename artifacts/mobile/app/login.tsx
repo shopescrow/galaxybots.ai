@@ -16,7 +16,13 @@ import colors from "@/constants/colors";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { login, biometricAvailable, biometricEnabled, authenticateWithBiometric } = useAuth();
+  const {
+    login,
+    loginWithBiometric,
+    biometricAvailable,
+    biometricEnabled,
+    hasStoredSession,
+  } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -38,17 +44,26 @@ export default function LoginScreen() {
   };
 
   const handleBiometric = async () => {
-    const success = await authenticateWithBiometric();
-    if (success) {
-      setLoading(true);
-      try {
-        await login(email.trim(), password);
-      } catch {
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const success = await loginWithBiometric();
+      if (!success) {
+        Alert.alert(
+          "Authentication failed",
+          "Biometric check failed or session expired. Please sign in with your password.",
+        );
       }
+    } catch {
+      Alert.alert(
+        "Session expired",
+        "Please sign in with your password.",
+      );
+    } finally {
+      setLoading(false);
     }
   };
+
+  const showBiometric = biometricAvailable && biometricEnabled && hasStoredSession;
 
   return (
     <KeyboardAwareScrollViewCompat
@@ -68,6 +83,34 @@ export default function LoginScreen() {
         <Text style={styles.brand}>GalaxyBots</Text>
         <Text style={styles.subtitle}>Mobile Command Center</Text>
       </View>
+
+      {showBiometric && (
+        <View style={styles.biometricSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.biometricMainButton,
+              pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              loading && { opacity: 0.7 },
+            ]}
+            onPress={handleBiometric}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.light.tint} size="small" />
+            ) : (
+              <>
+                <Feather name="unlock" size={22} color={colors.light.tint} />
+                <Text style={styles.biometricMainText}>
+                  Unlock with Biometrics
+                </Text>
+              </>
+            )}
+          </Pressable>
+          <Text style={styles.biometricHint}>
+            Or sign in with your password below
+          </Text>
+        </View>
+      )}
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
@@ -127,13 +170,6 @@ export default function LoginScreen() {
             <Text style={styles.loginButtonText}>Sign In</Text>
           )}
         </Pressable>
-
-        {biometricAvailable && biometricEnabled && (
-          <Pressable style={styles.biometricButton} onPress={handleBiometric}>
-            <Feather name="smartphone" size={20} color={colors.light.tint} />
-            <Text style={styles.biometricText}>Use Biometric Login</Text>
-          </Pressable>
-        )}
       </View>
 
       <View style={{ flex: 1 }} />
@@ -171,6 +207,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     color: colors.light.textSecondary,
+  },
+  biometricSection: {
+    alignItems: "center",
+    marginBottom: 32,
+    gap: 12,
+  },
+  biometricMainButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: colors.light.tintLight,
+    borderRadius: 14,
+    height: 52,
+    paddingHorizontal: 24,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: colors.light.tint,
+  },
+  biometricMainText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: colors.light.tint,
+  },
+  biometricHint: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: colors.light.textTertiary,
   },
   form: {
     gap: 20,
@@ -213,18 +277,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
     color: "#FFFFFF",
-  },
-  biometricButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-  },
-  biometricText: {
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
-    color: colors.light.tint,
   },
   footer: {
     fontSize: 12,
