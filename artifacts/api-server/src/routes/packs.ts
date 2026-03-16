@@ -179,6 +179,10 @@ router.post(
         .set({ industry: pack.industry })
         .where(eq(clientsTable.id, clientId));
 
+      let pipelinesCreated = 0;
+      let kbDocsCreated = 0;
+      let scenariosCreated = 0;
+
       for (const pipeline of pack.pipelines) {
         const steps = pipeline.steps
           .map((step) => {
@@ -206,6 +210,7 @@ router.post(
               instruction: step.instruction,
             })),
           );
+          pipelinesCreated++;
         }
       }
 
@@ -234,6 +239,7 @@ router.post(
             ...(embedding ? { embedding } : {}),
           });
         }
+        kbDocsCreated++;
       }
 
       let welcomeSessionId: number | null = null;
@@ -246,6 +252,7 @@ router.post(
           .returning();
 
         if (!welcomeSessionId) welcomeSessionId = session.id;
+        scenariosCreated++;
 
         const recommendedBotRows = allBots.filter((b) =>
           scenario.recommendedBots.some((rb) => rb.toLowerCase() === b.title.toLowerCase()),
@@ -267,7 +274,7 @@ router.post(
         .values({ clientId, packId: pack.id })
         .returning();
 
-      return { installed, welcomeSessionId };
+      return { installed, welcomeSessionId, pipelinesCreated, kbDocsCreated, scenariosCreated };
     });
 
     res.status(201).json({
@@ -277,10 +284,10 @@ router.post(
       installedAt: result.installed.installedAt,
       welcomeSessionId: result.welcomeSessionId,
       created: {
-        pipelines: pack.pipelines.length,
-        kbDocuments: pack.kbDocuments.length,
+        pipelines: result.pipelinesCreated,
+        kbDocuments: result.kbDocsCreated,
         botOverlays: pack.botOverlays.length,
-        scenarios: pack.scenarios.length,
+        scenarios: result.scenariosCreated,
       },
     });
   },
