@@ -15,9 +15,10 @@ import {
   Workflow, Play, Pause, Plus, Trash2, Bot, Loader2,
   CheckCircle, XCircle, Clock, Eye, ArrowRight, GripVertical,
   Webhook, MousePointer, Link2, ChevronDown, ChevronUp,
-  Zap, Copy, RefreshCw, Shield, Radio, FileText, AlertCircle
+  Zap, Copy, RefreshCw, Shield, Radio, FileText, AlertCircle, Store
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { PublishModal } from "@/components/marketplace/PublishModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -107,6 +108,7 @@ export default function Pipelines() {
   const [viewingRun, setViewingRun] = useState<number | null>(null);
   const [expandedPipeline, setExpandedPipeline] = useState<number | null>(null);
   const [triggersPipeline, setTriggersPipeline] = useState<PipelineData | null>(null);
+  const [publishPipeline, setPublishPipeline] = useState<PipelineData | null>(null);
 
   const { data: pipelines = [], isLoading } = useQuery<PipelineData[]>({
     queryKey: ["pipelines"],
@@ -221,6 +223,14 @@ export default function Pipelines() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          title="Publish to Marketplace"
+                          onClick={() => setPublishPipeline(pipeline)}
+                        >
+                          <Store className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           className="text-red-400 hover:text-red-300"
                           onClick={() => { if (confirm("Delete this pipeline?")) deleteMutation.mutate(pipeline.id); }}
                         >
@@ -313,6 +323,24 @@ export default function Pipelines() {
         <TriggersDialog
           pipeline={triggersPipeline}
           onClose={() => { setTriggersPipeline(null); queryClient.invalidateQueries({ queryKey: ["pipelines"] }); }}
+        />
+      )}
+
+      {publishPipeline && (
+        <PublishModal
+          open={!!publishPipeline}
+          onOpenChange={(open) => { if (!open) setPublishPipeline(null); }}
+          type="pipeline"
+          sourceData={{
+            name: publishPipeline.name,
+            triggerType: publishPipeline.triggerType,
+            steps: publishPipeline.steps.map((s) => ({
+              botTitle: s.bot?.title || `Bot #${s.botId}`,
+              instruction: s.instruction,
+            })),
+          }}
+          defaultTitle={publishPipeline.name}
+          defaultDescription={`${publishPipeline.steps.length}-step automated pipeline`}
         />
       )}
     </AppLayout>

@@ -20,7 +20,10 @@ import {
   Zap,
   Shield,
   Target,
+  Store,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { PublishModal } from "@/components/marketplace/PublishModal";
 
 const DIFFICULTY_STYLES: Record<string, string> = {
   Tactical: "text-green-400 border-green-500/30 bg-green-500/10",
@@ -35,9 +38,12 @@ const DIFFICULTY_ICONS: Record<string, typeof Zap> = {
 };
 
 export default function Scenarios() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "owner" || user?.role === "admin";
   const [, navigate] = useLocation();
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<ScenarioCategory | "all">("all");
+  const [publishScenario, setPublishScenario] = useState<Scenario | null>(null);
 
   const filtered = SCENARIOS.filter((s) => {
     if (clientFilter !== "all" && s.clientSlug !== clientFilter) return false;
@@ -175,14 +181,27 @@ export default function Scenarios() {
                         </div>
                       </div>
 
-                      <Button
-                        variant="glow"
-                        className="w-full font-tech tracking-wider"
-                        onClick={() => handleLaunchMission(scenario)}
-                      >
-                        <Rocket className="w-4 h-4 mr-2" />
-                        Launch Mission
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="glow"
+                          className="flex-1 font-tech tracking-wider"
+                          onClick={() => handleLaunchMission(scenario)}
+                        >
+                          <Rocket className="w-4 h-4 mr-2" />
+                          Launch Mission
+                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0"
+                            title="Publish to Marketplace"
+                            onClick={(e) => { e.stopPropagation(); setPublishScenario(scenario); }}
+                          >
+                            <Store className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </Card>
                   </motion.div>
                 );
@@ -191,6 +210,20 @@ export default function Scenarios() {
           )}
         </div>
       </div>
+
+      {publishScenario && (
+        <PublishModal
+          open={!!publishScenario}
+          onOpenChange={(open) => { if (!open) setPublishScenario(null); }}
+          type="scenario"
+          sourceData={{
+            objective: publishScenario.missionObjective,
+            recommendedBotTitles: [],
+          }}
+          defaultTitle={publishScenario.title}
+          defaultDescription={publishScenario.situation}
+        />
+      )}
     </AppLayout>
   );
 }

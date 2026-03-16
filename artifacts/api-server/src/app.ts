@@ -64,6 +64,7 @@ const PUBLIC_PATHS = [
   "/api/demo/claim",
   "/api/demo/mission-stream",
   "/api/packs",
+  "/api/marketplace",
   "/api/client-portal/request-pin",
   "/api/client-portal/verify-pin",
   "/api/client-portal/me",
@@ -74,6 +75,7 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PATH_PREFIXES = [
   "/api/packs/",
+  "/api/marketplace/",
   "/api/webhooks/lead/",
   "/api/webhooks/pipeline/",
   "/api/storage/public-objects/",

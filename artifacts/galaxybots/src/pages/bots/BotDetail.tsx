@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { getGetConversationMessagesQueryKey } from "@workspace/api-client-react"
 import { MemoryAudit } from "@/components/memory/MemoryAudit";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { PublishModal } from "@/components/marketplace/PublishModal";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
@@ -48,6 +49,7 @@ export default function BotDetail() {
   const startConvo = useStartConversation();
   const [isStarting, setIsStarting] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "memory" | "governance">("chat");
+  const [publishOpen, setPublishOpen] = useState(false);
   const isAdmin = user?.role === "owner" || user?.role === "admin";
 
   const handleStartChat = async () => {
@@ -125,9 +127,44 @@ export default function BotDetail() {
                       ))}
                     </ul>
                   </div>
+
+                  {isAdmin && (
+                    <div className="mt-4 pt-4 border-t border-border/50">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2 text-xs font-tech"
+                        onClick={() => setPublishOpen(true)}
+                      >
+                        <Store className="w-3.5 h-3.5" />
+                        Publish to Marketplace
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
+
+            {bot && (
+              <PublishModal
+                open={publishOpen}
+                onOpenChange={setPublishOpen}
+                type="bot"
+                sourceData={{
+                  name: bot.name,
+                  title: bot.title,
+                  department: bot.department,
+                  category: bot.category,
+                  description: bot.description,
+                  responsibilities: bot.responsibilities,
+                  personality: bot.personality,
+                  avatar: bot.avatar,
+                  declaration: bot.declaration,
+                }}
+                defaultTitle={bot.name}
+                defaultDescription={bot.description}
+              />
+            )}
 
             <div className="lg:col-span-2 flex flex-col min-h-0 flex-1">
               <div className="flex gap-1 mb-3">

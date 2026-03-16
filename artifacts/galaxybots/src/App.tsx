@@ -52,6 +52,9 @@ import LiveDemo from "@/pages/demo/LiveDemo";
 import DemoClaim from "@/pages/demo/DemoClaim";
 import PacksLibrary from "@/pages/packs/PacksLibrary";
 import PackDetail from "@/pages/packs/PackDetail";
+import MarketplaceGallery from "@/pages/marketplace/MarketplaceGallery";
+import TemplateDetail from "@/pages/marketplace/TemplateDetail";
+import AdminModeration from "@/pages/marketplace/AdminModeration";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -140,6 +143,7 @@ function AuthenticatedRoutes() {
       <Route path="/documents" component={DocumentStudio} />
       <Route path="/pipelines" component={Pipelines} />
       <Route path="/analytics" component={AnalyticsDashboard} />
+      <Route path="/admin/marketplace" component={AdminModeration} />
       <Route component={NotFound} />
     </Switch>
     </>
@@ -158,6 +162,8 @@ function AppRouter() {
       <Route path="/demo/claim" component={DemoClaim} />
       <Route path="/packs" component={PacksLibrary} />
       <Route path="/packs/:packId" component={PackDetail} />
+      <Route path="/marketplace" component={MarketplaceGallery} />
+      <Route path="/marketplace/:templateId" component={TemplateDetail} />
       <Route path="/" component={SmartHome} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route>

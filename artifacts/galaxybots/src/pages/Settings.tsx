@@ -1,12 +1,18 @@
 import { useState, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useUserPreferences, ACCENT_COLOR_MAP } from "@/contexts/UserPreferencesContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, LANGUAGES } from "@/contexts/LanguageContext";
-import { Upload, X, Check, Palette, Type, LayoutDashboard, Loader2, Image, Globe } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Upload, X, Check, Palette, Type, LayoutDashboard, Loader2, Image, Globe, Store, Bot, Zap, GitBranch, Trash2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
 const ACCENT_OPTIONS = [
   { key: "purple", label: "Purple", preview: "bg-[hsl(270,80%,60%)]" },
@@ -26,13 +32,54 @@ const FONT_SIZE_OPTIONS = [
   { key: "xl", label: "Extra Large" },
 ];
 
+interface MyTemplate {
+  id: number;
+  type: string;
+  title: string;
+  status: string;
+  installCount: number;
+  createdAt: string;
+}
+
+const TYPE_ICONS_MAP: Record<string, typeof Bot> = { bot: Bot, scenario: Zap, pipeline: GitBranch };
+
 export default function Settings() {
   const { preferences, updatePreferences, uploadLogo, removeLogo, isLoading } = useUserPreferences();
   const { user } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: myTemplates = [] } = useQuery<MyTemplate[]>({
+    queryKey: ["my-marketplace-templates"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/marketplace/my-templates`, {
+        credentials: "include",
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${API_BASE}/marketplace/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-marketplace-templates"] });
+      toast({ title: "Template removed from marketplace" });
+    },
+  });
 
   const handleAccentChange = async (color: string) => {
     setSaving("accent");
@@ -307,6 +354,80 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Store className="w-5 h-5 text-primary" />
+                My Published Templates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Templates you've published to the marketplace.
+              </p>
+              {myTemplates.length === 0 ? (
+                <div className="text-center py-6">
+                  <Store className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No published templates yet</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 gap-1.5"
+                    onClick={() => navigate("/marketplace")}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Browse Marketplace
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {myTemplates.map((t) => {
+                    const Icon = TYPE_ICONS_MAP[t.type] || Bot;
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border/50"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{t.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px]",
+                                  t.status === "approved"
+                                    ? "text-emerald-400 border-emerald-500/30"
+                                    : t.status === "pending"
+                                      ? "text-amber-400 border-amber-500/30"
+                                      : "text-red-400 border-red-500/30",
+                                )}
+                              >
+                                {t.status}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground">
+                                {t.installCount} installs
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-red-400 shrink-0"
+                          onClick={() => deleteMutation.mutate(t.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
