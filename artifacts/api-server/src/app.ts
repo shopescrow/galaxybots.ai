@@ -8,6 +8,7 @@ import { generalRateLimit } from "./middleware/rate-limit";
 import { stripeWebhookHandler } from "./routes/billing";
 import { analyticsApiKeyAuth } from "./middleware/analytics-api-key";
 import { instrumentHealthSignals } from "./middleware/health-signals";
+import { developerApiKeyAuth } from "./middleware/developer-api-key";
 
 const app: Express = express();
 
@@ -75,6 +76,9 @@ const PUBLIC_PATHS = [
   "/api/sso/check-domain",
   "/api/sso/saml/metadata",
   "/api/sso/exchange",
+  "/api/developer/changelog",
+  "/api/developer/openapi",
+  "/api/developer/webhook-events",
 ];
 
 const PUBLIC_PATH_PREFIXES = [
@@ -101,6 +105,9 @@ app.use("/api", (req, res, next) => {
   }
   if (fullPath.startsWith("/api/analytics/") && req.headers.authorization?.startsWith("Bearer gba_")) {
     return analyticsApiKeyAuth(req, res, next);
+  }
+  if (req.headers.authorization?.startsWith("Bearer gbdev_")) {
+    return developerApiKeyAuth(req, res, next);
   }
   return authenticate(req, res, next);
 });

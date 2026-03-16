@@ -45,6 +45,7 @@ import Pipelines from "@/pages/pipelines/Pipelines";
 import CommandCenter from "@/pages/command-center/CommandCenter";
 import AnalyticsDashboard from "@/pages/analytics/AnalyticsDashboard";
 import ClientPortal from "@/pages/client-portal/ClientPortal";
+import DeveloperPortal from "@/pages/developers/DeveloperPortal";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -176,6 +177,7 @@ function AppRouter() {
       <Route path="/roi/shared/:token" component={SharedReport} />
       <Route path="/" component={SmartHome} />
       <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/developers" component={DeveloperPortal} />
       <Route>
         <AuthenticatedRoutes />
       </Route>

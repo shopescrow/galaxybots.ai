@@ -44,6 +44,7 @@ import proposalsRouter from "./proposals";
 import notificationsRouter from "./notifications";
 import clientHealthRouter from "./client-health";
 import pushTokensRouter from "./push-tokens";
+import developerRouter from "./developer";
 
 const router: IRouter = Router();
 
@@ -90,5 +91,6 @@ router.use(proposalsRouter);
 router.use(notificationsRouter);
 router.use(clientHealthRouter);
 router.use(pushTokensRouter);
+router.use(developerRouter);
 
 export default router;

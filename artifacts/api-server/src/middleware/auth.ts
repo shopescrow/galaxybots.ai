@@ -12,6 +12,7 @@ export interface AuthUser {
   bypassPayment?: boolean;
   guestSessionId?: number;
   iat?: number;
+  developerKeyId?: number;
 }
 
 let checkRevocation: ((email: string, iat: number) => boolean) | null = null;

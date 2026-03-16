@@ -28,6 +28,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <a href="/bots" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Roster</a>
             <a href="/partner/bingolingo" className="hover:text-gold transition-colors min-h-[44px] flex items-center">BingoLingo.ai Partner</a>
             <a href="/valuation" className="hover:text-cyan transition-colors min-h-[44px] flex items-center">5-Year Projections</a>
+            <a href="/developers" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Developers</a>
           </div>
           <p className="text-center text-xs text-muted-foreground font-tech">
             © 2026 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential. Property of Gifted Productions Inc.
