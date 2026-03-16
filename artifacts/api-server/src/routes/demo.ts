@@ -671,7 +671,7 @@ router.get("/analytics/demo-metrics", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
 
-    const conditions: any[] = [];
+    const conditions: ReturnType<typeof eq>[] = [];
     if (dateFrom) {
       const d = new Date(dateFrom);
       if (!isNaN(d.getTime())) conditions.push(gte(guestSessionsTable.createdAt, d));
@@ -711,13 +711,52 @@ router.get("/analytics/demo-metrics", async (req, res): Promise<void> => {
     const completions = Number(completedCount[0]?.count || 0);
     const claims = statusMap["claimed"] || 0;
 
+    const avgMsgResult = await db
+      .select({ avg: sql<number>`COALESCE(AVG(msg_count), 0)` })
+      .from(
+        db
+          .select({
+            sessionId: guestSessionsTable.taskSessionId,
+            msg_count: sql<number>`(SELECT COUNT(*) FROM task_session_messages WHERE session_id = ${guestSessionsTable.taskSessionId})`,
+          })
+          .from(guestSessionsTable)
+          .where(sql`${guestSessionsTable.taskSessionId} IS NOT NULL`)
+          .as("sub")
+      );
+    const avgMessagesPerSession = Number(avgMsgResult[0]?.avg || 0);
+
+    const last24hThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const last24hSessions = await db
+      .select({
+        status: guestSessionsTable.status,
+        missionCompleted: guestSessionsTable.missionCompleted,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(guestSessionsTable)
+      .where(gte(guestSessionsTable.createdAt, last24hThreshold))
+      .groupBy(guestSessionsTable.status, guestSessionsTable.missionCompleted);
+
+    let last24hStarts = 0;
+    let last24hCompleted = 0;
+    let last24hClaimed = 0;
+    for (const row of last24hSessions) {
+      const c = Number(row.count);
+      last24hStarts += c;
+      if (row.missionCompleted) last24hCompleted += c;
+      if (row.status === "claimed") last24hClaimed += c;
+    }
+
     res.json({
-      totalStarts: starts,
-      totalCompletions: completions,
-      totalClaims: claims,
-      completionRate: starts > 0 ? Math.round((completions / starts) * 100) : 0,
-      claimRate: starts > 0 ? Math.round((claims / starts) * 100) : 0,
-      conversionRate: completions > 0 ? Math.round((claims / completions) * 100) : 0,
+      totalDemoStarts: starts,
+      totalCompleted: completions,
+      totalClaimed: claims,
+      conversionRate: starts > 0 ? (claims / starts) * 100 : 0,
+      avgMessagesPerSession,
+      last24h: {
+        starts: last24hStarts,
+        completed: last24hCompleted,
+        claimed: last24hClaimed,
+      },
       byStatus: statusMap,
     });
   } catch (err) {

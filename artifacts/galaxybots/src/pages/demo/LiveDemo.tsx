@@ -146,7 +146,7 @@ export default function LiveDemo() {
       .then((data) => {
         if (Array.isArray(data)) {
           setMessages(
-            data.map((m: any) => ({
+            data.map((m: { id: number; role: string; content: string; botName?: string; botTitle?: string; messageType?: string; toolData?: Record<string, unknown> }) => ({
               id: String(m.id),
               role: m.role === "user" ? "user" : "bot",
               content: m.content,
@@ -441,7 +441,7 @@ export default function LiveDemo() {
                       .then((data) => {
                         if (Array.isArray(data)) {
                           setMessages(
-                            data.map((m: any) => ({
+                            data.map((m: { id: number; role: string; content: string; botName?: string; botTitle?: string; messageType?: string; toolData?: Record<string, unknown> }) => ({
                               id: String(m.id),
                               role: m.role === "user" ? "user" : "bot",
                               content: m.content,
