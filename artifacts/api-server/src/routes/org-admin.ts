@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
+import { validateExternalUrl } from "../utils/url-validation";
 import {
   db,
   ssoConfigsTable,
@@ -187,6 +188,16 @@ router.put(
 
     if (providerType === "oidc" && (!oidcClientId || !oidcIssuerUrl)) {
       res.status(400).json({ error: "oidcClientId and oidcIssuerUrl are required for OIDC" });
+      return;
+    }
+
+    if (oidcIssuerUrl && !validateExternalUrl(oidcIssuerUrl)) {
+      res.status(400).json({ error: "OIDC issuer URL must be a valid external HTTPS URL" });
+      return;
+    }
+
+    if (idpMetadataUrl && !validateExternalUrl(idpMetadataUrl)) {
+      res.status(400).json({ error: "IdP metadata URL must be a valid external HTTPS URL" });
       return;
     }
 

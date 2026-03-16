@@ -9,11 +9,11 @@ import {
   platformAuditLogTable,
   permissionProfileTemplatesTable,
   botToolPermissionsTable,
-  botsTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { signToken, authenticate, setRevocationChecker } from "../middleware/auth";
 import { encryptCredential, decryptCredential } from "../utils/credential-encryption";
+import { validateExternalUrl } from "../utils/url-validation";
 
 const router: IRouter = Router();
 
@@ -65,22 +65,6 @@ interface JwkKey {
   e?: string;
   alg?: string;
   use?: string;
-}
-
-function validateExternalUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return false;
-    const hostname = parsed.hostname.toLowerCase();
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
-    if (hostname === "0.0.0.0" || hostname.startsWith("10.") || hostname.startsWith("192.168.")) return false;
-    if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return false;
-    if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return false;
-    if (hostname === "metadata.google.internal" || hostname === "169.254.169.254") return false;
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function fetchSamlMetadata(metadataUrl: string): Promise<{ ssoUrl: string; entityId: string; cert: string } | null> {
@@ -560,6 +544,11 @@ router.get(
       return;
     }
 
+    if (!validateExternalUrl(config.oidcIssuerUrl)) {
+      res.status(400).json({ error: "OIDC issuer URL is not a valid external HTTPS URL" });
+      return;
+    }
+
     const baseUrl = `https://${req.get("host")}`;
     const redirectUri = `${baseUrl}/api/sso/oidc/callback`;
 
@@ -567,13 +556,20 @@ router.get(
     let userinfoEndpoint: string;
     try {
       const discoveryUrl = config.oidcIssuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-      const discoveryRes = await fetch(discoveryUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const discoveryRes = await fetch(discoveryUrl, { signal: controller.signal, redirect: "error" });
+      clearTimeout(timeout);
       const discovery = (await discoveryRes.json()) as {
         token_endpoint: string;
         userinfo_endpoint: string;
       };
       tokenEndpoint = discovery.token_endpoint;
       userinfoEndpoint = discovery.userinfo_endpoint;
+      if (!validateExternalUrl(tokenEndpoint) || !validateExternalUrl(userinfoEndpoint)) {
+        res.status(400).json({ error: "OIDC endpoints resolved to invalid URLs" });
+        return;
+      }
     } catch {
       tokenEndpoint = `${config.oidcIssuerUrl}/token`;
       userinfoEndpoint = `${config.oidcIssuerUrl}/userinfo`;
@@ -923,17 +919,20 @@ async function jitProvision(
       );
 
     if (profile && Array.isArray(profile.permissions)) {
-      const bots = await db
-        .select({ id: botsTable.id })
-        .from(botsTable);
+      const existingPerms = await db
+        .select()
+        .from(botToolPermissionsTable)
+        .where(eq(botToolPermissionsTable.clientId, clientId));
 
-      for (const bot of bots) {
+      const existingBotIds = [...new Set(existingPerms.map((p) => p.botId))];
+
+      for (const botId of existingBotIds) {
         for (const perm of profile.permissions as Array<{ toolName: string; allowed: boolean; requiresApproval?: boolean }>) {
           await db
             .insert(botToolPermissionsTable)
             .values({
               clientId,
-              botId: bot.id,
+              botId,
               toolName: perm.toolName,
               allowed: perm.allowed,
               requiresApproval: perm.requiresApproval ?? false,

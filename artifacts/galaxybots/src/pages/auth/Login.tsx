@@ -73,8 +73,9 @@ export default function Login() {
       if (!res.ok) throw new Error("SSO initiation failed");
       const data = await res.json();
       window.location.href = data.redirectUrl;
-    } catch (err: any) {
-      setError(err.message || "SSO login failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "SSO login failed";
+      setError(message);
       setSsoLoading(false);
     }
   };
@@ -90,8 +91,9 @@ export default function Login() {
     try {
       await login(email, password);
       navigate("/");
-    } catch (err: any) {
-      setError(err.message || "Login failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Login failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
