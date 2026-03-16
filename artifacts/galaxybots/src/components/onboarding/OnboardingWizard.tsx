@@ -173,7 +173,14 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
 
         if (!matchingPack || packInstalled) {
           await updateOnboarding({ industry: true });
-          setCurrentStep(3);
+          const welcomeId = sessionStorage.getItem("pack_welcome_session");
+          if (welcomeId) {
+            sessionStorage.removeItem("pack_welcome_session");
+            onOpenChange(false);
+            navigate(`/task-rooms/${welcomeId}`);
+          } else {
+            setCurrentStep(3);
+          }
         }
       }
     } finally {
@@ -213,15 +220,8 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
                 You've completed all setup steps. Your AI directors are fully configured and ready to execute.
               </DialogDescription>
             </DialogHeader>
-            <Button variant="glow" onClick={() => {
-              onOpenChange(false);
-              const welcomeSession = sessionStorage.getItem("pack_welcome_session");
-              if (welcomeSession) {
-                sessionStorage.removeItem("pack_welcome_session");
-                navigate(`/task-rooms/${welcomeSession}`);
-              }
-            }} className="mt-4">
-              {sessionStorage.getItem("pack_welcome_session") ? "Launch Your First Mission" : "Go to Dashboard"}
+            <Button variant="glow" onClick={() => onOpenChange(false)} className="mt-4">
+              Go to Dashboard
             </Button>
           </div>
         </DialogContent>

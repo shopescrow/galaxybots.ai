@@ -86,7 +86,8 @@ function AuthenticatedRoutes() {
     if (!user || isLoading || wizardShownThisSession) return;
     const onboarding = user.onboarding;
     if (!onboarding || onboarding.dismissed || onboarding.completedAt) return;
-    if (!onboarding.companyProfile) {
+    const hasIncompleteSteps = !onboarding.companyProfile || !onboarding.industry || !onboarding.firstClient || !onboarding.integrations;
+    if (hasIncompleteSteps) {
       setWizardOpen(true);
       setWizardShownThisSession(true);
     }
