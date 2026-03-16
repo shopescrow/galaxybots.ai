@@ -116,3 +116,4 @@ export async function apiDelete<T = unknown>(
     body: body ? JSON.stringify(body) : undefined,
   });
 }
+

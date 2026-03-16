@@ -12,6 +12,7 @@ import {
   apiDelete,
 } from "./api";
 
+
 interface User {
   id: number;
   email: string;
@@ -123,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setHasStoredSession(false);
   }, []);
+
 
   const toggleBiometric = useCallback(async () => {
     const newVal = !biometricEnabled;

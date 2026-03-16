@@ -126,7 +126,15 @@ async function processDeliveries() {
       }
     }
   } catch (err) {
-    console.error("[WebhookWorker] Error processing deliveries:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("relation") && msg.includes("does not exist")) {
+      console.error(
+        `[WebhookWorker] Missing database table detected: ${msg}. ` +
+        `Run 'pnpm --filter @workspace/db push' to create missing tables. Will retry next interval.`
+      );
+    } else {
+      console.error("[WebhookWorker] Error processing deliveries:", err);
+    }
   }
 }
 
@@ -168,7 +176,15 @@ export function startWebhookDeliveryWorker() {
   console.log("[WebhookWorker] Starting webhook delivery worker (10s interval, exponential backoff)");
   deliveryInterval = setInterval(() => {
     processDeliveries().catch((err) => {
-      console.error("[WebhookWorker] Unhandled error in delivery tick (will retry next interval):", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("relation") && msg.includes("does not exist")) {
+        console.error(
+          `[WebhookWorker] Missing database table: ${msg}. ` +
+          `Run 'pnpm --filter @workspace/db push' to create missing tables. Will retry next interval.`
+        );
+      } else {
+        console.error("[WebhookWorker] Unhandled error in delivery tick (will retry next interval):", err);
+      }
     });
   }, DELIVERY_INTERVAL_MS);
 }

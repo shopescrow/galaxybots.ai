@@ -717,28 +717,29 @@ export async function startScheduler() {
   }
 
   console.log("[scheduler] Background autonomy scheduler started (checking every 5 minutes)");
+
+  function handleTickError(label: string) {
+    return (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("relation") && msg.includes("does not exist")) {
+        console.error(
+          `[scheduler] ${label}: Missing database table — ${msg}. ` +
+          `Run 'pnpm --filter @workspace/db push' to create missing tables. Will retry next tick.`
+        );
+      } else {
+        console.error(`[scheduler] Tick error (${label}):`, err);
+      }
+    };
+  }
+
   schedulerInterval = setInterval(() => {
-    checkDueAssignments().catch((err) =>
-      console.error("[scheduler] Tick error (assignments):", err)
-    );
-    checkWeeklyBriefings().catch((err) =>
-      console.error("[scheduler] Tick error (weekly briefings):", err)
-    );
-    checkCompetitorAlerts().catch((err) =>
-      console.error("[scheduler] Tick error (competitor alerts):", err)
-    );
-    checkKnowledgeBaseSyncs().catch((err) =>
-      console.error("[scheduler] Tick error (KB sync):", err)
-    );
-    checkBingolingoAutoContent().catch((err) =>
-      console.error("[scheduler] Tick error (BingoLingo auto-content):", err)
-    );
-    checkHealthScores().catch((err) =>
-      console.error("[scheduler] Tick error (health scores):", err)
-    );
-    checkWeeklyPulse().catch((err) =>
-      console.error("[scheduler] Tick error (weekly pulse):", err)
-    );
+    checkDueAssignments().catch(handleTickError("assignments"));
+    checkWeeklyBriefings().catch(handleTickError("weekly briefings"));
+    checkCompetitorAlerts().catch(handleTickError("competitor alerts"));
+    checkKnowledgeBaseSyncs().catch(handleTickError("KB sync"));
+    checkBingolingoAutoContent().catch(handleTickError("BingoLingo auto-content"));
+    checkHealthScores().catch(handleTickError("health scores"));
+    checkWeeklyPulse().catch(handleTickError("weekly pulse"));
   }, 5 * 60 * 1000);
 }
 

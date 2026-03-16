@@ -62,4 +62,5 @@
     "expo-notifications": "^0.32.16",
     "expo-secure-store": "^15.0.8"
   }
+
 }

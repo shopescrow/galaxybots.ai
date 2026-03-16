@@ -11,16 +11,6 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef } from "react";
 import { Platform } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { ActivityIndicator, View } from "react-native";
-import colors from "@/constants/colors";
-
-SplashScreen.preventAutoHideAsync();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -164,6 +154,8 @@ function RootLayoutNav() {
         />
       </Stack>
     </AuthGate>
+  );
+}
   );
 }
 
