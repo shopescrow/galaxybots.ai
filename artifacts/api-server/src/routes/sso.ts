@@ -9,14 +9,20 @@ import {
   platformAuditLogTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { signToken, authenticate } from "../middleware/auth";
+import { signToken, authenticate, setRevocationChecker } from "../middleware/auth";
 import { encryptCredential, decryptCredential } from "../utils/credential-encryption";
 
 const router: IRouter = Router();
 
 const ssoStateStore = new Map<string, { clientId: number; codeVerifier?: string; nonce?: string; createdAt: number }>();
 const ssoCompletionCodes = new Map<string, { token: string; maxAge: number; createdAt: number }>();
-const revokedTokens = new Set<string>();
+const revokedSessions = new Map<string, number>();
+
+setRevocationChecker((email: string, iat: number): boolean => {
+  const revokedAt = revokedSessions.get(email.toLowerCase());
+  if (revokedAt && iat <= revokedAt) return true;
+  return false;
+});
 
 setInterval(() => {
   const now = Date.now();
@@ -25,6 +31,10 @@ setInterval(() => {
   }
   for (const [key, val] of ssoCompletionCodes) {
     if (now - val.createdAt > 2 * 60 * 1000) ssoCompletionCodes.delete(key);
+  }
+  const cutoff = Math.floor(now / 1000) - 24 * 60 * 60;
+  for (const [email, revokedAt] of revokedSessions) {
+    if (revokedAt < cutoff) revokedSessions.delete(email);
   }
 }, 60 * 1000);
 
@@ -120,12 +130,8 @@ function verifyJwtSignatureWithJwks(idToken: string, keys: any[]): boolean {
   return true;
 }
 
-export function isTokenRevoked(tokenJti: string): boolean {
-  return revokedTokens.has(tokenJti);
-}
-
-function computeTokenJti(email: string, iat: number): string {
-  return crypto.createHash("sha256").update(`${email}:${iat}`).digest("hex").slice(0, 16);
+function revokeUserSessions(email: string): void {
+  revokedSessions.set(email.toLowerCase(), Math.floor(Date.now() / 1000));
 }
 
 router.get(
@@ -730,8 +736,7 @@ router.post(
   authenticate,
   async (req, res): Promise<void> => {
     await logSsoEvent("sso_logout", req.user!.clientId, req.user!.userId, {}, req.ip);
-    const jti = computeTokenJti(req.user!.email, 0);
-    revokedTokens.add(jti);
+    revokeUserSessions(req.user!.email);
     res.clearCookie("token");
     res.json({ success: true });
   },
@@ -757,18 +762,28 @@ router.post(
     }
 
     const nameIdMatch = decoded.match(/<(?:saml:)?NameID[^>]*>([^<]+)<\/(?:saml:)?NameID>/);
-    if (nameIdMatch && nameIdMatch[1]) {
-      const email = nameIdMatch[1].toLowerCase();
-      const domain = email.includes("@") ? email.split("@")[1] : null;
+    if (!nameIdMatch || !nameIdMatch[1]) {
+      res.status(400).json({ error: "No NameID found in SLO request" });
+      return;
+    }
 
-      if (domain) {
-        const [config] = await db
-          .select()
-          .from(ssoConfigsTable)
-          .where(eq(ssoConfigsTable.domainHint, domain));
+    const email = nameIdMatch[1].toLowerCase();
+    const domain = email.includes("@") ? email.split("@")[1] : null;
 
-        if (config && config.idpCert) {
-          const idpCert = decryptCredential(config.idpCert);
+    if (domain) {
+      const [config] = await db
+        .select()
+        .from(ssoConfigsTable)
+        .where(eq(ssoConfigsTable.domainHint, domain));
+
+      if (config) {
+        let idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
+        if (config.idpMetadataUrl && !idpCert) {
+          const metadata = await fetchSamlMetadata(config.idpMetadataUrl);
+          if (metadata) idpCert = metadata.cert;
+        }
+
+        if (idpCert) {
           const baseUrl = `https://${req.get("host")}`;
           const saml = new SAML({
             callbackUrl: `${baseUrl}/api/sso/saml/acs`,
@@ -778,25 +793,29 @@ router.post(
           });
 
           try {
-            if (SAMLRequest) {
-              await saml.validateRedirectAsync({ SAMLRequest } as any);
-            }
-          } catch (err: any) {
-            await logSsoEvent("sso_slo_validation_failed", config.clientId, null, { error: err.message, email }, req.ip);
+            const sloBody: Record<string, string> = {};
+            if (SAMLRequest) sloBody.SAMLRequest = SAMLRequest;
+            if (SAMLResponse) sloBody.SAMLResponse = SAMLResponse;
+            await saml.validatePostResponseAsync(sloBody);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "unknown";
+            await logSsoEvent("sso_slo_signature_invalid", config.clientId, null, { error: message, email }, req.ip);
+            res.status(400).json({ error: "SLO signature validation failed" });
+            return;
           }
         }
       }
+    }
 
-      const [user] = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.email, email));
+    revokeUserSessions(email);
 
-      if (user) {
-        const jti = computeTokenJti(email, 0);
-        revokedTokens.add(jti);
-        await logSsoEvent("sso_backchannel_logout", user.clientId, user.id, { email, sessionRevoked: true }, req.ip);
-      }
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email));
+
+    if (user) {
+      await logSsoEvent("sso_backchannel_logout", user.clientId, user.id, { email, sessionRevoked: true }, req.ip);
     }
 
     res.status(200).send();

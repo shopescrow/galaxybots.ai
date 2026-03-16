@@ -38,7 +38,7 @@ export default function Login() {
       if (res.ok) {
         const data = await res.json();
         setSsoState(data);
-        if (data.ssoEnabled && data.forceSso && data.clientId) {
+        if (data.ssoEnabled && data.clientId) {
           setSsoLoading(true);
           const endpoint = data.providerType === "oidc"
             ? `${BASE}/api/sso/oidc/login/${data.clientId}`

@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS sso_configs (
 CREATE UNIQUE INDEX IF NOT EXISTS sso_configs_domain_unique ON sso_configs(domain_hint);
 CREATE INDEX IF NOT EXISTS sso_configs_client_idx ON sso_configs(client_id);
 
+ALTER TABLE sso_configs ADD COLUMN IF NOT EXISTS scim_group_role_mapping JSONB;
+
 ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_provider TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;

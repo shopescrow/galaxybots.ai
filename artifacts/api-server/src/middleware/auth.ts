@@ -9,6 +9,13 @@ export interface AuthUser {
   plan?: string;
   bypassPayment?: boolean;
   guestSessionId?: number;
+  iat?: number;
+}
+
+let checkRevocation: ((email: string, iat: number) => boolean) | null = null;
+
+export function setRevocationChecker(fn: (email: string, iat: number) => boolean): void {
+  checkRevocation = fn;
 }
 
 declare global {
@@ -48,6 +55,12 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
+    if (checkRevocation && decoded.email && decoded.iat) {
+      if (checkRevocation(decoded.email, decoded.iat)) {
+        res.status(401).json({ error: "Session has been revoked" });
+        return;
+      }
+    }
     req.user = decoded;
     next();
   } catch {
@@ -86,6 +99,12 @@ export function authenticateOrGuest(req: Request, res: Response, next: NextFunct
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
+    if (checkRevocation && decoded.email && decoded.iat) {
+      if (checkRevocation(decoded.email, decoded.iat)) {
+        res.status(401).json({ error: "Session has been revoked" });
+        return;
+      }
+    }
     req.user = decoded;
     next();
   } catch {

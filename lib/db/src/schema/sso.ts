@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
 
 export const ssoConfigsTable = pgTable("sso_configs", {
@@ -16,6 +16,7 @@ export const ssoConfigsTable = pgTable("sso_configs", {
   jitDefaultRole: text("jit_default_role").notNull().default("viewer"),
   forceSso: boolean("force_sso").notNull().default(false),
   scimToken: text("scim_token"),
+  scimGroupRoleMapping: jsonb("scim_group_role_mapping"),
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

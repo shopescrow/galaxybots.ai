@@ -164,6 +164,7 @@ router.put(
       jitDefaultRole,
       forceSso,
       enabled,
+      scimGroupRoleMapping,
     } = req.body;
 
     if (!providerType || !domainHint) {
@@ -176,8 +177,8 @@ router.put(
       return;
     }
 
-    if (providerType === "saml" && !idpSsoUrl) {
-      res.status(400).json({ error: "idpSsoUrl is required for SAML" });
+    if (providerType === "saml" && !idpSsoUrl && !idpMetadataUrl) {
+      res.status(400).json({ error: "Either idpSsoUrl or idpMetadataUrl is required for SAML" });
       return;
     }
 
@@ -199,6 +200,7 @@ router.put(
       domainHint: domainHint.toLowerCase(),
       jitDefaultRole: jitDefaultRole || "viewer",
       forceSso: forceSso ?? false,
+      scimGroupRoleMapping: scimGroupRoleMapping || null,
       enabled: enabled ?? true,
     };
 
