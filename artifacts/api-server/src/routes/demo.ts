@@ -12,6 +12,8 @@ import {
   taskSessionsTable,
   taskSessionBotsTable,
   taskSessionMessagesTable,
+  knowledgeBaseDocumentsTable,
+  knowledgeBaseChunksTable,
 } from "@workspace/db";
 import { eq, and, gt, sql, gte, lte, desc, inArray } from "drizzle-orm";
 import { signToken } from "../middleware/auth";
@@ -277,14 +279,55 @@ async function seedDemoCompany(): Promise<{ clientId: number; botIds: number[] }
 
   const botIds = selectedBotIds;
 
+  const [kbDoc] = await db
+    .insert(knowledgeBaseDocumentsTable)
+    .values({
+      clientId: client.id,
+      title: "Apex Ventures Q2 Performance Brief",
+      sourceFilename: "apex-q2-brief.txt",
+      fileType: "text/plain",
+      chunkCount: 1,
+    })
+    .returning();
+
+  await db.insert(knowledgeBaseChunksTable).values({
+    documentId: kbDoc.id,
+    clientId: client.id,
+    chunkText: `APEX VENTURES — Q2 PERFORMANCE BRIEF
+
+Company: Apex Ventures (SaaS, $12M ARR)
+Customers: 200 enterprise accounts
+Marketing Team: 15 people
+Q2 Key Metrics:
+- MQL-to-SQL conversion rate declined 8% QoQ
+- Customer acquisition cost (CAC) increased 12%
+- Churn rate: 4.2% (up from 3.8%)
+- NPS: 42 (stable)
+- Pipeline velocity: 45 days avg (up from 38)
+
+Channel Performance:
+- Paid search: $2.1M spend, 3.2x ROAS (down from 4.1x)
+- Content marketing: 15K organic visits/mo (flat)
+- Outbound: 180 SQLs generated (down 15%)
+- Events/webinars: 22 events, 1.2K registrations
+
+Board Priorities for Q3:
+1. Restore MQL-to-SQL conversion to Q1 levels
+2. Reduce CAC by 20% while maintaining growth rate
+3. Launch ABM pilot targeting top 50 enterprise prospects
+4. Expand into healthcare vertical (new TAM: $800M)`,
+    chunkIndex: 0,
+  });
+
   return { clientId: client.id, botIds };
 }
 
 async function cleanupExpiredSessions(): Promise<void> {
-  const threshold = new Date(Date.now() - DEMO_CLEANUP_THRESHOLD_MS);
-  const expired = await db
-    .select({ id: guestSessionsTable.id, clientId: guestSessionsTable.clientId })
-    .from(guestSessionsTable)
+  const deletionThreshold = new Date(Date.now() - DEMO_CLEANUP_THRESHOLD_MS);
+
+  await db
+    .update(guestSessionsTable)
+    .set({ status: "expired" })
     .where(
       and(
         eq(guestSessionsTable.status, "active"),
@@ -292,12 +335,17 @@ async function cleanupExpiredSessions(): Promise<void> {
       )
     );
 
-  for (const session of expired) {
-    await db
-      .update(guestSessionsTable)
-      .set({ status: "expired" })
-      .where(eq(guestSessionsTable.id, session.id));
+  const expired = await db
+    .select({ id: guestSessionsTable.id, clientId: guestSessionsTable.clientId })
+    .from(guestSessionsTable)
+    .where(
+      and(
+        eq(guestSessionsTable.status, "expired"),
+        lte(guestSessionsTable.expiresAt, deletionThreshold)
+      )
+    );
 
+  for (const session of expired) {
     if (session.clientId) {
       const taskSessions = await db
         .select({ id: taskSessionsTable.id })
@@ -311,8 +359,17 @@ async function cleanupExpiredSessions(): Promise<void> {
       await db.delete(taskSessionsTable).where(eq(taskSessionsTable.clientId, session.clientId));
       await db.delete(clientsTable).where(eq(clientsTable.id, session.clientId));
     }
+
+    await db
+      .update(guestSessionsTable)
+      .set({ status: "cleaned", clientId: null, taskSessionId: null })
+      .where(eq(guestSessionsTable.id, session.id));
   }
 }
+
+setInterval(() => {
+  cleanupExpiredSessions().catch((err) => console.error("[Demo] Scheduled cleanup error:", err));
+}, 15 * 60 * 1000);
 
 router.post("/demo/start", demoRateLimit, async (req, res): Promise<void> => {
   try {

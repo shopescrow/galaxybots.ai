@@ -168,7 +168,7 @@ export default function LiveDemo() {
             if (!line.startsWith("data: ")) continue;
             try {
               const event = JSON.parse(line.slice(6));
-              if (event.type === "message") {
+              if (event.type === "message" || event.type === "tool_call" || event.type === "tool_result") {
                 setMessages((prev) => {
                   const exists = prev.some((m) => m.content === event.content && m.botName === event.botName);
                   if (exists) return prev;
@@ -180,7 +180,8 @@ export default function LiveDemo() {
                       content: event.content,
                       botName: event.botName,
                       botTitle: event.botTitle,
-                      messageType: event.messageType,
+                      messageType: event.messageType || event.type,
+                      toolData: event.toolData,
                     },
                   ];
                 });
