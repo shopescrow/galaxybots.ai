@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS guest_sessions (
   id SERIAL PRIMARY KEY,
   session_token TEXT NOT NULL UNIQUE,
   ip_hash TEXT NOT NULL,
-  client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+  client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
   task_session_id INTEGER REFERENCES task_sessions(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'active',
   claimed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

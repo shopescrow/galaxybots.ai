@@ -9,7 +9,7 @@ export const guestSessionsTable = pgTable("guest_sessions", {
   id: serial("id").primaryKey(),
   sessionToken: text("session_token").notNull().unique(),
   ipHash: text("ip_hash").notNull(),
-  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   taskSessionId: integer("task_session_id").references(() => taskSessionsTable.id, { onDelete: "set null" }),
   status: text("status").notNull().default("active"),
   claimedByUserId: integer("claimed_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
