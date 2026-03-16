@@ -35,6 +35,7 @@ import demoRouter from "./demo";
 import onboardingRouter from "./onboarding";
 import clientPortalRouter from "./client-portal";
 import packsRouter from "./packs";
+import bingolingoRouter from "./bingolingo";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(analyticsRouter);
 router.use(onboardingRouter);
 router.use(clientPortalRouter);
 router.use(packsRouter);
+router.use(bingolingoRouter);
 
 export default router;

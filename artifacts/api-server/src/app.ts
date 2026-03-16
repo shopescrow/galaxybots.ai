@@ -79,6 +79,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/storage/public-objects/",
   "/api/client-portal/missions/",
   "/api/client-portal/approvals/",
+  "/api/bingolingo/hub/",
+  "/api/bingolingo/ext/",
 ];
 
 app.use("/api", (req, res, next) => {

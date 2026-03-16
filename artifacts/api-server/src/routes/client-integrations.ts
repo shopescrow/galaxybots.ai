@@ -8,7 +8,7 @@ const router: IRouter = Router();
 
 const REDACTED = "••••••••";
 
-const VALID_SERVICES = ["gmail", "google_calendar", "hubspot", "notion", "piratemonster", "salesforce"] as const;
+const VALID_SERVICES = ["gmail", "google_calendar", "hubspot", "notion", "piratemonster", "salesforce", "bingolingo"] as const;
 
 router.get("/client-integrations/:clientId", async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);

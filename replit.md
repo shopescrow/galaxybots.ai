@@ -106,3 +106,24 @@ The project includes a standalone MCP (Model Context Protocol) server at `artifa
 **DB Tables:** `platform_api_keys`, `mcp_tool_calls`, `aeo_webhooks`, `aeo_scan_requests`, `aeo_recommendation_cache`, `webhook_deliveries`.
 
 **Registration:** Add as a custom MCP server in Replit with SSE URL `https://<domain>/__mcp/sse` and the bearer token header.
+
+## BingoLingo.ai — Content Intelligence Platform
+
+**Artifact:** `/bingolingo` — standalone React+Vite frontend at `artifacts/bingolingo/`.
+
+**API:** Routes at `artifacts/api-server/src/routes/bingolingo.ts`, mounted under `/api/bingolingo/*`.
+
+**DB Schema:** `lib/db/src/schema/bingolingo.ts` — tables: `bingolingo_clients`, `bingolingo_content`, `bingolingo_api_keys`.
+
+**Features:**
+- Client management (CRUD, auto-slugification)
+- AI content generation via GPT-4o-mini (blog, LinkedIn, Twitter, email, press release, case study)
+- Content lifecycle (draft → published → archived)
+- Content calendar per client
+- Public content hub at `/api/bingolingo/hub/:clientSlug`
+- External REST API with `X-BingoLingo-Key` header auth (SHA-256 hashed keys)
+- GalaxyBots agent tools: `bingolingo_create_content`, `bingolingo_publish`, `bingolingo_list_content` in `operational-tools.ts`
+- Weekly auto-content scheduler for clients with `autoContentEnabled=true`
+- BingoLingo integration card on GalaxyBots Integrations page
+
+**Auth model:** External API uses `X-BingoLingo-Key` header (hashed with SHA-256). Internal dashboard/management routes require JWT authentication (same as GalaxyBots). Hub routes are fully public. The frontend sends JWT via cookie (`credentials: "include"`).

@@ -57,6 +57,14 @@ const SERVICES = [
     credentialLabel: "Notion Integration Token",
     credentialPlaceholder: "ntn_xxxxxxxxxxxx...",
   },
+  {
+    key: "bingolingo",
+    name: "BingoLingo.ai",
+    description: "AI-powered content intelligence — generate blog posts, social media content, email newsletters, and more via the BingoLingo API.",
+    icon: Zap,
+    credentialLabel: "BingoLingo API Key",
+    credentialPlaceholder: "blk_xxxxxxxxxxxx...",
+  },
 ];
 
 function IntegrationCard({
