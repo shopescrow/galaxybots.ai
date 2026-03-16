@@ -800,52 +800,61 @@ router.post(
       return;
     }
 
+    const issuerMatch = decoded.match(/<(?:saml:)?Issuer[^>]*>([^<]+)<\/(?:saml:)?Issuer>/);
+    if (!issuerMatch || !issuerMatch[1]) {
+      res.status(400).json({ error: "No Issuer found in SLO request" });
+      return;
+    }
+
+    const issuerEntityId = issuerMatch[1].trim();
+
+    const configs = await db.select().from(ssoConfigsTable).where(eq(ssoConfigsTable.enabled, true));
+    const config = configs.find((c) => c.idpEntityId === issuerEntityId);
+
+    if (!config) {
+      res.status(400).json({ error: "Unknown IdP issuer — SLO rejected" });
+      return;
+    }
+
+    let idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
+    if (config.idpMetadataUrl && !idpCert) {
+      const metadata = await fetchSamlMetadata(config.idpMetadataUrl);
+      if (metadata) idpCert = metadata.cert;
+    }
+
+    if (!idpCert) {
+      res.status(400).json({ error: "No IdP certificate available — cannot verify SLO signature" });
+      return;
+    }
+
+    const baseUrl = `https://${req.get("host")}`;
+    const saml = new SAML({
+      callbackUrl: `${baseUrl}/api/sso/saml/acs`,
+      entryPoint: config.idpSsoUrl || "",
+      issuer: baseUrl,
+      cert: idpCert,
+      wantLogoutResponseSigned: true,
+    });
+
+    try {
+      const sloBody: Record<string, string> = {};
+      if (SAMLRequest) sloBody.SAMLRequest = SAMLRequest;
+      if (SAMLResponse) sloBody.SAMLResponse = SAMLResponse;
+      await saml.validatePostResponseAsync(sloBody);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "unknown";
+      await logSsoEvent("sso_slo_signature_invalid", config.clientId, null, { error: message, issuer: issuerEntityId }, req.ip);
+      res.status(400).json({ error: "SLO signature validation failed" });
+      return;
+    }
+
     const nameIdMatch = decoded.match(/<(?:saml:)?NameID[^>]*>([^<]+)<\/(?:saml:)?NameID>/);
     if (!nameIdMatch || !nameIdMatch[1]) {
-      res.status(400).json({ error: "No NameID found in SLO request" });
+      res.status(400).json({ error: "No NameID found in verified SLO request" });
       return;
     }
 
     const email = nameIdMatch[1].toLowerCase();
-    const domain = email.includes("@") ? email.split("@")[1] : null;
-
-    if (domain) {
-      const [config] = await db
-        .select()
-        .from(ssoConfigsTable)
-        .where(eq(ssoConfigsTable.domainHint, domain));
-
-      if (config) {
-        let idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
-        if (config.idpMetadataUrl && !idpCert) {
-          const metadata = await fetchSamlMetadata(config.idpMetadataUrl);
-          if (metadata) idpCert = metadata.cert;
-        }
-
-        if (idpCert) {
-          const baseUrl = `https://${req.get("host")}`;
-          const saml = new SAML({
-            callbackUrl: `${baseUrl}/api/sso/saml/acs`,
-            entryPoint: config.idpSsoUrl || "",
-            issuer: baseUrl,
-            cert: idpCert,
-          });
-
-          try {
-            const sloBody: Record<string, string> = {};
-            if (SAMLRequest) sloBody.SAMLRequest = SAMLRequest;
-            if (SAMLResponse) sloBody.SAMLResponse = SAMLResponse;
-            await saml.validatePostResponseAsync(sloBody);
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : "unknown";
-            await logSsoEvent("sso_slo_signature_invalid", config.clientId, null, { error: message, email }, req.ip);
-            res.status(400).json({ error: "SLO signature validation failed" });
-            return;
-          }
-        }
-      }
-    }
-
     revokeUserSessions(email);
 
     const [user] = await db
