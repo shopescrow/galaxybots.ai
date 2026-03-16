@@ -16,6 +16,7 @@ const router: IRouter = Router();
 
 const ssoStateStore = new Map<string, { clientId: number; codeVerifier?: string; nonce?: string; createdAt: number }>();
 const ssoCompletionCodes = new Map<string, { token: string; maxAge: number; createdAt: number }>();
+const revokedTokens = new Set<string>();
 
 setInterval(() => {
   const now = Date.now();
@@ -42,6 +43,89 @@ function logSsoEvent(
     metadata,
     ipAddress,
   });
+}
+
+async function fetchSamlMetadata(metadataUrl: string): Promise<{ ssoUrl: string; entityId: string; cert: string } | null> {
+  try {
+    const res = await fetch(metadataUrl);
+    if (!res.ok) return null;
+    const xml = await res.text();
+
+    const ssoUrlMatch = xml.match(/SingleSignOnService[^>]*Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"[^>]*Location="([^"]+)"/);
+    if (!ssoUrlMatch) {
+      const fallbackMatch = xml.match(/SingleSignOnService[^>]*Location="([^"]+)"/);
+      if (!fallbackMatch) return null;
+      ssoUrlMatch;
+    }
+    const ssoUrl = (ssoUrlMatch || xml.match(/SingleSignOnService[^>]*Location="([^"]+)"/))?.[1] || "";
+
+    const entityIdMatch = xml.match(/entityID="([^"]+)"/);
+    const entityId = entityIdMatch?.[1] || "";
+
+    const certMatch = xml.match(/<(?:ds:)?X509Certificate>([^<]+)<\/(?:ds:)?X509Certificate>/);
+    const cert = certMatch?.[1]?.replace(/\s/g, "") || "";
+
+    if (!ssoUrl) return null;
+    return { ssoUrl, entityId, cert };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchOidcJwks(issuerUrl: string): Promise<any[]> {
+  try {
+    const discoveryUrl = issuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
+    const discoveryRes = await fetch(discoveryUrl);
+    const discovery = (await discoveryRes.json()) as { jwks_uri?: string };
+    if (!discovery.jwks_uri) return [];
+    const jwksRes = await fetch(discovery.jwks_uri);
+    const jwks = (await jwksRes.json()) as { keys: any[] };
+    return jwks.keys || [];
+  } catch {
+    return [];
+  }
+}
+
+function verifyJwtSignatureWithJwks(idToken: string, keys: any[]): boolean {
+  if (keys.length === 0) return true;
+
+  try {
+    const [headerB64] = idToken.split(".");
+    const header = JSON.parse(Buffer.from(headerB64, "base64url").toString());
+    const kid = header.kid;
+    const alg = header.alg;
+
+    let key = keys.find((k: any) => k.kid === kid);
+    if (!key) key = keys[0];
+
+    if (alg === "RS256" && key.n && key.e) {
+      const pubKey = crypto.createPublicKey({
+        key: {
+          kty: key.kty,
+          n: key.n,
+          e: key.e,
+        },
+        format: "jwk",
+      });
+
+      const [headerPart, payloadPart, signaturePart] = idToken.split(".");
+      const data = `${headerPart}.${payloadPart}`;
+      const signature = Buffer.from(signaturePart, "base64url");
+
+      return crypto.createVerify("RSA-SHA256").update(data).verify(pubKey, signature);
+    }
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+export function isTokenRevoked(tokenJti: string): boolean {
+  return revokedTokens.has(tokenJti);
+}
+
+function computeTokenJti(email: string, iat: number): string {
+  return crypto.createHash("sha256").update(`${email}:${iat}`).digest("hex").slice(0, 16);
 }
 
 router.get(
@@ -98,8 +182,28 @@ router.get(
         ),
       );
 
-    if (!config || !config.idpSsoUrl) {
+    if (!config) {
       res.status(404).json({ error: "SAML SSO not configured for this organization" });
+      return;
+    }
+
+    let idpSsoUrl = config.idpSsoUrl;
+    let idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
+    let idpEntityId = config.idpEntityId;
+
+    if (config.idpMetadataUrl && !idpSsoUrl) {
+      const metadata = await fetchSamlMetadata(config.idpMetadataUrl);
+      if (!metadata) {
+        res.status(502).json({ error: "Failed to fetch IdP metadata" });
+        return;
+      }
+      idpSsoUrl = metadata.ssoUrl;
+      idpCert = metadata.cert;
+      idpEntityId = metadata.entityId;
+    }
+
+    if (!idpSsoUrl) {
+      res.status(404).json({ error: "SAML SSO URL not configured. Provide an IdP SSO URL or metadata URL." });
       return;
     }
 
@@ -107,16 +211,15 @@ router.get(
     const state = crypto.randomBytes(32).toString("hex");
     ssoStateStore.set(state, { clientId, createdAt: Date.now() });
 
-    const idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
-
     const saml = new SAML({
       callbackUrl: `${baseUrl}/api/sso/saml/acs`,
-      entryPoint: config.idpSsoUrl,
+      entryPoint: idpSsoUrl,
       issuer: baseUrl,
       cert: idpCert,
       wantAssertionsSigned: true,
       wantAuthnResponseSigned: true,
       audience: baseUrl,
+      ...(idpEntityId ? { idpIssuer: idpEntityId } : {}),
     });
 
     try {
@@ -159,26 +262,38 @@ router.post(
         ),
       );
 
-    if (!config || !config.idpSsoUrl) {
+    if (!config) {
       res.status(404).json({ error: "SAML SSO not configured" });
       return;
     }
 
+    let idpSsoUrl = config.idpSsoUrl;
+    let idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
+    let idpEntityId = config.idpEntityId;
+
+    if (config.idpMetadataUrl) {
+      const metadata = await fetchSamlMetadata(config.idpMetadataUrl);
+      if (metadata) {
+        idpSsoUrl = idpSsoUrl || metadata.ssoUrl;
+        idpCert = idpCert || metadata.cert;
+        idpEntityId = idpEntityId || metadata.entityId;
+      }
+    }
+
     const baseUrl = `https://${req.get("host")}`;
-    const idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
 
     const saml = new SAML({
       callbackUrl: `${baseUrl}/api/sso/saml/acs`,
-      entryPoint: config.idpSsoUrl,
+      entryPoint: idpSsoUrl || "",
       issuer: baseUrl,
       cert: idpCert,
       wantAssertionsSigned: true,
       wantAuthnResponseSigned: true,
       audience: baseUrl,
-      ...(config.idpEntityId ? { idpIssuer: config.idpEntityId } : {}),
+      ...(idpEntityId ? { idpIssuer: idpEntityId } : {}),
     });
 
-    let profile: { nameID?: string; email?: string; displayName?: string; [key: string]: unknown } | null;
+    let profile: { nameID?: string; email?: string; displayName?: string; sessionNotOnOrAfter?: string; [key: string]: unknown } | null;
     try {
       const result = await saml.validatePostResponseAsync({ SAMLResponse });
       profile = result.profile;
@@ -228,8 +343,23 @@ router.post(
       .from(clientsTable)
       .where(eq(clientsTable.id, user.clientId));
 
-    const ssoExpiry = config.forceSso ? "8h" : "7d";
-    const sessionMaxAge = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    let sessionTtlMs: number;
+    let jwtExpiry: string;
+
+    if (profile.sessionNotOnOrAfter) {
+      const sessionEnd = new Date(profile.sessionNotOnOrAfter as string).getTime();
+      const remaining = sessionEnd - Date.now();
+      if (remaining > 0 && remaining < 24 * 60 * 60 * 1000) {
+        sessionTtlMs = remaining;
+        jwtExpiry = `${Math.ceil(remaining / 1000)}s`;
+      } else {
+        sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+        jwtExpiry = config.forceSso ? "8h" : "7d";
+      }
+    } else {
+      sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+      jwtExpiry = config.forceSso ? "8h" : "7d";
+    }
 
     const token = signToken({
       userId: user.id,
@@ -238,7 +368,7 @@ router.post(
       email: user.email,
       plan: client?.plan,
       bypassPayment: user.bypassPayment,
-    }, ssoExpiry);
+    }, jwtExpiry);
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
@@ -249,7 +379,7 @@ router.post(
     );
 
     const completionCode = crypto.randomBytes(32).toString("hex");
-    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionMaxAge, createdAt: Date.now() });
+    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
     res.redirect(`${frontendBase}/galaxybots/sso/callback?code=${completionCode}`);
@@ -269,6 +399,8 @@ router.get(
     <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
       Location="${baseUrl}/api/sso/saml/acs" index="0" isDefault="true"/>
+    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+      Location="${baseUrl}/api/sso/saml/slo"/>
   </md:SPSSODescriptor>
 </md:EntityDescriptor>`;
 
@@ -415,6 +547,7 @@ router.get(
 
     let email: string;
     let displayName: string;
+    let idpSessionExpiry: number | null = null;
     try {
       const tokenRes = await fetch(tokenEndpoint, {
         method: "POST",
@@ -424,6 +557,7 @@ router.get(
       const tokenData = (await tokenRes.json()) as {
         access_token: string;
         id_token?: string;
+        expires_in?: number;
       };
 
       if (!tokenData.access_token) {
@@ -433,6 +567,13 @@ router.get(
       }
 
       if (tokenData.id_token) {
+        const jwksKeys = await fetchOidcJwks(config.oidcIssuerUrl!);
+        if (jwksKeys.length > 0 && !verifyJwtSignatureWithJwks(tokenData.id_token, jwksKeys)) {
+          await logSsoEvent("sso_login_failed", clientId, null, { error: "id_token signature invalid", provider: "oidc" }, req.ip);
+          res.status(400).json({ error: "OIDC id_token signature verification failed" });
+          return;
+        }
+
         try {
           const payload = JSON.parse(Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString());
           if (expectedNonce && payload.nonce && payload.nonce !== expectedNonce) {
@@ -453,9 +594,17 @@ router.get(
             res.status(400).json({ error: "OIDC id_token expired" });
             return;
           }
+          if (payload.exp) {
+            idpSessionExpiry = payload.exp * 1000;
+          }
         } catch {
-          // id_token validation best-effort if parsing fails
+          res.status(400).json({ error: "Failed to parse OIDC id_token" });
+          return;
         }
+      }
+
+      if (tokenData.expires_in && !idpSessionExpiry) {
+        idpSessionExpiry = Date.now() + tokenData.expires_in * 1000;
       }
 
       const userinfoRes = await fetch(userinfoEndpoint, {
@@ -507,8 +656,22 @@ router.get(
       .from(clientsTable)
       .where(eq(clientsTable.id, user.clientId));
 
-    const ssoExpiry = config.forceSso ? "8h" : "7d";
-    const sessionMaxAge = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    let sessionTtlMs: number;
+    let jwtExpiry: string;
+
+    if (idpSessionExpiry) {
+      const remaining = idpSessionExpiry - Date.now();
+      if (remaining > 0 && remaining < 24 * 60 * 60 * 1000) {
+        sessionTtlMs = remaining;
+        jwtExpiry = `${Math.ceil(remaining / 1000)}s`;
+      } else {
+        sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+        jwtExpiry = config.forceSso ? "8h" : "7d";
+      }
+    } else {
+      sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+      jwtExpiry = config.forceSso ? "8h" : "7d";
+    }
 
     const token = signToken({
       userId: user.id,
@@ -517,7 +680,7 @@ router.get(
       email: user.email,
       plan: client?.plan,
       bypassPayment: user.bypassPayment,
-    }, ssoExpiry);
+    }, jwtExpiry);
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
@@ -528,7 +691,7 @@ router.get(
     );
 
     const completionCode = crypto.randomBytes(32).toString("hex");
-    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionMaxAge, createdAt: Date.now() });
+    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
     res.redirect(`${frontendBase}/galaxybots/sso/callback?code=${completionCode}`);
@@ -567,6 +730,8 @@ router.post(
   authenticate,
   async (req, res): Promise<void> => {
     await logSsoEvent("sso_logout", req.user!.clientId, req.user!.userId, {}, req.ip);
+    const jti = computeTokenJti(req.user!.email, 0);
+    revokedTokens.add(jti);
     res.clearCookie("token");
     res.json({ success: true });
   },
@@ -594,13 +759,43 @@ router.post(
     const nameIdMatch = decoded.match(/<(?:saml:)?NameID[^>]*>([^<]+)<\/(?:saml:)?NameID>/);
     if (nameIdMatch && nameIdMatch[1]) {
       const email = nameIdMatch[1].toLowerCase();
+      const domain = email.includes("@") ? email.split("@")[1] : null;
+
+      if (domain) {
+        const [config] = await db
+          .select()
+          .from(ssoConfigsTable)
+          .where(eq(ssoConfigsTable.domainHint, domain));
+
+        if (config && config.idpCert) {
+          const idpCert = decryptCredential(config.idpCert);
+          const baseUrl = `https://${req.get("host")}`;
+          const saml = new SAML({
+            callbackUrl: `${baseUrl}/api/sso/saml/acs`,
+            entryPoint: config.idpSsoUrl || "",
+            issuer: baseUrl,
+            cert: idpCert,
+          });
+
+          try {
+            if (SAMLRequest) {
+              await saml.validateRedirectAsync({ SAMLRequest } as any);
+            }
+          } catch (err: any) {
+            await logSsoEvent("sso_slo_validation_failed", config.clientId, null, { error: err.message, email }, req.ip);
+          }
+        }
+      }
+
       const [user] = await db
         .select()
         .from(usersTable)
         .where(eq(usersTable.email, email));
 
       if (user) {
-        await logSsoEvent("sso_backchannel_logout", user.clientId, user.id, { email }, req.ip);
+        const jti = computeTokenJti(email, 0);
+        revokedTokens.add(jti);
+        await logSsoEvent("sso_backchannel_logout", user.clientId, user.id, { email, sessionRevoked: true }, req.ip);
       }
     }
 
