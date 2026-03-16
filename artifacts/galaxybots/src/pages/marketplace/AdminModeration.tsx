@@ -180,7 +180,7 @@ export default function AdminModeration() {
                               onClick={() =>
                                 moderateMutation.mutate({
                                   id: t.id,
-                                  updates: { status: "approved", verified: true },
+                                  updates: { status: "approved" },
                                 })
                               }
                             >
@@ -205,6 +205,30 @@ export default function AdminModeration() {
                         )}
                         {activeStatus === "approved" && (
                           <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={cn(
+                                "gap-1",
+                                t.verified
+                                  ? "text-emerald-400 border-emerald-500/30"
+                                  : "text-muted-foreground",
+                              )}
+                              onClick={() =>
+                                moderateMutation.mutate({
+                                  id: t.id,
+                                  updates: { verified: !t.verified },
+                                })
+                              }
+                            >
+                              <ShieldCheck
+                                className={cn(
+                                  "w-3.5 h-3.5",
+                                  t.verified && "text-emerald-400",
+                                )}
+                              />
+                              {t.verified ? "Unverify" : "Verify"}
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"

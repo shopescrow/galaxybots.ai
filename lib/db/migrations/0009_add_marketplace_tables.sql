@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS marketplace_installs (
   template_id INTEGER NOT NULL REFERENCES marketplace_templates(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  installed_resource_id INTEGER,
   installed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
