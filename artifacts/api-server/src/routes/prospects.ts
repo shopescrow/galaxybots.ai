@@ -1,16 +1,16 @@
 import { Router } from "express";
-import { db, prospectsTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { db, prospectsTable, prospectOutreachLogTable, prospectOutreachTemplatesTable, clientsTable } from "@workspace/db";
+import { eq, and, desc, sql, gte, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
 
-type ProspectStatus = "new" | "enriched" | "review_needed" | "qualified" | "contacted" | "rejected";
+type ProspectStatus = "new" | "enriched" | "review_needed" | "qualified" | "contacted" | "rejected" | "responded" | "converted";
 
-const VALID_STATUSES: ProspectStatus[] = ["new", "enriched", "review_needed", "qualified", "contacted", "rejected"];
+const VALID_STATUSES: ProspectStatus[] = ["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"];
 
 const PatchProspectSchema = z.object({
-  status: z.enum(["new", "enriched", "review_needed", "qualified", "contacted", "rejected"]).optional(),
+  status: z.enum(["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"]).optional(),
   phone: z.string().nullable().optional(),
   email: z.union([z.string().email(), z.literal("").transform(() => null), z.null()]).optional(),
   domain: z.string().nullable().optional(),
@@ -156,6 +156,160 @@ router.patch("/prospects/:id", async (req, res) => {
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: "Failed to update prospect" });
+  }
+});
+
+router.get("/prospects/funnel", async (req, res) => {
+  try {
+    const clientId = getEffectiveClientId(req);
+    if (!clientId) {
+      return res.status(403).json({ error: "Client context required" });
+    }
+
+    const allProspects = await db.select({
+      id: prospectsTable.id,
+      status: prospectsTable.status,
+      outreachSentCount: prospectsTable.outreachSentCount,
+      createdAt: prospectsTable.createdAt,
+      convertedAt: prospectsTable.convertedAt,
+      updatedAt: prospectsTable.updatedAt,
+    }).from(prospectsTable)
+      .where(eq(prospectsTable.clientId, clientId));
+
+    const totalDiscovered = allProspects.length;
+
+    const enrichedStatuses = ["enriched", "review_needed", "qualified", "contacted", "responded", "converted"];
+    const enrichedCount = allProspects.filter(p => enrichedStatuses.includes(p.status)).length;
+
+    const qualifiedStatuses = ["qualified", "contacted", "responded", "converted"];
+    const qualifiedCount = allProspects.filter(p => qualifiedStatuses.includes(p.status)).length;
+
+    const outreachSent = allProspects.filter(p => p.outreachSentCount > 0).length;
+
+    const respondedStatuses = ["responded", "converted"];
+    const respondedCount = allProspects.filter(p => respondedStatuses.includes(p.status)).length;
+
+    const convertedCount = allProspects.filter(p => p.status === "converted").length;
+
+    function avgDaysInStage(statusList: string[]): number | null {
+      const matching = allProspects.filter(p => statusList.includes(p.status));
+      if (matching.length === 0) return null;
+      const now = Date.now();
+      const totalDays = matching.reduce((sum, p) => {
+        const enteredAt = new Date(p.updatedAt).getTime();
+        const days = (now - enteredAt) / (1000 * 60 * 60 * 24);
+        return sum + Math.max(0, days);
+      }, 0);
+      return Math.round((totalDays / matching.length) * 10) / 10;
+    }
+
+    const stages = [
+      { stage: "Discovered", count: totalDiscovered, avgDays: avgDaysInStage(["new"]) },
+      { stage: "Enriched", count: enrichedCount, avgDays: avgDaysInStage(["enriched", "review_needed"]) },
+      { stage: "Qualified", count: qualifiedCount, avgDays: avgDaysInStage(["qualified"]) },
+      { stage: "Outreach Sent", count: outreachSent, avgDays: avgDaysInStage(["contacted"]) },
+      { stage: "Responded", count: respondedCount, avgDays: avgDaysInStage(["responded"]) },
+      { stage: "Converted", count: convertedCount, avgDays: null as number | null },
+    ];
+
+    const stagesWithRates = stages.map((s, i) => ({
+      ...s,
+      conversionRate: i === 0 ? 100 : (stages[i - 1].count > 0 ? Math.round((s.count / stages[i - 1].count) * 100) : 0),
+    }));
+
+    let avgDaysToConversion: number | null = null;
+    const convertedProspects = allProspects.filter(p => p.status === "converted" && p.convertedAt);
+    if (convertedProspects.length > 0) {
+      const totalDays = convertedProspects.reduce((sum, p) => {
+        const days = (new Date(p.convertedAt!).getTime() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        return sum + days;
+      }, 0);
+      avgDaysToConversion = Math.round((totalDays / convertedProspects.length) * 10) / 10;
+    }
+
+    res.json({ stages: stagesWithRates, avgDaysToConversion });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch funnel data" });
+  }
+});
+
+router.get("/prospects/roi", async (req, res) => {
+  try {
+    const clientId = getEffectiveClientId(req);
+    if (!clientId) {
+      return res.status(403).json({ error: "Client context required" });
+    }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentProspects = await db.select().from(prospectsTable)
+      .where(and(
+        eq(prospectsTable.clientId, clientId),
+        gte(prospectsTable.createdAt, thirtyDaysAgo),
+      ));
+
+    const prospectSourced = recentProspects.length;
+
+    const outreachLogs = await db.select({
+      cnt: sql<number>`count(*)::int`,
+    }).from(prospectOutreachLogTable)
+      .innerJoin(prospectsTable, eq(prospectOutreachLogTable.prospectId, prospectsTable.id))
+      .where(and(
+        eq(prospectsTable.clientId, clientId),
+        gte(prospectOutreachLogTable.sentAt, thirtyDaysAgo),
+      ));
+
+    const outreachSent = outreachLogs[0]?.cnt || 0;
+
+    const responseLogs = await db.select({
+      cnt: sql<number>`count(*)::int`,
+    }).from(prospectOutreachLogTable)
+      .innerJoin(prospectsTable, eq(prospectOutreachLogTable.prospectId, prospectsTable.id))
+      .where(and(
+        eq(prospectsTable.clientId, clientId),
+        gte(prospectOutreachLogTable.sentAt, thirtyDaysAgo),
+        isNotNull(prospectOutreachLogTable.responseReceivedAt),
+      ));
+
+    const responsesReceived = responseLogs[0]?.cnt || 0;
+    const responseRate = outreachSent > 0 ? Math.round((responsesReceived / outreachSent) * 100) : 0;
+
+    const planMonthlyRevenue: Record<string, number> = {
+      single: 497,
+      growth: 997,
+      agency: 2497,
+    };
+
+    const convertedInWindow = await db.select({
+      plan: clientsTable.plan,
+    }).from(prospectsTable)
+      .innerJoin(clientsTable, eq(prospectsTable.convertedClientId, clientsTable.id))
+      .where(and(
+        eq(prospectsTable.clientId, clientId),
+        eq(prospectsTable.status, "converted"),
+        isNotNull(prospectsTable.convertedAt),
+        gte(prospectsTable.convertedAt, thirtyDaysAgo),
+      ));
+
+    const conversions = convertedInWindow.length;
+
+    let estimatedRevenue = 0;
+    for (const cp of convertedInWindow) {
+      const monthlyRate = planMonthlyRevenue[cp.plan] ?? planMonthlyRevenue.single;
+      estimatedRevenue += monthlyRate * 12;
+    }
+
+    res.json({
+      prospectSourced,
+      outreachSent,
+      responsesReceived,
+      responseRate,
+      conversions,
+      estimatedRevenue: Math.round(estimatedRevenue),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch prospector ROI data" });
   }
 });
 

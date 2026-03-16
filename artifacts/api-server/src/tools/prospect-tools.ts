@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { registerTool, type ToolContext } from "./registry";
-import { db, prospectsTable } from "@workspace/db";
+import { db, prospectsTable, botsTable, botAssignmentsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import * as cheerio from "cheerio";
+import { broadcastSSE } from "../services/scheduler";
 
-const ProspectStatusEnum = z.enum(["new", "enriched", "review_needed", "qualified", "contacted", "rejected"]);
+const ProspectStatusEnum = z.enum(["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"]);
 const ProspectErrorCategoryEnum = z.enum(["network", "parsing", "not_found", "validation"]);
 
 type ProspectStatus = z.infer<typeof ProspectStatusEnum>;
@@ -750,6 +751,44 @@ registerTool({
       extractionNotes: updatedNotes,
       updatedAt: new Date(),
     }).where(eq(prospectsTable.id, input.prospectId));
+
+    if (newStatus === "qualified" && prospect.status !== "qualified") {
+      try {
+        const [salesBot] = await db.select().from(botsTable)
+          .where(eq(botsTable.department, "Sales"))
+          .limit(1);
+
+        if (salesBot && prospect.clientId) {
+          const existingAssignments = await db.select().from(botAssignmentsTable)
+            .where(and(
+              eq(botAssignmentsTable.botId, salesBot.id),
+              eq(botAssignmentsTable.clientId, prospect.clientId),
+              eq(botAssignmentsTable.objective, `Outreach review for qualified prospect: ${prospect.companyName} (ID: ${prospect.id}). Review the prospect details and initiate outreach via email or SMS.`),
+            ))
+            .limit(1);
+
+          if (existingAssignments.length === 0) {
+            await db.insert(botAssignmentsTable).values({
+              botId: salesBot.id,
+              clientId: prospect.clientId,
+              objective: `Outreach review for qualified prospect: ${prospect.companyName} (ID: ${prospect.id}). Review the prospect details and initiate outreach via email or SMS.`,
+              schedule: "daily",
+              isActive: "true",
+              actionMode: "passive",
+            });
+          }
+        }
+
+        broadcastSSE("prospect-qualified", {
+          prospectId: prospect.id,
+          companyName: prospect.companyName,
+          clientId: prospect.clientId,
+          status: "qualified",
+        });
+      } catch {
+        // Non-critical: assignment creation failed but qualification succeeded
+      }
+    }
 
     return {
       success: true,

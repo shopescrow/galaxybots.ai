@@ -10,7 +10,8 @@ import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Loader2, Search, Building, Phone, Mail, Globe, ExternalLink,
-  CheckCircle, XCircle, Eye, Edit3, AlertTriangle, Users, TrendingUp
+  CheckCircle, XCircle, Edit3, AlertTriangle, Users, TrendingUp,
+  ArrowRight, Calendar, MessageSquare, UserCheck
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -38,6 +39,18 @@ type ProspectStats = {
   statusCounts: Record<string, number>;
 };
 
+type FunnelStage = {
+  stage: string;
+  count: number;
+  conversionRate: number;
+  avgDays: number | null;
+};
+
+type FunnelData = {
+  stages: FunnelStage[];
+  avgDaysToConversion: number | null;
+};
+
 const STATUS_COLORS: Record<string, string> = {
   new: "text-blue-400 border-blue-400/30 bg-blue-400/10",
   enriched: "text-emerald-400 border-emerald-400/30 bg-emerald-400/10",
@@ -45,6 +58,8 @@ const STATUS_COLORS: Record<string, string> = {
   qualified: "text-primary border-primary/30 bg-primary/10",
   contacted: "text-cyan border-cyan/30 bg-cyan/10",
   rejected: "text-red-400 border-red-400/30 bg-red-400/10",
+  responded: "text-violet-400 border-violet-400/30 bg-violet-400/10",
+  converted: "text-emerald-500 border-emerald-500/30 bg-emerald-500/10",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -54,7 +69,18 @@ const STATUS_LABELS: Record<string, string> = {
   qualified: "Qualified",
   contacted: "Contacted",
   rejected: "Rejected",
+  responded: "Responded",
+  converted: "Converted",
 };
+
+const FUNNEL_COLORS = [
+  "bg-blue-500",
+  "bg-cyan-500",
+  "bg-primary",
+  "bg-amber-500",
+  "bg-violet-500",
+  "bg-emerald-500",
+];
 
 function confidenceColor(score: number) {
   if (score >= 0.75) return "text-emerald-400";
@@ -82,7 +108,7 @@ export default function Prospects() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
-  const [tab, setTab] = useState<"pipeline" | "review">("pipeline");
+  const [tab, setTab] = useState<"pipeline" | "review" | "funnel">("pipeline");
   const [editingProspect, setEditingProspect] = useState<Prospect | null>(null);
   const [editForm, setEditForm] = useState({ phone: "", email: "", domain: "", companyName: "" });
 
@@ -130,6 +156,16 @@ export default function Prospects() {
     },
   });
 
+  const { data: funnelData, isLoading: funnelLoading } = useQuery<FunnelData>({
+    queryKey: ["prospects-funnel"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/prospects/funnel`);
+      if (!res.ok) return { stages: [], avgDaysToConversion: null };
+      return res.json();
+    },
+    enabled: tab === "funnel",
+  });
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: Record<string, unknown> }) => {
       const res = await fetch(`${BASE}/api/prospects/${id}`, {
@@ -144,6 +180,7 @@ export default function Prospects() {
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
       queryClient.invalidateQueries({ queryKey: ["prospects-review"] });
       queryClient.invalidateQueries({ queryKey: ["prospects-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["prospects-funnel"] });
     },
   });
 
@@ -188,6 +225,8 @@ export default function Prospects() {
     { label: "Review", value: stats?.statusCounts?.review_needed ?? 0, icon: AlertTriangle, color: "text-amber-400" },
     { label: "Qualified", value: stats?.statusCounts?.qualified ?? 0, icon: TrendingUp, color: "text-primary" },
   ];
+
+  const maxFunnelCount = funnelData?.stages?.[0]?.count || 1;
 
   return (
     <AppLayout>
@@ -234,6 +273,12 @@ export default function Prospects() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setTab("funnel")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === "funnel" ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Funnel
+            </button>
           </div>
 
           {tab === "pipeline" && (
@@ -249,6 +294,8 @@ export default function Prospects() {
                   <SelectItem value="review_needed">Review Needed</SelectItem>
                   <SelectItem value="qualified">Qualified</SelectItem>
                   <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="responded">Responded</SelectItem>
+                  <SelectItem value="converted">Converted</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
@@ -416,6 +463,107 @@ export default function Prospects() {
                   </CardContent>
                 </Card>
               ))
+            )}
+          </div>
+        )}
+
+        {tab === "funnel" && (
+          <div className="space-y-6">
+            {funnelLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <>
+                <Card className="glass-panel border-border/40">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-primary" />
+                      Sales Funnel
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {funnelData?.stages?.map((stage, i) => (
+                        <div key={stage.stage} className="flex items-center gap-4">
+                          <div className="w-32 text-sm font-medium text-right shrink-0">{stage.stage}</div>
+                          <div className="flex-1 flex items-center gap-3">
+                            <div className="flex-1 h-10 bg-secondary/30 rounded-lg overflow-hidden relative">
+                              <motion.div
+                                initial={prefersReducedMotion ? false : { width: 0 }}
+                                animate={{ width: `${maxFunnelCount > 0 ? (stage.count / maxFunnelCount) * 100 : 0}%` }}
+                                transition={{ duration: 0.6, delay: i * 0.1 }}
+                                className={`h-full ${FUNNEL_COLORS[i % FUNNEL_COLORS.length]} rounded-lg flex items-center justify-end pr-3`}
+                              >
+                                <span className="text-sm font-bold text-white drop-shadow-sm">
+                                  {stage.count}
+                                </span>
+                              </motion.div>
+                            </div>
+                            <div className="w-16 text-right shrink-0">
+                              {i > 0 ? (
+                                <span className={`text-sm font-medium ${stage.conversionRate >= 50 ? "text-emerald-400" : stage.conversionRate >= 25 ? "text-amber-400" : "text-red-400"}`}>
+                                  {stage.conversionRate}%
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          <div className="w-16 text-right shrink-0">
+                            {stage.avgDays != null ? (
+                              <span className="text-xs text-muted-foreground">{stage.avgDays}d avg</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </div>
+                          </div>
+                          {i < (funnelData?.stages?.length || 0) - 1 && (
+                            <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0 hidden sm:block" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Card className="glass-panel border-border/40">
+                    <CardContent className="p-5 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20">
+                        <Users className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{funnelData?.stages?.[0]?.count ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Total Discovered</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="glass-panel border-border/40">
+                    <CardContent className="p-5 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <UserCheck className="w-5 h-5 text-emerald-500" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{funnelData?.stages?.[5]?.count ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Total Converted</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="glass-panel border-border/40">
+                    <CardContent className="p-5 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <Calendar className="w-5 h-5 text-amber-500" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">
+                          {funnelData?.avgDaysToConversion != null ? `${funnelData.avgDaysToConversion}d` : "—"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Avg. Days to Convert</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
             )}
           </div>
         )}

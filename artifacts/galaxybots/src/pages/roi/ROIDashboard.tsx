@@ -18,6 +18,10 @@ import {
   BarChart3,
   Copy,
   Check,
+  Target,
+  Send,
+  MessageSquare,
+  UserCheck,
 } from "lucide-react";
 import {
   BarChart,
@@ -146,6 +150,23 @@ export default function ROIDashboard() {
     queryFn: async () => {
       const res = await fetch(`${BASE}/api/roi/client/${clientId}`);
       if (!res.ok) throw new Error("Failed to fetch ROI data");
+      return res.json();
+    },
+    enabled: !isNaN(clientId),
+  });
+
+  const { data: prospectorROI } = useQuery<{
+    prospectSourced: number;
+    outreachSent: number;
+    responsesReceived: number;
+    responseRate: number;
+    conversions: number;
+    estimatedRevenue: number;
+  }>({
+    queryKey: ["prospector-roi", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/prospects/roi?clientId=${clientId}`);
+      if (!res.ok) return { prospectSourced: 0, outreachSent: 0, responsesReceived: 0, responseRate: 0, conversions: 0, estimatedRevenue: 0 };
       return res.json();
     },
     enabled: !isNaN(clientId),
@@ -616,6 +637,63 @@ export default function ROIDashboard() {
                     </Link>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {prospectorROI && (prospectorROI.prospectSourced > 0 || prospectorROI.outreachSent > 0 || prospectorROI.conversions > 0) && (
+          <Card className="border-border/50 border-primary/20 mb-8">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Prospector ROI — Last 30 Days
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Users className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-xs text-muted-foreground">Sourced</span>
+                  </div>
+                  <p className="text-xl font-bold">{prospectorROI.prospectSourced}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Send className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-xs text-muted-foreground">Outreach</span>
+                  </div>
+                  <p className="text-xl font-bold">{prospectorROI.outreachSent}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-violet-500/5 border border-violet-500/10">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <MessageSquare className="w-3.5 h-3.5 text-violet-400" />
+                    <span className="text-xs text-muted-foreground">Responses</span>
+                  </div>
+                  <p className="text-xl font-bold">{prospectorROI.responsesReceived}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-xs text-muted-foreground">Response Rate</span>
+                  </div>
+                  <p className="text-xl font-bold">{prospectorROI.responseRate}%</p>
+                </div>
+                <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-xs text-muted-foreground">Converted</span>
+                  </div>
+                  <p className="text-xl font-bold">{prospectorROI.conversions}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <DollarSign className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs text-muted-foreground">Revenue</span>
+                  </div>
+                  <p className="text-xl font-bold">${prospectorROI.estimatedRevenue.toLocaleString()}</p>
+                </div>
               </div>
             </CardContent>
           </Card>
