@@ -9,7 +9,8 @@ import { useUserPreferences, ACCENT_COLOR_MAP } from "@/contexts/UserPreferences
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, LANGUAGES } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, X, Check, Palette, Type, LayoutDashboard, Loader2, Image, Globe, Store, Bot, Zap, GitBranch, Trash2, ExternalLink, Pencil, EyeOff } from "lucide-react";
+import { Upload, X, Check, Palette, Type, LayoutDashboard, Loader2, Image, Globe, Store, Bot, Zap, GitBranch, Trash2, ExternalLink, Pencil, EyeOff, Save } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
@@ -36,6 +37,7 @@ interface MyTemplate {
   id: number;
   type: string;
   title: string;
+  description: string;
   status: string;
   visibility: string;
   installCount: number;
@@ -79,6 +81,26 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-marketplace-templates"] });
       toast({ title: "Template removed from marketplace" });
+    },
+  });
+
+  const [editingTemplate, setEditingTemplate] = useState<{ id: number; title: string; description: string } | null>(null);
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, title, description }: { id: number; title: string; description: string }) => {
+      const res = await fetch(`${API_BASE}/marketplace/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-marketplace-templates"] });
+      toast({ title: "Template updated" });
+      setEditingTemplate(null);
     },
   });
 
@@ -444,7 +466,7 @@ export default function Settings() {
                             size="sm"
                             className="text-muted-foreground hover:text-primary"
                             title="Edit template"
-                            onClick={() => navigate(`/marketplace/${t.id}`)}
+                            onClick={() => setEditingTemplate({ id: t.id, title: t.title, description: t.description })}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
@@ -476,6 +498,55 @@ export default function Settings() {
           </Card>
         </div>
       </div>
+
+      {editingTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setEditingTemplate(null)}
+          />
+          <div className="relative bg-card border border-border/50 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-display font-bold">Edit Template</h3>
+              <button onClick={() => setEditingTemplate(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-tech text-muted-foreground mb-1.5 block">Title</label>
+                <Input
+                  value={editingTemplate.title}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate, title: e.target.value })}
+                  className="bg-secondary/30"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-tech text-muted-foreground mb-1.5 block">Description</label>
+                <textarea
+                  value={editingTemplate.description}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
+                  className="w-full rounded-lg bg-secondary/30 border border-border/50 p-3 text-sm min-h-[80px] resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={editMutation.isPending}
+                  onClick={() => editMutation.mutate(editingTemplate)}
+                >
+                  {editMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

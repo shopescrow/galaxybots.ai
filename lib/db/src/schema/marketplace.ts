@@ -32,6 +32,7 @@ export const marketplaceInstallsTable = pgTable("marketplace_installs", {
   templateId: integer("template_id").notNull().references(() => marketplaceTemplatesTable.id, { onDelete: "cascade" }),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  installedResourceId: integer("installed_resource_id"),
   installedAt: timestamp("installed_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("marketplace_installs_template_idx").on(table.templateId),

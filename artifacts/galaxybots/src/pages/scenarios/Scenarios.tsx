@@ -216,6 +216,10 @@ export default function Scenarios() {
           type="scenario"
           sourceData={{
             objective: publishScenario.missionObjective,
+            situation: publishScenario.situation,
+            actions: publishScenario.actions,
+            category: publishScenario.category,
+            difficulty: publishScenario.difficulty,
             recommendedBotTitles: [],
           }}
           defaultTitle={publishScenario.title}

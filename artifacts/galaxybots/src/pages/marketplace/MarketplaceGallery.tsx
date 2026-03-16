@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,41 @@ export default function MarketplaceGallery() {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
   const [industryFilter, setIndustryFilter] = useState("");
+  const [deployingId, setDeployingId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const deployMutation = useMutation({
+    mutationFn: async (templateId: number) => {
+      const res = await fetch(`${API_BASE}/marketplace/${templateId}/deploy`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Deploy failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: data.message || "Template deployed successfully" });
+      queryClient.invalidateQueries({ queryKey: ["marketplace"] });
+      setDeployingId(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Deploy failed", description: err.message, variant: "destructive" });
+      setDeployingId(null);
+    },
+  });
+
+  const handleDeploy = (templateId: number) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    setDeployingId(templateId);
+    deployMutation.mutate(templateId);
+  };
 
   const { data: templates = [], isLoading } = useQuery<MarketplaceTemplate[]>({
     queryKey: ["marketplace", typeFilter, categoryFilter, search, sortBy, industryFilter],
@@ -236,7 +272,7 @@ export default function MarketplaceGallery() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {featuredTemplates.map((t) => (
-                    <TemplateCard key={t.id} template={t} onClick={() => navigate(`/marketplace/${t.id}`)} />
+                    <TemplateCard key={t.id} template={t} onClick={() => navigate(`/marketplace/${t.id}`)} onDeploy={handleDeploy} deploying={deployingId === t.id} isAuthenticated={!!user} />
                   ))}
                 </div>
               </div>
@@ -244,7 +280,7 @@ export default function MarketplaceGallery() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {regularTemplates.map((t) => (
-                <TemplateCard key={t.id} template={t} onClick={() => navigate(`/marketplace/${t.id}`)} />
+                <TemplateCard key={t.id} template={t} onClick={() => navigate(`/marketplace/${t.id}`)} onDeploy={handleDeploy} deploying={deployingId === t.id} isAuthenticated={!!user} />
               ))}
             </div>
           </>
@@ -265,9 +301,15 @@ export default function MarketplaceGallery() {
 function TemplateCard({
   template,
   onClick,
+  onDeploy,
+  deploying,
+  isAuthenticated,
 }: {
   template: MarketplaceTemplate;
   onClick: () => void;
+  onDeploy: (id: number) => void;
+  deploying: boolean;
+  isAuthenticated: boolean;
 }) {
   const TypeIcon = TYPE_ICONS[template.type] || Bot;
   const typeColor = TYPE_COLORS[template.type] || TYPE_COLORS.bot;
@@ -318,10 +360,27 @@ function TemplateCard({
           </div>
         </div>
 
-        <div className="mt-3 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="mt-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
           <span className="text-xs text-primary flex items-center gap-1 font-tech">
             View Details <ArrowRight className="w-3 h-3" />
           </span>
+          <Button
+            variant="glow"
+            size="sm"
+            className="text-xs h-7 px-3"
+            disabled={deploying}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeploy(template.id);
+            }}
+          >
+            {deploying ? (
+              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+            ) : (
+              <Download className="w-3 h-3 mr-1" />
+            )}
+            {isAuthenticated ? "Deploy" : "Login to Deploy"}
+          </Button>
         </div>
       </CardContent>
     </Card>

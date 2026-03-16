@@ -273,6 +273,8 @@ router.post(
     }
 
     try {
+      let resourceId: number | null = null;
+
       await db.transaction(async (tx) => {
         if (template.type === "bot") {
           const botData = data as {
@@ -286,7 +288,7 @@ router.post(
             avatar?: string;
             declaration?: string;
           };
-          await tx.insert(botsTable).values({
+          const botValues = {
             name: botData.name,
             title: botData.title,
             department: botData.department,
@@ -297,21 +299,48 @@ router.post(
             avatar: botData.avatar,
             declaration: botData.declaration,
             isAiGenerated: true,
-          });
+          };
+
+          if (isReinstall && existingInstall!.installedResourceId) {
+            await tx
+              .update(botsTable)
+              .set(botValues)
+              .where(eq(botsTable.id, existingInstall!.installedResourceId));
+            resourceId = existingInstall!.installedResourceId;
+          } else {
+            const [bot] = await tx.insert(botsTable).values(botValues).returning();
+            resourceId = bot.id;
+          }
         } else if (template.type === "scenario") {
           const scenarioData = data as {
             objective: string;
             recommendedBotTitles?: string[];
+            actions?: string[];
+            situation?: string;
           };
           const allBots = await tx.select().from(botsTable);
-          const [session] = await tx
-            .insert(taskSessionsTable)
-            .values({
-              clientId,
-              objective: scenarioData.objective,
-              status: "active",
-            })
-            .returning();
+
+          if (isReinstall && existingInstall!.installedResourceId) {
+            await tx
+              .update(taskSessionsTable)
+              .set({ objective: scenarioData.objective })
+              .where(eq(taskSessionsTable.id, existingInstall!.installedResourceId));
+            resourceId = existingInstall!.installedResourceId;
+
+            await tx
+              .delete(taskSessionBotsTable)
+              .where(eq(taskSessionBotsTable.sessionId, existingInstall!.installedResourceId));
+          } else {
+            const [session] = await tx
+              .insert(taskSessionsTable)
+              .values({
+                clientId,
+                objective: scenarioData.objective,
+                status: "active",
+              })
+              .returning();
+            resourceId = session.id;
+          }
 
           if (scenarioData.recommendedBotTitles && scenarioData.recommendedBotTitles.length > 0) {
             const matchedBots = allBots.filter((b) =>
@@ -322,7 +351,7 @@ router.post(
             if (matchedBots.length > 0) {
               await tx.insert(taskSessionBotsTable).values(
                 matchedBots.map((b) => ({
-                  sessionId: session.id,
+                  sessionId: resourceId!,
                   botId: b.id,
                   role: "member",
                 })),
@@ -347,19 +376,35 @@ router.post(
             throw new Error("Could not resolve any bot titles from the pipeline template. Ensure the required bots exist in your roster.");
           }
 
-          const [pipeline] = await tx
-            .insert(pipelinesTable)
-            .values({
-              clientId,
-              name: pipelineData.name,
-              triggerType: pipelineData.triggerType || "manual",
-              active: true,
-            })
-            .returning();
+          if (isReinstall && existingInstall!.installedResourceId) {
+            await tx
+              .update(pipelinesTable)
+              .set({
+                name: pipelineData.name,
+                triggerType: pipelineData.triggerType || "manual",
+              })
+              .where(eq(pipelinesTable.id, existingInstall!.installedResourceId));
+            resourceId = existingInstall!.installedResourceId;
+
+            await tx
+              .delete(pipelineStepsTable)
+              .where(eq(pipelineStepsTable.pipelineId, existingInstall!.installedResourceId));
+          } else {
+            const [pipeline] = await tx
+              .insert(pipelinesTable)
+              .values({
+                clientId,
+                name: pipelineData.name,
+                triggerType: pipelineData.triggerType || "manual",
+                active: true,
+              })
+              .returning();
+            resourceId = pipeline.id;
+          }
 
           await tx.insert(pipelineStepsTable).values(
             resolvedSteps.map((step, index) => ({
-              pipelineId: pipeline.id,
+              pipelineId: resourceId!,
               stepOrder: index + 1,
               botId: step.botId,
               instruction: step.instruction,
@@ -367,11 +412,17 @@ router.post(
           );
         }
 
-        if (!isReinstall) {
+        if (isReinstall) {
+          await tx
+            .update(marketplaceInstallsTable)
+            .set({ installedResourceId: resourceId, installedAt: new Date() })
+            .where(eq(marketplaceInstallsTable.id, existingInstall!.id));
+        } else {
           await tx.insert(marketplaceInstallsTable).values({
             templateId,
             userId,
             clientId,
+            installedResourceId: resourceId,
           });
 
           await tx
@@ -473,7 +524,7 @@ router.delete(
 router.get(
   "/admin/marketplace",
   authenticate,
-  requireRole("owner", "admin"),
+  requireRole("owner"),
   async (req, res): Promise<void> => {
     const status = (req.query.status as string) || "pending";
     const templates = await db
@@ -489,7 +540,7 @@ router.get(
 router.patch(
   "/admin/marketplace/:id",
   authenticate,
-  requireRole("owner", "admin"),
+  requireRole("owner"),
   async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     if (isNaN(id)) {
