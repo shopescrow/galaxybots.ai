@@ -12,9 +12,11 @@ import {
   taskSessionBotsTable,
   taskSessionMessagesTable,
 } from "@workspace/db";
-import { eq, and, gt, sql, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gt, sql, gte, lte, desc, inArray } from "drizzle-orm";
 import { signToken } from "../middleware/auth";
 import rateLimit from "express-rate-limit";
+import { runAgenticLoop } from "../tools/agentic-loop";
+import { buildClientContext } from "../services/client-context";
 
 const router: IRouter = Router();
 
@@ -51,7 +53,6 @@ const SANDBOXED_TOOLS = new Set([
 const READ_ONLY_TOOLS = new Set([
   "web_search",
   "read_world_state",
-  "write_world_state",
   "read_platform_data",
   "read_email",
   "read_slack_channel",
@@ -60,14 +61,10 @@ const READ_ONLY_TOOLS = new Set([
   "scrape_webpage",
   "analyze_aeo_score",
   "aeo_recommend",
-  "run_code",
   "delegate_to_bot",
   "prospect_search",
-  "enrich_prospect",
   "get_prospects",
-  "qualify_prospect",
   "browse_sabrina_automations",
-  "download_sabrina_automation",
 ]);
 
 export function isToolSandboxed(toolName: string): boolean {
@@ -95,6 +92,76 @@ export function getSandboxedToolResponse(toolName: string): unknown {
 
 function hashIp(ip: string): string {
   return crypto.createHash("sha256").update(ip + (process.env.JWT_SECRET || "salt")).digest("hex").slice(0, 32);
+}
+
+async function autoLaunchDemoMission(
+  taskSessionId: number,
+  clientId: number,
+  botIds: number[]
+): Promise<void> {
+  try {
+    const bots = botIds.length > 0
+      ? await db.select().from(botsTable).where(inArray(botsTable.id, botIds))
+      : [];
+    if (bots.length === 0) return;
+
+    await db.insert(taskSessionMessagesTable).values({
+      sessionId: taskSessionId,
+      role: "user",
+      content: DEMO_MISSION_OBJECTIVE,
+      botName: "Mission Control",
+      botTitle: "System",
+      messageType: "text",
+    });
+
+    const clientContext = await buildClientContext(clientId);
+    const teamRoster = bots.map((b) => `${b.name} (${b.title})`).join(", ");
+
+    for (const bot of bots) {
+      const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
+Personality: ${bot.personality}
+Your responsibilities: ${bot.responsibilities.join("; ")}
+${clientContext}
+TASK OBJECTIVE: ${DEMO_MISSION_OBJECTIVE}
+TEAM MEMBERS: ${teamRoster}
+${DEMO_BUSINESS_CONTEXT}
+You are participating in a live demo session for a prospective customer. Deliver an impressive, substantive initial assessment demonstrating deep domain expertise. Be specific with metrics, frameworks, and actionable recommendations. Keep response focused and impactful (4-6 sentences).`;
+
+      const { finalContent } = await runAgenticLoop({
+        model: "gpt-4o-mini",
+        maxIterations: 5,
+        maxTokens: 400,
+        systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: `Mission briefing: ${DEMO_MISSION_OBJECTIVE}\n\nProvide your initial expert assessment of this situation. What are the key issues you see, and what should we focus on first?`,
+          },
+        ],
+        context: {
+          sessionId: taskSessionId,
+          botId: bot.id,
+          botName: bot.name,
+          clientId,
+          userId: 0,
+          isGuest: true,
+        },
+      });
+
+      const content = finalContent || "Acknowledged. I will analyze this and provide my assessment shortly.";
+      await db.insert(taskSessionMessagesTable).values({
+        sessionId: taskSessionId,
+        botId: bot.id,
+        botName: bot.name,
+        botTitle: bot.title,
+        role: "bot",
+        content,
+        messageType: "text",
+      });
+    }
+  } catch (err) {
+    console.error("[Demo] Auto-launch mission error:", err);
+  }
 }
 
 const demoRateLimit = rateLimit({
@@ -282,6 +349,10 @@ router.post("/demo/start", demoRateLimit, async (req, res): Promise<void> => {
     const bots = botIds.length > 0
       ? await db.select().from(botsTable).where(sql`${botsTable.id} = ANY(${botIds})`)
       : [];
+
+    autoLaunchDemoMission(taskSession.id, clientId, botIds).catch((err) =>
+      console.error("[Demo] Background auto-launch error:", err)
+    );
 
     res.status(201).json({
       token: guestToken,

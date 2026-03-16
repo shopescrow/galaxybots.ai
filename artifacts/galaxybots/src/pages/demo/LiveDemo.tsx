@@ -137,10 +137,8 @@ export default function LiveDemo() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  useEffect(() => {
+  const fetchMessages = useCallback(() => {
     if (!demoSession) return;
-
-    setIsLoadingMessages(true);
     fetch(`${BASE}/api/task-sessions/${demoSession.taskSessionId}/messages`, {
       headers: { Authorization: `Bearer ${demoSession.token}` },
     })
@@ -163,6 +161,19 @@ export default function LiveDemo() {
       .catch(() => {})
       .finally(() => setIsLoadingMessages(false));
   }, [demoSession]);
+
+  useEffect(() => {
+    if (!demoSession) return;
+    setIsLoadingMessages(true);
+    fetchMessages();
+
+    const pollInterval = setInterval(fetchMessages, 5000);
+    const stopPolling = setTimeout(() => clearInterval(pollInterval), 60000);
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(stopPolling);
+    };
+  }, [demoSession, fetchMessages]);
 
   const sendMessage = useCallback(async () => {
     if (!demoSession || !inputValue.trim() || isSending) return;
@@ -412,20 +423,42 @@ export default function LiveDemo() {
 
           {messages.length === 0 && !isLoadingMessages && (
             <div className="text-center py-12 space-y-4">
-              <Bot className="w-12 h-12 text-primary mx-auto opacity-30" />
+              <Loader2 className="w-12 h-12 text-primary mx-auto animate-spin" />
               <p className="text-muted-foreground">
-                Your AI team is assembled and ready. Send a message to begin the mission.
+                Your AI team is analyzing the mission. Initial assessments arriving shortly...
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-2"
                 onClick={() => {
-                  setInputValue("Begin the Q2 marketing analysis. Each director, share your initial assessment.");
+                  if (demoSession) {
+                    setIsLoadingMessages(true);
+                    fetch(`${BASE}/api/task-sessions/${demoSession.taskSessionId}/messages`, {
+                      headers: { Authorization: `Bearer ${demoSession.token}` },
+                    })
+                      .then((res) => res.json())
+                      .then((data) => {
+                        if (Array.isArray(data)) {
+                          setMessages(
+                            data.map((m: any) => ({
+                              id: String(m.id),
+                              role: m.role === "user" ? "user" : "bot",
+                              content: m.content,
+                              botName: m.botName,
+                              botTitle: m.botTitle,
+                              messageType: m.messageType,
+                              toolData: m.toolData,
+                            }))
+                          );
+                        }
+                      })
+                      .finally(() => setIsLoadingMessages(false));
+                  }
                 }}
               >
                 <Zap className="w-3.5 h-3.5" />
-                Use suggested prompt
+                Refresh Messages
               </Button>
             </div>
           )}

@@ -60,6 +60,8 @@ const PUBLIC_PATHS = [
   "/api/integrations/piratemonster/register-partner",
   "/api/partner/link",
   "/api/partner/register",
+  "/api/demo/start",
+  "/api/demo/claim",
 ];
 
 const PUBLIC_PATH_PREFIXES = [
