@@ -142,7 +142,7 @@ You are participating in a live demo session for a prospective customer. Deliver
             toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
           };
           await db.insert(taskSessionMessagesTable).values(msg);
-          emitter.emit("event", { type: "tool_call", ...msg });
+          emitter.emit("event", { type: "tool_call", ...msg, sandboxed: true });
         } else if (event.type === "tool_result") {
           const msg = {
             sessionId: taskSessionId,
@@ -155,7 +155,7 @@ You are participating in a live demo session for a prospective customer. Deliver
             toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
           };
           await db.insert(taskSessionMessagesTable).values(msg);
-          emitter.emit("event", { type: "tool_result", ...msg });
+          emitter.emit("event", { type: "tool_result", ...msg, sandboxed: true });
         }
       }
 

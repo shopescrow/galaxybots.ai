@@ -177,12 +177,15 @@ export default function LiveDemo() {
                 setMessages((prev) => {
                   const exists = prev.some((m) => m.content === event.content && m.botName === event.botName);
                   if (exists) return prev;
+                  const sandboxLabel = event.sandboxed ? " [Sandboxed — sign up to enable real actions]" : "";
                   return [
                     ...prev,
                     {
                       id: `sse-${Date.now()}-${Math.random()}`,
                       role: event.role === "user" ? "user" as const : "bot" as const,
-                      content: event.content,
+                      content: (event.type === "tool_call" || event.type === "tool_result")
+                        ? `${event.content}${sandboxLabel}`
+                        : event.content,
                       botName: event.botName,
                       botTitle: event.botTitle,
                       messageType: event.messageType || event.type,
