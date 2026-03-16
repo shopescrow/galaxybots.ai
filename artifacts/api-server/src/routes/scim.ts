@@ -239,6 +239,18 @@ router.patch("/scim/v2/Users/:id", scimAuth, async (req, res): Promise<void> => 
     return;
   }
 
+  const SCIM_GROUP_ROLE_MAP: Record<string, string> = {
+    admin: "admin",
+    admins: "admin",
+    administrators: "admin",
+    owner: "owner",
+    owners: "owner",
+    viewer: "viewer",
+    viewers: "viewer",
+    member: "viewer",
+    members: "viewer",
+  };
+
   const updates: Record<string, unknown> = {};
   const { Operations } = req.body;
 
@@ -254,6 +266,24 @@ router.patch("/scim/v2/Users/:id", scimAuth, async (req, res): Promise<void> => 
         if (op.path === "userName" || (op.value && op.value.userName)) {
           const newEmail = (op.path === "userName" ? op.value : op.value.userName) as string;
           updates.email = newEmail.toLowerCase();
+        }
+        if (op.path === "roles" && Array.isArray(op.value)) {
+          const primaryRole = op.value.find((r: any) => r.primary)?.value || op.value[0]?.value;
+          if (primaryRole) {
+            const mapped = SCIM_GROUP_ROLE_MAP[primaryRole.toLowerCase()];
+            if (mapped) updates.role = mapped;
+          }
+        }
+      }
+      if (op.op === "add" || op.op === "Add") {
+        if (op.path === "members" || op.path === "groups") {
+          if (Array.isArray(op.value)) {
+            for (const group of op.value) {
+              const groupName = (group.display || group.value || "").toLowerCase();
+              const mapped = SCIM_GROUP_ROLE_MAP[groupName];
+              if (mapped) updates.role = mapped;
+            }
+          }
         }
       }
     }

@@ -73,6 +73,7 @@ const PUBLIC_PATHS = [
   "/api/client-portal/approvals",
   "/api/sso/check-domain",
   "/api/sso/saml/metadata",
+  "/api/sso/exchange",
 ];
 
 const PUBLIC_PATH_PREFIXES = [

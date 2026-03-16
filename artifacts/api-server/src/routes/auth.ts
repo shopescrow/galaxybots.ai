@@ -111,24 +111,19 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
-  if (isEmail) {
-    const domain = identifier.toLowerCase().split("@")[1];
-    if (domain) {
-      const [ssoConfig] = await db
-        .select()
-        .from(ssoConfigsTable)
-        .where(
-          and(
-            eq(ssoConfigsTable.domainHint, domain),
-            eq(ssoConfigsTable.enabled, true),
-            eq(ssoConfigsTable.forceSso, true),
-          ),
-        );
-      if (ssoConfig) {
-        res.status(403).json({ error: "Password login is disabled for your organization. Please use SSO." });
-        return;
-      }
-    }
+  const [ssoConfig] = await db
+    .select()
+    .from(ssoConfigsTable)
+    .where(
+      and(
+        eq(ssoConfigsTable.clientId, user.clientId),
+        eq(ssoConfigsTable.enabled, true),
+        eq(ssoConfigsTable.forceSso, true),
+      ),
+    );
+  if (ssoConfig) {
+    res.status(403).json({ error: "Password login is disabled for your organization. Please use SSO." });
+    return;
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);

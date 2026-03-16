@@ -15,11 +15,15 @@ import { encryptCredential, decryptCredential } from "../utils/credential-encryp
 const router: IRouter = Router();
 
 const ssoStateStore = new Map<string, { clientId: number; codeVerifier?: string; nonce?: string; createdAt: number }>();
+const ssoCompletionCodes = new Map<string, { token: string; maxAge: number; createdAt: number }>();
 
 setInterval(() => {
   const now = Date.now();
   for (const [key, val] of ssoStateStore) {
     if (now - val.createdAt > 10 * 60 * 1000) ssoStateStore.delete(key);
+  }
+  for (const [key, val] of ssoCompletionCodes) {
+    if (now - val.createdAt > 2 * 60 * 1000) ssoCompletionCodes.delete(key);
   }
 }, 60 * 1000);
 
@@ -224,6 +228,7 @@ router.post(
       .from(clientsTable)
       .where(eq(clientsTable.id, user.clientId));
 
+    const ssoExpiry = config.forceSso ? "8h" : "7d";
     const sessionMaxAge = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 
     const token = signToken({
@@ -233,7 +238,7 @@ router.post(
       email: user.email,
       plan: client?.plan,
       bypassPayment: user.bypassPayment,
-    });
+    }, ssoExpiry);
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
@@ -243,15 +248,11 @@ router.post(
       req.ip,
     );
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: sessionMaxAge,
-    });
+    const completionCode = crypto.randomBytes(32).toString("hex");
+    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionMaxAge, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
-    res.redirect(`${frontendBase}/galaxybots/sso/callback?success=true&token=${encodeURIComponent(token)}`);
+    res.redirect(`${frontendBase}/galaxybots/sso/callback?code=${completionCode}`);
   },
 );
 
@@ -431,15 +432,29 @@ router.get(
         return;
       }
 
-      if (tokenData.id_token && expectedNonce) {
+      if (tokenData.id_token) {
         try {
           const payload = JSON.parse(Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString());
-          if (payload.nonce && payload.nonce !== expectedNonce) {
+          if (expectedNonce && payload.nonce && payload.nonce !== expectedNonce) {
             res.status(400).json({ error: "OIDC nonce mismatch — possible replay attack" });
             return;
           }
+          const expectedIssuer = config.oidcIssuerUrl!.replace(/\/$/, "");
+          if (payload.iss && payload.iss.replace(/\/$/, "") !== expectedIssuer) {
+            res.status(400).json({ error: "OIDC issuer mismatch" });
+            return;
+          }
+          const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+          if (payload.aud && !aud.includes(config.oidcClientId)) {
+            res.status(400).json({ error: "OIDC audience mismatch" });
+            return;
+          }
+          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+            res.status(400).json({ error: "OIDC id_token expired" });
+            return;
+          }
         } catch {
-          // nonce check best-effort if id_token parsing fails
+          // id_token validation best-effort if parsing fails
         }
       }
 
@@ -492,6 +507,7 @@ router.get(
       .from(clientsTable)
       .where(eq(clientsTable.id, user.clientId));
 
+    const ssoExpiry = config.forceSso ? "8h" : "7d";
     const sessionMaxAge = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 
     const token = signToken({
@@ -501,7 +517,7 @@ router.get(
       email: user.email,
       plan: client?.plan,
       bypassPayment: user.bypassPayment,
-    });
+    }, ssoExpiry);
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
@@ -511,15 +527,38 @@ router.get(
       req.ip,
     );
 
-    res.cookie("token", token, {
+    const completionCode = crypto.randomBytes(32).toString("hex");
+    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionMaxAge, createdAt: Date.now() });
+
+    const frontendBase = `https://${req.get("host")}`;
+    res.redirect(`${frontendBase}/galaxybots/sso/callback?code=${completionCode}`);
+  },
+);
+
+router.post(
+  "/sso/exchange",
+  async (req, res): Promise<void> => {
+    const { code } = req.body;
+    if (!code || typeof code !== "string") {
+      res.status(400).json({ error: "Missing completion code" });
+      return;
+    }
+
+    const entry = ssoCompletionCodes.get(code);
+    if (!entry) {
+      res.status(400).json({ error: "Invalid or expired completion code" });
+      return;
+    }
+    ssoCompletionCodes.delete(code);
+
+    res.cookie("token", entry.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: sessionMaxAge,
+      maxAge: entry.maxAge,
     });
 
-    const frontendBase = `https://${req.get("host")}`;
-    res.redirect(`${frontendBase}/galaxybots/sso/callback?success=true&token=${encodeURIComponent(token)}`);
+    res.json({ token: entry.token });
   },
 );
 
@@ -530,6 +569,42 @@ router.post(
     await logSsoEvent("sso_logout", req.user!.clientId, req.user!.userId, {}, req.ip);
     res.clearCookie("token");
     res.json({ success: true });
+  },
+);
+
+router.post(
+  "/sso/saml/slo",
+  async (req, res): Promise<void> => {
+    const { SAMLRequest, SAMLResponse } = req.body;
+
+    if (!SAMLRequest && !SAMLResponse) {
+      res.status(400).json({ error: "Missing SAML SLO request or response" });
+      return;
+    }
+
+    const payload = SAMLRequest || SAMLResponse;
+    let decoded: string;
+    try {
+      decoded = Buffer.from(payload, "base64").toString("utf-8");
+    } catch {
+      res.status(400).json({ error: "Invalid SLO payload encoding" });
+      return;
+    }
+
+    const nameIdMatch = decoded.match(/<(?:saml:)?NameID[^>]*>([^<]+)<\/(?:saml:)?NameID>/);
+    if (nameIdMatch && nameIdMatch[1]) {
+      const email = nameIdMatch[1].toLowerCase();
+      const [user] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.email, email));
+
+      if (user) {
+        await logSsoEvent("sso_backchannel_logout", user.clientId, user.id, { email }, req.ip);
+      }
+    }
+
+    res.status(200).send();
   },
 );
 
