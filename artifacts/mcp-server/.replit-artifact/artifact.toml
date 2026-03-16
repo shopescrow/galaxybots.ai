@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/__mcp/"
+title = "MCP Server"
+version = "1.0.0"
+id = "artifacts/mcp-server"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 23320
+name = "web"
+paths = ["/__mcp/"]
+
+[services.development]
+run = "pnpm --filter @workspace/mcp-server run dev"
+
+[services.env]
+PORT = "23320"
+BASE_PATH = "/__mcp/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/mcp-server", "run", "build"]
+publicDir = "artifacts/mcp-server/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

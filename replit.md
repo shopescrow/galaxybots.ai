@@ -48,3 +48,19 @@ The project is built as a monorepo using `pnpm workspaces`, Node.js 24, TypeScri
 - **Slack:** Platform-level integration for messaging agentic tools (`post_slack_message`, `read_slack_channel`).
 - **Linear:** Platform-level integration for issue management agentic tools (`create_issue`, `update_issue`).
 - **Stripe:** Payment processing for subscription billing. Checkout sessions redirect users to Stripe-hosted payment pages, and a webhook (`POST /api/billing/stripe/webhook`) auto-activates accounts on successful payment. Requires env secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_SINGLE`, `STRIPE_PRICE_ID_TEAM`, `STRIPE_PRICE_ID_ENTERPRISE`. An optional `APP_URL` env var controls redirect URLs after checkout.
+
+# MCP Server
+
+The project includes a standalone MCP (Model Context Protocol) server at `artifacts/mcp-server` that exposes GalaxyBots capabilities as callable tools for Replit Agent and any MCP-compatible AI client. It implements the MCP protocol over SSE (HTTP transport), reachable at `/__mcp/sse`.
+
+**Tools exposed:**
+- `list_bots` / `get_bot` — Query the bot roster
+- `list_clients` / `get_client` — Query client business profiles (omits sensitive fields)
+- `send_message_to_bot` — Send a message to a bot and receive its AI response
+- `analyze_task` — Submit a business objective for Optima Prime team analysis
+- `create_task_session` / `list_task_sessions` — Manage Task Rooms
+- `search_bot_memory` — Semantic search over a bot's long-term memory (pgvector)
+
+**Authentication:** All requests require `Authorization: Bearer <MCP_API_KEY>` header. The `MCP_API_KEY` is set as an environment variable.
+
+**Registration:** Add as a custom MCP server in Replit with SSE URL `https://<domain>/__mcp/sse` and the bearer token header.
