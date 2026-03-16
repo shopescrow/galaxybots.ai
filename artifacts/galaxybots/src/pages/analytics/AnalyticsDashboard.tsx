@@ -180,9 +180,7 @@ function DemoMetricsPanel() {
     queryKey: ["demoMetrics"],
     queryFn: async () => {
       const res = await fetch(`${BASE}/api/analytics/demo-metrics`, {
-        headers: {
-          Authorization: `Bearer ${document.cookie.match(/token=([^;]+)/)?.[1] || ""}`,
-        },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();

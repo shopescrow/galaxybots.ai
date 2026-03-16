@@ -23,7 +23,8 @@ const router: IRouter = Router();
 const DEMO_COMPANY_NAME = "Apex Ventures";
 const DEMO_CONTACT_NAME = "Demo User";
 const DEMO_CONTACT_EMAIL = "demo@apexventures.example";
-const DEMO_SESSION_DURATION_MS = 30 * 60 * 1000;
+const DEMO_SESSION_DURATION_MS = 2 * 60 * 60 * 1000;
+const DEMO_JWT_EXPIRY = "30m";
 const DEMO_CLEANUP_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 
 const DEMO_MISSION_OBJECTIVE = "Analyze our Q2 marketing performance and recommend a growth strategy for next quarter";
@@ -127,7 +128,7 @@ TEAM MEMBERS: ${teamRoster}
 ${DEMO_BUSINESS_CONTEXT}
 You are participating in a live demo session for a prospective customer. Deliver an impressive, substantive initial assessment demonstrating deep domain expertise. Be specific with metrics, frameworks, and actionable recommendations. Keep response focused and impactful (4-6 sentences).`;
 
-      const { finalContent } = await runAgenticLoop({
+      const { finalContent, events } = await runAgenticLoop({
         model: "gpt-4o-mini",
         maxIterations: 5,
         maxTokens: 400,
@@ -148,6 +149,32 @@ You are participating in a live demo session for a prospective customer. Deliver
         },
       });
 
+      for (const event of events) {
+        if (event.type === "tool_call") {
+          await db.insert(taskSessionMessagesTable).values({
+            sessionId: taskSessionId,
+            botId: bot.id,
+            botName: bot.name,
+            botTitle: bot.title,
+            role: "bot",
+            content: `Using tool: ${event.toolName}`,
+            messageType: "tool_call",
+            toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
+          });
+        } else if (event.type === "tool_result") {
+          await db.insert(taskSessionMessagesTable).values({
+            sessionId: taskSessionId,
+            botId: bot.id,
+            botName: bot.name,
+            botTitle: bot.title,
+            role: "bot",
+            content: `Tool result: ${event.toolName}`,
+            messageType: "tool_result",
+            toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
+          });
+        }
+      }
+
       const content = finalContent || "Acknowledged. I will analyze this and provide my assessment shortly.";
       await db.insert(taskSessionMessagesTable).values({
         sessionId: taskSessionId,
@@ -166,12 +193,12 @@ You are participating in a live demo session for a prospective customer. Deliver
 
 const demoRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 3,
+  limit: 1,
   keyGenerator: (req) => req.ip || "unknown",
   standardHeaders: "draft-7",
   legacyHeaders: false,
   validate: false,
-  message: { error: "Demo sessions are limited to 3 per hour. Please try again later or create an account." },
+  message: { error: "Demo sessions are limited to 1 per hour. Please try again later or create an account." },
 });
 
 async function seedDemoCompany(): Promise<{ clientId: number; botIds: number[] }> {
@@ -273,7 +300,7 @@ router.post("/demo/start", demoRateLimit, async (req, res): Promise<void> => {
           guestSessionId: existing.id,
         },
         secret,
-        { expiresIn: "30m" }
+        { expiresIn: DEMO_JWT_EXPIRY }
       );
 
       res.json({
@@ -343,7 +370,7 @@ router.post("/demo/start", demoRateLimit, async (req, res): Promise<void> => {
         guestSessionId: guestSession.id,
       },
       secret,
-      { expiresIn: "30m" }
+      { expiresIn: DEMO_JWT_EXPIRY }
     );
 
     const bots = botIds.length > 0
