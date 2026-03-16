@@ -23,7 +23,7 @@ const router: IRouter = Router();
 const DEMO_COMPANY_NAME = "Apex Ventures";
 const DEMO_CONTACT_NAME = "Demo User";
 const DEMO_CONTACT_EMAIL = "demo@apexventures.example";
-const DEMO_SESSION_DURATION_MS = 2 * 60 * 60 * 1000;
+const DEMO_SESSION_DURATION_MS = 30 * 60 * 1000;
 const DEMO_JWT_EXPIRY = "30m";
 const DEMO_CLEANUP_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 

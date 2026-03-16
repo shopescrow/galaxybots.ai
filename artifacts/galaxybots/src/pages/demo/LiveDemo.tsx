@@ -119,7 +119,7 @@ function DemoROICard() {
 export default function LiveDemo() {
   const {
     demoSession, isDemo, isStarting, startDemo, completeDemo,
-    missionCompleted, roiData, clearDemo,
+    missionCompleted, roiData, clearDemo, remainingMs,
   } = useDemo();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
