@@ -38,9 +38,22 @@ export default function Login() {
       if (res.ok) {
         const data = await res.json();
         setSsoState(data);
+        if (data.ssoEnabled && data.forceSso && data.clientId) {
+          setSsoLoading(true);
+          const endpoint = data.providerType === "oidc"
+            ? `${BASE}/api/sso/oidc/login/${data.clientId}`
+            : `${BASE}/api/sso/saml/login/${data.clientId}`;
+          const loginRes = await fetch(endpoint, { credentials: "include" });
+          if (loginRes.ok) {
+            const loginData = await loginRes.json();
+            window.location.href = loginData.redirectUrl;
+            return;
+          }
+          setSsoLoading(false);
+        }
       }
     } catch {
-      // Domain check is best-effort
+      setSsoLoading(false);
     }
   }, []);
 

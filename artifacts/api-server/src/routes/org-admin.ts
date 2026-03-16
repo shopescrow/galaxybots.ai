@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middleware/auth";
+import { encryptCredential } from "../utils/credential-encryption";
 
 const router: IRouter = Router();
 
@@ -191,9 +192,9 @@ router.put(
       idpMetadataUrl: idpMetadataUrl || null,
       idpEntityId: idpEntityId || null,
       idpSsoUrl: idpSsoUrl || null,
-      idpCert: idpCert || null,
+      idpCert: idpCert ? encryptCredential(idpCert) : null,
       oidcClientId: oidcClientId || null,
-      oidcClientSecret: oidcClientSecret || null,
+      oidcClientSecret: oidcClientSecret ? encryptCredential(oidcClientSecret) : null,
       oidcIssuerUrl: oidcIssuerUrl || null,
       domainHint: domainHint.toLowerCase(),
       jitDefaultRole: jitDefaultRole || "viewer",
@@ -258,10 +259,11 @@ router.post(
     }
 
     const token = `scim_${crypto.randomBytes(32).toString("hex")}`;
+    const encryptedToken = encryptCredential(token);
 
     await db
       .update(ssoConfigsTable)
-      .set({ scimToken: token })
+      .set({ scimToken: encryptedToken })
       .where(eq(ssoConfigsTable.id, config.id));
 
     await db.insert(platformAuditLogTable).values({

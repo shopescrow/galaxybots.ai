@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import type { Request, Response, NextFunction } from "express";
-import bcrypt from "bcryptjs";
 import {
   db,
   ssoConfigsTable,
@@ -8,6 +7,7 @@ import {
   platformAuditLogTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { decryptCredential } from "../utils/credential-encryption";
 
 const router: IRouter = Router();
 
@@ -35,10 +35,18 @@ async function scimAuth(req: Request, res: Response, next: NextFunction): Promis
   }
 
   const token = authHeader.slice(7);
-  const [config] = await db
+  const configs = await db
     .select()
-    .from(ssoConfigsTable)
-    .where(eq(ssoConfigsTable.scimToken, token));
+    .from(ssoConfigsTable);
+
+  const config = configs.find((c) => {
+    if (!c.scimToken) return false;
+    try {
+      return decryptCredential(c.scimToken) === token;
+    } catch {
+      return c.scimToken === token;
+    }
+  });
 
   if (!config) {
     res.status(401).json({

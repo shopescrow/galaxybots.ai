@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
+import { SAML } from "@node-saml/node-saml";
 import {
   db,
   ssoConfigsTable,
@@ -8,9 +9,19 @@ import {
   platformAuditLogTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { signToken, authenticate, requireRole } from "../middleware/auth";
+import { signToken, authenticate } from "../middleware/auth";
+import { encryptCredential, decryptCredential } from "../utils/credential-encryption";
 
 const router: IRouter = Router();
+
+const ssoStateStore = new Map<string, { clientId: number; codeVerifier?: string; nonce?: string; createdAt: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of ssoStateStore) {
+    if (now - val.createdAt > 10 * 60 * 1000) ssoStateStore.delete(key);
+  }
+}, 60 * 1000);
 
 function logSsoEvent(
   action: string,
@@ -88,75 +99,120 @@ router.get(
       return;
     }
 
-    const state = crypto.randomBytes(32).toString("hex");
     const baseUrl = `https://${req.get("host")}`;
-    const acsUrl = `${baseUrl}/api/sso/saml/acs`;
+    const state = crypto.randomBytes(32).toString("hex");
+    ssoStateStore.set(state, { clientId, createdAt: Date.now() });
 
-    const samlRequest = Buffer.from(
-      `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ` +
-      `ID="_${crypto.randomUUID()}" Version="2.0" IssueInstant="${new Date().toISOString()}" ` +
-      `Destination="${config.idpSsoUrl}" AssertionConsumerServiceURL="${acsUrl}" ` +
-      `ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST">` +
-      `<saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">${baseUrl}</saml:Issuer>` +
-      `</samlp:AuthnRequest>`,
-    ).toString("base64");
+    const idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
 
-    const redirectUrl = `${config.idpSsoUrl}?SAMLRequest=${encodeURIComponent(samlRequest)}&RelayState=${state}`;
+    const saml = new SAML({
+      callbackUrl: `${baseUrl}/api/sso/saml/acs`,
+      entryPoint: config.idpSsoUrl,
+      issuer: baseUrl,
+      cert: idpCert,
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      audience: baseUrl,
+    });
 
-    await logSsoEvent("sso_login_initiated", clientId, null, { provider: "saml" }, req.ip);
-
-    res.json({ redirectUrl, state });
+    try {
+      const loginUrl = await saml.getAuthorizeUrlAsync(state, req.get("host") || "", {});
+      await logSsoEvent("sso_login_initiated", clientId, null, { provider: "saml" }, req.ip);
+      res.json({ redirectUrl: loginUrl, state });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to generate SAML login URL" });
+    }
   },
 );
 
 router.post(
   "/sso/saml/acs",
   async (req, res): Promise<void> => {
-    const { SAMLResponse } = req.body;
+    const { SAMLResponse, RelayState } = req.body;
 
     if (!SAMLResponse) {
       res.status(400).json({ error: "Missing SAMLResponse" });
       return;
     }
 
-    let decoded: string;
-    try {
-      decoded = Buffer.from(SAMLResponse, "base64").toString("utf-8");
-    } catch {
-      res.status(400).json({ error: "Invalid SAMLResponse encoding" });
+    const stateEntry = RelayState ? ssoStateStore.get(RelayState) : null;
+    if (!stateEntry) {
+      res.status(400).json({ error: "Invalid or expired SSO state" });
       return;
     }
+    ssoStateStore.delete(RelayState);
 
-    const emailMatch = decoded.match(/<(?:saml:)?NameID[^>]*>([^<]+)<\/(?:saml:)?NameID>/);
-    const nameMatch = decoded.match(
-      /<(?:saml:)?Attribute\s+Name="(?:displayName|http:\/\/schemas\.xmlsoap\.org\/ws\/2005\/05\/identity\/claims\/name)"[^>]*>\s*<(?:saml:)?AttributeValue[^>]*>([^<]+)/,
-    );
-
-    if (!emailMatch || !emailMatch[1]) {
-      res.status(400).json({ error: "Could not extract email from SAML assertion" });
-      return;
-    }
-
-    const email = emailMatch[1].toLowerCase();
-    const displayName = nameMatch?.[1] || email.split("@")[0];
-    const domain = email.split("@")[1];
+    const clientId = stateEntry.clientId;
 
     const [config] = await db
       .select()
       .from(ssoConfigsTable)
       .where(
         and(
-          eq(ssoConfigsTable.domainHint, domain),
+          eq(ssoConfigsTable.clientId, clientId),
+          eq(ssoConfigsTable.providerType, "saml"),
           eq(ssoConfigsTable.enabled, true),
         ),
       );
 
-    if (!config) {
-      res.status(403).json({ error: "No SSO configuration found for this domain" });
+    if (!config || !config.idpSsoUrl) {
+      res.status(404).json({ error: "SAML SSO not configured" });
       return;
     }
 
-    const { user, isNewUser } = await jitProvision(email, displayName, config.clientId, config.jitDefaultRole, "saml");
+    const baseUrl = `https://${req.get("host")}`;
+    const idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
+
+    const saml = new SAML({
+      callbackUrl: `${baseUrl}/api/sso/saml/acs`,
+      entryPoint: config.idpSsoUrl,
+      issuer: baseUrl,
+      cert: idpCert,
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      audience: baseUrl,
+      ...(config.idpEntityId ? { idpIssuer: config.idpEntityId } : {}),
+    });
+
+    let profile: { nameID?: string; email?: string; displayName?: string; [key: string]: unknown } | null;
+    try {
+      const result = await saml.validatePostResponseAsync({ SAMLResponse });
+      profile = result.profile;
+    } catch (err: any) {
+      await logSsoEvent("sso_login_failed", clientId, null, { error: err.message, provider: "saml" }, req.ip);
+      res.status(403).json({ error: "SAML assertion validation failed: " + (err.message || "unknown error") });
+      return;
+    }
+
+    if (!profile) {
+      res.status(403).json({ error: "No profile returned from SAML assertion" });
+      return;
+    }
+
+    const email = (profile.email || profile.nameID || "").toLowerCase();
+    if (!email || !email.includes("@")) {
+      res.status(400).json({ error: "Could not extract valid email from SAML assertion" });
+      return;
+    }
+
+    const domain = email.split("@")[1];
+    if (domain !== config.domainHint) {
+      res.status(403).json({ error: "Email domain does not match SSO configuration" });
+      return;
+    }
+
+    const displayName = (profile.displayName as string) || email.split("@")[0];
+
+    let user: Awaited<ReturnType<typeof jitProvision>>["user"];
+    let isNewUser: boolean;
+    try {
+      const result = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "saml");
+      user = result.user;
+      isNewUser = result.isNewUser;
+    } catch (err: any) {
+      res.status(403).json({ error: err.message });
+      return;
+    }
 
     await db
       .update(usersTable)
@@ -167,6 +223,8 @@ router.post(
       .select()
       .from(clientsTable)
       .where(eq(clientsTable.id, user.clientId));
+
+    const sessionMaxAge = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 
     const token = signToken({
       userId: user.id,
@@ -179,7 +237,7 @@ router.post(
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
-      config.clientId,
+      clientId,
       user.id,
       { provider: "saml", email, isNewUser },
       req.ip,
@@ -189,7 +247,7 @@ router.post(
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: sessionMaxAge,
     });
 
     const frontendBase = `https://${req.get("host")}`;
@@ -251,15 +309,14 @@ router.get(
       .update(codeVerifier)
       .digest("base64url");
 
+    ssoStateStore.set(state, { clientId, codeVerifier, nonce, createdAt: Date.now() });
+
     const baseUrl = `https://${req.get("host")}`;
     const redirectUri = `${baseUrl}/api/sso/oidc/callback`;
 
-    const discoveryUrl = config.oidcIssuerUrl.endsWith("/")
-      ? `${config.oidcIssuerUrl}.well-known/openid-configuration`
-      : `${config.oidcIssuerUrl}/.well-known/openid-configuration`;
-
     let authorizationEndpoint: string;
     try {
+      const discoveryUrl = config.oidcIssuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
       const discoveryRes = await fetch(discoveryUrl);
       const discovery = (await discoveryRes.json()) as { authorization_endpoint: string };
       authorizationEndpoint = discovery.authorization_endpoint;
@@ -272,7 +329,7 @@ router.get(
       response_type: "code",
       scope: "openid email profile",
       redirect_uri: redirectUri,
-      state: `${clientId}:${state}`,
+      state,
       nonce,
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
@@ -282,11 +339,7 @@ router.get(
 
     await logSsoEvent("sso_login_initiated", clientId, null, { provider: "oidc" }, req.ip);
 
-    res.json({
-      redirectUrl,
-      state,
-      codeVerifier,
-    });
+    res.json({ redirectUrl, state });
   },
 );
 
@@ -300,12 +353,16 @@ router.get(
       return;
     }
 
-    const [clientIdStr] = state.split(":");
-    const clientId = Number(clientIdStr);
-    if (isNaN(clientId)) {
-      res.status(400).json({ error: "Invalid state" });
+    const stateEntry = ssoStateStore.get(state);
+    if (!stateEntry) {
+      res.status(400).json({ error: "Invalid or expired SSO state. Please try again." });
       return;
     }
+    ssoStateStore.delete(state);
+
+    const clientId = stateEntry.clientId;
+    const codeVerifier = stateEntry.codeVerifier;
+    const expectedNonce = stateEntry.nonce;
 
     const [config] = await db
       .select()
@@ -326,13 +383,10 @@ router.get(
     const baseUrl = `https://${req.get("host")}`;
     const redirectUri = `${baseUrl}/api/sso/oidc/callback`;
 
-    const discoveryUrl = config.oidcIssuerUrl.endsWith("/")
-      ? `${config.oidcIssuerUrl}.well-known/openid-configuration`
-      : `${config.oidcIssuerUrl}/.well-known/openid-configuration`;
-
     let tokenEndpoint: string;
     let userinfoEndpoint: string;
     try {
+      const discoveryUrl = config.oidcIssuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
       const discoveryRes = await fetch(discoveryUrl);
       const discovery = (await discoveryRes.json()) as {
         token_endpoint: string;
@@ -351,8 +405,11 @@ router.get(
       redirect_uri: redirectUri,
       client_id: config.oidcClientId,
     });
+    if (codeVerifier) {
+      tokenParams.set("code_verifier", codeVerifier);
+    }
     if (config.oidcClientSecret) {
-      tokenParams.set("client_secret", config.oidcClientSecret);
+      tokenParams.set("client_secret", decryptCredential(config.oidcClientSecret));
     }
 
     let email: string;
@@ -369,8 +426,21 @@ router.get(
       };
 
       if (!tokenData.access_token) {
-        res.status(400).json({ error: "Failed to obtain access token" });
+        await logSsoEvent("sso_login_failed", clientId, null, { error: "No access token", provider: "oidc" }, req.ip);
+        res.status(400).json({ error: "Failed to obtain access token from identity provider" });
         return;
+      }
+
+      if (tokenData.id_token && expectedNonce) {
+        try {
+          const payload = JSON.parse(Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString());
+          if (payload.nonce && payload.nonce !== expectedNonce) {
+            res.status(400).json({ error: "OIDC nonce mismatch — possible replay attack" });
+            return;
+          }
+        } catch {
+          // nonce check best-effort if id_token parsing fails
+        }
       }
 
       const userinfoRes = await fetch(userinfoEndpoint, {
@@ -385,7 +455,8 @@ router.get(
       email = userinfo.email?.toLowerCase();
       displayName = userinfo.name || userinfo.preferred_username || email.split("@")[0];
     } catch {
-      res.status(500).json({ error: "Failed to exchange OIDC code" });
+      await logSsoEvent("sso_login_failed", clientId, null, { error: "Token exchange failed", provider: "oidc" }, req.ip);
+      res.status(500).json({ error: "Failed to exchange OIDC authorization code" });
       return;
     }
 
@@ -394,7 +465,22 @@ router.get(
       return;
     }
 
-    const { user, isNewUser } = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "oidc");
+    const domain = email.split("@")[1];
+    if (domain !== config.domainHint) {
+      res.status(403).json({ error: "Email domain does not match SSO configuration" });
+      return;
+    }
+
+    let user: Awaited<ReturnType<typeof jitProvision>>["user"];
+    let isNewUser: boolean;
+    try {
+      const result = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "oidc");
+      user = result.user;
+      isNewUser = result.isNewUser;
+    } catch (err: any) {
+      res.status(403).json({ error: err.message });
+      return;
+    }
 
     await db
       .update(usersTable)
@@ -405,6 +491,8 @@ router.get(
       .select()
       .from(clientsTable)
       .where(eq(clientsTable.id, user.clientId));
+
+    const sessionMaxAge = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 
     const token = signToken({
       userId: user.id,
@@ -427,7 +515,7 @@ router.get(
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: sessionMaxAge,
     });
 
     const frontendBase = `https://${req.get("host")}`;
