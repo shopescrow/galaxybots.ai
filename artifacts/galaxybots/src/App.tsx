@@ -39,6 +39,8 @@ import Settings from "@/pages/Settings";
 import Governance from "@/pages/governance/Governance";
 import KnowledgeBase from "@/pages/knowledge-base/KnowledgeBase";
 import DocumentStudio from "@/pages/documents/DocumentStudio";
+import ProposalStudio from "@/pages/proposals/ProposalStudio";
+import SharedProposal from "@/pages/proposals/SharedProposal";
 import Pipelines from "@/pages/pipelines/Pipelines";
 import CommandCenter from "@/pages/command-center/CommandCenter";
 import AnalyticsDashboard from "@/pages/analytics/AnalyticsDashboard";
@@ -135,7 +137,6 @@ function AuthenticatedRoutes() {
       <Route path="/compliance" component={Compliance} />
       <Route path="/integrations" component={Integrations} />
       <Route path="/clients/:id/roi" component={ROIDashboard} />
-      <Route path="/roi/shared/:token" component={SharedReport} />
       <Route path="/billing" component={Billing} />
       <Route path="/scenarios" component={Scenarios} />
       <Route path="/prospects" component={Prospects} />
@@ -143,6 +144,7 @@ function AuthenticatedRoutes() {
       <Route path="/governance" component={Governance} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/documents" component={DocumentStudio} />
+      <Route path="/proposals" component={ProposalStudio} />
       <Route path="/pipelines" component={Pipelines} />
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/admin/marketplace" component={AdminModeration} />
@@ -168,6 +170,8 @@ function AppRouter() {
       <Route path="/packs/:packId" component={PackDetail} />
       <Route path="/marketplace" component={MarketplaceGallery} />
       <Route path="/marketplace/:templateId" component={TemplateDetail} />
+      <Route path="/proposals/shared/:token" component={SharedProposal} />
+      <Route path="/roi/shared/:token" component={SharedReport} />
       <Route path="/" component={SmartHome} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route>

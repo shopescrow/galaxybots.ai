@@ -3,6 +3,7 @@ import {
   sessionOutcomesTable,
   clientsTable,
   roiShareableReportsTable,
+  proposalsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -106,6 +107,57 @@ export async function getClientROI(clientId: number, dateFrom?: Date, dateTo?: D
     .slice(0, 10)
     .map(([name, count]) => ({ name, count }));
 
+  let proposalMetrics = {
+    totalProposals: 0,
+    won: 0,
+    lost: 0,
+    sent: 0,
+    winRate: 0,
+    totalPipelineValue: 0,
+    totalWonValue: 0,
+    recentProposals: [] as { id: number; prospectName: string; type: string; status: string; value: number | null; createdAt: Date }[],
+  };
+
+  try {
+    const proposalConditions = [eq(proposalsTable.clientId, clientId)];
+    if (dateFrom) proposalConditions.push(gte(proposalsTable.createdAt, dateFrom));
+    if (dateTo) proposalConditions.push(lte(proposalsTable.createdAt, dateTo));
+
+    const proposals = await db
+      .select()
+      .from(proposalsTable)
+      .where(and(...proposalConditions))
+      .orderBy(desc(proposalsTable.createdAt));
+
+    const won = proposals.filter((p) => p.status === "won");
+    const lost = proposals.filter((p) => p.status === "lost");
+    const sent = proposals.filter((p) => p.status === "sent");
+
+    proposalMetrics = {
+      totalProposals: proposals.length,
+      won: won.length,
+      lost: lost.length,
+      sent: sent.length,
+      winRate: won.length + lost.length > 0 ? Math.round((won.length / (won.length + lost.length)) * 100) : 0,
+      totalPipelineValue: [...sent, ...won].reduce((sum, p) => sum + (p.value ? parseFloat(p.value) : 0), 0),
+      totalWonValue: won.reduce((sum, p) => sum + (p.value ? parseFloat(p.value) : 0), 0),
+      recentProposals: proposals.slice(0, 5).map((p) => ({
+        id: p.id,
+        prospectName: p.prospectName,
+        type: p.type,
+        status: p.status,
+        value: p.value ? parseFloat(p.value) : null,
+        createdAt: p.createdAt,
+      })),
+    };
+  } catch (err: unknown) {
+    if (err instanceof Error && "code" in err && (err as Record<string, unknown>).code === "42P01") {
+      console.warn(`[roi] relation "proposals" does not exist yet — skipping proposal metrics`);
+    } else {
+      console.error("[roi] Failed to fetch proposal metrics:", err);
+    }
+  }
+
   return {
     clientId,
     companyName: client?.companyName || "Unknown",
@@ -126,6 +178,7 @@ export async function getClientROI(clientId: number, dateFrom?: Date, dateTo?: D
       department: o.department,
       createdAt: o.createdAt,
     })),
+    proposalMetrics,
   };
 }
 

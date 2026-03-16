@@ -89,6 +89,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/sso/saml/",
   "/api/sso/oidc/",
   "/api/scim/v2/",
+  "/api/proposals/shared/",
+  "/api/roi/shared/",
 ];
 
 app.use("/api", (req, res, next) => {

@@ -24,6 +24,7 @@ const ALL_NAV_LINKS = [
   { href: "/governance", label: "Governance" },
   { href: "/knowledge-base", label: "Knowledge Base" },
   { href: "/documents", label: "Documents" },
+  { href: "/proposals", label: "Proposals" },
   { href: "/pipelines", label: "Pipelines" },
   { href: "/analytics", label: "Analytics" },
   { href: "/billing", label: "Billing" },
