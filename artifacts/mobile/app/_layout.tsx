@@ -103,7 +103,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 function NotificationHandler() {
   const router = useRouter();
-  const responseListener = useRef<Notifications.Subscription>();
+  const responseListener = useRef<{ remove(): void } | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -135,7 +135,7 @@ function NotificationHandler() {
 
     return () => {
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
       }
     };
   }, [router]);

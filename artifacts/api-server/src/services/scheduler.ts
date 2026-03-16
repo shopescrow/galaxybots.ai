@@ -175,6 +175,7 @@ async function runAssignment(assignmentId: number) {
         title: "Autonomous run skipped",
         body: `Autonomous run skipped for assignment #${assignmentId}: monthly cost cap exceeded`,
         link: "/analytics",
+        isScheduled: true,
       }).catch((e) => console.error("[notifications] Failed to create cost_alert notification:", e));
       return null;
     }
@@ -232,6 +233,7 @@ async function runAssignment(assignmentId: number) {
     body: reportData.summary,
     link: "/command-center",
     metadata: { reportId: report.id, botId: bot.id },
+    isScheduled: true,
   }).catch((e) => console.error("[notifications] Failed to create background-report notification:", e));
 
   if (reportData.runStatus === "failed" || reportData.runStatus === "partial") {
@@ -258,6 +260,7 @@ async function runAssignment(assignmentId: number) {
       body: reportData.summary,
       link: "/bots",
       metadata: { reportId: report.id, assignmentId: assignment.id, botId: bot.id },
+      isScheduled: true,
     }).catch((e) => console.error("[notifications] Failed to create assignment-alert notification:", e));
   }
 
@@ -323,6 +326,7 @@ async function checkWeeklyBriefings() {
           body: briefing.briefing.substring(0, 500),
           link: "/roi",
           metadata: { highlights: briefing.highlights },
+          isScheduled: true,
         }).catch((e) => console.error("[notifications] Failed to create weekly-briefing notification:", e));
       } catch (err: unknown) {
         console.error(`[scheduler] Error for client ${client.id}: ${errMsg(err)}`);

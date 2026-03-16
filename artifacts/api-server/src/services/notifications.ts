@@ -13,6 +13,7 @@ export async function createNotification(payload: {
   link?: string | null;
   metadata?: Record<string, unknown>;
   isApproval?: boolean;
+  isScheduled?: boolean;
 }) {
   if (!payload.clientId) {
     console.warn("[notifications] createNotification called without clientId — skipping to prevent cross-tenant broadcast");
@@ -57,6 +58,7 @@ export async function createNotification(payload: {
         badge,
         category: payload.category,
         isApproval: payload.isApproval,
+        isScheduled: payload.isScheduled,
       });
     } else {
       await sendPushToClient(payload.clientId, {
@@ -66,6 +68,7 @@ export async function createNotification(payload: {
         badge,
         category: payload.category,
         isApproval: payload.isApproval,
+        isScheduled: payload.isScheduled,
       });
     }
   } catch (err) {

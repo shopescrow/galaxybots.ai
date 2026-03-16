@@ -22,7 +22,7 @@ const CATEGORY_PREF_MAP: Record<string, string> = {
 async function isUserPushAllowed(
   userId: number,
   category?: NotificationCategory,
-  isApproval?: boolean,
+  opts?: { isApproval?: boolean; isScheduled?: boolean },
 ): Promise<boolean> {
   const prefs = await db
     .select()
@@ -35,8 +35,13 @@ async function isUserPushAllowed(
   const pref = prefs[0] as Record<string, unknown>;
   if (!pref.pushEnabled) return false;
 
-  if (isApproval) {
+  if (opts?.isApproval) {
     if (pref.notifyApprovals === false) return false;
+    return true;
+  }
+
+  if (opts?.isScheduled) {
+    if (pref.notifyScheduler === false) return false;
     return true;
   }
 
@@ -57,9 +62,13 @@ export async function sendPushToUser(
     badge?: number;
     category?: NotificationCategory;
     isApproval?: boolean;
+    isScheduled?: boolean;
   },
 ): Promise<void> {
-  const allowed = await isUserPushAllowed(userId, payload.category, payload.isApproval);
+  const allowed = await isUserPushAllowed(userId, payload.category, {
+    isApproval: payload.isApproval,
+    isScheduled: payload.isScheduled,
+  });
   if (!allowed) return;
 
   const tokens = await db
@@ -107,6 +116,7 @@ export async function sendPushToClient(
     badge?: number;
     category?: NotificationCategory;
     isApproval?: boolean;
+    isScheduled?: boolean;
   },
 ): Promise<void> {
   const { usersTable } = await import("@workspace/db");
