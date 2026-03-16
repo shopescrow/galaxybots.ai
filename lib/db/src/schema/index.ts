@@ -46,3 +46,4 @@ export * from "./notifications";
 export * from "./client-health";
 export * from "./push-tokens";
 export * from "./developer-api-keys";
+export * from "./voice-intelligence";

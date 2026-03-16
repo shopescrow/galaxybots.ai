@@ -45,6 +45,7 @@ import notificationsRouter from "./notifications";
 import clientHealthRouter from "./client-health";
 import pushTokensRouter from "./push-tokens";
 import developerRouter from "./developer";
+import voiceIntelligenceRouter from "./voice-intelligence";
 
 const router: IRouter = Router();
 
@@ -92,5 +93,6 @@ router.use(notificationsRouter);
 router.use(clientHealthRouter);
 router.use(pushTokensRouter);
 router.use(developerRouter);
+router.use(voiceIntelligenceRouter);
 
 export default router;

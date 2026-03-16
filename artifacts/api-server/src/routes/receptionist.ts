@@ -4,6 +4,7 @@ import { db, receptionistConfigsTable, callLogsTable, callImprovementRunsTable, 
 import { eq, desc, and, gte, lte, sql, type InferSelectModel } from "drizzle-orm";
 import { syncCallToCRM, sendTestWebhook } from "../services/crm-adapter";
 import { shouldRunImprovement, runImprovementPass, storeCallTranscriptMemory } from "../services/receptionist-improvement";
+import { generateCallDebrief } from "./voice-intelligence";
 import nodemailer from "nodemailer";
 
 type ReceptionistConfig = InferSelectModel<typeof receptionistConfigsTable>;
@@ -449,6 +450,15 @@ router.post("/receptionist/call-status", requireCredentials, validateTwilioSigna
                 summary: transcriptSummary || `Call transcript from ${callLog.direction} call`,
               }).catch(() => {});
             }
+
+            generateCallDebrief(
+              callLog.id,
+              config.clientId,
+              transcriptText,
+              callLog.fromNumber || undefined
+            ).catch(err => {
+              console.error("[AI Receptionist] Auto-debrief generation failed:", err);
+            });
           }
         } catch (err) {
           console.error("[AI Receptionist] Transcript fetch failed:", err);
