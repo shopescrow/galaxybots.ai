@@ -14,6 +14,10 @@ import { syncSource } from "./kb-sync";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { shouldPauseAutonomous } from "./cost-caps";
 
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 const SCHEDULER_LOCK_ID = 999999;
 
 const SCHEDULE_INTERVALS: Record<string, number> = {
@@ -236,8 +240,8 @@ async function checkDueAssignments() {
     if (!assignment.lastRunAt) {
       try {
         await runAssignment(assignment.id);
-      } catch (err) {
-        console.error(`Scheduler error for assignment ${assignment.id}:`, err);
+      } catch (err: unknown) {
+        console.error(`[scheduler] Error for client ${assignment.clientId ?? 'unknown'}: assignment ${assignment.id} failed — ${errMsg(err)}`);
       }
       continue;
     }
@@ -246,8 +250,8 @@ async function checkDueAssignments() {
     if (elapsed >= interval) {
       try {
         await runAssignment(assignment.id);
-      } catch (err) {
-        console.error(`Scheduler error for assignment ${assignment.id}:`, err);
+      } catch (err: unknown) {
+        console.error(`[scheduler] Error for client ${assignment.clientId ?? 'unknown'}: assignment ${assignment.id} failed — ${errMsg(err)}`);
       }
     }
   }
@@ -273,12 +277,12 @@ async function checkWeeklyBriefings() {
           highlights: briefing.highlights,
           recommendation: briefing.recommendation,
         });
-      } catch (err) {
-        console.error(`Weekly briefing error for client ${client.id}:`, err);
+      } catch (err: unknown) {
+        console.error(`[scheduler] Error for client ${client.id}: ${errMsg(err)}`);
       }
     }
-  } catch (err) {
-    console.error("Weekly briefing check error:", err);
+  } catch (err: unknown) {
+    console.error(`[scheduler] Weekly briefing check failed: ${errMsg(err)}`);
   }
 }
 
@@ -301,8 +305,8 @@ async function checkKnowledgeBaseSyncs() {
     if (!source.lastSyncAt) {
       try {
         await syncSource(source.id);
-      } catch (err) {
-        console.error(`KB sync error for source ${source.id}:`, err);
+      } catch (err: unknown) {
+        console.error(`[scheduler] Error for KB source ${source.id}: ${errMsg(err)}`);
       }
       continue;
     }
@@ -311,8 +315,8 @@ async function checkKnowledgeBaseSyncs() {
     if (elapsed >= interval) {
       try {
         await syncSource(source.id);
-      } catch (err) {
-        console.error(`KB sync error for source ${source.id}:`, err);
+      } catch (err: unknown) {
+        console.error(`[scheduler] Error for KB source ${source.id}: ${errMsg(err)}`);
       }
     }
   }
@@ -328,7 +332,7 @@ async function tryAcquireSchedulerLock(): Promise<boolean> {
     );
     return result.rows[0]?.acquired === true;
   } catch (err) {
-    console.error("Failed to acquire scheduler advisory lock:", err);
+    console.error("[scheduler] Failed to acquire advisory lock:", err);
     return false;
   }
 }
@@ -338,20 +342,20 @@ export async function startScheduler() {
 
   const acquired = await tryAcquireSchedulerLock();
   if (!acquired) {
-    console.log("Scheduler lock not acquired — another instance is running scheduled jobs");
+    console.log("[scheduler] Lock not acquired — another instance is running scheduled jobs");
     return;
   }
 
-  console.log("Background autonomy scheduler started (checking every 5 minutes)");
+  console.log("[scheduler] Background autonomy scheduler started (checking every 5 minutes)");
   schedulerInterval = setInterval(() => {
     checkDueAssignments().catch((err) =>
-      console.error("Scheduler tick error:", err)
+      console.error("[scheduler] Tick error (assignments):", err)
     );
     checkWeeklyBriefings().catch((err) =>
-      console.error("Weekly briefing tick error:", err)
+      console.error("[scheduler] Tick error (weekly briefings):", err)
     );
     checkKnowledgeBaseSyncs().catch((err) =>
-      console.error("KB sync tick error:", err)
+      console.error("[scheduler] Tick error (KB sync):", err)
     );
   }, 5 * 60 * 1000);
 }

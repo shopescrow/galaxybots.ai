@@ -33,11 +33,21 @@ export async function getClientROI(clientId: number, dateFrom?: Date, dateTo?: D
   if (dateFrom) conditions.push(gte(sessionOutcomesTable.createdAt, dateFrom));
   if (dateTo) conditions.push(lte(sessionOutcomesTable.createdAt, dateTo));
 
-  const outcomes = await db
-    .select()
-    .from(sessionOutcomesTable)
-    .where(and(...conditions))
-    .orderBy(desc(sessionOutcomesTable.createdAt));
+  let outcomes: (typeof sessionOutcomesTable.$inferSelect)[];
+  try {
+    outcomes = await db
+      .select()
+      .from(sessionOutcomesTable)
+      .where(and(...conditions))
+      .orderBy(desc(sessionOutcomesTable.createdAt));
+  } catch (err: unknown) {
+    if (err instanceof Error && "code" in err && (err as Record<string, unknown>).code === "42P01") {
+      console.warn(`[roi] relation "session_outcomes" does not exist yet — returning empty results`);
+      outcomes = [];
+    } else {
+      throw err;
+    }
+  }
 
   const [client] = await db
     .select()
