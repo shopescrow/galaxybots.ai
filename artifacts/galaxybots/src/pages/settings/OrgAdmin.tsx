@@ -36,6 +36,8 @@ interface SSOConfig {
   forceSso: boolean;
   enabled: boolean;
   hasScimToken: boolean;
+  scimGroupRoleMapping: Record<string, string> | null;
+  jitDefaultPermissionProfileId: number | null;
 }
 
 export default function OrgAdmin() {
@@ -62,6 +64,8 @@ export default function OrgAdmin() {
     jitDefaultRole: "viewer",
     forceSso: false,
     enabled: true,
+    scimGroupRoleMapping: "",
+    jitDefaultPermissionProfileId: "",
   });
 
   const headers = { "Content-Type": "application/json" };
@@ -95,6 +99,8 @@ export default function OrgAdmin() {
             jitDefaultRole: config.jitDefaultRole || "viewer",
             forceSso: config.forceSso || false,
             enabled: config.enabled ?? true,
+            scimGroupRoleMapping: config.scimGroupRoleMapping ? JSON.stringify(config.scimGroupRoleMapping, null, 2) : "",
+            jitDefaultPermissionProfileId: config.jitDefaultPermissionProfileId ? String(config.jitDefaultPermissionProfileId) : "",
           });
         }
       }
@@ -107,21 +113,39 @@ export default function OrgAdmin() {
   async function saveSsoConfig() {
     setSaving(true);
     try {
+      let parsedGroupRoleMapping = null;
+      if (formData.scimGroupRoleMapping.trim()) {
+        try {
+          parsedGroupRoleMapping = JSON.parse(formData.scimGroupRoleMapping);
+        } catch {
+          toast({ title: "Error", description: "SCIM Group Role Mapping must be valid JSON", variant: "destructive" });
+          setSaving(false);
+          return;
+        }
+      }
+
+      const payload = {
+        ...formData,
+        scimGroupRoleMapping: parsedGroupRoleMapping,
+        jitDefaultPermissionProfileId: formData.jitDefaultPermissionProfileId ? Number(formData.jitDefaultPermissionProfileId) : null,
+      };
+
       const res = await fetch(`${BASE}/api/org/sso-config`, {
         method: "PUT",
         credentials: "include",
         headers,
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
+        const errData = await res.json();
+        throw new Error(errData.error);
       }
       const config = await res.json();
       setSsoConfig(config);
       toast({ title: "SSO Configuration Saved", description: "Your SSO settings have been updated." });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to save SSO config", variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save SSO config";
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
     setSaving(false);
   }
@@ -140,8 +164,9 @@ export default function OrgAdmin() {
       const data = await res.json();
       setScimToken(data.token);
       toast({ title: "SCIM Token Generated", description: "Copy and save this token — it won't be shown again." });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate SCIM token";
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   }
 
@@ -154,13 +179,14 @@ export default function OrgAdmin() {
         body: JSON.stringify(updates),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
+        const errData = await res.json();
+        throw new Error(errData.error);
       }
       await loadData();
       toast({ title: "Member Updated" });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update member";
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   }
 
@@ -342,6 +368,30 @@ export default function OrgAdmin() {
                 <p className="text-xs text-slate-500">Enable or disable SSO for your organization.</p>
               </div>
               <Switch checked={formData.enabled} onCheckedChange={(v) => setFormData({ ...formData, enabled: v })} />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-300">SCIM Group Role Mapping (JSON)</Label>
+              <textarea
+                className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-slate-200 text-sm font-mono"
+                rows={4}
+                placeholder={'{"engineering": "viewer", "platform-admins": "admin"}'}
+                value={formData.scimGroupRoleMapping}
+                onChange={(e) => setFormData({ ...formData, scimGroupRoleMapping: e.target.value })}
+              />
+              <p className="text-xs text-slate-500">Maps IdP group names to platform roles (admin, viewer, owner). Merges with defaults.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-300">Default Permission Profile ID</Label>
+              <Input
+                type="number"
+                placeholder="Permission profile ID for JIT-provisioned users"
+                value={formData.jitDefaultPermissionProfileId}
+                onChange={(e) => setFormData({ ...formData, jitDefaultPermissionProfileId: e.target.value })}
+                className="bg-slate-900/50 border-slate-600 text-slate-200"
+              />
+              <p className="text-xs text-slate-500">Bot permission profile automatically applied to new SSO/SCIM users.</p>
             </div>
 
             <Button onClick={saveSsoConfig} disabled={saving} className="w-full bg-purple-600 hover:bg-purple-700">

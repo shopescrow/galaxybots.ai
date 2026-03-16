@@ -7,6 +7,9 @@ import {
   usersTable,
   clientsTable,
   platformAuditLogTable,
+  permissionProfileTemplatesTable,
+  botToolPermissionsTable,
+  botsTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { signToken, authenticate, setRevocationChecker } from "../middleware/auth";
@@ -55,19 +58,45 @@ function logSsoEvent(
   });
 }
 
-async function fetchSamlMetadata(metadataUrl: string): Promise<{ ssoUrl: string; entityId: string; cert: string } | null> {
+interface JwkKey {
+  kid?: string;
+  kty?: string;
+  n?: string;
+  e?: string;
+  alg?: string;
+  use?: string;
+}
+
+function validateExternalUrl(url: string): boolean {
   try {
-    const res = await fetch(metadataUrl);
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
+    if (hostname === "0.0.0.0" || hostname.startsWith("10.") || hostname.startsWith("192.168.")) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return false;
+    if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return false;
+    if (hostname === "metadata.google.internal" || hostname === "169.254.169.254") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchSamlMetadata(metadataUrl: string): Promise<{ ssoUrl: string; entityId: string; cert: string } | null> {
+  if (!validateExternalUrl(metadataUrl)) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(metadataUrl, { signal: controller.signal, redirect: "error" });
+    clearTimeout(timeout);
     if (!res.ok) return null;
     const xml = await res.text();
 
-    const ssoUrlMatch = xml.match(/SingleSignOnService[^>]*Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"[^>]*Location="([^"]+)"/);
-    if (!ssoUrlMatch) {
-      const fallbackMatch = xml.match(/SingleSignOnService[^>]*Location="([^"]+)"/);
-      if (!fallbackMatch) return null;
-      ssoUrlMatch;
-    }
-    const ssoUrl = (ssoUrlMatch || xml.match(/SingleSignOnService[^>]*Location="([^"]+)"/))?.[1] || "";
+    const redirectMatch = xml.match(/SingleSignOnService[^>]*Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"[^>]*Location="([^"]+)"/);
+    const fallbackMatch = xml.match(/SingleSignOnService[^>]*Location="([^"]+)"/);
+    const ssoUrl = redirectMatch?.[1] || fallbackMatch?.[1] || "";
 
     const entityIdMatch = xml.match(/entityID="([^"]+)"/);
     const entityId = entityIdMatch?.[1] || "";
@@ -82,21 +111,29 @@ async function fetchSamlMetadata(metadataUrl: string): Promise<{ ssoUrl: string;
   }
 }
 
-async function fetchOidcJwks(issuerUrl: string): Promise<any[]> {
+async function fetchOidcJwks(issuerUrl: string): Promise<JwkKey[]> {
+  if (!validateExternalUrl(issuerUrl)) return [];
+
   try {
     const discoveryUrl = issuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-    const discoveryRes = await fetch(discoveryUrl);
+    const controller1 = new AbortController();
+    const t1 = setTimeout(() => controller1.abort(), 10000);
+    const discoveryRes = await fetch(discoveryUrl, { signal: controller1.signal, redirect: "error" });
+    clearTimeout(t1);
     const discovery = (await discoveryRes.json()) as { jwks_uri?: string };
-    if (!discovery.jwks_uri) return [];
-    const jwksRes = await fetch(discovery.jwks_uri);
-    const jwks = (await jwksRes.json()) as { keys: any[] };
+    if (!discovery.jwks_uri || !validateExternalUrl(discovery.jwks_uri)) return [];
+    const controller2 = new AbortController();
+    const t2 = setTimeout(() => controller2.abort(), 10000);
+    const jwksRes = await fetch(discovery.jwks_uri, { signal: controller2.signal, redirect: "error" });
+    clearTimeout(t2);
+    const jwks = (await jwksRes.json()) as { keys: JwkKey[] };
     return jwks.keys || [];
   } catch {
     return [];
   }
 }
 
-function verifyJwtSignatureWithJwks(idToken: string, keys: { kid?: string; kty?: string; n?: string; e?: string }[]): boolean {
+function verifyJwtSignatureWithJwks(idToken: string, keys: JwkKey[]): boolean {
   if (keys.length === 0) return false;
 
   try {
@@ -233,7 +270,7 @@ router.get(
       const loginUrl = await saml.getAuthorizeUrlAsync(state, req.get("host") || "", {});
       await logSsoEvent("sso_login_initiated", clientId, null, { provider: "saml" }, req.ip);
       res.json({ redirectUrl: loginUrl, state });
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to generate SAML login URL" });
     }
   },
@@ -304,9 +341,10 @@ router.post(
     try {
       const result = await saml.validatePostResponseAsync({ SAMLResponse });
       profile = result.profile;
-    } catch (err: any) {
-      await logSsoEvent("sso_login_failed", clientId, null, { error: err.message, provider: "saml" }, req.ip);
-      res.status(403).json({ error: "SAML assertion validation failed: " + (err.message || "unknown error") });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      await logSsoEvent("sso_login_failed", clientId, null, { error: message, provider: "saml" }, req.ip);
+      res.status(403).json({ error: "SAML assertion validation failed: " + message });
       return;
     }
 
@@ -332,11 +370,12 @@ router.post(
     let user: Awaited<ReturnType<typeof jitProvision>>["user"];
     let isNewUser: boolean;
     try {
-      const result = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "saml");
+      const result = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "saml", config.jitDefaultPermissionProfileId ?? undefined);
       user = result.user;
       isNewUser = result.isNewUser;
-    } catch (err: any) {
-      res.status(403).json({ error: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Provisioning failed";
+      res.status(403).json({ error: message });
       return;
     }
 
@@ -389,7 +428,8 @@ router.post(
     ssoCompletionCodes.set(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
-    res.redirect(`${frontendBase}/galaxybots/sso/callback?code=${completionCode}`);
+    const basePath = process.env.BASE_PATH || "/galaxybots";
+    res.redirect(`${frontendBase}${basePath}/sso/callback?code=${completionCode}`);
   },
 );
 
@@ -645,11 +685,12 @@ router.get(
     let user: Awaited<ReturnType<typeof jitProvision>>["user"];
     let isNewUser: boolean;
     try {
-      const result = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "oidc");
+      const result = await jitProvision(email, displayName, clientId, config.jitDefaultRole, "oidc", config.jitDefaultPermissionProfileId ?? undefined);
       user = result.user;
       isNewUser = result.isNewUser;
-    } catch (err: any) {
-      res.status(403).json({ error: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Provisioning failed";
+      res.status(403).json({ error: message });
       return;
     }
 
@@ -701,7 +742,8 @@ router.get(
     ssoCompletionCodes.set(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
-    res.redirect(`${frontendBase}/galaxybots/sso/callback?code=${completionCode}`);
+    const basePath = process.env.BASE_PATH || "/galaxybots";
+    res.redirect(`${frontendBase}${basePath}/sso/callback?code=${completionCode}`);
   },
 );
 
@@ -829,6 +871,7 @@ async function jitProvision(
   clientId: number,
   defaultRole: string,
   provider: string,
+  permissionProfileId?: number,
 ): Promise<{ user: { id: number; email: string; clientId: number; role: string; bypassPayment: boolean }; isNewUser: boolean }> {
   const [existingUser] = await db
     .select()
@@ -867,6 +910,39 @@ async function jitProvision(
       ssoProvider: provider,
     })
     .returning();
+
+  if (permissionProfileId) {
+    const [profile] = await db
+      .select()
+      .from(permissionProfileTemplatesTable)
+      .where(
+        and(
+          eq(permissionProfileTemplatesTable.id, permissionProfileId),
+          eq(permissionProfileTemplatesTable.clientId, clientId),
+        ),
+      );
+
+    if (profile && Array.isArray(profile.permissions)) {
+      const bots = await db
+        .select({ id: botsTable.id })
+        .from(botsTable);
+
+      for (const bot of bots) {
+        for (const perm of profile.permissions as Array<{ toolName: string; allowed: boolean; requiresApproval?: boolean }>) {
+          await db
+            .insert(botToolPermissionsTable)
+            .values({
+              clientId,
+              botId: bot.id,
+              toolName: perm.toolName,
+              allowed: perm.allowed,
+              requiresApproval: perm.requiresApproval ?? false,
+            })
+            .onConflictDoNothing();
+        }
+      }
+    }
+  }
 
   return {
     user: {
