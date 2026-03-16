@@ -5,10 +5,12 @@ import {
   backgroundReportsTable,
   botsTable,
   clientsTable,
+  knowledgeBaseSourcesTable,
 } from "@workspace/db";
-import { eq, and, lte, isNull, or } from "drizzle-orm";
+import { eq, and, lte, isNull, or, ne } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "./roi";
+import { syncSource } from "./kb-sync";
 
 const SCHEDULER_LOCK_ID = 999999;
 
@@ -177,6 +179,42 @@ async function checkWeeklyBriefings() {
   }
 }
 
+async function checkKnowledgeBaseSyncs() {
+  const now = new Date();
+
+  const sources = await db
+    .select()
+    .from(knowledgeBaseSourcesTable)
+    .where(
+      and(
+        ne(knowledgeBaseSourcesTable.status, "syncing"),
+        ne(knowledgeBaseSourcesTable.status, "disabled")
+      )
+    );
+
+  for (const source of sources) {
+    const interval = SCHEDULE_INTERVALS[source.syncSchedule] ?? SCHEDULE_INTERVALS.daily;
+
+    if (!source.lastSyncAt) {
+      try {
+        await syncSource(source.id);
+      } catch (err) {
+        console.error(`KB sync error for source ${source.id}:`, err);
+      }
+      continue;
+    }
+
+    const elapsed = now.getTime() - new Date(source.lastSyncAt).getTime();
+    if (elapsed >= interval) {
+      try {
+        await syncSource(source.id);
+      } catch (err) {
+        console.error(`KB sync error for source ${source.id}:`, err);
+      }
+    }
+  }
+}
+
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
 async function tryAcquireSchedulerLock(): Promise<boolean> {
@@ -208,6 +246,9 @@ export async function startScheduler() {
     );
     checkWeeklyBriefings().catch((err) =>
       console.error("Weekly briefing tick error:", err)
+    );
+    checkKnowledgeBaseSyncs().catch((err) =>
+      console.error("KB sync tick error:", err)
     );
   }, 5 * 60 * 1000);
 }
