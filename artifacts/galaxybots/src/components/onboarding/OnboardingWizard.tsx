@@ -149,20 +149,32 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
       });
 
       if (res.ok) {
+        let packInstalled = false;
         if (matchingPack) {
           try {
-            await fetch(`${BASE}/api/packs/${matchingPack.packId}/install`, {
+            const installRes = await fetch(`${BASE}/api/packs/${matchingPack.packId}/install`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
               },
             });
+            if (installRes.ok) {
+              packInstalled = true;
+              const installData = await installRes.json();
+              if (installData.welcomeSessionId) {
+                sessionStorage.setItem("pack_welcome_session", String(installData.welcomeSessionId));
+              }
+            } else if (installRes.status === 409) {
+              packInstalled = true;
+            }
           } catch (_e) {}
         }
 
-        await updateOnboarding({ industry: true });
-        setCurrentStep(3);
+        if (!matchingPack || packInstalled) {
+          await updateOnboarding({ industry: true });
+          setCurrentStep(3);
+        }
       }
     } finally {
       setLoading(false);
@@ -201,8 +213,15 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
                 You've completed all setup steps. Your AI directors are fully configured and ready to execute.
               </DialogDescription>
             </DialogHeader>
-            <Button variant="glow" onClick={() => onOpenChange(false)} className="mt-4">
-              Go to Dashboard
+            <Button variant="glow" onClick={() => {
+              onOpenChange(false);
+              const welcomeSession = sessionStorage.getItem("pack_welcome_session");
+              if (welcomeSession) {
+                sessionStorage.removeItem("pack_welcome_session");
+                navigate(`/task-room/${welcomeSession}`);
+              }
+            }} className="mt-4">
+              {sessionStorage.getItem("pack_welcome_session") ? "Launch Your First Mission" : "Go to Dashboard"}
             </Button>
           </div>
         </DialogContent>

@@ -9,6 +9,8 @@ import {
   pipelineStepsTable,
   knowledgeBaseDocumentsTable,
   knowledgeBaseChunksTable,
+  taskSessionsTable,
+  taskSessionBotsTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import jwt from "jsonwebtoken";
@@ -234,23 +236,51 @@ router.post(
         }
       }
 
+      let welcomeSessionId: number | null = null;
+      for (const scenario of pack.scenarios) {
+        const objective = `[${pack.name}] ${scenario.title}\n\nCategory: ${scenario.category} | Difficulty: ${scenario.difficulty}\n\nSituation: ${scenario.situation}\n\nMission Objective: ${scenario.missionObjective}\n\nRecommended Actions:\n${scenario.actions.map((a, i) => `${i + 1}. ${a}`).join("\n")}`;
+
+        const [session] = await tx
+          .insert(taskSessionsTable)
+          .values({ clientId, objective, status: "active" })
+          .returning();
+
+        if (!welcomeSessionId) welcomeSessionId = session.id;
+
+        const recommendedBotRows = allBots.filter((b) =>
+          scenario.recommendedBots.some((rb) => rb.toLowerCase() === b.title.toLowerCase()),
+        );
+
+        if (recommendedBotRows.length > 0) {
+          await tx.insert(taskSessionBotsTable).values(
+            recommendedBotRows.map((b) => ({
+              sessionId: session.id,
+              botId: b.id,
+              role: "member",
+            })),
+          );
+        }
+      }
+
       const [installed] = await tx
         .insert(installedPacksTable)
         .values({ clientId, packId: pack.id })
         .returning();
 
-      return installed;
+      return { installed, welcomeSessionId };
     });
 
     res.status(201).json({
       success: true,
       packId: pack.id,
       packName: pack.name,
-      installedAt: result.installedAt,
+      installedAt: result.installed.installedAt,
+      welcomeSessionId: result.welcomeSessionId,
       created: {
         pipelines: pack.pipelines.length,
         kbDocuments: pack.kbDocuments.length,
         botOverlays: pack.botOverlays.length,
+        scenarios: pack.scenarios.length,
       },
     });
   },

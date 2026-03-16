@@ -9,6 +9,7 @@ import {
 import { eq, asc, and } from "drizzle-orm";
 import { runAgenticLoop } from "../tools";
 import { buildClientContext } from "./client-context";
+import { getPackOverlayForBot } from "./pack-overlays";
 
 export async function executePipelineRun(pipelineId: number, triggerType: string, triggerData: Record<string, unknown> = {}) {
   const [pipeline] = await db
@@ -93,10 +94,15 @@ async function executeRunSteps(
       .set({ status: "running", startedAt: new Date() })
       .where(eq(pipelineRunStepsTable.id, runStep.id));
 
+    let packOverlay = "";
+    try {
+      packOverlay = await getPackOverlayForBot(pipeline.clientId, bot.title);
+    } catch (_e) {}
+
     const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
-${clientContext}
+${clientContext}${packOverlay}
 
 You are executing step ${runStep.stepOrder} of the "${pipeline.name}" pipeline.
 Your instruction for this step: ${runStep.instruction}
