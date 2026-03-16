@@ -171,3 +171,31 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+.text-scale-sm {
+  font-size: 14px;
+}
+.text-scale-md {
+  font-size: 16px;
+}
+.text-scale-lg {
+  font-size: 18px;
+}
+.text-scale-xl {
+  font-size: 20px;
+}
+
+.text-scale-lg .content-scroll,
+.text-scale-xl .content-scroll {
+  overflow: auto;
+}
+
+.text-scale-lg [data-card-content],
+.text-scale-xl [data-card-content] {
+  overflow-x: auto;
+}
+
+.text-scale-lg table,
+.text-scale-xl table {
+  min-width: max-content;
+}

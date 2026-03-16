@@ -19,3 +19,4 @@ export * from "./users";
 export * from "./audit-log";
 export * from "./session-outcomes";
 export * from "./prospects";
+export * from "./user-preferences";

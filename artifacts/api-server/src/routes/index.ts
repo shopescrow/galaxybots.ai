@@ -22,6 +22,8 @@ import roiRouter from "./roi";
 import billingRouter from "./billing";
 import webhooksRouter from "./webhooks";
 import prospectsRouter from "./prospects";
+import storageRouter from "./storage";
+import userPreferencesRouter from "./user-preferences";
 
 const router: IRouter = Router();
 
@@ -46,5 +48,7 @@ router.use(roiRouter);
 router.use(billingRouter);
 router.use(webhooksRouter);
 router.use(prospectsRouter);
+router.use(storageRouter);
+router.use(userPreferencesRouter);
 
 export default router;

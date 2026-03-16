@@ -3,9 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
 import { Bot, Network, Shield, Zap, Radio, Crosshair } from "lucide-react";
+import { useUserPreferences } from "@/contexts/UserPreferencesContext";
+import { BillingWidget } from "@/components/BillingWidget";
+import logoImg from "@assets/galaxybots-logo-transparent.png";
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion();
+  const { preferences } = useUserPreferences();
+  const displayLogo = preferences?.logoUrl || logoImg;
 
   return (
     <AppLayout>
@@ -26,6 +31,15 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: prefersReducedMotion ? 0 : 0.5 }}
             >
+              {preferences?.logoUrl && (
+                <div className="mb-8">
+                  <img
+                    src={displayLogo}
+                    alt="Company logo"
+                    className="w-20 h-20 object-contain rounded-2xl mx-auto bg-card/60 p-2 border border-border/30"
+                  />
+                </div>
+              )}
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary font-tech text-sm mb-6 shadow-[0_0_15px_rgba(123,97,255,0.2)]">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 SYSTEM ONLINE. WAITING FOR DIRECTIVES.
@@ -113,6 +127,12 @@ export default function Home() {
               <p className="text-muted-foreground">You are the CEO. You own the architecture. Absolute control over your virtual conglomerate.</p>
             </motion.div>
           </div>
+
+          {preferences?.showBillingWidget && (
+            <div className="mt-12 max-w-md mx-auto">
+              <BillingWidget />
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

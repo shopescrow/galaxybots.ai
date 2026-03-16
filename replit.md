@@ -48,6 +48,18 @@ The project is built as a monorepo using `pnpm workspaces`, Node.js 24, TypeScri
 - **Slack:** Platform-level integration for messaging agentic tools (`post_slack_message`, `read_slack_channel`).
 - **Linear:** Platform-level integration for issue management agentic tools (`create_issue`, `update_issue`).
 - **Stripe:** Payment processing for subscription billing. Checkout sessions redirect users to Stripe-hosted payment pages, and a webhook (`POST /api/billing/stripe/webhook`) auto-activates accounts on successful payment. Requires env secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_SINGLE`, `STRIPE_PRICE_ID_TEAM`, `STRIPE_PRICE_ID_ENTERPRISE`. An optional `APP_URL` env var controls redirect URLs after checkout.
+- **Google Cloud Storage (Object Storage):** Used for file uploads (e.g., company logos). Provisioned via Replit's object storage with presigned URL upload flow. Env vars: `DEFAULT_OBJECT_STORAGE_BUCKET_ID`, `PUBLIC_OBJECT_SEARCH_PATHS`, `PRIVATE_OBJECT_DIR`.
+
+# Dashboard Personalization & Display Settings
+
+The platform supports per-user personalization via the `user_preferences` table and a `/settings` page:
+- **Company Logo Upload:** Users can upload a company logo (stored in object storage) that appears in the navbar and on the Command Center home screen.
+- **Accent Color:** 8 curated accent color options (purple, cyan, gold, green, orange, red, blue, slate) that override the `--primary` CSS custom property.
+- **Font Size Scaling:** 4 font size options (Small/Default/Large/Extra Large) applied via root CSS classes (`text-scale-sm/md/lg/xl`). Large and Extra Large sizes enable overflow scrolling on content areas via the `.content-scroll` class.
+- **Billing Widget:** An optional billing status card on the home screen showing current plan, status, and a link to manage the subscription. Toggled via user settings.
+- **API Endpoints:** `GET/PATCH /api/user/preferences`, `POST/DELETE /api/user/preferences/logo`.
+- **Context:** `UserPreferencesContext` manages state and applies preferences instantly without page reload.
+- **Storage Routes:** `POST /api/storage/uploads/request-url`, `GET /api/storage/objects/*`, `GET /api/storage/public-objects/*`.
 
 # MCP Server
 

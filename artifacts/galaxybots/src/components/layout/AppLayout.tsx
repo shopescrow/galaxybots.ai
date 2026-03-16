@@ -13,7 +13,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: prefersReducedMotion ? 0 : 0.4 }}
-          className="flex-1 h-full"
+          className="flex-1 h-full content-scroll"
         >
           {children}
         </motion.div>

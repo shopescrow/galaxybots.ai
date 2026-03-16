@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Settings } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
 
 const NAV_LINKS = [
@@ -24,10 +25,13 @@ const NAV_LINKS = [
 export function Navbar() {
   const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { preferences } = useUserPreferences();
 
   useEffect(() => {
     setIsOpen(false);
   }, [location]);
+
+  const displayLogo = preferences?.logoUrl || logoImg;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 supports-[backdrop-filter]:bg-background/60 supports-[backdrop-filter]:backdrop-blur-xl">
@@ -35,7 +39,7 @@ export function Navbar() {
         
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-3 group">
-            <img src={logoImg} alt="GalaxyBots.ai" className="w-10 h-10 rounded-xl object-cover" />
+            <img src={displayLogo} alt="GalaxyBots.ai" className="w-10 h-10 rounded-xl object-cover" />
             <span className="font-display font-bold text-xl tracking-wider text-foreground">
               GALAXY<span className="text-primary">BOTS</span>
             </span>
@@ -61,6 +65,11 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           <LanguageSelector />
+          <Link href="/settings">
+            <Button variant="ghost" size="sm" className="font-tech text-xs min-h-[44px] gap-1">
+              <Settings className="w-4 h-4" />
+            </Button>
+          </Link>
           <Link href="/how-it-works">
             <Button variant="outline" size="sm" className="font-tech text-xs min-h-[44px]">How It Works</Button>
           </Link>
@@ -98,6 +107,12 @@ export function Navbar() {
           <div className="px-4 py-2">
             <LanguageSelector />
           </div>
+          <Link href="/settings">
+            <Button variant="ghost" className="w-full font-tech text-sm min-h-[44px] gap-2 justify-start">
+              <Settings className="w-4 h-4" />
+              Settings
+            </Button>
+          </Link>
           <Link href="/how-it-works">
             <Button variant="outline" className="w-full font-tech text-sm min-h-[44px]">How It Works</Button>
           </Link>

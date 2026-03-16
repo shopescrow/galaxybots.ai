@@ -64,6 +64,7 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PATH_PREFIXES = [
   "/api/webhooks/lead/",
+  "/api/storage/public-objects/",
 ];
 
 app.use("/api", (req, res, next) => {

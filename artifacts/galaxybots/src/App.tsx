@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
 
 import Home from "@/pages/Home";
 import BotRoster from "@/pages/bots/BotRoster";
@@ -31,6 +32,7 @@ import SharedReport from "@/pages/roi/SharedReport";
 import Billing from "@/pages/Billing";
 import Scenarios from "@/pages/scenarios/Scenarios";
 import Prospects from "@/pages/prospects/Prospects";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -89,6 +91,7 @@ function AuthenticatedRoutes() {
       <Route path="/billing" component={Billing} />
       <Route path="/scenarios" component={Scenarios} />
       <Route path="/prospects" component={Prospects} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -112,14 +115,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <LanguageProvider>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <AppRouter />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
-        </LanguageProvider>
+        <UserPreferencesProvider>
+          <LanguageProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <AppRouter />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </LanguageProvider>
+        </UserPreferencesProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

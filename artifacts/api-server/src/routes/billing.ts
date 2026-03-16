@@ -50,7 +50,7 @@ router.get("/billing/links", authenticate, (_req, res): void => {
 
 router.get("/billing/status", authenticate, async (req, res): Promise<void> => {
   const [client] = await db
-    .select({ plan: clientsTable.plan, status: clientsTable.status })
+    .select({ plan: clientsTable.plan, status: clientsTable.status, createdAt: clientsTable.createdAt })
     .from(clientsTable)
     .where(eq(clientsTable.id, req.user!.clientId));
 
@@ -59,7 +59,19 @@ router.get("/billing/status", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({ plan: client.plan, status: client.status });
+  let renewalDate: string | null = null;
+
+  if (client.createdAt) {
+    const created = new Date(client.createdAt);
+    const renewal = new Date(created);
+    renewal.setMonth(renewal.getMonth() + 1);
+    while (renewal < new Date()) {
+      renewal.setMonth(renewal.getMonth() + 1);
+    }
+    renewalDate = renewal.toISOString();
+  }
+
+  res.json({ plan: client.plan, status: client.status, renewalDate });
 });
 
 router.post("/billing/stripe/checkout", authenticate, async (req, res): Promise<void> => {
