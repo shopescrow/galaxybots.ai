@@ -26,12 +26,13 @@ export default function ApprovalDetailScreen() {
   const queryClient = useQueryClient();
   const [acting, setActing] = useState<"approve" | "reject" | null>(null);
 
-  const { data: approvals, isLoading } = useQuery({
-    queryKey: ["approvals", "pending"],
-    queryFn: () => apiFetch<Approval[]>("governance/approvals?status=pending"),
+  const { data: approval, isLoading } = useQuery({
+    queryKey: ["approval", id],
+    queryFn: async () => {
+      const all = await apiFetch<Approval[]>("governance/approvals?status=all");
+      return all.find((a) => a.id === Number(id)) ?? null;
+    },
   });
-
-  const approval = approvals?.find((a) => a.id === Number(id));
 
   const handleAction = async (action: "approve" | "reject") => {
     if (!approval) return;
@@ -56,6 +57,7 @@ export default function ApprovalDetailScreen() {
               await apiPost(`governance/approvals/${id}/${action}`, {});
               queryClient.invalidateQueries({ queryKey: ["approvals"] });
               queryClient.invalidateQueries({ queryKey: ["pendingApprovals"] });
+              queryClient.invalidateQueries({ queryKey: ["approval", id] });
               router.back();
             } catch (err) {
               Alert.alert("Error", err instanceof Error ? err.message : "Action failed");
@@ -95,7 +97,7 @@ export default function ApprovalDetailScreen() {
         </View>
         <View style={{ padding: 40, alignItems: "center" }}>
           <Text style={{ fontFamily: "Inter_400Regular", color: colors.light.textSecondary }}>
-            This approval may have already been resolved.
+            This approval was not found.
           </Text>
         </View>
       </View>
@@ -145,6 +147,26 @@ export default function ApprovalDetailScreen() {
               {new Date(approval.createdAt).toLocaleString()}
             </Text>
           </View>
+          {approval.resolvedAt && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Resolved</Text>
+                <Text style={styles.infoValue}>
+                  {new Date(approval.resolvedAt).toLocaleString()}
+                </Text>
+              </View>
+            </>
+          )}
+          {approval.rejectionReason && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Reason</Text>
+                <Text style={[styles.infoValue, { color: colors.light.danger }]}>{approval.rejectionReason}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Tool Input</Text>

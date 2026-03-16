@@ -9,11 +9,12 @@ import {
   messages,
   taskSessionMessagesTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireRole } from "../middleware/auth";
 import { getAllTools, getTool, type ToolContext } from "../tools";
 import { SENSITIVE_TOOLS, SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS, READ_ONLY_ANALYST_TOOLS, applyBrandVoiceGuardrails } from "../services/governance";
 import { resumeAgenticLoop, resumeAgenticLoopWithRejection } from "../tools/agentic-loop";
+import { sendPushToClient } from "../services/push-sender";
 
 async function persistResumedOutput(
   approval: { conversationId: number | null; sessionId: number | null; botId: number; botName: string | null },
@@ -186,15 +187,15 @@ router.get("/governance/approvals", requireRole("owner", "admin"), async (req, r
   const clientId = req.user!.clientId;
   const status = (req.query.status as string) || "pending";
 
+  const conditions = [eq(pendingApprovalsTable.clientId, clientId)];
+  if (status !== "all") {
+    conditions.push(eq(pendingApprovalsTable.status, status));
+  }
+
   const approvals = await db
     .select()
     .from(pendingApprovalsTable)
-    .where(
-      and(
-        eq(pendingApprovalsTable.clientId, clientId),
-        eq(pendingApprovalsTable.status, status)
-      )
-    );
+    .where(and(...conditions));
 
   res.json(approvals);
 });
@@ -302,6 +303,23 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
   }
 
   res.json({ ...updated, toolResult, resumeResult });
+
+  const pendingCount = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(
+      and(
+        eq(pendingApprovalsTable.clientId, clientId),
+        eq(pendingApprovalsTable.status, "pending"),
+      ),
+    );
+  const badge = pendingCount[0]?.count ?? 0;
+  sendPushToClient(clientId, {
+    title: "",
+    body: "",
+    badge,
+    isApproval: true,
+  }).catch(() => {});
 });
 
 router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), async (req, res): Promise<void> => {
@@ -385,6 +403,23 @@ router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), a
   }
 
   res.json({ ...updated, resumeResult });
+
+  const pendingCount = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(
+      and(
+        eq(pendingApprovalsTable.clientId, clientId),
+        eq(pendingApprovalsTable.status, "pending"),
+      ),
+    );
+  const badge = pendingCount[0]?.count ?? 0;
+  sendPushToClient(clientId, {
+    title: "",
+    body: "",
+    badge,
+    isApproval: true,
+  }).catch(() => {});
 });
 
 router.get("/governance/brand-voice", requireRole("owner", "admin"), async (req, res): Promise<void> => {
