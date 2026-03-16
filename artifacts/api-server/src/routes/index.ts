@@ -25,6 +25,7 @@ import prospectsRouter from "./prospects";
 import storageRouter from "./storage";
 import userPreferencesRouter from "./user-preferences";
 import governanceRouter from "./governance";
+import knowledgeBaseRouter from "./knowledge-base";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(prospectsRouter);
 router.use(storageRouter);
 router.use(userPreferencesRouter);
 router.use(governanceRouter);
+router.use(knowledgeBaseRouter);
 
 export default router;

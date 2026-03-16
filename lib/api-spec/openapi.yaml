@@ -31,6 +31,8 @@ tags:
     description: Webhook endpoints for external integrations
   - name: receptionist
     description: AI Receptionist voice call operations
+  - name: knowledge-base
+    description: Company knowledge base document management
 paths:
   /healthz:
     get:
@@ -1464,6 +1466,67 @@ paths:
                   success:
                     type: boolean
 
+  /knowledge-base/documents:
+    get:
+      operationId: listKnowledgeBaseDocuments
+      tags: [knowledge-base]
+      summary: List all knowledge base documents for the authenticated client
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeBaseDocument"
+    post:
+      operationId: uploadKnowledgeBaseDocument
+      tags: [knowledge-base]
+      summary: Upload a document to the knowledge base
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+              required: [file]
+      responses:
+        "201":
+          description: Document uploaded and indexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseDocument"
+
+  /knowledge-base/documents/{id}:
+    delete:
+      operationId: deleteKnowledgeBaseDocument
+      tags: [knowledge-base]
+      summary: Delete a knowledge base document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
 components:
   schemas:
     HealthStatus:
@@ -2445,3 +2508,23 @@ components:
           type: string
           format: date-time
       required: [id, configId, callsAnalyzed, createdAt]
+
+    KnowledgeBaseDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        title:
+          type: string
+        sourceFilename:
+          type: string
+        fileType:
+          type: string
+        chunkCount:
+          type: integer
+        uploadedAt:
+          type: string
+          format: date-time
+      required: [id, clientId, title, sourceFilename, fileType, chunkCount, uploadedAt]

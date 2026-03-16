@@ -23,6 +23,7 @@ import {
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { runAgenticLoop, type AgenticEvent } from "../tools";
 import { buildMemoryContext } from "../services/memory";
+import { buildKnowledgeBaseContext } from "../services/knowledge-base";
 import { requireRole } from "../middleware/auth";
 import { llmRateLimit } from "../middleware/rate-limit";
 
@@ -346,6 +347,11 @@ router.post(
 
     const clientContext = await buildClientContext(req.user!.clientId);
 
+    let taskKbContext = "";
+    try {
+      taskKbContext = await buildKnowledgeBaseContext(req.user!.clientId, `${session.objective} ${body.data.content}`);
+    } catch (_e) {}
+
     for (const bot of teamBots) {
       let memoryContext = "";
       try {
@@ -358,7 +364,7 @@ Your responsibilities: ${bot.responsibilities.join("; ")}
 ${clientContext}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
-${memoryContext}
+${memoryContext}${taskKbContext}
 You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
 
 You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.
@@ -543,6 +549,11 @@ router.post(
 
       const clientContext = await buildClientContext(req.user!.clientId);
 
+      let streamTaskKbContext = "";
+      try {
+        streamTaskKbContext = await buildKnowledgeBaseContext(req.user!.clientId, `${session.objective} ${body.data.content}`);
+      } catch (_e) {}
+
       await batchProcessWithSSE(
         teamBots,
         async (bot) => {
@@ -552,7 +563,7 @@ Your responsibilities: ${bot.responsibilities.join("; ")}
 ${clientContext}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
-
+${streamTaskKbContext}
 You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
 
 You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.

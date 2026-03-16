@@ -13,6 +13,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { runAgenticLoop, type AgenticEvent } from "../tools";
 import { buildMemoryContext } from "../services/memory";
 import { applyBrandVoiceGuardrails } from "../services/governance";
+import { buildKnowledgeBaseContext } from "../services/knowledge-base";
 
 const router: IRouter = Router();
 
@@ -125,6 +126,11 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     memoryContext = await buildMemoryContext(bot.id, body.data.content, req.user!.clientId);
   } catch (_e) {}
 
+  let kbContext = "";
+  try {
+    kbContext = await buildKnowledgeBaseContext(req.user!.clientId, body.data.content);
+  } catch (_e) {}
+
   const systemPrompt = `You are ${bot.name}, the ${bot.title} at GalaxyBots.ai — a world-class AI corporate director.
 
 Your personality: ${bot.personality}
@@ -132,7 +138,7 @@ Your department: ${bot.department}
 
 Your key responsibilities:
 ${bot.responsibilities.map((r, i) => `${i + 1}. ${r}`).join("\n")}
-${memoryContext}
+${memoryContext}${kbContext}
 You speak with the authority, expertise, and professionalism of a Fortune 500 executive. Provide strategic, insightful, and actionable advice from your professional perspective. Be direct, confident, and brilliant. You are speaking to the CEO or a client. Always stay in character.
 
 You have access to tools that allow you to search the web, read/write shared state, query platform data, and delegate tasks to other bots. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.${langInstruction}`;
@@ -268,6 +274,16 @@ router.post("/conversations/:id/messages/stream", async (req, res): Promise<void
       ? `\n\nIMPORTANT: Respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Do not use English unless quoting a specific term.`
       : "";
 
+    let streamMemoryContext = "";
+    try {
+      streamMemoryContext = await buildMemoryContext(bot.id, body.data.content, req.user!.clientId);
+    } catch (_e) {}
+
+    let streamKbContext = "";
+    try {
+      streamKbContext = await buildKnowledgeBaseContext(req.user!.clientId, body.data.content);
+    } catch (_e) {}
+
     const systemPrompt = `You are ${bot.name}, the ${bot.title} at GalaxyBots.ai — a world-class AI corporate director.
 
 Your personality: ${bot.personality}
@@ -275,7 +291,7 @@ Your department: ${bot.department}
 
 Your key responsibilities:
 ${bot.responsibilities.map((r, i) => `${i + 1}. ${r}`).join("\n")}
-
+${streamMemoryContext}${streamKbContext}
 You speak with the authority, expertise, and professionalism of a Fortune 500 executive. Provide strategic, insightful, and actionable advice from your professional perspective. Be direct, confident, and brilliant. You are speaking to the CEO or a client. Always stay in character.
 
 You have access to tools that allow you to search the web, read/write shared state, query platform data, and delegate tasks to other bots. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.${langInstruction}`;

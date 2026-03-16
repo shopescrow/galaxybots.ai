@@ -21,3 +21,4 @@ export * from "./session-outcomes";
 export * from "./prospects";
 export * from "./user-preferences";
 export * from "./governance";
+export * from "./knowledge-base";

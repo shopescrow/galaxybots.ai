@@ -8,8 +8,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
 import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket } from "lucide-react";
 import { AeoIntelligenceTab } from "./AeoIntelligenceTab";
+import { KnowledgeBaseTab } from "./KnowledgeBaseTab";
 import { SCENARIOS, SCENARIO_CLIENTS } from "@/data/scenarios";
 import { useState, useEffect } from "react";
+import { BookOpen } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -61,7 +63,7 @@ export default function ClientDetail() {
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "missions">("intelligence");
+  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions">("intelligence");
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
@@ -233,6 +235,17 @@ export default function ClientDetail() {
               <Building className="w-4 h-4" />
               Business Profile
             </button>
+            <button
+              onClick={() => setActiveTab("knowledge-base")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
+                activeTab === "knowledge-base"
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              Knowledge Base
+            </button>
             <Link href={`/clients/${clientId}/roi`}>
               <div className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer">
                 <BarChart3 className="w-4 h-4" />
@@ -340,6 +353,8 @@ export default function ClientDetail() {
             </Card>
           </div>
         )}
+
+        {activeTab === "knowledge-base" && <KnowledgeBaseTab clientId={clientId} />}
 
         {activeTab === "missions" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
