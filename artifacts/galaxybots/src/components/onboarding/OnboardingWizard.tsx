@@ -69,6 +69,8 @@ const OTHER_INDUSTRIES = [
   "Education",
   "Construction",
   "Nonprofit",
+  "Transportation",
+  "Household Moving",
   "Other",
 ];
 

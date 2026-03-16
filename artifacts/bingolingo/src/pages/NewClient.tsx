@@ -14,7 +14,8 @@ import { Link } from "wouter";
 const INDUSTRIES = [
   "Technology", "Healthcare", "Finance", "E-commerce", "Education",
   "Real Estate", "Marketing", "Legal", "Manufacturing", "Hospitality",
-  "SaaS", "Consulting", "Media", "Non-profit", "Other",
+  "SaaS", "Consulting", "Media", "Non-profit", "Transportation",
+  "Household Moving", "Other",
 ];
 
 export default function NewClient() {
@@ -107,7 +108,7 @@ export default function NewClient() {
               <SelectTrigger>
                 <SelectValue placeholder="Select industry" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 {INDUSTRIES.map((i) => (
                   <SelectItem key={i} value={i}>{i}</SelectItem>
                 ))}
