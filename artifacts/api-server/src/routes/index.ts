@@ -28,6 +28,7 @@ import governanceRouter from "./governance";
 import knowledgeBaseRouter from "./knowledge-base";
 import documentsRouter from "./documents";
 import pipelinesRouter from "./pipelines";
+import triggersRouter from "./triggers";
 import commandCenterRouter from "./command-center";
 import analyticsRouter from "./analytics";
 import demoRouter from "./demo";
@@ -62,6 +63,7 @@ router.use(governanceRouter);
 router.use(knowledgeBaseRouter);
 router.use(documentsRouter);
 router.use(pipelinesRouter);
+router.use(triggersRouter);
 router.use(commandCenterRouter);
 router.use(analyticsRouter);
 

@@ -7,11 +7,15 @@ import {
   taskSessionsTable,
   taskSessionBotsTable,
   taskSessionMessagesTable,
+  pipelineTriggersTable,
+  triggerEventsTable,
+  pipelinesTable,
 } from "@workspace/db";
-import { eq, ilike } from "drizzle-orm";
+import { eq, ilike, and } from "drizzle-orm";
 import crypto from "crypto";
 import { runAgenticLoop } from "../tools";
 import { buildClientContext } from "../services/client-context";
+import { executePipelineRun } from "../services/pipeline-engine";
 
 const LeadPayload = z.object({
   name: z.string().min(1),
@@ -66,6 +70,53 @@ router.post("/webhooks/lead/:clientId", async (req, res): Promise<void> => {
   }
 
   const { name, contact, serviceInterest, message } = parsed.data;
+
+  const leadTrigger = await findOrCreateLeadTrigger(clientId);
+
+  if (leadTrigger) {
+    const payloadPreview = JSON.stringify(parsed.data).substring(0, 500);
+    const [event] = await db
+      .insert(triggerEventsTable)
+      .values({
+        triggerId: leadTrigger.triggerId,
+        pipelineId: leadTrigger.pipelineId,
+        status: "pending",
+        payloadPreview,
+      })
+      .returning();
+
+    try {
+      const run = await executePipelineRun(leadTrigger.pipelineId, "generic", {
+        ...parsed.data,
+        _trigger: {
+          type: "generic",
+          slug: leadTrigger.slug,
+          eventId: event.id,
+          source: "legacy_lead_webhook",
+        },
+      });
+
+      await db
+        .update(triggerEventsTable)
+        .set({ status: "success", runId: run.id })
+        .where(eq(triggerEventsTable.id, event.id));
+
+      res.status(201).json({
+        runId: run.id,
+        eventId: event.id,
+        message: "Lead ingested via unified trigger system",
+      });
+      return;
+    } catch (err) {
+      await db
+        .update(triggerEventsTable)
+        .set({
+          status: "failed",
+          errorMessage: err instanceof Error ? err.message : "Pipeline execution failed",
+        })
+        .where(eq(triggerEventsTable.id, event.id));
+    }
+  }
 
   const objective = `New lead inquiry from ${name} (${contact}).${serviceInterest ? ` Service interest: ${serviceInterest}.` : ""}${message ? ` Message: ${message}` : ""} — Qualify this lead, assess their needs, and prepare a follow-up plan for ${client.companyName}.`;
 
@@ -166,5 +217,36 @@ Keep responses focused and actionable (3-5 sentences per point).`;
     }
   }
 });
+
+async function findOrCreateLeadTrigger(clientId: number): Promise<{ triggerId: number; pipelineId: number; slug: string } | null> {
+  try {
+    const clientPipelines = await db
+      .select()
+      .from(pipelinesTable)
+      .where(and(eq(pipelinesTable.clientId, clientId), eq(pipelinesTable.active, true)));
+
+    for (const pipeline of clientPipelines) {
+      const triggers = await db
+        .select()
+        .from(pipelineTriggersTable)
+        .where(and(
+          eq(pipelineTriggersTable.pipelineId, pipeline.id),
+          eq(pipelineTriggersTable.active, true),
+        ));
+
+      const leadTrigger = triggers.find(
+        (t) => t.label?.toLowerCase().includes("lead") || t.triggerType === "form"
+      );
+
+      if (leadTrigger) {
+        return { triggerId: leadTrigger.id, pipelineId: pipeline.id, slug: leadTrigger.endpointSlug };
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export default router;

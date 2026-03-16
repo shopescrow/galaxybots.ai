@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb, boolean, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clientsTable } from "./clients";
@@ -49,10 +49,35 @@ export const pipelineRunStepsTable = pgTable("pipeline_run_steps", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const pipelineTriggersTable = pgTable("pipeline_triggers", {
+  id: serial("id").primaryKey(),
+  pipelineId: integer("pipeline_id").notNull().references(() => pipelinesTable.id, { onDelete: "cascade" }),
+  triggerType: varchar("trigger_type", { length: 50 }).notNull().default("generic"),
+  endpointSlug: varchar("endpoint_slug", { length: 100 }).notNull().unique(),
+  signingSecret: text("signing_secret").notNull(),
+  label: text("label"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const triggerEventsTable = pgTable("trigger_events", {
+  id: serial("id").primaryKey(),
+  triggerId: integer("trigger_id").notNull().references(() => pipelineTriggersTable.id, { onDelete: "cascade" }),
+  pipelineId: integer("pipeline_id").notNull().references(() => pipelinesTable.id, { onDelete: "cascade" }),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  payloadPreview: text("payload_preview"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  errorMessage: text("error_message"),
+  runId: integer("run_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertPipelineSchema = createInsertSchema(pipelinesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPipelineStepSchema = createInsertSchema(pipelineStepsTable).omit({ id: true, createdAt: true });
 export const insertPipelineRunSchema = createInsertSchema(pipelineRunsTable).omit({ id: true, createdAt: true });
 export const insertPipelineRunStepSchema = createInsertSchema(pipelineRunStepsTable).omit({ id: true, createdAt: true });
+export const insertPipelineTriggerSchema = createInsertSchema(pipelineTriggersTable).omit({ id: true, createdAt: true });
+export const insertTriggerEventSchema = createInsertSchema(triggerEventsTable).omit({ id: true, createdAt: true });
 
 export type Pipeline = typeof pipelinesTable.$inferSelect;
 export type InsertPipeline = z.infer<typeof insertPipelineSchema>;
@@ -62,3 +87,7 @@ export type PipelineRun = typeof pipelineRunsTable.$inferSelect;
 export type InsertPipelineRun = z.infer<typeof insertPipelineRunSchema>;
 export type PipelineRunStep = typeof pipelineRunStepsTable.$inferSelect;
 export type InsertPipelineRunStep = z.infer<typeof insertPipelineRunStepSchema>;
+export type PipelineTrigger = typeof pipelineTriggersTable.$inferSelect;
+export type InsertPipelineTrigger = z.infer<typeof insertPipelineTriggerSchema>;
+export type TriggerEvent = typeof triggerEventsTable.$inferSelect;
+export type InsertTriggerEvent = z.infer<typeof insertTriggerEventSchema>;

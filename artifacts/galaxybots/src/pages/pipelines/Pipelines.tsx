@@ -14,7 +14,8 @@ import { motion } from "framer-motion";
 import {
   Workflow, Play, Pause, Plus, Trash2, Bot, Loader2,
   CheckCircle, XCircle, Clock, Eye, ArrowRight, GripVertical,
-  Webhook, MousePointer, Link2, ChevronDown, ChevronUp
+  Webhook, MousePointer, Link2, ChevronDown, ChevronUp,
+  Zap, Copy, RefreshCw, Shield, Radio, FileText, AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -24,9 +25,19 @@ type BotInfo = { id: number; name: string; title: string; department: string };
 type StepDef = { botId: number; instruction: string };
 type StepWithBot = { id: number; pipelineId: number; stepOrder: number; botId: number; instruction: string; bot: BotInfo | null };
 type RunSummary = { id: number; pipelineId: number; status: string; triggerType: string; startedAt: string | null; completedAt: string | null; createdAt: string };
+type TriggerData = {
+  id: number; pipelineId: number; triggerType: string; endpointSlug: string;
+  signingSecret: string; label: string | null; active: boolean; createdAt: string;
+};
+type TriggerEventData = {
+  id: number; triggerId: number; pipelineId: number; receivedAt: string;
+  payloadPreview: string | null; status: string; errorMessage: string | null;
+  runId: number | null; createdAt: string;
+};
 type PipelineData = {
   id: number; clientId: number; name: string; triggerType: string; triggerConfig: Record<string, unknown>;
   active: boolean; createdAt: string; updatedAt: string; steps: StepWithBot[]; recentRuns: RunSummary[];
+  triggers?: TriggerData[];
 };
 type RunStepDetail = {
   id: number; runId: number; stepId: number; botId: number; stepOrder: number;
@@ -52,6 +63,7 @@ async function apiFetch(path: string, options?: RequestInit) {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle }> = {
     done: { variant: "default", icon: CheckCircle },
+    success: { variant: "default", icon: CheckCircle },
     running: { variant: "secondary", icon: Loader2 },
     pending: { variant: "outline", icon: Clock },
     failed: { variant: "destructive", icon: XCircle },
@@ -69,7 +81,21 @@ function StatusBadge({ status }: { status: string }) {
 function TriggerIcon({ type }: { type: string }) {
   if (type === "webhook") return <Webhook className="w-4 h-4" />;
   if (type === "pipeline_completion") return <Link2 className="w-4 h-4" />;
+  if (type === "stripe") return <Zap className="w-4 h-4" />;
+  if (type === "twilio") return <Radio className="w-4 h-4" />;
+  if (type === "form") return <FileText className="w-4 h-4" />;
+  if (type === "generic") return <Zap className="w-4 h-4" />;
   return <MousePointer className="w-4 h-4" />;
+}
+
+function TriggerTypeLabel({ type }: { type: string }) {
+  const labels: Record<string, string> = {
+    generic: "HTTP POST",
+    stripe: "Stripe Event",
+    twilio: "Twilio SMS/Call",
+    form: "Form Embed",
+  };
+  return <>{labels[type] || type}</>;
 }
 
 export default function Pipelines() {
@@ -80,6 +106,7 @@ export default function Pipelines() {
   const [editingPipeline, setEditingPipeline] = useState<PipelineData | null>(null);
   const [viewingRun, setViewingRun] = useState<number | null>(null);
   const [expandedPipeline, setExpandedPipeline] = useState<number | null>(null);
+  const [triggersPipeline, setTriggersPipeline] = useState<PipelineData | null>(null);
 
   const { data: pipelines = [], isLoading } = useQuery<PipelineData[]>({
     queryKey: ["pipelines"],
@@ -126,7 +153,7 @@ export default function Pipelines() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <p className="text-slate-400 text-sm">
-            Define automated sequences where bots execute tasks in order, triggered by webhooks, manual runs, or pipeline completions.
+            Define automated sequences where bots execute tasks in order, triggered by webhooks, events, forms, or manual runs.
           </p>
           <Button onClick={() => setShowCreate(true)} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="w-4 h-4 mr-2" />New Pipeline
@@ -159,12 +186,27 @@ export default function Pipelines() {
                           <TriggerIcon type={pipeline.triggerType} />
                           {pipeline.triggerType === "pipeline_completion" ? "On Completion" : pipeline.triggerType}
                         </Badge>
+                        {(pipeline.triggers?.length ?? 0) > 0 && (
+                          <Badge variant="outline" className="gap-1 text-green-400 border-green-700">
+                            <Zap className="w-3 h-3" />
+                            {pipeline.triggers!.length} trigger{pipeline.triggers!.length !== 1 ? "s" : ""}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={pipeline.active}
                           onCheckedChange={() => toggleMutation.mutate(pipeline.id)}
                         />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTriggersPipeline(pipeline)}
+                          className="border-slate-600 gap-1"
+                        >
+                          <Zap className="w-4 h-4" />
+                          Triggers
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -265,6 +307,13 @@ export default function Pipelines() {
 
       {viewingRun !== null && (
         <RunDetailDialog runId={viewingRun} onClose={() => setViewingRun(null)} />
+      )}
+
+      {triggersPipeline && (
+        <TriggersDialog
+          pipeline={triggersPipeline}
+          onClose={() => { setTriggersPipeline(null); queryClient.invalidateQueries({ queryKey: ["pipelines"] }); }}
+        />
       )}
     </AppLayout>
   );
@@ -475,6 +524,343 @@ function PipelineFormDialog({
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             {pipeline ? "Save Changes" : "Create Pipeline"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TriggersDialog({
+  pipeline,
+  onClose,
+}: {
+  pipeline: PipelineData;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [addingType, setAddingType] = useState<string>("");
+  const [addingLabel, setAddingLabel] = useState("");
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copiedSecretId, setCopiedSecretId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<"triggers" | "events">("triggers");
+
+  const { data: triggers = [], isLoading: triggersLoading } = useQuery<TriggerData[]>({
+    queryKey: ["pipeline-triggers", pipeline.id],
+    queryFn: () => apiFetch(`/pipelines/${pipeline.id}/triggers`),
+  });
+
+  const { data: events = [], isLoading: eventsLoading } = useQuery<TriggerEventData[]>({
+    queryKey: ["pipeline-trigger-events", pipeline.id],
+    queryFn: () => apiFetch(`/pipelines/${pipeline.id}/trigger-events`),
+    enabled: activeTab === "events",
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { triggerType: string; label: string }) =>
+      apiFetch(`/pipelines/${pipeline.id}/triggers`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipeline-triggers", pipeline.id] });
+      setAddingType("");
+      setAddingLabel("");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (triggerId: number) =>
+      apiFetch(`/pipelines/${pipeline.id}/triggers/${triggerId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-triggers", pipeline.id] }),
+  });
+
+  const toggleTriggerMutation = useMutation({
+    mutationFn: ({ triggerId, active }: { triggerId: number; active: boolean }) =>
+      apiFetch(`/pipelines/${pipeline.id}/triggers/${triggerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ active }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-triggers", pipeline.id] }),
+  });
+
+  const rotateMutation = useMutation({
+    mutationFn: (triggerId: number) =>
+      apiFetch(`/pipelines/${pipeline.id}/triggers/${triggerId}/rotate-secret`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-triggers", pipeline.id] }),
+  });
+
+  const triggerUrl = (slug: string) => {
+    const origin = window.location.origin;
+    return `${origin}${BASE}/api/triggers/${slug}`;
+  };
+
+  const copyToClipboard = (text: string, triggerId: number, type: "url" | "secret") => {
+    navigator.clipboard.writeText(text);
+    if (type === "url") {
+      setCopiedId(triggerId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } else {
+      setCopiedSecretId(triggerId);
+      setTimeout(() => setCopiedSecretId(null), 2000);
+    }
+  };
+
+  const formSnippet = (slug: string, secret: string) => {
+    const url = triggerUrl(slug);
+    return `<form id="trigger-form" onsubmit="event.preventDefault();fetch('${url}',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer ${secret}'},body:JSON.stringify(Object.fromEntries(new FormData(this)))}).then(r=>r.json()).then(d=>alert('Submitted!')).catch(e=>alert('Error: '+e.message))">
+  <input name="name" placeholder="Name" required style="display:block;margin:4px 0;padding:8px;width:100%"/>
+  <input name="email" placeholder="Email" required style="display:block;margin:4px 0;padding:8px;width:100%"/>
+  <textarea name="message" placeholder="Message" style="display:block;margin:4px 0;padding:8px;width:100%"></textarea>
+  <button type="submit" style="margin-top:8px;padding:8px 16px;cursor:pointer">Submit</button>
+</form>`;
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="bg-slate-800 border-slate-700 max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-white flex items-center gap-2">
+            <Zap className="w-5 h-5 text-yellow-400" />
+            Event Triggers — {pipeline.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex gap-2 mb-4">
+          <Button
+            size="sm"
+            variant={activeTab === "triggers" ? "default" : "outline"}
+            onClick={() => setActiveTab("triggers")}
+            className={activeTab === "triggers" ? "bg-blue-600" : "border-slate-600"}
+          >
+            <Zap className="w-4 h-4 mr-1" />
+            Triggers ({triggers.length})
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTab === "events" ? "default" : "outline"}
+            onClick={() => setActiveTab("events")}
+            className={activeTab === "events" ? "bg-blue-600" : "border-slate-600"}
+          >
+            <Clock className="w-4 h-4 mr-1" />
+            Event Log
+          </Button>
+        </div>
+
+        {activeTab === "triggers" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Select value={addingType} onValueChange={setAddingType}>
+                <SelectTrigger className="bg-slate-900/50 border-slate-600 text-white w-48">
+                  <SelectValue placeholder="Add trigger..." />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="generic">Generic HTTP POST</SelectItem>
+                  <SelectItem value="stripe">Stripe Event</SelectItem>
+                  <SelectItem value="twilio">Twilio SMS/Call</SelectItem>
+                  <SelectItem value="form">Form Embed</SelectItem>
+                </SelectContent>
+              </Select>
+              {addingType && (
+                <>
+                  <Input
+                    value={addingLabel}
+                    onChange={(e) => setAddingLabel(e.target.value)}
+                    placeholder="Label (optional)"
+                    className="bg-slate-900/50 border-slate-600 text-white flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => createMutation.mutate({ triggerType: addingType, label: addingLabel })}
+                    disabled={createMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {triggersLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
+            ) : triggers.length === 0 ? (
+              <div className="text-center py-8">
+                <Zap className="w-10 h-10 text-slate-500 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">No triggers configured. Add one above to receive external events.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {triggers.map((trigger) => (
+                  <Card key={trigger.id} className="bg-slate-900/50 border-slate-700/50">
+                    <CardContent className="py-3 px-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <TriggerIcon type={trigger.triggerType} />
+                          <span className="text-white font-medium">{trigger.label || <TriggerTypeLabel type={trigger.triggerType} />}</span>
+                          <Badge variant="outline" className="text-xs">
+                            <TriggerTypeLabel type={trigger.triggerType} />
+                          </Badge>
+                          <Switch
+                            checked={trigger.active}
+                            onCheckedChange={(checked) => toggleTriggerMutation.mutate({ triggerId: trigger.id, active: checked })}
+                          />
+                          <Badge variant={trigger.active ? "default" : "secondary"} className="text-xs">
+                            {trigger.active ? "Active" : "Disabled"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (confirm("Rotate signing secret? The old secret will stop working immediately.")) {
+                                rotateMutation.mutate(trigger.id);
+                              }
+                            }}
+                            className="text-slate-400 hover:text-white"
+                            title="Rotate Secret"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-400 hover:text-red-300"
+                            onClick={() => { if (confirm("Delete this trigger?")) deleteMutation.mutate(trigger.id); }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div>
+                          <Label className="text-xs text-slate-500">Endpoint URL</Label>
+                          <div className="flex items-center gap-2">
+                            <code className="bg-slate-800 text-green-400 px-3 py-1.5 rounded text-xs flex-1 overflow-x-auto">
+                              {triggerUrl(trigger.endpointSlug)}
+                            </code>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => copyToClipboard(triggerUrl(trigger.endpointSlug), trigger.id, "url")}
+                              className="text-slate-400"
+                            >
+                              {copiedId === trigger.id ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-slate-500 flex items-center gap-1">
+                            <Shield className="w-3 h-3" /> Signing Secret
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <code className="bg-slate-800 text-yellow-400 px-3 py-1.5 rounded text-xs flex-1 overflow-x-auto font-mono">
+                              {trigger.signingSecret}
+                            </code>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => copyToClipboard(trigger.signingSecret, trigger.id, "secret")}
+                              className="text-slate-400"
+                            >
+                              {copiedSecretId === trigger.id ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {trigger.triggerType === "generic" && (
+                          <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
+                            <p className="mb-1 font-medium text-slate-300">Usage (cURL):</p>
+                            <code className="text-green-400 whitespace-pre-wrap break-all">
+{`curl -X POST ${triggerUrl(trigger.endpointSlug)} \\
+  -H "Authorization: Bearer ${trigger.signingSecret}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"key": "value"}'`}
+                            </code>
+                          </div>
+                        )}
+
+                        {trigger.triggerType === "stripe" && (
+                          <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
+                            <p className="font-medium text-slate-300 mb-1">Stripe Setup:</p>
+                            <p>Configure this URL as a webhook endpoint in your Stripe Dashboard. Use the signing secret above as the HMAC verification key.</p>
+                          </div>
+                        )}
+
+                        {trigger.triggerType === "twilio" && (
+                          <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
+                            <p className="font-medium text-slate-300 mb-1">Twilio Setup:</p>
+                            <p>Set this URL as your Twilio webhook for SMS/voice. Use Basic auth with the signing secret as password.</p>
+                          </div>
+                        )}
+
+                        {trigger.triggerType === "form" && (
+                          <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
+                            <p className="font-medium text-slate-300 mb-1">Embed Snippet:</p>
+                            <code className="text-green-400 whitespace-pre-wrap break-all">
+                              {formSnippet(trigger.endpointSlug, trigger.signingSecret)}
+                            </code>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "events" && (
+          <div className="space-y-3">
+            {eventsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
+            ) : events.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="w-10 h-10 text-slate-500 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">No trigger events recorded yet.</p>
+              </div>
+            ) : (
+              events.map((event) => (
+                <Card key={event.id} className={`border ${
+                  event.status === "success" ? "border-green-700/50 bg-green-900/10" :
+                  event.status === "failed" ? "border-red-700/50 bg-red-900/10" :
+                  "border-slate-700/50 bg-slate-900/50"
+                }`}>
+                  <CardContent className="py-3 px-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={event.status} />
+                        <span className="text-sm text-slate-300">Event #{event.id}</span>
+                        {event.runId && (
+                          <Badge variant="outline" className="text-xs">Run #{event.runId}</Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-500">
+                        {new Date(event.receivedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    {event.errorMessage && (
+                      <div className="flex items-start gap-2 text-xs text-red-400 mb-2">
+                        <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                        {event.errorMessage}
+                      </div>
+                    )}
+                    {event.payloadPreview && (
+                      <div className="bg-slate-900/50 rounded p-2 text-xs text-slate-400 font-mono max-h-24 overflow-y-auto whitespace-pre-wrap break-all">
+                        {event.payloadPreview}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

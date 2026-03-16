@@ -5,6 +5,8 @@ import {
   pipelineStepsTable,
   pipelineRunsTable,
   pipelineRunStepsTable,
+  pipelineTriggersTable,
+  triggerEventsTable,
   botsTable,
   clientsTable,
 } from "@workspace/db";
@@ -15,6 +17,14 @@ import { requireRole } from "../middleware/auth";
 import { executePipelineRun } from "../services/pipeline-engine";
 
 const router: IRouter = Router();
+
+function generateSlug(): string {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+function generateSecret(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
 
 const CreatePipelineBody = z.object({
   name: z.string().min(1),
@@ -36,6 +46,11 @@ const UpdatePipelineBody = z.object({
     botId: z.number(),
     instruction: z.string().min(1),
   })).optional(),
+});
+
+const CreateTriggerBody = z.object({
+  triggerType: z.enum(["generic", "stripe", "twilio", "form"]),
+  label: z.string().optional(),
 });
 
 router.get("/pipelines", requireRole("owner", "admin"), async (req, res): Promise<void> => {
@@ -69,7 +84,13 @@ router.get("/pipelines", requireRole("owner", "admin"), async (req, res): Promis
         .orderBy(desc(pipelineRunsTable.createdAt))
         .limit(5);
 
-      return { ...p, steps: stepsWithBots, recentRuns: runs };
+      const triggers = await db
+        .select()
+        .from(pipelineTriggersTable)
+        .where(eq(pipelineTriggersTable.pipelineId, p.id))
+        .orderBy(desc(pipelineTriggersTable.createdAt));
+
+      return { ...p, steps: stepsWithBots, recentRuns: runs, triggers };
     })
   );
 
@@ -113,7 +134,7 @@ router.post("/pipelines", requireRole("owner", "admin"), async (req, res): Promi
     .where(eq(pipelineStepsTable.pipelineId, pipeline.id))
     .orderBy(asc(pipelineStepsTable.stepOrder));
 
-  res.status(201).json({ ...pipeline, steps, recentRuns: [] });
+  res.status(201).json({ ...pipeline, steps, recentRuns: [], triggers: [] });
 });
 
 router.put("/pipelines/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
@@ -326,6 +347,242 @@ router.patch("/pipelines/:id/toggle", requireRole("owner", "admin"), async (req,
     .returning();
 
   res.json(updated);
+});
+
+router.get("/pipelines/:id/triggers", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const pipelineId = Number(req.params.id);
+  if (isNaN(pipelineId)) {
+    res.status(400).json({ error: "Invalid pipeline ID" });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+
+  const [pipeline] = await db
+    .select()
+    .from(pipelinesTable)
+    .where(and(eq(pipelinesTable.id, pipelineId), eq(pipelinesTable.clientId, clientId)));
+
+  if (!pipeline) {
+    res.status(404).json({ error: "Pipeline not found" });
+    return;
+  }
+
+  const triggers = await db
+    .select()
+    .from(pipelineTriggersTable)
+    .where(eq(pipelineTriggersTable.pipelineId, pipelineId))
+    .orderBy(desc(pipelineTriggersTable.createdAt));
+
+  res.json(triggers);
+});
+
+router.post("/pipelines/:id/triggers", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const pipelineId = Number(req.params.id);
+  if (isNaN(pipelineId)) {
+    res.status(400).json({ error: "Invalid pipeline ID" });
+    return;
+  }
+
+  const body = CreateTriggerBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+
+  const [pipeline] = await db
+    .select()
+    .from(pipelinesTable)
+    .where(and(eq(pipelinesTable.id, pipelineId), eq(pipelinesTable.clientId, clientId)));
+
+  if (!pipeline) {
+    res.status(404).json({ error: "Pipeline not found" });
+    return;
+  }
+
+  const [trigger] = await db
+    .insert(pipelineTriggersTable)
+    .values({
+      pipelineId,
+      triggerType: body.data.triggerType,
+      endpointSlug: generateSlug(),
+      signingSecret: generateSecret(),
+      label: body.data.label || `${body.data.triggerType} trigger`,
+    })
+    .returning();
+
+  res.status(201).json(trigger);
+});
+
+router.patch("/pipelines/:id/triggers/:triggerId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const pipelineId = Number(req.params.id);
+  const triggerId = Number(req.params.triggerId);
+  if (isNaN(pipelineId) || isNaN(triggerId)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const updateBody = z.object({
+    label: z.string().optional(),
+    active: z.boolean().optional(),
+  }).safeParse(req.body);
+
+  if (!updateBody.success) {
+    res.status(400).json({ error: updateBody.error.message });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+
+  const [pipeline] = await db
+    .select()
+    .from(pipelinesTable)
+    .where(and(eq(pipelinesTable.id, pipelineId), eq(pipelinesTable.clientId, clientId)));
+
+  if (!pipeline) {
+    res.status(404).json({ error: "Pipeline not found" });
+    return;
+  }
+
+  const [trigger] = await db
+    .select()
+    .from(pipelineTriggersTable)
+    .where(and(
+      eq(pipelineTriggersTable.id, triggerId),
+      eq(pipelineTriggersTable.pipelineId, pipelineId)
+    ));
+
+  if (!trigger) {
+    res.status(404).json({ error: "Trigger not found" });
+    return;
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (updateBody.data.label !== undefined) updates.label = updateBody.data.label;
+  if (updateBody.data.active !== undefined) updates.active = updateBody.data.active;
+
+  if (Object.keys(updates).length === 0) {
+    res.json(trigger);
+    return;
+  }
+
+  const [updated] = await db
+    .update(pipelineTriggersTable)
+    .set(updates)
+    .where(eq(pipelineTriggersTable.id, triggerId))
+    .returning();
+
+  res.json(updated);
+});
+
+router.delete("/pipelines/:id/triggers/:triggerId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const pipelineId = Number(req.params.id);
+  const triggerId = Number(req.params.triggerId);
+  if (isNaN(pipelineId) || isNaN(triggerId)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+
+  const [pipeline] = await db
+    .select()
+    .from(pipelinesTable)
+    .where(and(eq(pipelinesTable.id, pipelineId), eq(pipelinesTable.clientId, clientId)));
+
+  if (!pipeline) {
+    res.status(404).json({ error: "Pipeline not found" });
+    return;
+  }
+
+  const [trigger] = await db
+    .select()
+    .from(pipelineTriggersTable)
+    .where(and(
+      eq(pipelineTriggersTable.id, triggerId),
+      eq(pipelineTriggersTable.pipelineId, pipelineId)
+    ));
+
+  if (!trigger) {
+    res.status(404).json({ error: "Trigger not found" });
+    return;
+  }
+
+  await db.delete(pipelineTriggersTable).where(eq(pipelineTriggersTable.id, triggerId));
+  res.json({ success: true });
+});
+
+router.post("/pipelines/:id/triggers/:triggerId/rotate-secret", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const pipelineId = Number(req.params.id);
+  const triggerId = Number(req.params.triggerId);
+  if (isNaN(pipelineId) || isNaN(triggerId)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+
+  const [pipeline] = await db
+    .select()
+    .from(pipelinesTable)
+    .where(and(eq(pipelinesTable.id, pipelineId), eq(pipelinesTable.clientId, clientId)));
+
+  if (!pipeline) {
+    res.status(404).json({ error: "Pipeline not found" });
+    return;
+  }
+
+  const [trigger] = await db
+    .select()
+    .from(pipelineTriggersTable)
+    .where(and(
+      eq(pipelineTriggersTable.id, triggerId),
+      eq(pipelineTriggersTable.pipelineId, pipelineId)
+    ));
+
+  if (!trigger) {
+    res.status(404).json({ error: "Trigger not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(pipelineTriggersTable)
+    .set({ signingSecret: generateSecret() })
+    .where(eq(pipelineTriggersTable.id, triggerId))
+    .returning();
+
+  res.json(updated);
+});
+
+router.get("/pipelines/:id/trigger-events", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const pipelineId = Number(req.params.id);
+  if (isNaN(pipelineId)) {
+    res.status(400).json({ error: "Invalid pipeline ID" });
+    return;
+  }
+
+  const clientId = req.user!.clientId;
+
+  const [pipeline] = await db
+    .select()
+    .from(pipelinesTable)
+    .where(and(eq(pipelinesTable.id, pipelineId), eq(pipelinesTable.clientId, clientId)));
+
+  if (!pipeline) {
+    res.status(404).json({ error: "Pipeline not found" });
+    return;
+  }
+
+  const events = await db
+    .select()
+    .from(triggerEventsTable)
+    .where(eq(triggerEventsTable.pipelineId, pipelineId))
+    .orderBy(desc(triggerEventsTable.receivedAt))
+    .limit(50);
+
+  res.json(events);
 });
 
 router.post("/webhooks/pipeline/:pipelineId", async (req, res): Promise<void> => {
