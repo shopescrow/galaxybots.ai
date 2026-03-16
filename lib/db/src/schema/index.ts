@@ -25,3 +25,4 @@ export * from "./governance";
 export * from "./knowledge-base";
 export * from "./knowledge-base-sources";
 export * from "./documents";
+export * from "./pipelines";

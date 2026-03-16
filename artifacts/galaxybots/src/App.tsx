@@ -36,6 +36,7 @@ import Settings from "@/pages/Settings";
 import Governance from "@/pages/governance/Governance";
 import KnowledgeBase from "@/pages/knowledge-base/KnowledgeBase";
 import DocumentStudio from "@/pages/documents/DocumentStudio";
+import Pipelines from "@/pages/pipelines/Pipelines";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -56,8 +57,8 @@ function AuthenticatedRoutes() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-white text-lg">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
   }
@@ -98,6 +99,7 @@ function AuthenticatedRoutes() {
       <Route path="/governance" component={Governance} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/documents" component={DocumentStudio} />
+      <Route path="/pipelines" component={Pipelines} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -117,23 +119,21 @@ function AppRouter() {
   );
 }
 
-function App() {
+export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <LanguageProvider>
       <AuthProvider>
         <UserPreferencesProvider>
-          <LanguageProvider>
+          <QueryClientProvider client={queryClient}>
             <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <AppRouter />
               </WouterRouter>
               <Toaster />
             </TooltipProvider>
-          </LanguageProvider>
+          </QueryClientProvider>
         </UserPreferencesProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </LanguageProvider>
   );
 }
-
-export default App;

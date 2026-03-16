@@ -64,6 +64,7 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PATH_PREFIXES = [
   "/api/webhooks/lead/",
+  "/api/webhooks/pipeline/",
   "/api/storage/public-objects/",
 ];
 
