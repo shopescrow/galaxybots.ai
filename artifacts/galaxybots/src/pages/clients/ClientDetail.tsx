@@ -6,9 +6,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
-import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket } from "lucide-react";
+import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket, Users } from "lucide-react";
 import { AeoIntelligenceTab } from "./AeoIntelligenceTab";
 import { KnowledgeBaseTab } from "./KnowledgeBaseTab";
+import { StakeholderAccessTab } from "./StakeholderAccessTab";
 import { SCENARIOS, SCENARIO_CLIENTS } from "@/data/scenarios";
 import { useState, useEffect } from "react";
 import { BookOpen } from "lucide-react";
@@ -63,7 +64,7 @@ export default function ClientDetail() {
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions">("intelligence");
+  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders">("intelligence");
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
@@ -252,6 +253,17 @@ export default function ClientDetail() {
                 Value Report
               </div>
             </Link>
+            <button
+              onClick={() => setActiveTab("stakeholders")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
+                activeTab === "stakeholders"
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Stakeholder Access
+            </button>
             {clientScenarios.length > 0 && (
               <button
                 onClick={() => setActiveTab("missions")}
@@ -355,6 +367,8 @@ export default function ClientDetail() {
         )}
 
         {activeTab === "knowledge-base" && <KnowledgeBaseTab clientId={clientId} />}
+
+        {activeTab === "stakeholders" && <StakeholderAccessTab clientId={clientId} />}
 
         {activeTab === "missions" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

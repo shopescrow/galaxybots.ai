@@ -63,12 +63,20 @@ const PUBLIC_PATHS = [
   "/api/demo/start",
   "/api/demo/claim",
   "/api/demo/mission-stream",
+  "/api/client-portal/request-pin",
+  "/api/client-portal/verify-pin",
+  "/api/client-portal/me",
+  "/api/client-portal/roi",
+  "/api/client-portal/missions",
+  "/api/client-portal/approvals",
 ];
 
 const PUBLIC_PATH_PREFIXES = [
   "/api/webhooks/lead/",
   "/api/webhooks/pipeline/",
   "/api/storage/public-objects/",
+  "/api/client-portal/missions/",
+  "/api/client-portal/approvals/",
 ];
 
 app.use("/api", (req, res, next) => {

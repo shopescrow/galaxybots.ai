@@ -42,6 +42,7 @@ import DocumentStudio from "@/pages/documents/DocumentStudio";
 import Pipelines from "@/pages/pipelines/Pipelines";
 import CommandCenter from "@/pages/command-center/CommandCenter";
 import AnalyticsDashboard from "@/pages/analytics/AnalyticsDashboard";
+import ClientPortal from "@/pages/client-portal/ClientPortal";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -145,6 +146,7 @@ function AuthenticatedRoutes() {
 function AppRouter() {
   return (
     <Switch>
+      <Route path="/client-portal" component={ClientPortal} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/forgot-username" component={ForgotUsername} />

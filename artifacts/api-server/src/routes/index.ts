@@ -33,6 +33,7 @@ import commandCenterRouter from "./command-center";
 import analyticsRouter from "./analytics";
 import demoRouter from "./demo";
 import onboardingRouter from "./onboarding";
+import clientPortalRouter from "./client-portal";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(triggersRouter);
 router.use(commandCenterRouter);
 router.use(analyticsRouter);
 router.use(onboardingRouter);
+router.use(clientPortalRouter);
 
 export default router;
