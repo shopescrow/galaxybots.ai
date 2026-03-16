@@ -737,49 +737,56 @@ router.post("/demo/claim", async (req, res): Promise<void> => {
       return;
     }
 
-    const [newClient] = await db
-      .insert(clientsTable)
-      .values({
-        companyName,
-        contactName,
-        contactEmail: email.toLowerCase(),
-        plan: "trial",
-        status: "trial",
-      })
-      .returning();
-
     const passwordHash = await bcrypt.hash(password, 12);
-    const [newUser] = await db
-      .insert(usersTable)
-      .values({
-        email: email.toLowerCase(),
-        passwordHash,
-        clientId: newClient.id,
-        role: "owner",
-        displayName: displayName || contactName,
-      })
-      .returning();
 
-    if (guestSession.taskSessionId && guestSession.clientId) {
-      await db
-        .update(taskSessionsTable)
-        .set({ clientId: newClient.id })
-        .where(
-          and(
-            eq(taskSessionsTable.id, guestSession.taskSessionId),
-            eq(taskSessionsTable.clientId, guestSession.clientId)
-          )
-        );
-    }
+    const result = await db.transaction(async (tx) => {
+      const [newClient] = await tx
+        .insert(clientsTable)
+        .values({
+          companyName,
+          contactName,
+          contactEmail: email.toLowerCase(),
+          plan: "trial",
+          status: "trial",
+        })
+        .returning();
 
-    await db
-      .update(guestSessionsTable)
-      .set({ status: "claimed", claimedByUserId: newUser.id })
-      .where(eq(guestSessionsTable.id, guestSession.id));
+      const [newUser] = await tx
+        .insert(usersTable)
+        .values({
+          email: email.toLowerCase(),
+          passwordHash,
+          clientId: newClient.id,
+          role: "owner",
+          displayName: displayName || contactName,
+        })
+        .returning();
 
-    if (guestSession.clientId) {
-      await db.delete(clientsTable).where(eq(clientsTable.id, guestSession.clientId)).catch(() => {});
-    }
+      if (guestSession.taskSessionId && guestSession.clientId) {
+        await tx
+          .update(taskSessionsTable)
+          .set({ clientId: newClient.id })
+          .where(
+            and(
+              eq(taskSessionsTable.id, guestSession.taskSessionId),
+              eq(taskSessionsTable.clientId, guestSession.clientId)
+            )
+          );
+      }
+
+      await tx
+        .update(guestSessionsTable)
+        .set({ status: "claimed", claimedByUserId: newUser.id })
+        .where(eq(guestSessionsTable.id, guestSession.id));
+
+      if (guestSession.clientId) {
+        await tx.delete(clientsTable).where(eq(clientsTable.id, guestSession.clientId)).catch(() => {});
+      }
+
+      return { newClient, newUser };
+    });
+
+    const { newClient, newUser } = result;
 
     const authToken = signToken({
       userId: newUser.id,
