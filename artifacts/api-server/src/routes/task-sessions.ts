@@ -27,6 +27,7 @@ import { requireRole } from "../middleware/auth";
 import { llmRateLimit } from "../middleware/rate-limit";
 
 import { buildClientContext } from "../services/client-context";
+import { applyBrandVoiceGuardrails } from "../services/governance";
 
 const router: IRouter = Router();
 
@@ -425,10 +426,14 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
         }
       }
 
-      const cleanContent = content.replace(
+      let cleanContent = content.replace(
         /\[NEED_ROLE:\s*.+?\]/g,
         "",
       ).trim();
+
+      if (req.user!.clientId) {
+        cleanContent = await applyBrandVoiceGuardrails(req.user!.clientId, cleanContent);
+      }
 
       const [botMsg] = await db
         .insert(taskSessionMessagesTable)
@@ -618,7 +623,11 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
             }
           }
 
-          const cleanContent = content.replace(/\[NEED_ROLE:\s*.+?\]/g, "").trim();
+          let cleanContent = content.replace(/\[NEED_ROLE:\s*.+?\]/g, "").trim();
+
+          if (req.user!.clientId) {
+            cleanContent = await applyBrandVoiceGuardrails(req.user!.clientId, cleanContent);
+          }
 
           await db
             .insert(taskSessionMessagesTable)

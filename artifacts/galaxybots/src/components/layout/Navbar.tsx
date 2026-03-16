@@ -19,6 +19,7 @@ const NAV_LINKS = [
   { href: "/compliance", label: "Compliance" },
   { href: "/integrations", label: "Integrations" },
   { href: "/prospects", label: "Prospects" },
+  { href: "/governance", label: "Governance" },
   { href: "/billing", label: "Billing" },
 ];
 

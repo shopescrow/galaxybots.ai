@@ -24,6 +24,7 @@ import webhooksRouter from "./webhooks";
 import prospectsRouter from "./prospects";
 import storageRouter from "./storage";
 import userPreferencesRouter from "./user-preferences";
+import governanceRouter from "./governance";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(webhooksRouter);
 router.use(prospectsRouter);
 router.use(storageRouter);
 router.use(userPreferencesRouter);
+router.use(governanceRouter);
 
 export default router;

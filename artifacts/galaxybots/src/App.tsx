@@ -33,6 +33,7 @@ import Billing from "@/pages/Billing";
 import Scenarios from "@/pages/scenarios/Scenarios";
 import Prospects from "@/pages/prospects/Prospects";
 import Settings from "@/pages/Settings";
+import Governance from "@/pages/governance/Governance";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -92,6 +93,7 @@ function AuthenticatedRoutes() {
       <Route path="/scenarios" component={Scenarios} />
       <Route path="/prospects" component={Prospects} />
       <Route path="/settings" component={Settings} />
+      <Route path="/governance" component={Governance} />
       <Route component={NotFound} />
     </Switch>
   );

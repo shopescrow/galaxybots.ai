@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { db, clientsTable, clientBotsTable, botsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, clientsTable, clientBotsTable, botsTable, botToolPermissionsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import {
   GetClientBotsParams,
   HireBotBody,
@@ -9,6 +9,8 @@ import {
   GetClientBotsResponse,
 } from "@workspace/api-zod";
 import { requireRole } from "../middleware/auth";
+import { getAllTools } from "../tools";
+import { SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS } from "../services/governance";
 
 const UpdateClientBody = z.object({
   websiteUrl: z.string().nullish(),
@@ -135,11 +137,45 @@ router.post("/clients/:id/bots", requireRole("owner", "admin"), async (req, res)
     return;
   }
 
-  const [clientBot] = await db.insert(clientBotsTable).values({
-    clientId: id,
-    botId: body.data.botId,
-    status: "active",
-  }).returning();
+  const clientBot = await db.transaction(async (tx) => {
+    const [hired] = await tx.insert(clientBotsTable).values({
+      clientId: id,
+      botId: body.data.botId,
+      status: "active",
+    }).returning();
+
+    const existingPerms = await tx
+      .select()
+      .from(botToolPermissionsTable)
+      .where(
+        and(
+          eq(botToolPermissionsTable.clientId, id),
+          eq(botToolPermissionsTable.botId, body.data.botId)
+        )
+      );
+
+    if (existingPerms.length === 0) {
+      const allTools = getAllTools();
+      const allToolNames = allTools.map((t) => t.name);
+      const defaults = DEPARTMENT_TOOL_DEFAULTS[bot.department];
+
+      const permissionValues = allToolNames.map((toolName) => {
+        const allowed = defaults ? defaults.allowed.includes(toolName) : SAFE_READ_TOOLS.includes(toolName);
+        const requiresApproval = defaults ? defaults.approvalRequired.includes(toolName) : false;
+        return {
+          clientId: id,
+          botId: body.data.botId,
+          toolName,
+          allowed,
+          requiresApproval: allowed ? requiresApproval : false,
+        };
+      });
+
+      await tx.insert(botToolPermissionsTable).values(permissionValues);
+    }
+
+    return hired;
+  });
 
   res.status(201).json(clientBot);
 });

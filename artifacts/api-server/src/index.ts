@@ -1,5 +1,7 @@
 import app from "./app";
 import { startScheduler } from "./services/scheduler";
+import { backfillExistingBotPermissions } from "./services/governance";
+import { getAllTools } from "./tools";
 
 const rawPort = process.env["PORT"];
 
@@ -18,4 +20,7 @@ if (Number.isNaN(port) || port <= 0) {
 app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
   await startScheduler();
+  backfillExistingBotPermissions(getAllTools).catch((err) => {
+    console.error("[governance] Permission backfill failed:", err);
+  });
 });

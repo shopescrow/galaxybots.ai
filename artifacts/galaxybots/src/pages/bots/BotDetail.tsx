@@ -8,11 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { getGetConversationMessagesQueryKey } from "@workspace/api-client-react";
 import { MemoryAudit } from "@/components/memory/MemoryAudit";
 import { Link } from "wouter";
@@ -45,7 +47,8 @@ export default function BotDetail() {
   
   const startConvo = useStartConversation();
   const [isStarting, setIsStarting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "memory">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "memory" | "governance">("chat");
+  const isAdmin = user?.role === "owner" || user?.role === "admin";
 
   const handleStartChat = async () => {
     if (!bot) return;
@@ -146,6 +149,17 @@ export default function BotDetail() {
                   <Brain className="w-3.5 h-3.5 mr-1.5" />
                   Memory
                 </Button>
+                {isAdmin && (
+                  <Button
+                    variant={activeTab === "governance" ? "glow" : "ghost"}
+                    size="sm"
+                    className="font-tech text-xs"
+                    onClick={() => setActiveTab("governance")}
+                  >
+                    <Shield className="w-3.5 h-3.5 mr-1.5" />
+                    Governance
+                  </Button>
+                )}
               </div>
 
               {activeTab === "chat" ? (
@@ -175,11 +189,15 @@ export default function BotDetail() {
                     )}
                   </CardContent>
                 </Card>
-              ) : (
+              ) : activeTab === "memory" ? (
                 <div className="flex-1 overflow-y-auto pb-10">
                   <MemoryAudit botId={botId} botName={bot.name} />
                 </div>
-              )}
+              ) : activeTab === "governance" ? (
+                <div className="flex-1 overflow-y-auto pb-10">
+                  <BotGovernancePanel botId={botId} botName={bot.name} />
+                </div>
+              ) : null}
             </div>
           </div>
         )}
@@ -493,6 +511,160 @@ function ReceptionistImprovementHistory() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const GOV_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function govFetch(path: string, options?: RequestInit) {
+  const token = localStorage.getItem("auth_token");
+  const res = await fetch(`${GOV_BASE}/api${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+type ToolInfo = { name: string; description: string; isSensitive: boolean };
+type Permission = { id: number; clientId: number; botId: number; toolName: string; allowed: boolean; requiresApproval: boolean };
+
+function BotGovernancePanel({ botId, botName }: { botId: number; botName: string }) {
+  const queryClient = useQueryClient();
+
+  const { data: tools } = useQuery<ToolInfo[]>({
+    queryKey: ["governance-tools"],
+    queryFn: () => govFetch("/governance/tools"),
+  });
+
+  const { data: permissions, isLoading } = useQuery<Permission[]>({
+    queryKey: ["bot-permissions", botId],
+    queryFn: () => govFetch(`/governance/bots/${botId}/permissions`),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (perms: Array<{ toolName: string; allowed: boolean; requiresApproval: boolean }>) =>
+      govFetch(`/governance/bots/${botId}/permissions`, {
+        method: "PUT",
+        body: JSON.stringify({ permissions: perms }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bot-permissions", botId] }),
+  });
+
+  const seedMutation = useMutation({
+    mutationFn: () => govFetch(`/governance/bots/${botId}/permissions/seed`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bot-permissions", botId] }),
+  });
+
+  const permMap = new Map<string, Permission>();
+  permissions?.forEach((p) => permMap.set(p.toolName, p));
+
+  function togglePerm(toolName: string, field: "allowed" | "requiresApproval") {
+    const newPerms = (tools || []).map((t) => {
+      const existing = permMap.get(t.name);
+      const base = {
+        toolName: t.name,
+        allowed: existing?.allowed ?? false,
+        requiresApproval: existing?.requiresApproval ?? false,
+      };
+      if (t.name === toolName) {
+        if (field === "allowed") {
+          base.allowed = !base.allowed;
+          if (!base.allowed) base.requiresApproval = false;
+        } else {
+          base.requiresApproval = !base.requiresApproval;
+        }
+      }
+      return base;
+    });
+    updateMutation.mutate(newPerms);
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-border/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" />
+            Tool Permissions for {botName}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-4"
+            onClick={() => seedMutation.mutate()}
+            disabled={seedMutation.isPending}
+          >
+            {seedMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+            Reset to Department Defaults
+          </Button>
+
+          {isLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+          ) : (
+            <div className="space-y-2">
+              {(tools || []).map((tool) => {
+                const perm = permMap.get(tool.name);
+                const allowed = perm?.allowed ?? false;
+                const reqApproval = perm?.requiresApproval ?? false;
+
+                return (
+                  <div
+                    key={tool.name}
+                    className={cn(
+                      "p-2.5 rounded-lg border text-sm",
+                      allowed ? "bg-secondary/20 border-border/40" : "bg-destructive/5 border-destructive/20"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-foreground text-xs">{tool.name}</span>
+                          {tool.isSensitive && <Badge variant="destructive" className="text-[10px] px-1 py-0">Sensitive</Badge>}
+                        </div>
+                        <p className="text-muted-foreground text-[11px] truncate">{tool.description}</p>
+                      </div>
+                      <div className="flex items-center gap-3 ml-2">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-[10px] text-muted-foreground">Allow</Label>
+                          <Switch
+                            checked={allowed}
+                            onCheckedChange={() => togglePerm(tool.name, "allowed")}
+                            disabled={updateMutation.isPending}
+                          />
+                        </div>
+                        {allowed && (
+                          <div className="flex items-center gap-1">
+                            <Label className="text-[10px] text-muted-foreground">Approve</Label>
+                            <Switch
+                              checked={reqApproval}
+                              onCheckedChange={() => togglePerm(tool.name, "requiresApproval")}
+                              disabled={updateMutation.isPending}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="text-center">
+        <Link href="/governance" className="text-xs text-primary hover:underline">
+          Open full Governance settings →
+        </Link>
+      </div>
     </div>
   );
 }

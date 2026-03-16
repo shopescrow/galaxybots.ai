@@ -12,6 +12,7 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { runAgenticLoop, type AgenticEvent } from "../tools";
 import { buildMemoryContext } from "../services/memory";
+import { applyBrandVoiceGuardrails } from "../services/governance";
 
 const router: IRouter = Router();
 
@@ -183,7 +184,11 @@ You have access to tools that allow you to search the web, read/write shared sta
     }
   }
 
-  const botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
+  let botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
+
+  if (req.user!.clientId) {
+    botResponseContent = await applyBrandVoiceGuardrails(req.user!.clientId, botResponseContent);
+  }
 
   const [botMsg] = await db.insert(messages).values({
     conversationId: params.data.id,
@@ -407,6 +412,10 @@ Now write the single definitive synthesized response:`;
       }
 
       botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
+    }
+
+    if (req.user!.clientId) {
+      botResponseContent = await applyBrandVoiceGuardrails(req.user!.clientId, botResponseContent);
     }
 
     await db.insert(messages).values({
