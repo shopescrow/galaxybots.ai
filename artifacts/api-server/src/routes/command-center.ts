@@ -9,6 +9,7 @@ import {
   clientsTable,
   taskSessionsTable,
   botsTable,
+  clientHealthScoresTable,
 } from "@workspace/db";
 import { eq, desc, and, inArray, sql, or } from "drizzle-orm";
 import { requireRole } from "../middleware/auth";
@@ -171,7 +172,7 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
     .from(clientsTable)
     .where(inArray(clientsTable.id, clientIds));
 
-  const [activeSessions, lastToolActions, nextRuns] = await Promise.all([
+  const [activeSessions, lastToolActions, nextRuns, healthScores] = await Promise.all([
     db
       .select({
         clientId: taskSessionsTable.clientId,
@@ -208,6 +209,18 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
           eq(botAssignmentsTable.isActive, "true")
         )
       ),
+    db.execute(sql`
+      SELECT DISTINCT ON (client_id)
+        client_id AS "clientId",
+        score,
+        trend,
+        tag,
+        recommended_action AS "recommendedAction",
+        computed_at AS "computedAt"
+      FROM client_health_scores
+      WHERE client_id = ANY(${clientIds})
+      ORDER BY client_id, computed_at DESC
+    `),
   ]);
 
   const sessionMap = Object.fromEntries(activeSessions.map((s) => [s.clientId, s.count]));
@@ -222,6 +235,11 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
     daily: 24 * 60 * 60 * 1000,
     weekly: 7 * 24 * 60 * 60 * 1000,
   };
+
+  const healthMap: Record<number, { score: number; trend: string; tag: string; recommendedAction: string | null }> = {};
+  for (const row of healthScores.rows as Array<{ clientId: number; score: number; trend: string; tag: string; recommendedAction: string | null }>) {
+    healthMap[row.clientId] = { score: row.score, trend: row.trend, tag: row.tag, recommendedAction: row.recommendedAction };
+  }
 
   const nextRunMap: Record<number, { nextRun: string; objective: string } | null> = {};
   for (const run of nextRuns) {
@@ -245,6 +263,9 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
     lastToolName: actionMap[client.id]?.toolName || null,
     nextScheduledRun: nextRunMap[client.id]?.nextRun || null,
     nextRunObjective: nextRunMap[client.id]?.objective || null,
+    healthScore: healthMap[client.id]?.score ?? null,
+    healthTag: healthMap[client.id]?.tag ?? null,
+    healthTrend: healthMap[client.id]?.trend ?? null,
   }));
 
   res.json(cards);

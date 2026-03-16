@@ -19,6 +19,10 @@ import {
   Zap,
   LayoutDashboard,
   RefreshCw,
+  Heart,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import { useState } from "react";
 import { Redirect } from "wouter";
@@ -69,6 +73,9 @@ type CompanyCard = {
   lastToolName: string | null;
   nextScheduledRun: string | null;
   nextRunObjective: string | null;
+  healthScore: number | null;
+  healthTag: string | null;
+  healthTrend: string | null;
 };
 
 function useCommandCenterData() {
@@ -360,6 +367,18 @@ function AlertsSection({ alerts }: { alerts: Alert[] }) {
   );
 }
 
+const HEALTH_TAG_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  healthy: { bg: "bg-green-500/10", text: "text-green-400", border: "border-green-500/30", label: "HEALTHY" },
+  at_risk: { bg: "bg-yellow-500/10", text: "text-yellow-400", border: "border-yellow-500/30", label: "AT RISK" },
+  critical: { bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/30", label: "CRITICAL" },
+};
+
+function HealthTrendIcon({ trend }: { trend: string | null }) {
+  if (trend === "improving") return <TrendingUp className="w-3 h-3 text-green-400" />;
+  if (trend === "declining") return <TrendingDown className="w-3 h-3 text-red-400" />;
+  return <Minus className="w-3 h-3 text-muted-foreground" />;
+}
+
 function CompanyStatusCards({ companies }: { companies: CompanyCard[] }) {
   if (companies.length === 0) {
     return (
@@ -370,72 +389,126 @@ function CompanyStatusCards({ companies }: { companies: CompanyCard[] }) {
     );
   }
 
+  const sorted = [...companies].sort((a, b) => {
+    const tagOrder: Record<string, number> = { critical: 0, at_risk: 1, healthy: 2 };
+    const aOrder = a.healthTag ? (tagOrder[a.healthTag] ?? 3) : 3;
+    const bOrder = b.healthTag ? (tagOrder[b.healthTag] ?? 3) : 3;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return (a.healthScore ?? 100) - (b.healthScore ?? 100);
+  });
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {companies.map((company) => (
-        <Card key={company.id} className="hover:border-primary/40 transition-colors">
-          <CardHeader className="pb-3 border-b border-border/30">
-            <div className="flex justify-between items-start">
-              <CardTitle className="text-base truncate">{company.companyName}</CardTitle>
-              <Badge
-                variant={
-                  company.status === "active"
-                    ? "cyan"
-                    : company.status === "trial"
-                      ? "outline"
-                      : "secondary"
-                }
-              >
-                {company.status.toUpperCase()}
-              </Badge>
-            </div>
-            <Badge
-              variant="outline"
-              className="w-fit text-[10px] mt-1 uppercase text-gold border-gold/30 bg-gold/5"
-            >
-              {company.plan} TIER
-            </Badge>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-3 text-sm">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Active Sessions</span>
-              <span className="text-foreground font-medium">{company.activeSessions}</span>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Last Bot Action</span>
-              <span className="text-foreground text-xs">
-                {company.lastBotAction
-                  ? formatTime(company.lastBotAction)
-                  : "None"}
-              </span>
-            </div>
-            {company.lastToolName && (
+      {sorted.map((company) => {
+        const tagStyle = company.healthTag ? HEALTH_TAG_STYLES[company.healthTag] : null;
+        const isCritical = company.healthTag === "critical";
+
+        return (
+          <Card
+            key={company.id}
+            className={`hover:border-primary/40 transition-colors ${
+              isCritical ? "border-red-500/40 ring-1 ring-red-500/20" : ""
+            }`}
+          >
+            <CardHeader className="pb-3 border-b border-border/30">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2 min-w-0">
+                  {isCritical && <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />}
+                  <CardTitle className="text-base truncate">{company.companyName}</CardTitle>
+                </div>
+                <Badge
+                  variant={
+                    company.status === "active"
+                      ? "cyan"
+                      : company.status === "trial"
+                        ? "outline"
+                        : "secondary"
+                  }
+                >
+                  {company.status.toUpperCase()}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] uppercase text-gold border-gold/30 bg-gold/5"
+                >
+                  {company.plan} TIER
+                </Badge>
+                {tagStyle && (
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${tagStyle.text} ${tagStyle.border} ${tagStyle.bg}`}
+                  >
+                    <Heart className="w-3 h-3 mr-1" />
+                    {company.healthScore !== null ? company.healthScore : "—"} {tagStyle.label}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3 text-sm">
+              {company.healthScore !== null && (
+                <div className="flex justify-between text-muted-foreground items-center">
+                  <span className="flex items-center gap-1">
+                    <Heart className="w-3 h-3" />
+                    Health
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          company.healthScore >= 70 ? "bg-green-500" :
+                          company.healthScore >= 40 ? "bg-yellow-500" :
+                          "bg-red-500"
+                        }`}
+                        style={{ width: `${company.healthScore}%` }}
+                      />
+                    </div>
+                    <span className="text-foreground font-medium text-xs">{company.healthScore}</span>
+                    <HealthTrendIcon trend={company.healthTrend} />
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between text-muted-foreground">
-                <span>Last Tool</span>
-                <span className="text-foreground text-xs truncate ml-2">
-                  {formatToolName(company.lastToolName)}
+                <span>Active Sessions</span>
+                <span className="text-foreground font-medium">{company.activeSessions}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Last Bot Action</span>
+                <span className="text-foreground text-xs">
+                  {company.lastBotAction
+                    ? formatTime(company.lastBotAction)
+                    : "None"}
                 </span>
               </div>
-            )}
-            <div className="flex justify-between text-muted-foreground">
-              <span>Next Scheduled</span>
-              <span className="text-foreground text-xs">
-                {company.nextScheduledRun
-                  ? formatTime(company.nextScheduledRun)
-                  : "None"}
-              </span>
-            </div>
-            <div className="pt-3 border-t border-border/30">
-              <Link href={`/clients/${company.id}`}>
-                <Button variant="outline" size="sm" className="w-full font-tech text-xs gap-1">
-                  <ExternalLink className="w-3 h-3" />
-                  Open
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+              {company.lastToolName && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Last Tool</span>
+                  <span className="text-foreground text-xs truncate ml-2">
+                    {formatToolName(company.lastToolName)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-muted-foreground">
+                <span>Next Scheduled</span>
+                <span className="text-foreground text-xs">
+                  {company.nextScheduledRun
+                    ? formatTime(company.nextScheduledRun)
+                    : "None"}
+                </span>
+              </div>
+              <div className="pt-3 border-t border-border/30">
+                <Link href={`/clients/${company.id}`}>
+                  <Button variant="outline" size="sm" className="w-full font-tech text-xs gap-1">
+                    <ExternalLink className="w-3 h-3" />
+                    Open
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

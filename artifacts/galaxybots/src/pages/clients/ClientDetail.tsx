@@ -6,10 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
-import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket, Users } from "lucide-react";
+import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket, Users, Heart } from "lucide-react";
 import { AeoIntelligenceTab } from "./AeoIntelligenceTab";
 import { KnowledgeBaseTab } from "./KnowledgeBaseTab";
 import { StakeholderAccessTab } from "./StakeholderAccessTab";
+import { ClientHealthTab } from "./ClientHealthTab";
 import { SCENARIOS, SCENARIO_CLIENTS } from "@/data/scenarios";
 import { useState, useEffect } from "react";
 import { BookOpen } from "lucide-react";
@@ -64,7 +65,7 @@ export default function ClientDetail() {
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders">("intelligence");
+  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders" | "health">("intelligence");
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
@@ -215,6 +216,17 @@ export default function ClientDetail() {
         <div className="mb-6">
           <div className="flex gap-1 p-1 rounded-xl bg-card border border-border/40 w-fit">
             <button
+              onClick={() => setActiveTab("health")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
+                activeTab === "health"
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Heart className="w-4 h-4" />
+              Health Score
+            </button>
+            <button
               onClick={() => setActiveTab("intelligence")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
                 activeTab === "intelligence"
@@ -282,6 +294,8 @@ export default function ClientDetail() {
             )}
           </div>
         </div>
+
+        {activeTab === "health" && <ClientHealthTab clientId={clientId} />}
 
         {activeTab === "intelligence" && <AeoIntelligenceTab clientId={clientId} />}
 

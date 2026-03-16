@@ -7,6 +7,7 @@ import { auditLogger } from "./middleware/audit";
 import { generalRateLimit } from "./middleware/rate-limit";
 import { stripeWebhookHandler } from "./routes/billing";
 import { analyticsApiKeyAuth } from "./middleware/analytics-api-key";
+import { instrumentHealthSignals } from "./middleware/health-signals";
 
 const app: Express = express();
 
@@ -104,6 +105,7 @@ app.use("/api", (req, res, next) => {
   return authenticate(req, res, next);
 });
 
+app.use("/api", instrumentHealthSignals);
 app.use("/api", router);
 
 export default app;

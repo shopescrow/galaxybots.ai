@@ -42,6 +42,7 @@ import scimRouter from "./scim";
 import orgAdminRouter from "./org-admin";
 import proposalsRouter from "./proposals";
 import notificationsRouter from "./notifications";
+import clientHealthRouter from "./client-health";
 
 const router: IRouter = Router();
 
@@ -86,5 +87,6 @@ router.use(scimRouter);
 router.use(orgAdminRouter);
 router.use(proposalsRouter);
 router.use(notificationsRouter);
+router.use(clientHealthRouter);
 
 export default router;

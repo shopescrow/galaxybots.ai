@@ -10,6 +10,8 @@ import {
   bingolingoContentTable,
   competitorUrlsTable,
   aeoScoresTable,
+  pipelinesTable,
+  taskSessionsTable,
 } from "@workspace/db";
 import { eq, and, lte, isNull, or, ne, desc, gt } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -18,6 +20,7 @@ import { syncSource } from "./kb-sync";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { shouldPauseAutonomous } from "./cost-caps";
 import { createNotification } from "./notifications";
+import { computeAllHealthScores, generateWeeklyPulse } from "./client-health";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -558,6 +561,133 @@ async function checkCompetitorAlerts() {
   }
 }
 
+let lastHealthScoreCheck = 0;
+const HEALTH_SCORE_INTERVAL = 24 * 60 * 60 * 1000;
+
+async function triggerRetentionAction(clientId: number, tag: string, previousTag: string, score: number) {
+  try {
+    const pipelines = await db
+      .select()
+      .from(pipelinesTable)
+      .where(and(eq(pipelinesTable.clientId, clientId), eq(pipelinesTable.active, true)));
+
+    const retentionPipeline = pipelines.find(
+      (p) => p.name.toLowerCase().includes("retention") || p.name.toLowerCase().includes("health")
+    );
+
+    if (retentionPipeline) {
+      console.log(`[health-retention] Triggering pipeline "${retentionPipeline.name}" for client ${clientId} (${previousTag} → ${tag})`);
+      broadcastSSE("health-retention", {
+        clientId,
+        pipelineId: retentionPipeline.id,
+        pipelineName: retentionPipeline.name,
+        previousTag,
+        newTag: tag,
+        score,
+        message: `Retention pipeline "${retentionPipeline.name}" triggered for client #${clientId}`,
+      });
+    }
+
+    const [taskSession] = await db
+      .insert(taskSessionsTable)
+      .values({
+        clientId,
+        title: `[Auto] Client Health Alert: ${previousTag} → ${tag}`,
+        objective: `Client health status changed from ${previousTag} to ${tag} (score: ${score}). Review engagement metrics and take retention action.`,
+        status: "pending",
+      })
+      .returning();
+
+    console.log(`[health-retention] Created retention task session #${taskSession.id} for client ${clientId}`);
+  } catch (err) {
+    console.error(`[health-retention] Failed retention trigger for client ${clientId}:`, errMsg(err));
+  }
+}
+
+async function checkHealthScores() {
+  const now = Date.now();
+  if (now - lastHealthScoreCheck < HEALTH_SCORE_INTERVAL) return;
+  lastHealthScoreCheck = now;
+
+  try {
+    const results = await computeAllHealthScores();
+    const critical = results.filter((r) => r.tag === "critical");
+    const atRisk = results.filter((r) => r.tag === "at_risk");
+
+    for (const client of critical) {
+      broadcastSSE("health-alert", {
+        clientId: client.clientId,
+        level: "critical",
+        score: client.score,
+        message: `CRITICAL: Client #${client.clientId} health score dropped to ${client.score}`,
+      });
+    }
+
+    for (const client of atRisk) {
+      broadcastSSE("health-alert", {
+        clientId: client.clientId,
+        level: "at_risk",
+        score: client.score,
+        message: `AT RISK: Client #${client.clientId} health score is ${client.score}`,
+      });
+    }
+
+    const degraded = results.filter(
+      (r) => r.transition && (r.tag === "at_risk" || r.tag === "critical") && r.previousTag
+    );
+    for (const client of degraded) {
+      await triggerRetentionAction(client.clientId, client.tag, client.previousTag!, client.score);
+    }
+
+    console.log(`[scheduler] Health scores computed: ${results.length} clients (${critical.length} critical, ${atRisk.length} at-risk, ${degraded.length} transitions)`);
+  } catch (err: unknown) {
+    console.error(`[scheduler] Health score computation failed: ${errMsg(err)}`);
+  }
+}
+
+let lastWeeklyPulseCheck = 0;
+const WEEKLY_PULSE_INTERVAL = 7 * 24 * 60 * 60 * 1000;
+
+async function checkWeeklyPulse() {
+  const now = Date.now();
+  if (now - lastWeeklyPulseCheck < WEEKLY_PULSE_INTERVAL) return;
+
+  const today = new Date();
+  if (today.getDay() !== 1) return;
+
+  lastWeeklyPulseCheck = now;
+
+  try {
+    const pulse = await generateWeeklyPulse();
+
+    await db.insert(backgroundReportsTable).values({
+      botId: 0,
+      assignmentId: 0,
+      content: JSON.stringify(pulse, null, 2),
+      summary: `Weekly Client Health Pulse: ${pulse.summary.critical} critical, ${pulse.summary.atRisk} at-risk, ${pulse.summary.healthy} healthy out of ${pulse.summary.total} clients`,
+      runStatus: "success",
+    });
+
+    broadcastSSE("weekly-pulse", {
+      type: "client_pulse",
+      ...pulse,
+    });
+
+    for (const client of pulse.critical) {
+      broadcastSSE("health-alert", {
+        level: "pulse-critical",
+        companyName: client.companyName,
+        score: client.score,
+        message: `Weekly Pulse: ${client.companyName} is CRITICAL (score: ${client.score}) — ${client.recommendedAction}`,
+      });
+    }
+
+    console.log(`[scheduler] Weekly Client Pulse generated and persisted: ${pulse.summary.total} clients`);
+  } catch (err: unknown) {
+    console.error(`[scheduler] Weekly pulse generation failed: ${errMsg(err)}`);
+  }
+}
+
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
 async function tryAcquireSchedulerLock(): Promise<boolean> {
@@ -598,6 +728,12 @@ export async function startScheduler() {
     );
     checkBingolingoAutoContent().catch((err) =>
       console.error("[scheduler] Tick error (BingoLingo auto-content):", err)
+    );
+    checkHealthScores().catch((err) =>
+      console.error("[scheduler] Tick error (health scores):", err)
+    );
+    checkWeeklyPulse().catch((err) =>
+      console.error("[scheduler] Tick error (weekly pulse):", err)
     );
   }, 5 * 60 * 1000);
 }

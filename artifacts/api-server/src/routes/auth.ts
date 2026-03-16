@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db, usersTable, clientsTable, ssoConfigsTable } from "@workspace/db";
 import { eq, or, ilike, and } from "drizzle-orm";
 import { signToken, authenticate } from "../middleware/auth";
+import { recordLoginSignal } from "../middleware/health-signals";
 import { authRateLimit } from "../middleware/rate-limit";
 
 const router: IRouter = Router();
@@ -157,6 +158,8 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+
+  recordLoginSignal(user.clientId);
 
   res.json({
     user: {
