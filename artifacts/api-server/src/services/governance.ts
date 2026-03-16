@@ -107,6 +107,7 @@ export async function createPendingApproval(params: {
     body: `${params.botName ?? "A bot"} wants to use ${params.toolName} and needs your approval.`,
     link: `/approval/${approval.id}`,
     metadata: { approvalId: approval.id, badge },
+    isApproval: true,
   }).catch(() => {});
 
   return approval.id;

@@ -118,6 +118,10 @@ export default function ChatScreen() {
               continue;
             }
 
+            if (parsed.type === "done") {
+              continue;
+            }
+
             const chunk = parsed.content || parsed.text || "";
             if (!chunk) continue;
 

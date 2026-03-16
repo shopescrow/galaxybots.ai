@@ -19,7 +19,11 @@ const CATEGORY_PREF_MAP: Record<string, string> = {
   system: "notifySystem",
 };
 
-async function isUserPushAllowed(userId: number, category?: NotificationCategory): Promise<boolean> {
+async function isUserPushAllowed(
+  userId: number,
+  category?: NotificationCategory,
+  isApproval?: boolean,
+): Promise<boolean> {
   const prefs = await db
     .select()
     .from(userPreferencesTable)
@@ -30,6 +34,11 @@ async function isUserPushAllowed(userId: number, category?: NotificationCategory
 
   const pref = prefs[0] as Record<string, unknown>;
   if (!pref.pushEnabled) return false;
+
+  if (isApproval) {
+    if (pref.notifyApprovals === false) return false;
+    return true;
+  }
 
   if (category) {
     const prefKey = CATEGORY_PREF_MAP[category];
@@ -47,9 +56,10 @@ export async function sendPushToUser(
     data?: Record<string, string>;
     badge?: number;
     category?: NotificationCategory;
+    isApproval?: boolean;
   },
 ): Promise<void> {
-  const allowed = await isUserPushAllowed(userId, payload.category);
+  const allowed = await isUserPushAllowed(userId, payload.category, payload.isApproval);
   if (!allowed) return;
 
   const tokens = await db
@@ -96,6 +106,7 @@ export async function sendPushToClient(
     data?: Record<string, string>;
     badge?: number;
     category?: NotificationCategory;
+    isApproval?: boolean;
   },
 ): Promise<void> {
   const { usersTable } = await import("@workspace/db");
