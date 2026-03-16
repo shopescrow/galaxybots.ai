@@ -7,6 +7,7 @@ import pLimit from "p-limit";
 import pRetry from "p-retry";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals } from "../services/governance";
 import { logLlmUsage } from "../services/llm-usage";
+import { isToolSandboxed, getSandboxedToolResponse } from "../routes/demo";
 
 function auditToolExecution(
   context: ToolContext,
@@ -339,6 +340,24 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
 
           const tool = getTool(toolName);
           let result: unknown;
+
+          if (context.isGuest && isToolSandboxed(toolName)) {
+            result = getSandboxedToolResponse(toolName);
+            const sandboxEvent: AgenticEvent = {
+              type: "tool_result",
+              toolName,
+              toolCallId: toolCall.id,
+              input: parsedArgs,
+              output: result,
+              botId: context.botId,
+              botName: context.botName,
+              iteration,
+              sandboxed: true,
+            };
+            events.push(sandboxEvent);
+            onEvent?.(sandboxEvent);
+            return { toolCallId: toolCall.id, result };
+          }
 
           if (!tool) {
             result = { error: `Unknown tool: ${toolName}` };

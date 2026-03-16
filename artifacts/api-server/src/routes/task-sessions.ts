@@ -5,8 +5,9 @@ import {
   taskSessionsTable,
   taskSessionBotsTable,
   taskSessionMessagesTable,
+  guestSessionsTable,
 } from "@workspace/db";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, gt } from "drizzle-orm";
 import { captureSessionOutcome } from "../services/outcome-capture";
 import {
   AnalyzeTaskBody,
@@ -31,6 +32,22 @@ import { buildClientContext } from "../services/client-context";
 import { applyBrandVoiceGuardrails } from "../services/governance";
 
 const router: IRouter = Router();
+
+async function verifyGuestAccess(req: Express.Request, taskSessionId: number): Promise<boolean> {
+  if (req.user?.role !== "guest" || !req.user.guestSessionId) return true;
+  const [gs] = await db
+    .select()
+    .from(guestSessionsTable)
+    .where(
+      and(
+        eq(guestSessionsTable.id, req.user.guestSessionId),
+        eq(guestSessionsTable.taskSessionId, taskSessionId),
+        eq(guestSessionsTable.status, "active"),
+        gt(guestSessionsTable.expiresAt, new Date())
+      )
+    );
+  return !!gs;
+}
 
 async function getSessionWithBots(sessionId: number) {
   const [session] = await db
@@ -267,6 +284,11 @@ router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!(await verifyGuestAccess(req, params.data.id))) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
   const msgs = await db
     .select()
     .from(taskSessionMessagesTable)
@@ -390,6 +412,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           botName: bot.name,
           clientId: req.user!.clientId,
           userId: req.user!.userId,
+          isGuest: req.user!.role === "guest",
         },
       });
 
@@ -492,6 +515,11 @@ router.post(
       return;
     }
 
+    if (!(await verifyGuestAccess(req, params.data.id))) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -589,6 +617,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
               botName: bot.name,
               clientId: req.user!.clientId,
               userId: req.user!.userId,
+              isGuest: req.user!.role === "guest",
             },
             onEvent: (event) => {
               sendSSE({ ...event, botId: bot.id, botName: bot.name, botTitle: bot.title });

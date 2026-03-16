@@ -8,6 +8,7 @@ export interface AuthUser {
   email: string;
   plan?: string;
   bypassPayment?: boolean;
+  guestSessionId?: number;
 }
 
 declare global {
@@ -66,6 +67,34 @@ export function requireRole(...roles: string[]) {
     }
     next();
   };
+}
+
+export function authenticateOrGuest(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  let token: string | undefined;
+
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.slice(7);
+  } else if (req.cookies?.token) {
+    token = req.cookies.token;
+  }
+
+  if (!token) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
+    req.user = decoded;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+export function isGuestSession(req: Request): boolean {
+  return req.user?.role === "guest";
 }
 
 export function requirePayment(req: Request, res: Response, next: NextFunction): void {

@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Network, Shield, Zap, Radio, Crosshair } from "lucide-react";
+import { Bot, Network, Shield, Zap, Radio, Crosshair, Play } from "lucide-react";
 import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { BillingWidget } from "@/components/BillingWidget";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
@@ -74,6 +74,12 @@ export default function Home() {
                 <Link href="/bots">
                   <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px]">
                     Explore Roster
+                  </Button>
+                </Link>
+                <Link href="/demo">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px] gap-2 border-cyan/30 text-cyan hover:bg-cyan/10">
+                    <Play className="w-4 h-4" />
+                    Live Demo
                   </Button>
                 </Link>
               </div>

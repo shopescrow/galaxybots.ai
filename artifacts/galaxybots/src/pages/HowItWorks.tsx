@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { 
   Search, UserCheck, Zap, Building, Globe, ArrowRight, 
   CheckCircle, Clock, Shield, TrendingUp, Users, Bot,
-  ChevronRight, Star, Layers
+  ChevronRight, Star, Layers, Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -368,6 +368,12 @@ export default function HowItWorks() {
               </Link>
               <Link href="/bots">
                 <Button variant="outline" size="lg">Meet the Directors</Button>
+              </Link>
+              <Link href="/demo">
+                <Button variant="outline" size="lg" className="gap-2 border-cyan/30 text-cyan hover:bg-cyan/10">
+                  <Play className="w-4 h-4" />
+                  Try Live Demo
+                </Button>
               </Link>
             </div>
           </div>

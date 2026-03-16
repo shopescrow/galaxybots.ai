@@ -1,0 +1,631 @@
+import { Router, type IRouter } from "express";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import {
+  db,
+  guestSessionsTable,
+  clientsTable,
+  usersTable,
+  botsTable,
+  taskSessionsTable,
+  taskSessionBotsTable,
+  taskSessionMessagesTable,
+} from "@workspace/db";
+import { eq, and, gt, sql, gte, lte, desc } from "drizzle-orm";
+import { signToken } from "../middleware/auth";
+import rateLimit from "express-rate-limit";
+
+const router: IRouter = Router();
+
+const DEMO_COMPANY_NAME = "Apex Ventures";
+const DEMO_CONTACT_NAME = "Demo User";
+const DEMO_CONTACT_EMAIL = "demo@apexventures.example";
+const DEMO_SESSION_DURATION_MS = 30 * 60 * 1000;
+const DEMO_CLEANUP_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
+const DEMO_MISSION_OBJECTIVE = "Analyze our Q2 marketing performance and recommend a growth strategy for next quarter";
+
+const DEMO_BOT_NAMES = [
+  "Revenue Oracle Max",
+  "Finance Director Vance",
+  "Growth Hacker Kira",
+];
+
+const DEMO_INDUSTRY = "Technology / SaaS";
+const DEMO_SERVICES = ["AI-Powered Analytics", "Marketing Automation", "Customer Intelligence Platform"];
+const DEMO_BUSINESS_CONTEXT = "Apex Ventures is a mid-market SaaS company with $12M ARR, 200 enterprise customers, and a 15-person marketing team. Q2 saw a 8% decline in MQL-to-SQL conversion rate and a 12% increase in CAC. The board is pushing for aggressive growth in Q3 while maintaining profitability.";
+
+const SANDBOXED_TOOLS = new Set([
+  "send_email",
+  "post_slack_message",
+  "create_document",
+  "create_calendar_event",
+  "crm_upsert_contact",
+  "crm_create_deal",
+  "create_issue",
+  "update_issue",
+  "create_studio_document",
+]);
+
+const READ_ONLY_TOOLS = new Set([
+  "web_search",
+  "read_world_state",
+  "write_world_state",
+  "read_platform_data",
+  "read_email",
+  "read_slack_channel",
+  "read_document",
+  "list_calendar_events",
+  "scrape_webpage",
+  "analyze_aeo_score",
+  "aeo_recommend",
+  "run_code",
+  "delegate_to_bot",
+  "prospect_search",
+  "enrich_prospect",
+  "get_prospects",
+  "qualify_prospect",
+  "browse_sabrina_automations",
+  "download_sabrina_automation",
+]);
+
+export function isToolSandboxed(toolName: string): boolean {
+  return !GUEST_ALLOWED_TOOLS.has(toolName);
+}
+
+const GUEST_ALLOWED_TOOLS = new Set([
+  ...READ_ONLY_TOOLS,
+]);
+
+export function getSandboxedToolResponse(toolName: string): unknown {
+  const mockResponses: Record<string, unknown> = {
+    send_email: { success: true, messageId: "demo-mock-001", note: "[SANDBOXED] Email would be sent in a live account." },
+    post_slack_message: { success: true, ts: "demo-mock-ts", note: "[SANDBOXED] Slack message would be posted in a live account." },
+    create_document: { success: true, id: "demo-doc-001", url: "https://notion.so/demo", note: "[SANDBOXED] Document would be created in a live account." },
+    create_calendar_event: { success: true, id: "demo-event-001", note: "[SANDBOXED] Calendar event would be created in a live account." },
+    crm_upsert_contact: { success: true, contactId: "demo-contact-001", note: "[SANDBOXED] CRM contact would be upserted in a live account." },
+    crm_create_deal: { success: true, dealId: "demo-deal-001", note: "[SANDBOXED] CRM deal would be created in a live account." },
+    create_issue: { success: true, issueId: "demo-issue-001", url: "https://linear.app/demo", note: "[SANDBOXED] Issue would be created in a live account." },
+    update_issue: { success: true, note: "[SANDBOXED] Issue would be updated in a live account." },
+    create_studio_document: { success: true, documentId: 0, note: "[SANDBOXED] Studio document would be created in a live account." },
+  };
+  return mockResponses[toolName] || { success: true, note: `[SANDBOXED] ${toolName} would execute in a live account.` };
+}
+
+function hashIp(ip: string): string {
+  return crypto.createHash("sha256").update(ip + (process.env.JWT_SECRET || "salt")).digest("hex").slice(0, 32);
+}
+
+const demoRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  keyGenerator: (req) => req.ip || "unknown",
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  validate: false,
+  message: { error: "Demo sessions are limited to 3 per hour. Please try again later or create an account." },
+});
+
+async function seedDemoCompany(): Promise<{ clientId: number; botIds: number[] }> {
+  const [client] = await db
+    .insert(clientsTable)
+    .values({
+      companyName: DEMO_COMPANY_NAME,
+      contactName: DEMO_CONTACT_NAME,
+      contactEmail: `demo-${Date.now()}@apexventures.example`,
+      plan: "team",
+      status: "demo",
+      industry: DEMO_INDUSTRY,
+      servicesList: DEMO_SERVICES,
+      targetMarket: "Mid-market and Enterprise B2B SaaS companies",
+      businessContext: DEMO_BUSINESS_CONTEXT,
+    })
+    .returning();
+
+  const allBots = await db.select().from(botsTable);
+  const matchedBots = allBots.filter(
+    (b) =>
+      DEMO_BOT_NAMES.some((name) => b.name.toLowerCase().includes(name.toLowerCase().split(" ")[0]!))
+  );
+
+  const botIds = matchedBots.length > 0
+    ? matchedBots.map((b) => b.id)
+    : allBots.slice(0, 3).map((b) => b.id);
+
+  return { clientId: client.id, botIds };
+}
+
+async function cleanupExpiredSessions(): Promise<void> {
+  const threshold = new Date(Date.now() - DEMO_CLEANUP_THRESHOLD_MS);
+  const expired = await db
+    .select({ id: guestSessionsTable.id, clientId: guestSessionsTable.clientId })
+    .from(guestSessionsTable)
+    .where(
+      and(
+        eq(guestSessionsTable.status, "active"),
+        lte(guestSessionsTable.expiresAt, new Date())
+      )
+    );
+
+  for (const session of expired) {
+    await db
+      .update(guestSessionsTable)
+      .set({ status: "expired" })
+      .where(eq(guestSessionsTable.id, session.id));
+
+    if (session.clientId) {
+      const taskSessions = await db
+        .select({ id: taskSessionsTable.id })
+        .from(taskSessionsTable)
+        .where(eq(taskSessionsTable.clientId, session.clientId));
+
+      for (const ts of taskSessions) {
+        await db.delete(taskSessionMessagesTable).where(eq(taskSessionMessagesTable.sessionId, ts.id));
+        await db.delete(taskSessionBotsTable).where(eq(taskSessionBotsTable.sessionId, ts.id));
+      }
+      await db.delete(taskSessionsTable).where(eq(taskSessionsTable.clientId, session.clientId));
+      await db.delete(clientsTable).where(eq(clientsTable.id, session.clientId));
+    }
+  }
+}
+
+router.post("/demo/start", demoRateLimit, async (req, res): Promise<void> => {
+  try {
+    cleanupExpiredSessions().catch((err) => console.error("Demo cleanup error:", err));
+
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const ipHash = hashIp(ip);
+
+    const recentSession = await db
+      .select()
+      .from(guestSessionsTable)
+      .where(
+        and(
+          eq(guestSessionsTable.ipHash, ipHash),
+          eq(guestSessionsTable.status, "active"),
+          gt(guestSessionsTable.expiresAt, new Date())
+        )
+      )
+      .limit(1);
+
+    if (recentSession.length > 0) {
+      const existing = recentSession[0]!;
+      const secret = process.env["JWT_SECRET"];
+      if (!secret) {
+        res.status(500).json({ error: "Server configuration error" });
+        return;
+      }
+
+      const guestToken = jwt.sign(
+        {
+          userId: 0,
+          clientId: existing.clientId,
+          role: "guest",
+          email: "demo@apexventures.example",
+          guestSessionId: existing.id,
+        },
+        secret,
+        { expiresIn: "30m" }
+      );
+
+      res.json({
+        token: guestToken,
+        sessionToken: existing.sessionToken,
+        clientId: existing.clientId,
+        taskSessionId: existing.taskSessionId,
+        expiresAt: existing.expiresAt,
+        company: {
+          name: DEMO_COMPANY_NAME,
+          industry: DEMO_INDUSTRY,
+          context: DEMO_BUSINESS_CONTEXT,
+        },
+        mission: DEMO_MISSION_OBJECTIVE,
+        isExisting: true,
+      });
+      return;
+    }
+
+    const { clientId, botIds } = await seedDemoCompany();
+
+    const [taskSession] = await db
+      .insert(taskSessionsTable)
+      .values({
+        objective: DEMO_MISSION_OBJECTIVE,
+        clientId,
+        status: "active",
+      })
+      .returning();
+
+    if (botIds.length > 0) {
+      await db.insert(taskSessionBotsTable).values(
+        botIds.map((botId) => ({
+          sessionId: taskSession.id,
+          botId,
+        }))
+      );
+    }
+
+    const sessionToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + DEMO_SESSION_DURATION_MS);
+
+    const [guestSession] = await db
+      .insert(guestSessionsTable)
+      .values({
+        sessionToken,
+        ipHash,
+        clientId,
+        taskSessionId: taskSession.id,
+        status: "active",
+        expiresAt,
+      })
+      .returning();
+
+    const secret = process.env["JWT_SECRET"];
+    if (!secret) {
+      res.status(500).json({ error: "Server configuration error" });
+      return;
+    }
+
+    const guestToken = jwt.sign(
+      {
+        userId: 0,
+        clientId,
+        role: "guest",
+        email: "demo@apexventures.example",
+        guestSessionId: guestSession.id,
+      },
+      secret,
+      { expiresIn: "30m" }
+    );
+
+    const bots = botIds.length > 0
+      ? await db.select().from(botsTable).where(sql`${botsTable.id} = ANY(${botIds})`)
+      : [];
+
+    res.status(201).json({
+      token: guestToken,
+      sessionToken,
+      clientId,
+      taskSessionId: taskSession.id,
+      expiresAt,
+      company: {
+        name: DEMO_COMPANY_NAME,
+        industry: DEMO_INDUSTRY,
+        context: DEMO_BUSINESS_CONTEXT,
+      },
+      mission: DEMO_MISSION_OBJECTIVE,
+      team: bots.map((b) => ({
+        id: b.id,
+        name: b.name,
+        title: b.title,
+        department: b.department,
+      })),
+      isExisting: false,
+    });
+  } catch (err) {
+    console.error("Demo start error:", err);
+    res.status(500).json({ error: "Failed to start demo session" });
+  }
+});
+
+router.get("/demo/status", async (req, res): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "No demo session" });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const secret = process.env["JWT_SECRET"];
+    if (!secret) {
+      res.status(500).json({ error: "Server configuration error" });
+      return;
+    }
+
+    let decoded: { guestSessionId?: number; role?: string };
+    try {
+      decoded = jwt.verify(token, secret) as typeof decoded;
+    } catch {
+      res.status(401).json({ error: "Invalid or expired demo session" });
+      return;
+    }
+
+    if (decoded.role !== "guest" || !decoded.guestSessionId) {
+      res.status(400).json({ error: "Not a demo session" });
+      return;
+    }
+
+    const [session] = await db
+      .select()
+      .from(guestSessionsTable)
+      .where(eq(guestSessionsTable.id, decoded.guestSessionId));
+
+    if (!session) {
+      res.status(404).json({ error: "Demo session not found" });
+      return;
+    }
+
+    const remainingMs = Math.max(0, new Date(session.expiresAt).getTime() - Date.now());
+
+    res.json({
+      status: session.status,
+      expiresAt: session.expiresAt,
+      remainingMs,
+      missionCompleted: session.missionCompleted,
+      taskSessionId: session.taskSessionId,
+      clientId: session.clientId,
+    });
+  } catch (err) {
+    console.error("Demo status error:", err);
+    res.status(500).json({ error: "Failed to get demo status" });
+  }
+});
+
+router.post("/demo/complete", async (req, res): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "No demo session" });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const secret = process.env["JWT_SECRET"];
+    if (!secret) {
+      res.status(500).json({ error: "Server configuration error" });
+      return;
+    }
+
+    let decoded: { guestSessionId?: number; role?: string; clientId?: number };
+    try {
+      decoded = jwt.verify(token, secret) as typeof decoded;
+    } catch {
+      res.status(401).json({ error: "Invalid or expired demo session" });
+      return;
+    }
+
+    if (decoded.role !== "guest" || !decoded.guestSessionId) {
+      res.status(400).json({ error: "Not a demo session" });
+      return;
+    }
+
+    const [session] = await db
+      .select()
+      .from(guestSessionsTable)
+      .where(eq(guestSessionsTable.id, decoded.guestSessionId));
+
+    if (!session || !session.taskSessionId) {
+      res.status(404).json({ error: "Demo session not found" });
+      return;
+    }
+
+    if (session.status !== "active" || new Date(session.expiresAt) < new Date()) {
+      res.status(410).json({ error: "Demo session has expired" });
+      return;
+    }
+
+    const msgCount = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(taskSessionMessagesTable)
+      .where(eq(taskSessionMessagesTable.sessionId, session.taskSessionId));
+
+    const messageCount = Number(msgCount[0]?.count || 0);
+    const estimatedHoursSaved = Math.max(2, Math.round(messageCount * 0.5));
+    const hourlyRate = 150;
+    const estimatedCostSavings = estimatedHoursSaved * hourlyRate;
+
+    const roiData = JSON.stringify({
+      messageCount,
+      estimatedHoursSaved,
+      estimatedCostSavings,
+      hourlyRate,
+      missionObjective: DEMO_MISSION_OBJECTIVE,
+      completedAt: new Date().toISOString(),
+    });
+
+    await db
+      .update(guestSessionsTable)
+      .set({ missionCompleted: true, roiData })
+      .where(eq(guestSessionsTable.id, session.id));
+
+    res.json({
+      estimatedHoursSaved,
+      estimatedCostSavings,
+      hourlyRate,
+      messageCount,
+      missionObjective: DEMO_MISSION_OBJECTIVE,
+    });
+  } catch (err) {
+    console.error("Demo complete error:", err);
+    res.status(500).json({ error: "Failed to complete demo" });
+  }
+});
+
+router.post("/demo/claim", async (req, res): Promise<void> => {
+  try {
+    const { sessionToken, email, password, companyName, contactName, displayName } = req.body;
+
+    if (!sessionToken || !email || !password || !companyName || !contactName) {
+      res.status(400).json({ error: "sessionToken, email, password, companyName, and contactName are required" });
+      return;
+    }
+
+    if (typeof password !== "string" || password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters" });
+      return;
+    }
+
+    const [guestSession] = await db
+      .select()
+      .from(guestSessionsTable)
+      .where(eq(guestSessionsTable.sessionToken, sessionToken));
+
+    if (!guestSession) {
+      res.status(404).json({ error: "Demo session not found" });
+      return;
+    }
+
+    if (guestSession.status === "claimed") {
+      res.status(409).json({ error: "This demo session has already been claimed" });
+      return;
+    }
+
+    if (guestSession.status !== "active" || new Date(guestSession.expiresAt) < new Date()) {
+      res.status(410).json({ error: "This demo session has expired. Please start a new demo." });
+      return;
+    }
+
+    const [existingUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase()));
+
+    if (existingUser) {
+      res.status(409).json({ error: "Email already registered" });
+      return;
+    }
+
+    const [newClient] = await db
+      .insert(clientsTable)
+      .values({
+        companyName,
+        contactName,
+        contactEmail: email.toLowerCase(),
+        plan: "trial",
+        status: "trial",
+      })
+      .returning();
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const [newUser] = await db
+      .insert(usersTable)
+      .values({
+        email: email.toLowerCase(),
+        passwordHash,
+        clientId: newClient.id,
+        role: "owner",
+        displayName: displayName || contactName,
+      })
+      .returning();
+
+    if (guestSession.taskSessionId && guestSession.clientId) {
+      await db
+        .update(taskSessionsTable)
+        .set({ clientId: newClient.id })
+        .where(
+          and(
+            eq(taskSessionsTable.id, guestSession.taskSessionId),
+            eq(taskSessionsTable.clientId, guestSession.clientId)
+          )
+        );
+    }
+
+    await db
+      .update(guestSessionsTable)
+      .set({ status: "claimed", claimedByUserId: newUser.id })
+      .where(eq(guestSessionsTable.id, guestSession.id));
+
+    if (guestSession.clientId) {
+      await db.delete(clientsTable).where(eq(clientsTable.id, guestSession.clientId)).catch(() => {});
+    }
+
+    const authToken = signToken({
+      userId: newUser.id,
+      clientId: newClient.id,
+      role: newUser.role,
+      email: newUser.email,
+      plan: newClient.plan,
+      bypassPayment: newUser.bypassPayment,
+    });
+
+    res.cookie("token", authToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(201).json({
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        clientId: newClient.id,
+        role: newUser.role,
+        displayName: newUser.displayName,
+      },
+      token: authToken,
+      migratedTaskSessionId: guestSession.taskSessionId,
+    });
+  } catch (err) {
+    console.error("Demo claim error:", err);
+    res.status(500).json({ error: "Failed to claim demo session" });
+  }
+});
+
+router.get("/analytics/demo-metrics", async (req, res): Promise<void> => {
+  if (!req.user || (req.user.role !== "owner" && req.user.role !== "admin")) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  try {
+    const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+
+    const conditions: any[] = [];
+    if (dateFrom) {
+      const d = new Date(dateFrom);
+      if (!isNaN(d.getTime())) conditions.push(gte(guestSessionsTable.createdAt, d));
+    }
+    if (dateTo) {
+      const d = new Date(dateTo);
+      if (!isNaN(d.getTime())) conditions.push(lte(guestSessionsTable.createdAt, d));
+    }
+
+    const allSessions = await db
+      .select({
+        status: guestSessionsTable.status,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(guestSessionsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(guestSessionsTable.status);
+
+    const completedCount = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(guestSessionsTable)
+      .where(
+        and(
+          eq(guestSessionsTable.missionCompleted, true),
+          ...(conditions.length > 0 ? conditions : [])
+        )
+      );
+
+    const statusMap: Record<string, number> = {};
+    let total = 0;
+    for (const row of allSessions) {
+      statusMap[row.status] = Number(row.count);
+      total += Number(row.count);
+    }
+
+    const starts = total;
+    const completions = Number(completedCount[0]?.count || 0);
+    const claims = statusMap["claimed"] || 0;
+
+    res.json({
+      totalStarts: starts,
+      totalCompletions: completions,
+      totalClaims: claims,
+      completionRate: starts > 0 ? Math.round((completions / starts) * 100) : 0,
+      claimRate: starts > 0 ? Math.round((claims / starts) * 100) : 0,
+      conversionRate: completions > 0 ? Math.round((claims / completions) * 100) : 0,
+      byStatus: statusMap,
+    });
+  } catch (err) {
+    console.error("Demo metrics error:", err);
+    res.status(500).json({ error: "Failed to fetch demo metrics" });
+  }
+});
+
+export default router;

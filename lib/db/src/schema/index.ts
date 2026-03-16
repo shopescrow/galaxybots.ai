@@ -34,3 +34,4 @@ export * from "./aeo-webhooks";
 export * from "./aeo-scan-requests";
 export * from "./aeo-recommendation-cache";
 export * from "./webhook-deliveries";
+export * from "./guest-sessions";

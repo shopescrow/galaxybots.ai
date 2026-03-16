@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
+import { DemoProvider } from "@/contexts/DemoContext";
 
 import Home from "@/pages/Home";
 import BotRoster from "@/pages/bots/BotRoster";
@@ -44,6 +45,8 @@ import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 import ForgotUsername from "@/pages/auth/ForgotUsername";
 import ForgotPassword from "@/pages/auth/ForgotPassword";
+import LiveDemo from "@/pages/demo/LiveDemo";
+import DemoClaim from "@/pages/demo/DemoClaim";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,6 +125,8 @@ function AppRouter() {
       <Route path="/register" component={Register} />
       <Route path="/forgot-username" component={ForgotUsername} />
       <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/demo" component={LiveDemo} />
+      <Route path="/demo/claim" component={DemoClaim} />
       <Route>
         <AuthenticatedRoutes />
       </Route>
@@ -133,16 +138,18 @@ export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <UserPreferencesProvider>
-          <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <AppRouter />
-              </WouterRouter>
-              <Toaster />
-            </TooltipProvider>
-          </QueryClientProvider>
-        </UserPreferencesProvider>
+        <DemoProvider>
+          <UserPreferencesProvider>
+            <QueryClientProvider client={queryClient}>
+              <TooltipProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AppRouter />
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </QueryClientProvider>
+          </UserPreferencesProvider>
+        </DemoProvider>
       </AuthProvider>
     </LanguageProvider>
   );

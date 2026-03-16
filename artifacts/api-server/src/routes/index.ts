@@ -30,11 +30,13 @@ import documentsRouter from "./documents";
 import pipelinesRouter from "./pipelines";
 import commandCenterRouter from "./command-center";
 import analyticsRouter from "./analytics";
+import demoRouter from "./demo";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(demoRouter);
 router.use(botsRouter);
 router.use(conversationsRouter);
 router.use(boardroomRouter);

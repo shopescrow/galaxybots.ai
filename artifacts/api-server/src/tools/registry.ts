@@ -16,6 +16,7 @@ export interface ToolContext {
   botName?: string;
   clientId?: number;
   userId?: number;
+  isGuest?: boolean;
 }
 
 const toolMap = new Map<string, ToolDefinition>();
