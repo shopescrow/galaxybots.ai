@@ -45,18 +45,22 @@ export async function createNotification(payload: {
   const pushData: Record<string, string> = {};
   if (payload.link) pushData.route = payload.link;
 
+  const badge = payload.metadata?.badge as number | undefined;
+
   try {
     if (payload.userId) {
       await sendPushToUser(payload.userId, {
         title: payload.title,
         body: payload.body,
         data: pushData,
+        badge,
       });
     } else {
       await sendPushToClient(payload.clientId, {
         title: payload.title,
         body: payload.body,
         data: pushData,
+        badge,
       });
     }
   } catch (err) {

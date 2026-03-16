@@ -57,8 +57,8 @@ export default function ApprovalDetailScreen() {
               queryClient.invalidateQueries({ queryKey: ["approvals"] });
               queryClient.invalidateQueries({ queryKey: ["pendingApprovals"] });
               router.back();
-            } catch (err: any) {
-              Alert.alert("Error", err.message || "Action failed");
+            } catch (err) {
+              Alert.alert("Error", err instanceof Error ? err.message : "Action failed");
             } finally {
               setActing(null);
             }

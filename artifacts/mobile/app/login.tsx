@@ -36,8 +36,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-    } catch (err: any) {
-      Alert.alert("Login failed", err.message || "Invalid credentials");
+    } catch (err) {
+      Alert.alert("Login failed", err instanceof Error ? err.message : "Invalid credentials");
     } finally {
       setLoading(false);
     }

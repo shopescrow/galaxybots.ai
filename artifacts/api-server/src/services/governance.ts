@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { createNotification } from "./notifications";
 
 export interface PermissionCheckResult {
   allowed: boolean;
@@ -86,6 +87,27 @@ export async function createPendingApproval(params: {
       pausedLoopContext: params.pausedLoopContext ?? null,
     })
     .returning();
+
+  const pendingCount = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(
+      and(
+        eq(pendingApprovalsTable.clientId, params.clientId),
+        eq(pendingApprovalsTable.status, "pending"),
+      ),
+    );
+  const badge = pendingCount[0]?.count ?? 1;
+
+  createNotification({
+    clientId: params.clientId,
+    category: "bot",
+    severity: "warning",
+    title: "Approval Required",
+    body: `${params.botName ?? "A bot"} wants to use ${params.toolName} and needs your approval.`,
+    link: `/approval/${approval.id}`,
+    metadata: { approvalId: approval.id, badge },
+  }).catch(() => {});
 
   return approval.id;
 }

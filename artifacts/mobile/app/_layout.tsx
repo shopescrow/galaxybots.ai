@@ -48,8 +48,30 @@ const ALLOWED_ROUTE_PREFIXES = [
   "/roi/",
 ];
 
-function isRouteAllowed(route: string): boolean {
-  return ALLOWED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
+const WEB_TO_MOBILE_ROUTE_MAP: Record<string, string> = {
+  "/command-center": "/(tabs)",
+  "/analytics": "/(tabs)",
+  "/bots": "/(tabs)/bots",
+  "/governance": "/(tabs)/approvals",
+  "/approvals": "/(tabs)/approvals",
+  "/journal": "/(tabs)/journal",
+  "/settings": "/(tabs)/settings",
+  "/notifications": "/(tabs)",
+};
+
+function resolveRoute(route: string): string | null {
+  if (ALLOWED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix))) {
+    return route;
+  }
+  const mapped = WEB_TO_MOBILE_ROUTE_MAP[route];
+  if (mapped) return mapped;
+  const approvalMatch = route.match(/^\/approval\/(\d+)$/);
+  if (approvalMatch) return `/approval/${approvalMatch[1]}`;
+  const roiMatch = route.match(/^\/roi\/client\/(\d+)$/);
+  if (roiMatch) return `/roi/${roiMatch[1]}`;
+  const chatMatch = route.match(/^\/chat\/(\d+)$/);
+  if (chatMatch) return `/chat/${chatMatch[1]}`;
+  return null;
 }
 
 const queryClient = new QueryClient();
@@ -91,8 +113,9 @@ function NotificationHandler() {
             string,
             string
           >;
-          if (data?.route && isRouteAllowed(data.route)) {
-            router.push(data.route as never);
+          const resolved = data?.route ? resolveRoute(data.route) : null;
+          if (resolved) {
+            router.push(resolved as never);
           }
         }
       });
@@ -104,8 +127,9 @@ function NotificationHandler() {
           string,
           string
         >;
-        if (data?.route && isRouteAllowed(data.route)) {
-          router.push(data.route as never);
+        const resolved = data?.route ? resolveRoute(data.route) : null;
+        if (resolved) {
+          router.push(resolved as never);
         }
       });
 

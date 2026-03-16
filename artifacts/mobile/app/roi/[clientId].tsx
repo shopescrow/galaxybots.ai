@@ -56,8 +56,8 @@ export default function RoiScreen() {
             }),
         },
       ]);
-    } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to generate share link");
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Failed to generate share link");
     }
   };
 
