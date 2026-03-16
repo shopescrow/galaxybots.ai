@@ -19,6 +19,7 @@ import { eq, and, gt, sql, gte, lte, desc, inArray } from "drizzle-orm";
 import { signToken } from "../middleware/auth";
 import rateLimit from "express-rate-limit";
 import { runAgenticLoop } from "../tools/agentic-loop";
+import { isToolSandboxed } from "../services/demo-sandbox";
 import { buildClientContext } from "../services/client-context";
 
 const router: IRouter = Router();
@@ -142,7 +143,7 @@ You are participating in a live demo session for a prospective customer. Deliver
             toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input },
           };
           await db.insert(taskSessionMessagesTable).values(msg);
-          emitter.emit("event", { type: "tool_call", ...msg, sandboxed: true });
+          emitter.emit("event", { type: "tool_call", ...msg, sandboxed: isToolSandboxed(event.toolName) });
         } else if (event.type === "tool_result") {
           const msg = {
             sessionId: taskSessionId,
@@ -155,7 +156,7 @@ You are participating in a live demo session for a prospective customer. Deliver
             toolData: { toolName: event.toolName, toolCallId: event.toolCallId, input: event.input, output: event.output },
           };
           await db.insert(taskSessionMessagesTable).values(msg);
-          emitter.emit("event", { type: "tool_result", ...msg, sandboxed: true });
+          emitter.emit("event", { type: "tool_result", ...msg, sandboxed: isToolSandboxed(event.toolName) });
         }
       }
 
