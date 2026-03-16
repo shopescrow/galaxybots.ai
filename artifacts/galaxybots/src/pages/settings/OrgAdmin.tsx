@@ -212,6 +212,18 @@ export default function OrgAdmin() {
     { id: "scim" as const, label: "SCIM Provisioning", icon: Key },
   ];
 
+  if (user?.role !== "owner") {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="bg-slate-800/80 border-slate-700 max-w-md">
+          <CardContent className="pt-6 text-center">
+            <p className="text-slate-300 text-lg">Organization administration is restricted to account owners.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>

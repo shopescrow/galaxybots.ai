@@ -141,10 +141,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch(`${BASE}/api/auth/logout`, { method: "POST" });
+      const res = await fetch(`${BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        clearAuth();
+        if (data.idpLogoutUrl) {
+          window.location.href = data.idpLogoutUrl;
+          return;
+        }
+      }
     } catch {}
     clearAuth();
-  }, [clearAuth]);
+  }, [clearAuth, token]);
 
   const updateOnboarding = useCallback(async (updates: Partial<OnboardingState>) => {
     if (!token) return;

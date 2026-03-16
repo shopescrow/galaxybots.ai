@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { validateExternalUrl } from "../utils/url-validation";
+import { invalidateActiveStatusCache } from "../middleware/auth";
 import {
   db,
   ssoConfigsTable,
@@ -100,6 +101,12 @@ router.patch(
         role: usersTable.role,
         isActive: usersTable.isActive,
       });
+
+    if (isActive === false && updated?.email) {
+      invalidateActiveStatusCache(memberId);
+      const { revokeUserSessions } = await import("./sso");
+      revokeUserSessions(updated.email);
+    }
 
     await db.insert(platformAuditLogTable).values({
       clientId: req.user!.clientId,
