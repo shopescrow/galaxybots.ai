@@ -1,6 +1,7 @@
 import "./definitions";
 import "./operational-tools";
 import "./aeo-tools";
+import "./competitor-tools";
 import "./prospect-tools";
 import "./outreach-tools";
 export { getTool, getAllTools, getOpenAIToolDefinitions, type ToolContext } from "./registry";

@@ -9,6 +9,7 @@ export const aeoScoresTable = pgTable("aeo_scores", {
   engineScores: jsonb("engine_scores").notNull().$type<Record<string, { score: number; cited: boolean }>>(),
   citationCount: integer("citation_count").notNull().default(0),
   recommendations: jsonb("recommendations").notNull().$type<string[]>(),
+  scanType: text("scan_type").notNull().default("client"),
   scannedAt: timestamp("scanned_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

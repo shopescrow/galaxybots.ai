@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable } from "@workspace/db";
+import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable, competitorUrlsTable } from "@workspace/db";
 import { eq, desc, and, or, gt, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { runAgenticLoop } from "../tools/agentic-loop";
@@ -154,7 +154,19 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
       .orderBy(desc(aeoScoresTable.scannedAt))
       .limit(1);
 
-    const clientId = await matchClientByUrl(sourceUrl);
+    const competitorMatches = await db
+      .select()
+      .from(competitorUrlsTable)
+      .where(and(
+        eq(competitorUrlsTable.url, sourceUrl),
+        eq(competitorUrlsTable.active, true)
+      ));
+
+    const isCompetitorScan = competitorMatches.length > 0;
+    const clientId = isCompetitorScan
+      ? competitorMatches[0].clientId
+      : await matchClientByUrl(sourceUrl);
+    const scanType = isCompetitorScan ? "competitor" : "client";
 
     const [record] = await db.insert(aeoScoresTable).values({
       clientId,
@@ -163,6 +175,7 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
       engineScores,
       citationCount,
       recommendations,
+      scanType,
       scannedAt: new Date(scannedAt),
     }).onConflictDoUpdate({
       target: [aeoScoresTable.sourceUrl, aeoScoresTable.scannedAt],
@@ -172,6 +185,7 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
         citationCount,
         recommendations,
         clientId,
+        scanType,
       },
     }).returning();
 
@@ -255,7 +269,10 @@ router.get("/integrations/piratemonster/scores/:clientId", async (req, res): Pro
     const scores = await db
       .select()
       .from(aeoScoresTable)
-      .where(eq(aeoScoresTable.clientId, clientId))
+      .where(and(
+        eq(aeoScoresTable.clientId, clientId),
+        eq(aeoScoresTable.scanType, "client")
+      ))
       .orderBy(desc(aeoScoresTable.scannedAt));
 
     res.json(scores);
@@ -511,6 +528,182 @@ router.get("/integrations/piratemonster/mcp-stats", requireRole("owner", "admin"
   } catch (err) {
     console.error("Error fetching MCP stats:", err);
     res.status(500).json({ error: "Failed to fetch MCP stats" });
+  }
+});
+
+router.get("/integrations/piratemonster/competitors/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  if (isNaN(clientId)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+
+  if (req.user!.role !== "owner" && req.user!.clientId !== clientId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  try {
+    const competitors = await db
+      .select()
+      .from(competitorUrlsTable)
+      .where(and(
+        eq(competitorUrlsTable.clientId, clientId),
+        eq(competitorUrlsTable.active, true)
+      ));
+
+    const [clientScore] = await db
+      .select()
+      .from(aeoScoresTable)
+      .where(and(
+        eq(aeoScoresTable.clientId, clientId),
+        eq(aeoScoresTable.scanType, "client")
+      ))
+      .orderBy(desc(aeoScoresTable.scannedAt))
+      .limit(1);
+
+    const results = [];
+    for (const comp of competitors) {
+      const [latestScore] = await db
+        .select()
+        .from(aeoScoresTable)
+        .where(and(
+          eq(aeoScoresTable.sourceUrl, comp.url),
+          eq(aeoScoresTable.scanType, "competitor")
+        ))
+        .orderBy(desc(aeoScoresTable.scannedAt))
+        .limit(1);
+
+      results.push({
+        id: comp.id,
+        companyName: comp.companyName,
+        url: comp.url,
+        addedBy: comp.addedBy,
+        active: comp.active,
+        createdAt: comp.createdAt.toISOString(),
+        latestScore: latestScore ? {
+          overallScore: latestScore.overallScore,
+          citationCount: latestScore.citationCount,
+          engineScores: latestScore.engineScores,
+          scannedAt: latestScore.scannedAt.toISOString(),
+        } : null,
+        delta: latestScore && clientScore
+          ? clientScore.overallScore - latestScore.overallScore
+          : null,
+      });
+    }
+
+    res.json({
+      clientScore: clientScore ? clientScore.overallScore : null,
+      competitors: results,
+    });
+  } catch (err) {
+    console.error("Error fetching competitors:", err);
+    res.status(500).json({ error: "Failed to fetch competitors" });
+  }
+});
+
+router.post("/integrations/piratemonster/competitors/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  if (isNaN(clientId)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+
+  if (req.user!.role !== "owner" && req.user!.clientId !== clientId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const { url, companyName } = req.body || {};
+  if (!url || !companyName) {
+    res.status(400).json({ error: "url and companyName are required" });
+    return;
+  }
+
+  try {
+    new URL(url);
+  } catch {
+    res.status(400).json({ error: "Invalid URL format" });
+    return;
+  }
+
+  try {
+    const activeCount = await db
+      .select({ id: competitorUrlsTable.id })
+      .from(competitorUrlsTable)
+      .where(and(
+        eq(competitorUrlsTable.clientId, clientId),
+        eq(competitorUrlsTable.active, true)
+      ));
+
+    if (activeCount.length >= 10) {
+      res.status(400).json({ error: "Maximum of 10 active competitors per client" });
+      return;
+    }
+
+    const existingUrl = await db
+      .select()
+      .from(competitorUrlsTable)
+      .where(and(
+        eq(competitorUrlsTable.clientId, clientId),
+        eq(competitorUrlsTable.url, url),
+        eq(competitorUrlsTable.active, true)
+      ));
+
+    if (existingUrl.length > 0) {
+      res.status(400).json({ error: "This URL is already being tracked" });
+      return;
+    }
+
+    const [record] = await db.insert(competitorUrlsTable).values({
+      clientId,
+      url,
+      companyName,
+      addedBy: "dashboard",
+    }).returning();
+
+    res.status(201).json(record);
+  } catch (err) {
+    console.error("Error tracking competitor:", err);
+    res.status(500).json({ error: "Failed to track competitor" });
+  }
+});
+
+router.post("/integrations/piratemonster/competitors/:clientId/:competitorId/untrack", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  const competitorId = Number(req.params.competitorId);
+
+  if (isNaN(clientId) || isNaN(competitorId)) {
+    res.status(400).json({ error: "Invalid IDs" });
+    return;
+  }
+
+  if (req.user!.role !== "owner" && req.user!.clientId !== clientId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(competitorUrlsTable)
+      .set({ active: false })
+      .where(and(
+        eq(competitorUrlsTable.id, competitorId),
+        eq(competitorUrlsTable.clientId, clientId),
+        eq(competitorUrlsTable.active, true)
+      ))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Competitor not found or already inactive" });
+      return;
+    }
+
+    res.json({ success: true, competitor: updated });
+  } catch (err) {
+    console.error("Error untracking competitor:", err);
+    res.status(500).json({ error: "Failed to untrack competitor" });
   }
 });
 

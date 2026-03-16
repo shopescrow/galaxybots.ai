@@ -1,8 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -21,6 +24,27 @@ interface AeoScore {
   recommendations: string[];
   scannedAt: string;
   createdAt: string;
+}
+
+interface CompetitorData {
+  id: number;
+  companyName: string;
+  url: string;
+  addedBy: string;
+  active: boolean;
+  createdAt: string;
+  latestScore: {
+    overallScore: number;
+    citationCount: number;
+    engineScores: Record<string, EngineScore>;
+    scannedAt: string;
+  } | null;
+  delta: number | null;
+}
+
+interface CompetitorsResponse {
+  clientScore: number | null;
+  competitors: CompetitorData[];
 }
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -67,20 +91,23 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
 
   if (!scores || scores.length === 0) {
     return (
-      <Card className="border-dashed border-border/50 bg-transparent shadow-none">
-        <CardContent className="p-12 text-center">
-          <Zap className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-lg font-tech font-bold mb-2">No AEO Data Yet</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
-            Connect PirateMonster to start receiving AEO (Answer Engine Optimization) intelligence for this client.
-          </p>
-          <div className="text-xs text-muted-foreground font-tech space-y-1">
-            <p>1. Go to the Integrations page and configure the PirateMonster webhook</p>
-            <p>2. PirateMonster will push scan results automatically</p>
-            <p>3. Results will appear here with per-engine breakdowns</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card className="border-dashed border-border/50 bg-transparent shadow-none">
+          <CardContent className="p-12 text-center">
+            <Zap className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <h3 className="text-lg font-tech font-bold mb-2">No AEO Data Yet</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+              Connect PirateMonster to start receiving AEO (Answer Engine Optimization) intelligence for this client.
+            </p>
+            <div className="text-xs text-muted-foreground font-tech space-y-1">
+              <p>1. Go to the Integrations page and configure the PirateMonster webhook</p>
+              <p>2. PirateMonster will push scan results automatically</p>
+              <p>3. Results will appear here with per-engine breakdowns</p>
+            </div>
+          </CardContent>
+        </Card>
+        <CompetitorsSection clientId={clientId} />
+      </div>
     );
   }
 
@@ -215,6 +242,199 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
           </CardContent>
         </Card>
       )}
+
+      <CompetitorsSection clientId={clientId} />
     </div>
+  );
+}
+
+function CompetitorsSection({ clientId }: { clientId: number }) {
+  const queryClient = useQueryClient();
+  const [showModal, setShowModal] = useState(false);
+  const [newUrl, setNewUrl] = useState("");
+  const [newName, setNewName] = useState("");
+
+  const { data, isLoading } = useQuery<CompetitorsResponse>({
+    queryKey: ["competitors", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/competitors/${clientId}`);
+      if (!res.ok) return { clientScore: null, competitors: [] };
+      return res.json();
+    },
+  });
+
+  const trackMutation = useMutation({
+    mutationFn: async ({ url, companyName }: { url: string; companyName: string }) => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/competitors/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, companyName }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to track competitor");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["competitors", clientId] });
+      setShowModal(false);
+      setNewUrl("");
+      setNewName("");
+    },
+  });
+
+  const untrackMutation = useMutation({
+    mutationFn: async (competitorId: number) => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/competitors/${clientId}/${competitorId}/untrack`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to untrack competitor");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["competitors", clientId] });
+    },
+  });
+
+  const handleTrack = () => {
+    if (!newUrl || !newName) return;
+    trackMutation.mutate({ url: newUrl, companyName: newName });
+  };
+
+  const competitors = data?.competitors ?? [];
+
+  return (
+    <Card className="border-border/40">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-display font-bold flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            Competitors
+          </h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowModal(true)}
+            className="font-tech text-xs"
+            disabled={competitors.length >= 10}
+          >
+            <Plus className="w-3 h-3 mr-1" />
+            Track Competitor
+          </Button>
+        </div>
+
+        {showModal && (
+          <div className="mb-4 p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-tech font-bold">Track New Competitor</span>
+              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <Input
+              placeholder="Company name (e.g., Acme Corp)"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="text-sm"
+            />
+            <Input
+              placeholder="Website URL (e.g., https://acme.com)"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              className="text-sm"
+            />
+            {trackMutation.isError && (
+              <p className="text-destructive text-xs">{(trackMutation.error as Error).message}</p>
+            )}
+            <Button
+              onClick={handleTrack}
+              disabled={trackMutation.isPending || !newUrl || !newName}
+              variant="glow"
+              size="sm"
+              className="w-full font-tech"
+            >
+              {trackMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+              Add Competitor
+            </Button>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+          </div>
+        ) : competitors.length === 0 ? (
+          <div className="text-center py-8">
+            <Shield className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No competitors being tracked yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">Click "Track Competitor" to add one and compare AEO scores.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {competitors.map((comp) => (
+              <div
+                key={comp.id}
+                className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/30"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-tech font-bold text-sm truncate">{comp.companyName}</div>
+                    <div className="text-xs text-muted-foreground font-tech truncate">{comp.url}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {comp.latestScore ? (
+                    <>
+                      <div className="text-right">
+                        <div className={`text-lg font-display font-bold ${getScoreColor(comp.latestScore.overallScore)}`}>
+                          {comp.latestScore.overallScore}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-tech">
+                          {comp.latestScore.citationCount} citations
+                        </div>
+                      </div>
+                      {comp.delta !== null && (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-tech ${
+                            comp.delta > 0
+                              ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                              : comp.delta < 0
+                                ? "text-red-400 border-red-500/30 bg-red-500/10"
+                                : "text-muted-foreground border-border/30"
+                          }`}
+                        >
+                          {comp.delta > 0 ? (
+                            <><ArrowUpRight className="w-3 h-3 mr-0.5" />+{comp.delta}</>
+                          ) : comp.delta < 0 ? (
+                            <><ArrowDownRight className="w-3 h-3 mr-0.5" />{comp.delta}</>
+                          ) : (
+                            <><Minus className="w-3 h-3 mr-0.5" />0</>
+                          )}
+                        </Badge>
+                      )}
+                      <div className="text-[10px] text-muted-foreground font-tech">
+                        {format(new Date(comp.latestScore.scannedAt), "MMM d")}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground font-tech">No scan data</span>
+                  )}
+                  <button
+                    onClick={() => untrackMutation.mutate(comp.id)}
+                    disabled={untrackMutation.isPending}
+                    className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                    title="Remove competitor"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
