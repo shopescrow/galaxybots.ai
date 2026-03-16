@@ -36,3 +36,4 @@ export * from "./aeo-recommendation-cache";
 export * from "./webhook-deliveries";
 export * from "./guest-sessions";
 export * from "./client-stakeholders";
+export * from "./installed-packs";

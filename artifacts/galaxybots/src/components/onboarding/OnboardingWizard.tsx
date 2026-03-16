@@ -53,19 +53,21 @@ const STEPS = [
   },
 ];
 
-const INDUSTRIES = [
-  "Technology",
-  "Healthcare",
+const INDUSTRY_PACKS = [
+  { label: "SaaS & Technology", icon: "💻", packId: "saas-tech", industry: "Technology" },
+  { label: "Legal & Professional Services", icon: "⚖️", packId: "legal", industry: "Legal" },
+  { label: "Restaurant & Hospitality", icon: "🍽️", packId: "restaurant", industry: "Restaurant" },
+  { label: "Real Estate", icon: "🏢", packId: "real-estate", industry: "Real Estate" },
+  { label: "Healthcare & Wellness", icon: "🏥", packId: "healthcare", industry: "Healthcare" },
+  { label: "Agency & Consulting", icon: "🎯", packId: "agency", industry: "Consulting" },
+] as const;
+
+const OTHER_INDUSTRIES = [
   "Finance & Banking",
-  "Real Estate",
   "E-commerce & Retail",
   "Manufacturing",
-  "Legal Services",
-  "Marketing & Advertising",
   "Education",
-  "Hospitality & Travel",
   "Construction",
-  "Consulting",
   "Nonprofit",
   "Other",
 ];
@@ -133,15 +135,32 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
     if (!selectedIndustry) return;
     setLoading(true);
     try {
+      const matchingPack = INDUSTRY_PACKS.find(
+        (p) => p.industry === selectedIndustry || p.label === selectedIndustry,
+      );
+
       const res = await fetch(`${BASE}/api/clients/${user?.clientId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ industry: selectedIndustry }),
+        body: JSON.stringify({ industry: matchingPack?.industry || selectedIndustry }),
       });
+
       if (res.ok) {
+        if (matchingPack) {
+          try {
+            await fetch(`${BASE}/api/packs/${matchingPack.packId}/install`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+            });
+          } catch (_e) {}
+        }
+
         await updateOnboarding({ industry: true });
         setCurrentStep(3);
       }
@@ -293,23 +312,43 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
 
           {step.key === "industry" && !onboarding.industry && (
             <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">Select your industry to get a pre-configured AI starter pack with missions, pipelines, and knowledge base:</p>
               <div className="grid grid-cols-2 gap-1.5">
-                {INDUSTRIES.map((ind) => (
+                {INDUSTRY_PACKS.map((pack) => (
                   <button
-                    key={ind}
-                    onClick={() => setSelectedIndustry(ind)}
-                    className={`text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
-                      selectedIndustry === ind
+                    key={pack.packId}
+                    onClick={() => setSelectedIndustry(pack.industry)}
+                    className={`text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-colors border flex items-center gap-2 ${
+                      selectedIndustry === pack.industry
                         ? "bg-primary/20 text-primary border-primary/40"
                         : "bg-background text-muted-foreground border-border/30 hover:border-primary/30"
                     }`}
                   >
-                    {ind}
+                    <span className="text-base">{pack.icon}</span>
+                    <span>{pack.label}</span>
                   </button>
                 ))}
               </div>
+              <details className="text-xs">
+                <summary className="text-muted-foreground cursor-pointer hover:text-foreground">Other industries</summary>
+                <div className="grid grid-cols-2 gap-1.5 mt-2">
+                  {OTHER_INDUSTRIES.map((ind) => (
+                    <button
+                      key={ind}
+                      onClick={() => setSelectedIndustry(ind)}
+                      className={`text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                        selectedIndustry === ind
+                          ? "bg-primary/20 text-primary border-primary/40"
+                          : "bg-background text-muted-foreground border-border/30 hover:border-primary/30"
+                      }`}
+                    >
+                      {ind}
+                    </button>
+                  ))}
+                </div>
+              </details>
               <Button onClick={handleIndustry} disabled={!selectedIndustry || loading} size="sm" variant="glow">
-                {loading ? "Saving..." : "Save & Continue"}
+                {loading ? "Installing pack..." : "Save & Continue"}
               </Button>
             </div>
           )}

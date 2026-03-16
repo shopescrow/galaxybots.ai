@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, inArray, and, gt } from "drizzle-orm";
 import { captureSessionOutcome } from "../services/outcome-capture";
+import { getPackOverlayForBot } from "../services/pack-overlays";
 import {
   AnalyzeTaskBody,
   CreateTaskSessionBody,
@@ -380,10 +381,15 @@ router.post(
         memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`, req.user!.clientId);
       } catch (_e) {}
 
+      let packOverlay = "";
+      try {
+        packOverlay = await getPackOverlayForBot(req.user!.clientId, bot.title);
+      } catch (_e) {}
+
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
-${clientContext}
+${clientContext}${packOverlay}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
 ${memoryContext}${taskKbContext}
@@ -585,10 +591,15 @@ router.post(
       await batchProcessWithSSE(
         teamBots,
         async (bot) => {
+          let packOverlay = "";
+          try {
+            packOverlay = await getPackOverlayForBot(req.user!.clientId, bot.title);
+          } catch (_e) {}
+
           const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
-${clientContext}
+${clientContext}${packOverlay}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
 ${streamTaskKbContext}

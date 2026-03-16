@@ -50,6 +50,8 @@ import ForgotUsername from "@/pages/auth/ForgotUsername";
 import ForgotPassword from "@/pages/auth/ForgotPassword";
 import LiveDemo from "@/pages/demo/LiveDemo";
 import DemoClaim from "@/pages/demo/DemoClaim";
+import PacksLibrary from "@/pages/packs/PacksLibrary";
+import PackDetail from "@/pages/packs/PackDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -153,6 +155,8 @@ function AppRouter() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/demo" component={LiveDemo} />
       <Route path="/demo/claim" component={DemoClaim} />
+      <Route path="/packs" component={PacksLibrary} />
+      <Route path="/packs/:packId" component={PackDetail} />
       <Route path="/" component={SmartHome} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route>
