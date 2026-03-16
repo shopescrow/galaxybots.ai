@@ -286,31 +286,30 @@ export default function TemplateDetailPage() {
           <div className="space-y-4">
             <Card className="bg-card/50 backdrop-blur-sm sticky top-8">
               <CardContent className="p-6 space-y-4">
-                {template.alreadyInstalled ? (
-                  <Button disabled className="w-full gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    Already Deployed
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleDeploy}
-                    disabled={deploying}
-                    className="w-full gap-2"
-                    size="lg"
-                  >
-                    {deploying ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Deploying…
-                      </>
-                    ) : (
-                      <>
-                        <Rocket className="w-4 h-4" />
-                        Deploy to My Account
-                      </>
-                    )}
-                  </Button>
-                )}
+                <Button
+                  onClick={handleDeploy}
+                  disabled={deploying}
+                  className="w-full gap-2"
+                  variant={template.alreadyInstalled ? "outline" : "default"}
+                  size="lg"
+                >
+                  {deploying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {template.alreadyInstalled ? "Updating…" : "Deploying…"}
+                    </>
+                  ) : template.alreadyInstalled ? (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Re-deploy / Update
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="w-4 h-4" />
+                      Deploy to My Account
+                    </>
+                  )}
+                </Button>
 
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center gap-3 text-sm">

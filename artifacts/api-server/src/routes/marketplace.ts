@@ -39,12 +39,6 @@ const router: IRouter = Router();
 router.get("/marketplace", optionalAuth, async (req, res): Promise<void> => {
   const { type, category, industry, search, sort, featured } = req.query;
 
-  let query = db
-    .select()
-    .from(marketplaceTemplatesTable)
-    .where(eq(marketplaceTemplatesTable.status, "approved"))
-    .$dynamic();
-
   const conditions = [
     eq(marketplaceTemplatesTable.status, "approved"),
     eq(marketplaceTemplatesTable.visibility, "public"),
