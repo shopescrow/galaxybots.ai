@@ -58,6 +58,7 @@ The project is built as a monorepo using `pnpm workspaces`, Node.js 24, TypeScri
 # Dashboard Personalization & Display Settings
 
 The platform supports per-user personalization via the `user_preferences` table and a `/settings` page:
+- **Command Center:** An owner/admin landing page at `/command-center` providing a unified cross-company operations view. Features: Activity Feed (tool calls + audit logs across all accessible companies), Pending Approvals (actionable approve/reject from the governance system), Alerts (failed/partial scheduled runs), and Company Status Cards (active sessions, last bot action, next scheduled run, quick-open link). Owner/admin users are auto-redirected to Command Center from `/`. API endpoints: `GET /api/command-center/activity`, `GET /api/command-center/approvals`, `GET /api/command-center/alerts`, `GET /api/command-center/companies`.
 - **Company Logo Upload:** Users can upload a company logo (stored in object storage) that appears in the navbar and on the Command Center home screen.
 - **Accent Color:** 8 curated accent color options (purple, cyan, gold, green, orange, red, blue, slate) that override the `--primary` CSS custom property.
 - **Font Size Scaling:** 4 font size options (Small/Default/Large/Extra Large) applied via root CSS classes (`text-scale-sm/md/lg/xl`). Large and Extra Large sizes enable overflow scrolling on content areas via the `.content-scroll` class.

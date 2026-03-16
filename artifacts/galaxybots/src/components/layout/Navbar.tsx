@@ -1,13 +1,15 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Menu, X, Settings } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useUserPreferences } from "@/contexts/UserPreferencesContext";
+import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
 
-const NAV_LINKS = [
+const ALL_NAV_LINKS = [
+  { href: "/command-center", label: "Command Center", roles: ["owner", "admin"] },
   { href: "/assembly", label: "Assembly" },
   { href: "/bots", label: "Roster" },
   { href: "/boardroom", label: "Boardroom" },
@@ -30,6 +32,15 @@ export function Navbar() {
   const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { preferences } = useUserPreferences();
+  const { user } = useAuth();
+
+  const NAV_LINKS = useMemo(() =>
+    ALL_NAV_LINKS.filter((link) => {
+      if (!("roles" in link) || !link.roles) return true;
+      return user && link.roles.includes(user.role);
+    }),
+    [user]
+  );
 
   useEffect(() => {
     setIsOpen(false);

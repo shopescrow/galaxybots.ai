@@ -28,6 +28,7 @@ import governanceRouter from "./governance";
 import knowledgeBaseRouter from "./knowledge-base";
 import documentsRouter from "./documents";
 import pipelinesRouter from "./pipelines";
+import commandCenterRouter from "./command-center";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(governanceRouter);
 router.use(knowledgeBaseRouter);
 router.use(documentsRouter);
 router.use(pipelinesRouter);
+router.use(commandCenterRouter);
 
 export default router;

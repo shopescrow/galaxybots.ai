@@ -1,0 +1,563 @@
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { formatDistanceToNow } from "date-fns";
+import {
+  Loader2,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Building,
+  ExternalLink,
+  ShieldCheck,
+  XCircle,
+  Zap,
+  LayoutDashboard,
+  RefreshCw,
+} from "lucide-react";
+import { useState } from "react";
+import { Redirect } from "wouter";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+type ActivityItem = {
+  id: number;
+  type: string;
+  clientId: number | null;
+  action: string;
+  resource: string | null;
+  botName: string | null;
+  metadata: unknown;
+  createdAt: string;
+};
+
+type Approval = {
+  id: number;
+  clientId: number;
+  botId: number;
+  botName: string | null;
+  toolName: string;
+  toolInput: unknown;
+  status: string;
+  createdAt: string;
+};
+
+type Alert = {
+  id: number;
+  assignmentId: number;
+  botId: number;
+  botName: string;
+  clientId: number | null;
+  summary: string;
+  runStatus: string;
+  createdAt: string;
+};
+
+type CompanyCard = {
+  id: number;
+  companyName: string;
+  status: string;
+  plan: string;
+  activeSessions: number;
+  lastBotAction: string | null;
+  lastToolName: string | null;
+  nextScheduledRun: string | null;
+  nextRunObjective: string | null;
+};
+
+function useCommandCenterData() {
+  const { token } = useAuth();
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const activity = useQuery<{ items: ActivityItem[]; total: number }>({
+    queryKey: ["command-center", "activity"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/command-center/activity?limit=30`, { headers });
+      if (!res.ok) throw new Error("Failed to load activity");
+      return res.json();
+    },
+    refetchInterval: 15000,
+  });
+
+  const approvals = useQuery<Approval[]>({
+    queryKey: ["command-center", "approvals"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/command-center/approvals?status=pending`, { headers });
+      if (!res.ok) throw new Error("Failed to load approvals");
+      return res.json();
+    },
+    refetchInterval: 10000,
+  });
+
+  const alerts = useQuery<Alert[]>({
+    queryKey: ["command-center", "alerts"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/command-center/alerts?limit=20`, { headers });
+      if (!res.ok) throw new Error("Failed to load alerts");
+      return res.json();
+    },
+    refetchInterval: 15000,
+  });
+
+  const companies = useQuery<CompanyCard[]>({
+    queryKey: ["command-center", "companies"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/command-center/companies`, { headers });
+      if (!res.ok) throw new Error("Failed to load companies");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  return { activity, approvals, alerts, companies };
+}
+
+function formatTime(dateStr: string) {
+  try {
+    return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatToolName(name: string) {
+  return name
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function ActivityFeed({ items }: { items: ActivityItem[] }) {
+  if (items.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <Activity className="w-8 h-8 mx-auto mb-3 opacity-20" />
+        <p className="text-sm font-tech">No recent activity recorded.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+      {items.map((item) => (
+        <div
+          key={`${item.type}-${item.id}`}
+          className="flex items-start gap-3 p-3 rounded-xl hover:bg-secondary/30 transition-colors"
+        >
+          <div className="mt-0.5">
+            {item.type === "tool_call" ? (
+              <Zap className="w-4 h-4 text-primary" />
+            ) : (
+              <Activity className="w-4 h-4 text-cyan-400" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium truncate">
+                {formatToolName(item.action)}
+              </span>
+              {item.botName && (
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {item.botName}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              {formatTime(item.createdAt)}
+              {item.type === "tool_call" && (
+                <Badge variant="secondary" className="text-[9px]">
+                  TOOL
+                </Badge>
+              )}
+              {item.type === "audit" && (
+                <Badge variant="secondary" className="text-[9px]">
+                  AUDIT
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PendingApprovals({ approvals }: { approvals: Approval[] }) {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+  const [processingId, setProcessingId] = useState<number | null>(null);
+
+  const approveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${BASE}/api/governance/approvals/${id}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Approval failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["command-center", "approvals"] });
+      setProcessingId(null);
+    },
+    onError: () => {
+      setProcessingId(null);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${BASE}/api/governance/approvals/${id}/reject`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Declined from Command Center" }),
+      });
+      if (!res.ok) throw new Error("Rejection failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["command-center", "approvals"] });
+      setProcessingId(null);
+    },
+    onError: () => {
+      setProcessingId(null);
+    },
+  });
+
+  if (approvals.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <ShieldCheck className="w-8 h-8 mx-auto mb-3 opacity-20" />
+        <p className="text-sm font-tech">No pending approvals. All clear.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+      {approvals.map((a) => (
+        <div
+          key={a.id}
+          className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-sm font-medium truncate">
+                  {formatToolName(a.toolName)}
+                </span>
+              </div>
+              {a.botName && (
+                <p className="text-xs text-muted-foreground ml-6">
+                  Requested by {a.botName}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground ml-6 mt-1">
+                <Clock className="w-3 h-3 inline mr-1" />
+                {formatTime(a.createdAt)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-tech h-8 text-green-400 border-green-500/30 hover:bg-green-500/10"
+                disabled={processingId === a.id}
+                onClick={() => {
+                  setProcessingId(a.id);
+                  approveMutation.mutate(a.id);
+                }}
+              >
+                {processingId === a.id && approveMutation.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                )}
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-tech h-8 text-red-400 border-red-500/30 hover:bg-red-500/10"
+                disabled={processingId === a.id}
+                onClick={() => {
+                  setProcessingId(a.id);
+                  rejectMutation.mutate(a.id);
+                }}
+              >
+                <XCircle className="w-3 h-3 mr-1" />
+                Reject
+              </Button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AlertsSection({ alerts }: { alerts: Alert[] }) {
+  if (alerts.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <CheckCircle2 className="w-8 h-8 mx-auto mb-3 opacity-20" />
+        <p className="text-sm font-tech">No alerts. All systems operational.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+      {alerts.map((alert) => (
+        <div
+          key={alert.id}
+          className={`p-3 rounded-xl border ${
+            alert.runStatus === "failed"
+              ? "border-red-500/20 bg-red-500/5"
+              : "border-amber-500/20 bg-amber-500/5"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              className={`w-4 h-4 mt-0.5 shrink-0 ${
+                alert.runStatus === "failed" ? "text-red-400" : "text-amber-400"
+              }`}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-medium">{alert.botName}</span>
+                <Badge
+                  variant="outline"
+                  className={`text-[9px] ${
+                    alert.runStatus === "failed"
+                      ? "text-red-400 border-red-500/30"
+                      : "text-amber-400 border-amber-500/30"
+                  }`}
+                >
+                  {alert.runStatus.toUpperCase()}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {alert.summary}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                <Clock className="w-3 h-3 inline mr-1" />
+                {formatTime(alert.createdAt)}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CompanyStatusCards({ companies }: { companies: CompanyCard[] }) {
+  if (companies.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <Building className="w-8 h-8 mx-auto mb-3 opacity-20" />
+        <p className="text-sm font-tech">No companies found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {companies.map((company) => (
+        <Card key={company.id} className="hover:border-primary/40 transition-colors">
+          <CardHeader className="pb-3 border-b border-border/30">
+            <div className="flex justify-between items-start">
+              <CardTitle className="text-base truncate">{company.companyName}</CardTitle>
+              <Badge
+                variant={
+                  company.status === "active"
+                    ? "cyan"
+                    : company.status === "trial"
+                      ? "outline"
+                      : "secondary"
+                }
+              >
+                {company.status.toUpperCase()}
+              </Badge>
+            </div>
+            <Badge
+              variant="outline"
+              className="w-fit text-[10px] mt-1 uppercase text-gold border-gold/30 bg-gold/5"
+            >
+              {company.plan} TIER
+            </Badge>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Active Sessions</span>
+              <span className="text-foreground font-medium">{company.activeSessions}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Last Bot Action</span>
+              <span className="text-foreground text-xs">
+                {company.lastBotAction
+                  ? formatTime(company.lastBotAction)
+                  : "None"}
+              </span>
+            </div>
+            {company.lastToolName && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Last Tool</span>
+                <span className="text-foreground text-xs truncate ml-2">
+                  {formatToolName(company.lastToolName)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-muted-foreground">
+              <span>Next Scheduled</span>
+              <span className="text-foreground text-xs">
+                {company.nextScheduledRun
+                  ? formatTime(company.nextScheduledRun)
+                  : "None"}
+              </span>
+            </div>
+            <div className="pt-3 border-t border-border/30">
+              <Link href={`/clients/${company.id}`}>
+                <Button variant="outline" size="sm" className="w-full font-tech text-xs gap-1">
+                  <ExternalLink className="w-3 h-3" />
+                  Open
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export default function CommandCenter() {
+  const { user } = useAuth();
+  const { activity, approvals, alerts, companies } = useCommandCenterData();
+
+  if (user && user.role !== "owner" && user.role !== "admin") {
+    return <Redirect to="/" />;
+  }
+
+  const isLoading =
+    activity.isLoading || approvals.isLoading || alerts.isLoading || companies.isLoading;
+
+  const pendingCount = approvals.data?.length || 0;
+  const alertCount = alerts.data?.length || 0;
+
+  return (
+    <AppLayout>
+      <div className="container mx-auto px-4 py-8 sm:py-12">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold flex items-center gap-3">
+              <LayoutDashboard className="text-primary w-7 h-7 sm:w-8 sm:h-8" />
+              Command Center
+            </h1>
+            <p className="text-muted-foreground font-tech mt-1">
+              Real-time operations view across all deployments.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {pendingCount > 0 && (
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 font-tech">
+                {pendingCount} Pending
+              </Badge>
+            )}
+            {alertCount > 0 && (
+              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 font-tech">
+                {alertCount} Alert{alertCount !== 1 ? "s" : ""}
+              </Badge>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="font-tech text-xs gap-1"
+              onClick={() => {
+                activity.refetch();
+                approvals.refetch();
+                alerts.refetch();
+                companies.refetch();
+              }}
+            >
+              <RefreshCw className="w-3 h-3" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader className="pb-3 border-b border-border/30">
+                  <CardTitle className="text-lg flex items-center gap-2 font-tech">
+                    <Activity className="w-5 h-5 text-primary" />
+                    Activity Feed
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ActivityFeed items={activity.data?.items || []} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3 border-b border-border/30">
+                  <CardTitle className="text-lg flex items-center gap-2 font-tech">
+                    <AlertTriangle className="w-5 h-5 text-amber-400" />
+                    Pending Approvals
+                    {pendingCount > 0 && (
+                      <Badge className="ml-2 bg-amber-500/20 text-amber-400 text-xs">
+                        {pendingCount}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <PendingApprovals approvals={approvals.data || []} />
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-3 border-b border-border/30">
+                <CardTitle className="text-lg flex items-center gap-2 font-tech">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                  Alerts
+                  {alertCount > 0 && (
+                    <Badge className="ml-2 bg-red-500/20 text-red-400 text-xs">
+                      {alertCount}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <AlertsSection alerts={alerts.data || []} />
+              </CardContent>
+            </Card>
+
+            <div>
+              <h2 className="text-xl font-display font-bold mb-4 flex items-center gap-2">
+                <Building className="w-5 h-5 text-primary" />
+                Company Status
+              </h2>
+              <CompanyStatusCards companies={companies.data || []} />
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

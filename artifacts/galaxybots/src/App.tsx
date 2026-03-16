@@ -37,6 +37,7 @@ import Governance from "@/pages/governance/Governance";
 import KnowledgeBase from "@/pages/knowledge-base/KnowledgeBase";
 import DocumentStudio from "@/pages/documents/DocumentStudio";
 import Pipelines from "@/pages/pipelines/Pipelines";
+import CommandCenter from "@/pages/command-center/CommandCenter";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -69,7 +70,14 @@ function AuthenticatedRoutes() {
 
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/">
+        {(user.role === "owner" || user.role === "admin") ? (
+          <Redirect to="/command-center" />
+        ) : (
+          <Home />
+        )}
+      </Route>
+      <Route path="/command-center" component={CommandCenter} />
       <Route path="/bots" component={BotRoster} />
       <Route path="/bots/ai-receptionist" component={AIReceptionist} />
       <Route path="/bots/:id" component={BotDetail} />
