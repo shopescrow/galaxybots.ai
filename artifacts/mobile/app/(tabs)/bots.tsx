@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   RefreshControl,
   TextInput,
+  ScrollView,
   StyleSheet,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -47,12 +48,19 @@ export default function BotsScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["bots"],
     queryFn: () => apiFetch<Bot[]>("bots"),
   });
+
+  const categories = useMemo(() => {
+    if (!data) return [];
+    const deptSet = new Set(data.map((b) => b.department));
+    return Array.from(deptSet).sort();
+  }, [data]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -61,12 +69,22 @@ export default function BotsScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const filtered = (data || []).filter(
-    (b) =>
-      b.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.department.toLowerCase().includes(search.toLowerCase()) ||
-      b.title.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    let list = data || [];
+    if (selectedCategory) {
+      list = list.filter((b) => b.department === selectedCategory);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (b) =>
+          b.name.toLowerCase().includes(q) ||
+          b.department.toLowerCase().includes(q) ||
+          b.title.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [data, search, selectedCategory]);
 
   const renderItem = useCallback(({ item }: { item: Bot }) => {
     const dept = item.department.toLowerCase();
@@ -118,6 +136,57 @@ export default function BotsScreen() {
         )}
       </View>
 
+      {categories.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+          style={styles.categoryBar}
+        >
+          <Pressable
+            style={[
+              styles.categoryChip,
+              !selectedCategory && styles.categoryChipActive,
+            ]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSelectedCategory(null);
+            }}
+          >
+            <Text
+              style={[
+                styles.categoryChipText,
+                !selectedCategory && styles.categoryChipTextActive,
+              ]}
+            >
+              All
+            </Text>
+          </Pressable>
+          {categories.map((cat) => (
+            <Pressable
+              key={cat}
+              style={[
+                styles.categoryChip,
+                selectedCategory === cat && styles.categoryChipActive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setSelectedCategory(selectedCategory === cat ? null : cat);
+              }}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  selectedCategory === cat && styles.categoryChipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
       {isLoading ? (
         <ListSkeleton count={5} />
       ) : (
@@ -134,7 +203,7 @@ export default function BotsScreen() {
             <EmptyState
               icon="cpu"
               title="No bots found"
-              message={search ? "Try a different search term" : "No bots are available yet"}
+              message={search || selectedCategory ? "Try a different filter" : "No bots are available yet"}
             />
           }
         />
@@ -164,7 +233,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 46,
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 12,
     gap: 10,
     borderWidth: 1,
     borderColor: colors.light.border,
@@ -174,6 +243,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     color: colors.light.text,
+  },
+  categoryBar: {
+    maxHeight: 44,
+    marginBottom: 12,
+  },
+  categoryScroll: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.light.surface,
+    borderWidth: 1,
+    borderColor: colors.light.border,
+  },
+  categoryChipActive: {
+    backgroundColor: colors.light.tint,
+    borderColor: colors.light.tint,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: colors.light.textSecondary,
+  },
+  categoryChipTextActive: {
+    color: "#FFFFFF",
   },
   botCard: {
     flexDirection: "row",

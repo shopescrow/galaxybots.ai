@@ -97,6 +97,16 @@ export async function apiPut<T = unknown>(
   });
 }
 
+export async function apiPatch<T = unknown>(
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  return apiFetch<T>(path, {
+    method: "PATCH",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
 export async function apiDelete<T = unknown>(
   path: string,
   body?: unknown,

@@ -11,6 +11,15 @@ const objectStorageService = new ObjectStorageService();
 const VALID_ACCENT_COLORS = ["purple", "cyan", "gold", "green", "orange", "red", "blue", "slate"];
 const VALID_FONT_SIZES = ["sm", "md", "lg", "xl"];
 
+const NOTIFICATION_BOOL_FIELDS = [
+  "pushEnabled",
+  "notifyApprovals",
+  "notifyBotActions",
+  "notifyCostAlerts",
+  "notifyScheduler",
+  "notifySystem",
+] as const;
+
 async function getOrCreatePreferences(userId: number) {
   const [existing] = await db
     .select()
@@ -60,6 +69,12 @@ router.patch("/user/preferences", authenticate, async (req, res): Promise<void> 
 
   if (showBillingWidget !== undefined) {
     updates.showBillingWidget = Boolean(showBillingWidget);
+  }
+
+  for (const field of NOTIFICATION_BOOL_FIELDS) {
+    if (req.body[field] !== undefined) {
+      updates[field] = Boolean(req.body[field]);
+    }
   }
 
   if (Object.keys(updates).length === 0) {

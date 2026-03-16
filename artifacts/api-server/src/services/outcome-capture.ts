@@ -8,6 +8,7 @@ import {
 import { eq, inArray, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { estimateHoursSaved } from "./roi";
+import { createNotification } from "./notifications";
 
 export async function captureSessionOutcome(
   sessionId: number,
@@ -112,6 +113,19 @@ export async function captureSessionOutcome(
       },
     })
     .returning();
+
+  if (clientId) {
+    const botNames = teamBots.map((b) => b.name).join(", ");
+    createNotification({
+      clientId,
+      category: "bot",
+      severity: "info",
+      title: "Mission Complete",
+      body: outcomeSummary || `"${objective}" completed by ${botNames || "your team"}.`,
+      link: "/(tabs)",
+      metadata: { sessionId, toolsUsed: toolsExecutedTotal, hoursSaved: estimatedHours },
+    }).catch(() => {});
+  }
 
   return outcome;
 }

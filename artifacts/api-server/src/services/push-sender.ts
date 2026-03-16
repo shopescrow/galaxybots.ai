@@ -1,4 +1,4 @@
-import { db, pushTokensTable } from "@workspace/db";
+import { db, pushTokensTable, userPreferencesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 interface ExpoPushMessage {
@@ -11,6 +11,34 @@ interface ExpoPushMessage {
   priority?: "default" | "normal" | "high";
 }
 
+type NotificationCategory = "prospect" | "aeo" | "competitor" | "cost" | "bot" | "pipeline" | "system";
+
+const CATEGORY_PREF_MAP: Record<string, string> = {
+  bot: "notifyBotActions",
+  cost: "notifyCostAlerts",
+  system: "notifySystem",
+};
+
+async function isUserPushAllowed(userId: number, category?: NotificationCategory): Promise<boolean> {
+  const prefs = await db
+    .select()
+    .from(userPreferencesTable)
+    .where(eq(userPreferencesTable.userId, userId))
+    .limit(1);
+
+  if (prefs.length === 0) return true;
+
+  const pref = prefs[0] as Record<string, unknown>;
+  if (!pref.pushEnabled) return false;
+
+  if (category) {
+    const prefKey = CATEGORY_PREF_MAP[category];
+    if (prefKey && pref[prefKey] === false) return false;
+  }
+
+  return true;
+}
+
 export async function sendPushToUser(
   userId: number,
   payload: {
@@ -18,8 +46,12 @@ export async function sendPushToUser(
     body: string;
     data?: Record<string, string>;
     badge?: number;
+    category?: NotificationCategory;
   },
 ): Promise<void> {
+  const allowed = await isUserPushAllowed(userId, payload.category);
+  if (!allowed) return;
+
   const tokens = await db
     .select()
     .from(pushTokensTable)
@@ -63,6 +95,7 @@ export async function sendPushToClient(
     body: string;
     data?: Record<string, string>;
     badge?: number;
+    category?: NotificationCategory;
   },
 ): Promise<void> {
   const { usersTable } = await import("@workspace/db");

@@ -271,4 +271,35 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
   res.json(cards);
 });
 
+router.get("/command-center/last-bot-action", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientIds = await getAccessibleClientIds(req.user!);
+
+  if (clientIds.length === 0) {
+    res.json(null);
+    return;
+  }
+
+  const result = await db.execute(sql`
+    SELECT
+      tal.id,
+      tal.client_id AS "clientId",
+      tal.bot_name AS "botName",
+      tal.tool_name AS "toolName",
+      tal.created_at AS "createdAt",
+      c.company_name AS "companyName"
+    FROM tool_activity_log tal
+    JOIN clients c ON c.id = tal.client_id
+    WHERE tal.client_id = ANY(${clientIds})
+    ORDER BY tal.created_at DESC
+    LIMIT 1
+  `);
+
+  if (result.rows.length === 0) {
+    res.json(null);
+    return;
+  }
+
+  res.json(result.rows[0]);
+});
+
 export default router;

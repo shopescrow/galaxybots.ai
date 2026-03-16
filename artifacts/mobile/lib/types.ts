@@ -114,3 +114,15 @@ export interface ActivityItem {
   metadata: unknown;
   createdAt: string;
 }
+
+export interface SessionOutcome {
+  id: number;
+  sessionId: number;
+  outcomeSummary: string;
+  botsDeployed: Array<{ botId: number; botName: string; department: string }>;
+  toolsExecutedTotal: number;
+  durationMinutes: string;
+  estimatedHoursSaved: string;
+  department: string | null;
+  createdAt: string;
+}

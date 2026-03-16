@@ -12,16 +12,27 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 
 import { useAuth } from "@/lib/auth-context";
-import { apiPost, apiDelete } from "@/lib/api";
+import { apiFetch, apiPost, apiDelete, apiPatch } from "@/lib/api";
 import colors from "@/constants/colors";
+
+interface NotifPrefs {
+  pushEnabled: boolean;
+  notifyApprovals: boolean;
+  notifyBotActions: boolean;
+  notifyCostAlerts: boolean;
+  notifyScheduler: boolean;
+  notifySystem: boolean;
+}
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const queryClient = useQueryClient();
   const {
     user,
     logout,
@@ -30,19 +41,33 @@ export default function SettingsScreen() {
     toggleBiometric,
   } = useAuth();
 
-  const [pushEnabled, setPushEnabled] = useState(false);
+  const [devicePushEnabled, setDevicePushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+
+  const prefsQuery = useQuery({
+    queryKey: ["userPreferences"],
+    queryFn: () => apiFetch<NotifPrefs & Record<string, unknown>>("user/preferences"),
+  });
+
+  const notifPrefs: NotifPrefs = {
+    pushEnabled: prefsQuery.data?.pushEnabled ?? true,
+    notifyApprovals: prefsQuery.data?.notifyApprovals ?? true,
+    notifyBotActions: prefsQuery.data?.notifyBotActions ?? true,
+    notifyCostAlerts: prefsQuery.data?.notifyCostAlerts ?? true,
+    notifyScheduler: prefsQuery.data?.notifyScheduler ?? true,
+    notifySystem: prefsQuery.data?.notifySystem ?? true,
+  };
 
   useEffect(() => {
     Notifications.getPermissionsAsync().then(({ status }) => {
-      setPushEnabled(status === "granted");
+      setDevicePushEnabled(status === "granted");
     });
   }, []);
 
-  const togglePush = useCallback(async () => {
+  const toggleDevicePush = useCallback(async () => {
     setPushLoading(true);
     try {
-      if (!pushEnabled) {
+      if (!devicePushEnabled) {
         const { status } = await Notifications.requestPermissionsAsync();
         if (status !== "granted") {
           Alert.alert(
@@ -63,7 +88,7 @@ export default function SettingsScreen() {
           token: tokenData.data,
           platform,
         });
-        setPushEnabled(true);
+        setDevicePushEnabled(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         try {
@@ -72,7 +97,7 @@ export default function SettingsScreen() {
             token: tokenData.data,
           });
         } catch {}
-        setPushEnabled(false);
+        setDevicePushEnabled(false);
         Haptics.selectionAsync();
       }
     } catch {
@@ -80,7 +105,17 @@ export default function SettingsScreen() {
     } finally {
       setPushLoading(false);
     }
-  }, [pushEnabled]);
+  }, [devicePushEnabled]);
+
+  const updateNotifPref = useCallback(async (field: keyof NotifPrefs, value: boolean) => {
+    Haptics.selectionAsync();
+    try {
+      await apiPatch("user/preferences", { [field]: value });
+      queryClient.invalidateQueries({ queryKey: ["userPreferences"] });
+    } catch {
+      Alert.alert("Error", "Failed to save notification preference.");
+    }
+  }, [queryClient]);
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -174,14 +209,117 @@ export default function SettingsScreen() {
             <View>
               <Text style={styles.settingLabel}>Push Notifications</Text>
               <Text style={styles.settingDesc}>
-                Approvals, alerts & updates
+                Device-level permission
               </Text>
             </View>
           </View>
           <Switch
-            value={pushEnabled}
-            onValueChange={togglePush}
+            value={devicePushEnabled}
+            onValueChange={toggleDevicePush}
             disabled={pushLoading}
+            trackColor={{ true: colors.light.tint, false: colors.light.border }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.settingRow}>
+          <View style={styles.settingLeft}>
+            <View
+              style={[
+                styles.settingIcon,
+                { backgroundColor: colors.light.tintLight },
+              ]}
+            >
+              <Feather name="toggle-right" size={16} color={colors.light.tint} />
+            </View>
+            <View>
+              <Text style={styles.settingLabel}>All Push</Text>
+              <Text style={styles.settingDesc}>Master push toggle</Text>
+            </View>
+          </View>
+          <Switch
+            value={notifPrefs.pushEnabled}
+            onValueChange={(v) => updateNotifPref("pushEnabled", v)}
+            trackColor={{ true: colors.light.tint, false: colors.light.border }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.settingRow}>
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: "#FEF3C7" }]}>
+              <Feather name="shield" size={16} color="#F59E0B" />
+            </View>
+            <Text style={styles.settingLabel}>Approvals</Text>
+          </View>
+          <Switch
+            value={notifPrefs.notifyApprovals}
+            onValueChange={(v) => updateNotifPref("notifyApprovals", v)}
+            disabled={!notifPrefs.pushEnabled}
+            trackColor={{ true: colors.light.tint, false: colors.light.border }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.settingRow}>
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: "#DBEAFE" }]}>
+              <Feather name="cpu" size={16} color="#3B82F6" />
+            </View>
+            <Text style={styles.settingLabel}>Bot Actions</Text>
+          </View>
+          <Switch
+            value={notifPrefs.notifyBotActions}
+            onValueChange={(v) => updateNotifPref("notifyBotActions", v)}
+            disabled={!notifPrefs.pushEnabled}
+            trackColor={{ true: colors.light.tint, false: colors.light.border }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.settingRow}>
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
+              <Feather name="dollar-sign" size={16} color="#EF4444" />
+            </View>
+            <Text style={styles.settingLabel}>Cost Alerts</Text>
+          </View>
+          <Switch
+            value={notifPrefs.notifyCostAlerts}
+            onValueChange={(v) => updateNotifPref("notifyCostAlerts", v)}
+            disabled={!notifPrefs.pushEnabled}
+            trackColor={{ true: colors.light.tint, false: colors.light.border }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.settingRow}>
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: "#E0E7FF" }]}>
+              <Feather name="clock" size={16} color="#6366F1" />
+            </View>
+            <Text style={styles.settingLabel}>Scheduler</Text>
+          </View>
+          <Switch
+            value={notifPrefs.notifyScheduler}
+            onValueChange={(v) => updateNotifPref("notifyScheduler", v)}
+            disabled={!notifPrefs.pushEnabled}
+            trackColor={{ true: colors.light.tint, false: colors.light.border }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.settingRow}>
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: "#F1F5F9" }]}>
+              <Feather name="info" size={16} color="#64748B" />
+            </View>
+            <Text style={styles.settingLabel}>System</Text>
+          </View>
+          <Switch
+            value={notifPrefs.notifySystem}
+            onValueChange={(v) => updateNotifPref("notifySystem", v)}
+            disabled={!notifPrefs.pushEnabled}
             trackColor={{ true: colors.light.tint, false: colors.light.border }}
             thumbColor="#FFFFFF"
           />
@@ -336,6 +474,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: colors.light.textSecondary,
     marginTop: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.light.borderLight,
+    marginHorizontal: 16,
   },
   version: {
     fontSize: 12,

@@ -54,6 +54,7 @@ export async function createNotification(payload: {
         body: payload.body,
         data: pushData,
         badge,
+        category: payload.category,
       });
     } else {
       await sendPushToClient(payload.clientId, {
@@ -61,6 +62,7 @@ export async function createNotification(payload: {
         body: payload.body,
         data: pushData,
         badge,
+        category: payload.category,
       });
     }
   } catch (err) {

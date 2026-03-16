@@ -22,7 +22,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CardSkeleton, ListSkeleton } from "@/components/LoadingSkeleton";
 import { EmptyState } from "@/components/EmptyState";
 import colors from "@/constants/colors";
-import type { CompanyCard, CostCapInfo, Approval, ActivityItem } from "@/lib/types";
+import type { CompanyCard, CostCapInfo, Approval, ActivityItem, SessionOutcome } from "@/lib/types";
 
 export default function CommandCenterScreen() {
   const insets = useSafeAreaInsets();
@@ -50,6 +50,20 @@ export default function CommandCenterScreen() {
     queryFn: () => apiFetch<{ items: ActivityItem[]; total: number }>("command-center/activity?limit=5"),
   });
 
+  interface LastBotAction {
+    id: number;
+    clientId: number;
+    botName: string;
+    toolName: string;
+    createdAt: string;
+    companyName: string;
+  }
+
+  const lastAction = useQuery({
+    queryKey: ["lastBotAction"],
+    queryFn: () => apiFetch<LastBotAction | null>("command-center/last-bot-action"),
+  });
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -58,9 +72,10 @@ export default function CommandCenterScreen() {
       costCap.refetch(),
       approvals.refetch(),
       activity.refetch(),
+      lastAction.refetch(),
     ]);
     setRefreshing(false);
-  }, [companies, costCap, approvals, activity]);
+  }, [companies, costCap, approvals, activity, lastAction]);
 
   const totalActiveSessions = companies.data?.reduce((s, c) => s + c.activeSessions, 0) ?? 0;
   const pendingCount = approvals.data?.length ?? 0;
@@ -136,6 +151,28 @@ export default function CommandCenterScreen() {
             />
           </View>
         </>
+      )}
+
+      {lastAction.data && (
+        <View style={styles.lastActionCard}>
+          <View style={styles.lastActionHeader}>
+            <View style={[styles.lastActionIcon, { backgroundColor: colors.light.tintLight }]}>
+              <Feather name="zap" size={16} color={colors.light.tint} />
+            </View>
+            <Text style={styles.lastActionTitle}>Last Bot Action</Text>
+          </View>
+          <Text style={styles.lastActionBot} numberOfLines={1}>
+            {lastAction.data.botName}
+          </Text>
+          <Text style={styles.lastActionTool} numberOfLines={1}>
+            {lastAction.data.toolName}
+          </Text>
+          <View style={styles.lastActionMeta}>
+            <Feather name="clock" size={12} color={colors.light.textTertiary} />
+            <Text style={styles.lastActionTime}>{timeAgo(lastAction.data.createdAt)}</Text>
+            <Text style={styles.lastActionCompany}>{lastAction.data.companyName}</Text>
+          </View>
+        </View>
       )}
 
       {!!companies.data && companies.data.length > 0 && (
@@ -370,5 +407,61 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: colors.light.textSecondary,
     marginTop: 2,
+  },
+  lastActionCard: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: colors.light.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.light.borderLight,
+  },
+  lastActionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  lastActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lastActionTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: colors.light.text,
+  },
+  lastActionBot: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: colors.light.text,
+    marginBottom: 2,
+  },
+  lastActionTool: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: colors.light.tint,
+    marginBottom: 8,
+  },
+  lastActionMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  lastActionTime: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: colors.light.textTertiary,
+    marginRight: 8,
+  },
+  lastActionCompany: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: colors.light.textSecondary,
   },
 });
