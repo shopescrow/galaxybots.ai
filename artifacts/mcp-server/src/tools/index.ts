@@ -10,9 +10,25 @@ import { registerHttpFetchTool } from "./http-fetch.js";
 import { registerEmailTool } from "./email.js";
 import { registerMetricsTool } from "./metrics.js";
 import { registerAuditLogTool } from "./audit-log.js";
+import {
+  registerPirateMonsterAllTools,
+  registerPirateMonsterGalaxyBotsTools,
+  type McpSessionContext,
+} from "./piratemonster.js";
 
-export function registerAllTools(server: McpServer): void {
-  console.log("[MCP] Registering all tools...");
+export function registerAllTools(
+  server: McpServer,
+  callerType: "galaxybots" | "piratemonster" = "galaxybots",
+  sessionCtx: McpSessionContext = { partnerKeyId: null, rateLimit: Infinity }
+): void {
+  console.log(`[MCP] Registering tools for caller type: ${callerType}`);
+
+  if (callerType === "piratemonster") {
+    registerPirateMonsterAllTools(server, sessionCtx);
+    console.log("[MCP] PirateMonster tools registered successfully");
+    return;
+  }
+
   registerBotTools(server);
   registerClientTools(server);
   registerMessagingTool(server);
@@ -24,5 +40,6 @@ export function registerAllTools(server: McpServer): void {
   registerEmailTool(server);
   registerMetricsTool(server);
   registerAuditLogTool(server);
-  console.log("[MCP] All tools registered successfully");
+  registerPirateMonsterGalaxyBotsTools(server, sessionCtx);
+  console.log("[MCP] All tools registered successfully (GalaxyBots + pm_get_score + pm_get_recommendations)");
 }

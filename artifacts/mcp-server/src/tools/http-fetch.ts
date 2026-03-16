@@ -27,7 +27,7 @@ function isPrivateIp(ip: string): boolean {
   return false;
 }
 
-async function validateUrl(urlStr: string): Promise<string | null> {
+export async function validateUrl(urlStr: string): Promise<string | null> {
   let parsed: URL;
   try {
     parsed = new URL(urlStr);

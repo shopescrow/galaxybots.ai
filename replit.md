@@ -72,14 +72,32 @@ The platform supports per-user personalization via the `user_preferences` table 
 
 The project includes a standalone MCP (Model Context Protocol) server at `artifacts/mcp-server` that exposes GalaxyBots capabilities as callable tools for Replit Agent and any MCP-compatible AI client. It implements the MCP protocol over SSE (HTTP transport), reachable at `/__mcp/sse`.
 
-**Tools exposed:**
+**Tools exposed (GalaxyBots callers):**
 - `list_bots` / `get_bot` — Query the bot roster
 - `list_clients` / `get_client` — Query client business profiles (omits sensitive fields)
 - `send_message_to_bot` — Send a message to a bot and receive its AI response
 - `analyze_task` — Submit a business objective for Optima Prime team analysis
 - `create_task_session` / `list_task_sessions` — Manage Task Rooms
 - `search_bot_memory` — Semantic search over a bot's long-term memory (pgvector)
+- `pm_get_score` / `pm_get_recommendations` — PirateMonster AEO score and recommendation tools
 
-**Authentication:** All requests require `Authorization: Bearer <MCP_API_KEY>` header. The `MCP_API_KEY` is set as an environment variable.
+**PirateMonster MCP Tools (external partner callers):**
+- `pm_get_score` — Cloud 9 score with per-engine breakdown, freshness status
+- `pm_get_scan_history` — Historical scores with change tracking between scans
+- `pm_compare_urls` — Side-by-side comparison for 2–5 URLs
+- `pm_track_citations` — Per-engine citation status
+- `pm_request_scan` — Queue async AEO scan (results via webhook)
+- `pm_get_scan_status` — Check scan request status
+- `pm_get_recommendations` — Structured AEO improvement plan (cached 24h)
+- `pm_optimize_schema` — AI-generated JSON-LD recommendations (cached 24h, 5/key/hr)
+- `pm_register_webhook` — Register webhook for scan_complete, score_change, citation events
+
+**Authentication:** Dual auth model: GalaxyBots internal callers use `MCP_API_KEY` env var. External PirateMonster partners use per-partner API keys stored in `platform_api_keys` table (hashed, rate-limited, revocable). Session token ownership is enforced across SSE and message endpoints. Rate limiting uses sliding-window counter in `mcp_tool_calls` table.
+
+**Key Management:** API routes at `/api/integrations/piratemonster/mcp-keys` (POST=issue, GET=list, POST /:id/revoke). Stats at `/api/integrations/piratemonster/mcp-stats`.
+
+**Webhook Fanout:** Inbound PirateMonster webhook writes score to `aeo_scores`, emits scan_complete/score_change/citation_gained/citation_lost events scoped by partner key ownership (all keys that have scan requests for the URL), then inserts rows into `webhook_deliveries` table. A background worker (10s interval) claims pending deliveries (processing state), sends HTTP POST with HMAC-SHA256 signature, retries up to 3 times with exponential backoff, and filters only active webhooks. Webhook secrets are stored encrypted at rest in the `aeo_webhooks.secretHash` column (AES-256-GCM, requires `WEBHOOK_SECRET_KEY` env var); the column name is historical — the value is an encrypted blob, not a simple hash.
+
+**DB Tables:** `platform_api_keys`, `mcp_tool_calls`, `aeo_webhooks`, `aeo_scan_requests`, `aeo_recommendation_cache`, `webhook_deliveries`.
 
 **Registration:** Add as a custom MCP server in Replit with SSE URL `https://<domain>/__mcp/sse` and the bearer token header.

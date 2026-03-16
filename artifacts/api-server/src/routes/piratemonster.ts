@@ -1,8 +1,10 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable } from "@workspace/db";
+import { eq, desc, and, or, gt, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { runAgenticLoop } from "../tools/agentic-loop";
+import { requireRole } from "../middleware/auth";
+import crypto from "node:crypto";
 
 const router: IRouter = Router();
 
@@ -72,6 +74,69 @@ async function matchClientByUrl(sourceUrl: string): Promise<number | null> {
   return null;
 }
 
+async function queueWebhookDeliveries(scoreId: number, sourceUrl: string, eventType: string, payload: unknown) {
+  try {
+    const partnerKeysWithScans = await db
+      .select({ partnerKeyId: aeoScanRequestsTable.partnerKeyId })
+      .from(aeoScanRequestsTable)
+      .where(eq(aeoScanRequestsTable.url, sourceUrl))
+      .groupBy(aeoScanRequestsTable.partnerKeyId);
+
+    const ownerKeyIds = new Set(partnerKeysWithScans.map((r) => r.partnerKeyId));
+
+    const webhooks = await db
+      .select()
+      .from(aeoWebhooksTable)
+      .where(eq(aeoWebhooksTable.status, "active"));
+
+    const matchingWebhooks = webhooks.filter((wh) => {
+      const events = wh.eventTypes as string[];
+      return events.includes(eventType) && ownerKeyIds.has(wh.partnerKeyId);
+    });
+
+    if (matchingWebhooks.length === 0) return;
+
+    const enrichedPayload = { ...(payload as Record<string, unknown>), sourceUrl };
+
+    await db.insert(webhookDeliveriesTable).values(
+      matchingWebhooks.map((wh) => ({
+        webhookId: wh.id,
+        scoreId,
+        eventType,
+        payload: enrichedPayload,
+        status: "pending",
+      }))
+    );
+
+    console.log(`[PM] Queued ${matchingWebhooks.length} webhook deliveries for event ${eventType} (url: ${sourceUrl})`);
+  } catch (err) {
+    console.error("[PM] Error queuing webhook deliveries:", err);
+  }
+}
+
+async function updateScanRequests(sourceUrl: string, scoreId: number) {
+  try {
+    await db
+      .update(aeoScanRequestsTable)
+      .set({
+        status: "complete",
+        completedAt: new Date(),
+        scoreId,
+      })
+      .where(
+        and(
+          eq(aeoScanRequestsTable.url, sourceUrl),
+          or(
+            eq(aeoScanRequestsTable.status, "queued"),
+            eq(aeoScanRequestsTable.status, "processing")
+          )
+        )
+      );
+  } catch (err) {
+    console.error("[PM] Error updating scan requests:", err);
+  }
+}
+
 router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (req, res): Promise<void> => {
   try {
     const parsed = WebhookPayloadSchema.safeParse(req.body);
@@ -81,6 +146,13 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
     }
 
     const { sourceUrl, overallScore, engineScores, citationCount, recommendations, scannedAt } = parsed.data;
+
+    const [previousScore] = await db
+      .select()
+      .from(aeoScoresTable)
+      .where(eq(aeoScoresTable.sourceUrl, sourceUrl))
+      .orderBy(desc(aeoScoresTable.scannedAt))
+      .limit(1);
 
     const clientId = await matchClientByUrl(sourceUrl);
 
@@ -102,6 +174,63 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
         clientId,
       },
     }).returning();
+
+    await queueWebhookDeliveries(record.id, sourceUrl, "scan_complete", {
+      sourceUrl,
+      overallScore,
+      citationCount,
+      scannedAt,
+    });
+
+    if (previousScore) {
+      const prevEngines = previousScore.engineScores as Record<string, { score: number; cited: boolean }>;
+      const newEngines = engineScores as Record<string, { score: number; cited: boolean }>;
+
+      if (overallScore !== previousScore.overallScore) {
+        await queueWebhookDeliveries(record.id, sourceUrl, "score_change", {
+          sourceUrl,
+          previousScore: previousScore.overallScore,
+          newScore: overallScore,
+          scoreDelta: overallScore - previousScore.overallScore,
+          scannedAt,
+        });
+      }
+
+      const gainedEngines: string[] = [];
+      const lostEngines: string[] = [];
+
+      for (const [engine, data] of Object.entries(newEngines)) {
+        const prev = prevEngines[engine];
+        if (prev) {
+          if (data.cited && !prev.cited) gainedEngines.push(engine);
+          if (!data.cited && prev.cited) lostEngines.push(engine);
+        } else if (data.cited) {
+          gainedEngines.push(engine);
+        }
+      }
+
+      if (gainedEngines.length > 0) {
+        await queueWebhookDeliveries(record.id, sourceUrl, "citation_gained", {
+          sourceUrl,
+          engines: gainedEngines,
+          newCitationCount: citationCount,
+          previousCitationCount: previousScore.citationCount,
+          scannedAt,
+        });
+      }
+
+      if (lostEngines.length > 0) {
+        await queueWebhookDeliveries(record.id, sourceUrl, "citation_lost", {
+          sourceUrl,
+          engines: lostEngines,
+          newCitationCount: citationCount,
+          previousCitationCount: previousScore.citationCount,
+          scannedAt,
+        });
+      }
+    }
+
+    await updateScanRequests(sourceUrl, record.id);
 
     res.status(200).json(record);
   } catch (err) {
@@ -136,7 +265,7 @@ router.get("/integrations/piratemonster/scores/:clientId", async (req, res): Pro
   }
 });
 
-router.post("/integrations/piratemonster/recommend", requireInboundSecret, async (req, res): Promise<void> => {
+router.post("/integrations/piratemonster/recommend", requireRole("owner", "admin"), async (req, res): Promise<void> => {
   try {
     const parsed = RecommendPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -257,6 +386,131 @@ router.post("/integrations/piratemonster/register-partner", requireInboundSecret
   } catch (err) {
     console.error("Error registering PirateMonster partner:", err);
     res.status(500).json({ error: "Failed to register partner" });
+  }
+});
+
+router.post("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  try {
+    const { label } = req.body || {};
+
+    const rawKey = `pmk_${crypto.randomBytes(32).toString("hex")}`;
+    const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+
+    const [key] = await db.insert(platformApiKeysTable).values({
+      platform: "piratemonster_mcp",
+      label: label || null,
+      keyHash,
+      status: "active",
+      rateLimit: 100,
+    }).returning();
+
+    res.status(201).json({
+      id: key.id,
+      key: rawKey,
+      label: key.label,
+      rateLimit: key.rateLimit,
+      status: key.status,
+      createdAt: key.createdAt.toISOString(),
+      warning: "Store this key securely. It will not be shown again.",
+    });
+  } catch (err) {
+    console.error("Error creating MCP key:", err);
+    res.status(500).json({ error: "Failed to create MCP key" });
+  }
+});
+
+router.get("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+  try {
+    const keys = await db
+      .select({
+        id: platformApiKeysTable.id,
+        label: platformApiKeysTable.label,
+        status: platformApiKeysTable.status,
+        rateLimit: platformApiKeysTable.rateLimit,
+        allowedTools: platformApiKeysTable.allowedTools,
+        createdAt: platformApiKeysTable.createdAt,
+        revokedAt: platformApiKeysTable.revokedAt,
+      })
+      .from(platformApiKeysTable)
+      .where(eq(platformApiKeysTable.platform, "piratemonster_mcp"))
+      .orderBy(desc(platformApiKeysTable.createdAt));
+
+    res.json(keys);
+  } catch (err) {
+    console.error("Error listing MCP keys:", err);
+    res.status(500).json({ error: "Failed to list MCP keys" });
+  }
+});
+
+router.post("/integrations/piratemonster/mcp-keys/:id/revoke", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  try {
+    const keyId = Number(req.params.id);
+    if (isNaN(keyId)) {
+      res.status(400).json({ error: "Invalid key ID" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(platformApiKeysTable)
+      .set({ status: "revoked", revokedAt: new Date() })
+      .where(
+        and(
+          eq(platformApiKeysTable.id, keyId),
+          eq(platformApiKeysTable.platform, "piratemonster_mcp")
+        )
+      )
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Key not found" });
+      return;
+    }
+
+    res.json({ id: updated.id, status: updated.status, revokedAt: updated.revokedAt });
+  } catch (err) {
+    console.error("Error revoking MCP key:", err);
+    res.status(500).json({ error: "Failed to revoke MCP key" });
+  }
+});
+
+router.get("/integrations/piratemonster/mcp-stats", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const toolCallStats = await db
+      .select({
+        toolName: mcpToolCallsTable.toolName,
+        count: sql<number>`count(*)::int`,
+        cachedCount: sql<number>`sum(case when ${mcpToolCallsTable.cached} then 1 else 0 end)::int`,
+      })
+      .from(mcpToolCallsTable)
+      .where(gt(mcpToolCallsTable.calledAt, sevenDaysAgo))
+      .groupBy(mcpToolCallsTable.toolName);
+
+    const totalCalls = toolCallStats.reduce((sum, s) => sum + s.count, 0);
+    const totalCached = toolCallStats.reduce((sum, s) => sum + (s.cachedCount || 0), 0);
+    const cacheHitRate = totalCalls > 0 ? Math.round((totalCached / totalCalls) * 100) : 0;
+
+    const [{ count: activeWebhookCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(aeoWebhooksTable)
+      .where(eq(aeoWebhooksTable.status, "active"));
+
+    const [{ count: pendingScanCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(aeoScanRequestsTable)
+      .where(eq(aeoScanRequestsTable.status, "queued"));
+
+    res.json({
+      toolCallStats,
+      totalCalls,
+      cacheHitRate,
+      activeWebhookCount,
+      pendingScanCount,
+    });
+  } catch (err) {
+    console.error("Error fetching MCP stats:", err);
+    res.status(500).json({ error: "Failed to fetch MCP stats" });
   }
 });
 

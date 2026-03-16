@@ -57,7 +57,6 @@ const PUBLIC_PATHS = [
   "/api/compliance/inbound",
   "/api/compliance/platform/config",
   "/api/integrations/piratemonster/webhook",
-  "/api/integrations/piratemonster/recommend",
   "/api/integrations/piratemonster/register-partner",
   "/api/partner/link",
   "/api/partner/register",
