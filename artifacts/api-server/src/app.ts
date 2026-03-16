@@ -6,6 +6,7 @@ import { authenticate } from "./middleware/auth";
 import { auditLogger } from "./middleware/audit";
 import { generalRateLimit } from "./middleware/rate-limit";
 import { stripeWebhookHandler } from "./routes/billing";
+import { analyticsApiKeyAuth } from "./middleware/analytics-api-key";
 
 const app: Express = express();
 
@@ -72,6 +73,9 @@ app.use("/api", (req, res, next) => {
   const fullPath = `/api${req.path}`;
   if (PUBLIC_PATHS.includes(fullPath) || PUBLIC_PATH_PREFIXES.some(p => fullPath.startsWith(p))) {
     return next();
+  }
+  if (fullPath.startsWith("/api/analytics/") && req.headers.authorization?.startsWith("Bearer gba_")) {
+    return analyticsApiKeyAuth(req, res, next);
   }
   return authenticate(req, res, next);
 });

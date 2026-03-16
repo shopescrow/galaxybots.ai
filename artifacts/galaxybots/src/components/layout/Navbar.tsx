@@ -25,6 +25,7 @@ const ALL_NAV_LINKS = [
   { href: "/knowledge-base", label: "Knowledge Base" },
   { href: "/documents", label: "Documents" },
   { href: "/pipelines", label: "Pipelines" },
+  { href: "/analytics", label: "Analytics" },
   { href: "/billing", label: "Billing" },
 ];
 

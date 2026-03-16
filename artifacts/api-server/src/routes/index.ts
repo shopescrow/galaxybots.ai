@@ -29,6 +29,7 @@ import knowledgeBaseRouter from "./knowledge-base";
 import documentsRouter from "./documents";
 import pipelinesRouter from "./pipelines";
 import commandCenterRouter from "./command-center";
+import analyticsRouter from "./analytics";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use(knowledgeBaseRouter);
 router.use(documentsRouter);
 router.use(pipelinesRouter);
 router.use(commandCenterRouter);
+router.use(analyticsRouter);
 
 export default router;

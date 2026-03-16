@@ -38,6 +38,7 @@ import KnowledgeBase from "@/pages/knowledge-base/KnowledgeBase";
 import DocumentStudio from "@/pages/documents/DocumentStudio";
 import Pipelines from "@/pages/pipelines/Pipelines";
 import CommandCenter from "@/pages/command-center/CommandCenter";
+import AnalyticsDashboard from "@/pages/analytics/AnalyticsDashboard";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -108,6 +109,7 @@ function AuthenticatedRoutes() {
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/documents" component={DocumentStudio} />
       <Route path="/pipelines" component={Pipelines} />
+      <Route path="/analytics" component={AnalyticsDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

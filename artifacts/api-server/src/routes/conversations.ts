@@ -14,6 +14,7 @@ import { runAgenticLoop, type AgenticEvent } from "../tools";
 import { buildMemoryContext } from "../services/memory";
 import { applyBrandVoiceGuardrails } from "../services/governance";
 import { buildKnowledgeBaseContext } from "../services/knowledge-base";
+import { logLlmUsage } from "../services/llm-usage";
 
 const router: IRouter = Router();
 
@@ -336,6 +337,7 @@ You have access to tools that allow you to search the web, read/write shared sta
 
       await Promise.all(
         temperatures.map(async (temp, i) => {
+          const moaStart = Date.now();
           const completion = await openai.chat.completions.create({
             model: "gpt-4o",
             temperature: temp,
@@ -346,6 +348,18 @@ You have access to tools that allow you to search the web, read/write shared sta
           });
           perspectives[i] = completion.choices[0]?.message?.content ?? "";
           completed++;
+          const moaUsage = completion.usage;
+          if (moaUsage) {
+            logLlmUsage({
+              clientId: req.user!.clientId,
+              botId: bot.id,
+              conversationId: params.data.id,
+              model: "gpt-4o",
+              promptTokens: moaUsage.prompt_tokens ?? 0,
+              completionTokens: moaUsage.completion_tokens ?? 0,
+              latencyMs: Date.now() - moaStart,
+            });
+          }
           sendSSE({
             type: "moa_progress",
             moaIndex: completed,
@@ -373,6 +387,7 @@ ${perspectives.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
 
 Now write the single definitive synthesized response:`;
 
+      const synthStart = Date.now();
       const synthesis = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -380,6 +395,18 @@ Now write the single definitive synthesized response:`;
           { role: "user", content: body.data.content },
         ],
       });
+      const synthUsage = synthesis.usage;
+      if (synthUsage) {
+        logLlmUsage({
+          clientId: req.user!.clientId,
+          botId: bot.id,
+          conversationId: params.data.id,
+          model: "gpt-4o",
+          promptTokens: synthUsage.prompt_tokens ?? 0,
+          completionTokens: synthUsage.completion_tokens ?? 0,
+          latencyMs: Date.now() - synthStart,
+        });
+      }
 
       botResponseContent = synthesis.choices[0]?.message?.content
         ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";

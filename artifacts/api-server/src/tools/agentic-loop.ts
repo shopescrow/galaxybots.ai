@@ -6,6 +6,7 @@ import { db, platformAuditLogTable } from "@workspace/db";
 import pLimit from "p-limit";
 import pRetry from "p-retry";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals } from "../services/governance";
+import { logLlmUsage } from "../services/llm-usage";
 
 function auditToolExecution(
   context: ToolContext,
@@ -155,6 +156,7 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     let completion;
+    const callStart = Date.now();
     try {
       completion = await pRetry(
         () =>
@@ -178,6 +180,20 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
           },
         }
       );
+      const latencyMs = Date.now() - callStart;
+      const usage = completion.usage;
+      if (usage) {
+        logLlmUsage({
+          clientId: context.clientId,
+          botId: context.botId,
+          sessionId: context.sessionId ? Number(context.sessionId) : null,
+          conversationId: context.conversationId ? Number(context.conversationId) : null,
+          model,
+          promptTokens: usage.prompt_tokens ?? 0,
+          completionTokens: usage.completion_tokens ?? 0,
+          latencyMs,
+        });
+      }
     } catch (err) {
       const errorEvent: AgenticEvent = {
         type: "error",

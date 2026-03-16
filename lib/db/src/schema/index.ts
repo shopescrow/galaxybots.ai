@@ -26,3 +26,5 @@ export * from "./knowledge-base";
 export * from "./knowledge-base-sources";
 export * from "./documents";
 export * from "./pipelines";
+export * from "./llm-usage-log";
+export * from "./client-cost-caps";

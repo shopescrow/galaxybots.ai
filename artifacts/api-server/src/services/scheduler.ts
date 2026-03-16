@@ -12,6 +12,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "./roi";
 import { syncSource } from "./kb-sync";
 import { runAgenticLoop } from "../tools/agentic-loop";
+import { shouldPauseAutonomous } from "./cost-caps";
 
 const SCHEDULER_LOCK_ID = 999999;
 
@@ -146,6 +147,18 @@ async function runAssignment(assignmentId: number) {
     .where(eq(botAssignmentsTable.id, assignmentId));
 
   if (!assignment || assignment.isActive !== "true") return null;
+
+  if (assignment.clientId) {
+    const paused = await shouldPauseAutonomous(assignment.clientId);
+    if (paused) {
+      broadcastSSE("cost_alert", {
+        clientId: assignment.clientId,
+        level: "critical",
+        message: `Autonomous run skipped for assignment #${assignmentId}: monthly cost cap exceeded`,
+      });
+      return null;
+    }
+  }
 
   const [bot] = await db
     .select()
