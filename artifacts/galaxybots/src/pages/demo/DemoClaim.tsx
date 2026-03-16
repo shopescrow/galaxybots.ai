@@ -20,7 +20,7 @@ export default function DemoClaim() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    companyName: "",
+    companyName: demoSession?.company?.name || "",
     contactName: "",
     displayName: "",
   });

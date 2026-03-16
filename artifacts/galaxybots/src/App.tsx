@@ -57,6 +57,21 @@ const queryClient = new QueryClient({
   },
 });
 
+function SmartHome() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+  if (user && (user.role === "owner" || user.role === "admin")) {
+    return <Redirect to="/command-center" />;
+  }
+  return <Home />;
+}
+
 function AuthenticatedRoutes() {
   const { user, isLoading } = useAuth();
 
@@ -74,13 +89,6 @@ function AuthenticatedRoutes() {
 
   return (
     <Switch>
-      <Route path="/">
-        {(user.role === "owner" || user.role === "admin") ? (
-          <Redirect to="/command-center" />
-        ) : (
-          <Home />
-        )}
-      </Route>
       <Route path="/command-center" component={CommandCenter} />
       <Route path="/bots" component={BotRoster} />
       <Route path="/bots/ai-receptionist" component={AIReceptionist} />
@@ -90,7 +98,6 @@ function AuthenticatedRoutes() {
       <Route path="/clients" component={Clients} />
       <Route path="/clients/:id" component={ClientDetail} />
       <Route path="/hire" component={Hire} />
-      <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug" component={BlogPost} />
       <Route path="/partner" component={PartnerLanding} />
@@ -127,6 +134,8 @@ function AppRouter() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/demo" component={LiveDemo} />
       <Route path="/demo/claim" component={DemoClaim} />
+      <Route path="/" component={SmartHome} />
+      <Route path="/how-it-works" component={HowItWorks} />
       <Route>
         <AuthenticatedRoutes />
       </Route>

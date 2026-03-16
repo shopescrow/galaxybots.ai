@@ -167,11 +167,9 @@ export default function LiveDemo() {
     setIsLoadingMessages(true);
     fetchMessages();
 
-    const pollInterval = setInterval(fetchMessages, 5000);
-    const stopPolling = setTimeout(() => clearInterval(pollInterval), 60000);
+    const pollInterval = setInterval(fetchMessages, 4000);
     return () => {
       clearInterval(pollInterval);
-      clearTimeout(stopPolling);
     };
   }, [demoSession, fetchMessages]);
 
