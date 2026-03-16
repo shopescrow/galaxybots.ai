@@ -55,6 +55,8 @@ import PackDetail from "@/pages/packs/PackDetail";
 import MarketplaceGallery from "@/pages/marketplace/MarketplaceGallery";
 import TemplateDetail from "@/pages/marketplace/TemplateDetail";
 import AdminModeration from "@/pages/marketplace/AdminModeration";
+import SSOCallback from "@/pages/auth/SSOCallback";
+import OrgAdmin from "@/pages/settings/OrgAdmin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,6 +146,7 @@ function AuthenticatedRoutes() {
       <Route path="/pipelines" component={Pipelines} />
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/admin/marketplace" component={AdminModeration} />
+      <Route path="/settings/org" component={OrgAdmin} />
       <Route component={NotFound} />
     </Switch>
     </>
@@ -160,6 +163,7 @@ function AppRouter() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/demo" component={LiveDemo} />
       <Route path="/demo/claim" component={DemoClaim} />
+      <Route path="/sso/callback" component={SSOCallback} />
       <Route path="/packs" component={PacksLibrary} />
       <Route path="/packs/:packId" component={PackDetail} />
       <Route path="/marketplace" component={MarketplaceGallery} />

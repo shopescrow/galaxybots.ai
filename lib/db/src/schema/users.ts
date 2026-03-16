@@ -32,6 +32,9 @@ export const usersTable = pgTable("users", {
   displayName: text("display_name"),
   bypassPayment: boolean("bypass_payment").notNull().default(false),
   onboarding: jsonb("onboarding").$type<OnboardingState>().default(DEFAULT_ONBOARDING),
+  ssoProvider: text("sso_provider"),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

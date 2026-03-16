@@ -37,6 +37,9 @@ import clientPortalRouter from "./client-portal";
 import packsRouter from "./packs";
 import bingolingoRouter from "./bingolingo";
 import marketplaceRouter from "./marketplace";
+import ssoRouter from "./sso";
+import scimRouter from "./scim";
+import orgAdminRouter from "./org-admin";
 
 const router: IRouter = Router();
 
@@ -76,5 +79,8 @@ router.use(clientPortalRouter);
 router.use(packsRouter);
 router.use(bingolingoRouter);
 router.use(marketplaceRouter);
+router.use(ssoRouter);
+router.use(scimRouter);
+router.use(orgAdminRouter);
 
 export default router;

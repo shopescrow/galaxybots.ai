@@ -71,6 +71,8 @@ const PUBLIC_PATHS = [
   "/api/client-portal/roi",
   "/api/client-portal/missions",
   "/api/client-portal/approvals",
+  "/api/sso/check-domain",
+  "/api/sso/saml/metadata",
 ];
 
 const PUBLIC_PATH_PREFIXES = [
@@ -83,6 +85,9 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/client-portal/approvals/",
   "/api/bingolingo/hub/",
   "/api/bingolingo/ext/",
+  "/api/sso/saml/",
+  "/api/sso/oidc/",
+  "/api/scim/v2/",
 ];
 
 app.use("/api", (req, res, next) => {

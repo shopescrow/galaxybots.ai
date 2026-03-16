@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, clientsTable } from "@workspace/db";
-import { eq, or, ilike } from "drizzle-orm";
+import { db, usersTable, clientsTable, ssoConfigsTable } from "@workspace/db";
+import { eq, or, ilike, and } from "drizzle-orm";
 import { signToken, authenticate } from "../middleware/auth";
 import { authRateLimit } from "../middleware/rate-limit";
 
@@ -106,11 +106,41 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
+  if (!user.isActive) {
+    res.status(403).json({ error: "Account has been deactivated. Contact your administrator." });
+    return;
+  }
+
+  if (isEmail) {
+    const domain = identifier.toLowerCase().split("@")[1];
+    if (domain) {
+      const [ssoConfig] = await db
+        .select()
+        .from(ssoConfigsTable)
+        .where(
+          and(
+            eq(ssoConfigsTable.domainHint, domain),
+            eq(ssoConfigsTable.enabled, true),
+            eq(ssoConfigsTable.forceSso, true),
+          ),
+        );
+      if (ssoConfig) {
+        res.status(403).json({ error: "Password login is disabled for your organization. Please use SSO." });
+        return;
+      }
+    }
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
+
+  await db
+    .update(usersTable)
+    .set({ lastLoginAt: new Date() })
+    .where(eq(usersTable.id, user.id));
 
   const [client] = await db
     .select()
