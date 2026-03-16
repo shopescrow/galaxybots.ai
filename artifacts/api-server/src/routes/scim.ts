@@ -145,7 +145,7 @@ router.get("/scim/v2/Users/:id", scimAuth, async (req, res): Promise<void> => {
 
 router.post("/scim/v2/Users", scimAuth, async (req, res): Promise<void> => {
   const clientId = req.scimAuth!.clientId;
-  const { userName, name, displayName, active } = req.body;
+  const { userName, name, displayName, active, groups, roles } = req.body;
 
   if (!userName) {
     res.status(400).json({
@@ -180,6 +180,41 @@ router.post("/scim/v2/Users", scimAuth, async (req, res): Promise<void> => {
   const fullName = displayName ||
     (name ? `${name.givenName || ""} ${name.familyName || ""}`.trim() : email.split("@")[0]);
 
+  const DEFAULT_GROUP_ROLE_MAP: Record<string, string> = {
+    admin: "admin",
+    admins: "admin",
+    administrators: "admin",
+    owner: "owner",
+    owners: "owner",
+    viewer: "viewer",
+    viewers: "viewer",
+    member: "viewer",
+    members: "viewer",
+  };
+
+  const groupRoleMap: Record<string, string> = {
+    ...DEFAULT_GROUP_ROLE_MAP,
+    ...(config?.scimGroupRoleMapping as Record<string, string> || {}),
+  };
+
+  let role = config?.jitDefaultRole || "viewer";
+
+  if (Array.isArray(groups)) {
+    for (const group of groups) {
+      const groupName = (group.display || group.value || "").toLowerCase();
+      const mapped = groupRoleMap[groupName];
+      if (mapped) role = mapped;
+    }
+  }
+
+  if (Array.isArray(roles)) {
+    const primaryRole = roles.find((r: { primary?: boolean; value?: string }) => r.primary)?.value || roles[0]?.value;
+    if (primaryRole) {
+      const mapped = groupRoleMap[primaryRole.toLowerCase()];
+      if (mapped) role = mapped;
+    }
+  }
+
   const placeholderHash = "$2a$12$SSO_PLACEHOLDER_HASH_SCIM_PROVISIONED";
 
   const [user] = await db
@@ -188,7 +223,7 @@ router.post("/scim/v2/Users", scimAuth, async (req, res): Promise<void> => {
       email,
       passwordHash: placeholderHash,
       clientId,
-      role: config?.jitDefaultRole || "viewer",
+      role,
       displayName: fullName,
       ssoProvider: "scim",
       isActive: active !== false,

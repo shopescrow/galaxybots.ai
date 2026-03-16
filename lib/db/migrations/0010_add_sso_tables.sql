@@ -22,6 +22,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS sso_configs_domain_unique ON sso_configs(domai
 CREATE INDEX IF NOT EXISTS sso_configs_client_idx ON sso_configs(client_id);
 
 ALTER TABLE sso_configs ADD COLUMN IF NOT EXISTS scim_group_role_mapping JSONB;
+ALTER TABLE sso_configs ADD COLUMN IF NOT EXISTS jit_default_permission_profile_id INTEGER;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_provider TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;

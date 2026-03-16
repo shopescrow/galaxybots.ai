@@ -142,6 +142,8 @@ router.get(
       forceSso: config.forceSso,
       enabled: config.enabled,
       hasScimToken: !!config.scimToken,
+      scimGroupRoleMapping: config.scimGroupRoleMapping,
+      jitDefaultPermissionProfileId: config.jitDefaultPermissionProfileId,
     });
   },
 );
@@ -165,6 +167,7 @@ router.put(
       forceSso,
       enabled,
       scimGroupRoleMapping,
+      jitDefaultPermissionProfileId,
     } = req.body;
 
     if (!providerType || !domainHint) {
@@ -201,6 +204,7 @@ router.put(
       jitDefaultRole: jitDefaultRole || "viewer",
       forceSso: forceSso ?? false,
       scimGroupRoleMapping: scimGroupRoleMapping || null,
+      jitDefaultPermissionProfileId: jitDefaultPermissionProfileId || null,
       enabled: enabled ?? true,
     };
 

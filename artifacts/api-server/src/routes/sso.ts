@@ -96,41 +96,42 @@ async function fetchOidcJwks(issuerUrl: string): Promise<any[]> {
   }
 }
 
-function verifyJwtSignatureWithJwks(idToken: string, keys: any[]): boolean {
-  if (keys.length === 0) return true;
+function verifyJwtSignatureWithJwks(idToken: string, keys: { kid?: string; kty?: string; n?: string; e?: string }[]): boolean {
+  if (keys.length === 0) return false;
 
   try {
     const [headerB64] = idToken.split(".");
-    const header = JSON.parse(Buffer.from(headerB64, "base64url").toString());
+    const header = JSON.parse(Buffer.from(headerB64, "base64url").toString()) as { kid?: string; alg?: string };
     const kid = header.kid;
     const alg = header.alg;
 
-    let key = keys.find((k: any) => k.kid === kid);
+    if (alg !== "RS256") return false;
+
+    let key = keys.find((k) => k.kid === kid);
     if (!key) key = keys[0];
 
-    if (alg === "RS256" && key.n && key.e) {
-      const pubKey = crypto.createPublicKey({
-        key: {
-          kty: key.kty,
-          n: key.n,
-          e: key.e,
-        },
-        format: "jwk",
-      });
+    if (!key.n || !key.e) return false;
 
-      const [headerPart, payloadPart, signaturePart] = idToken.split(".");
-      const data = `${headerPart}.${payloadPart}`;
-      const signature = Buffer.from(signaturePart, "base64url");
+    const pubKey = crypto.createPublicKey({
+      key: {
+        kty: key.kty || "RSA",
+        n: key.n,
+        e: key.e,
+      },
+      format: "jwk",
+    });
 
-      return crypto.createVerify("RSA-SHA256").update(data).verify(pubKey, signature);
-    }
+    const [headerPart, payloadPart, signaturePart] = idToken.split(".");
+    const data = `${headerPart}.${payloadPart}`;
+    const signature = Buffer.from(signaturePart, "base64url");
+
+    return crypto.createVerify("RSA-SHA256").update(data).verify(pubKey, signature);
   } catch {
     return false;
   }
-  return true;
 }
 
-function revokeUserSessions(email: string): void {
+export function revokeUserSessions(email: string): void {
   revokedSessions.set(email.toLowerCase(), Math.floor(Date.now() / 1000));
 }
 
@@ -574,8 +575,8 @@ router.get(
 
       if (tokenData.id_token) {
         const jwksKeys = await fetchOidcJwks(config.oidcIssuerUrl!);
-        if (jwksKeys.length > 0 && !verifyJwtSignatureWithJwks(tokenData.id_token, jwksKeys)) {
-          await logSsoEvent("sso_login_failed", clientId, null, { error: "id_token signature invalid", provider: "oidc" }, req.ip);
+        if (!verifyJwtSignatureWithJwks(tokenData.id_token, jwksKeys)) {
+          await logSsoEvent("sso_login_failed", clientId, null, { error: "id_token signature invalid or JWKS unavailable", provider: "oidc" }, req.ip);
           res.status(400).json({ error: "OIDC id_token signature verification failed" });
           return;
         }

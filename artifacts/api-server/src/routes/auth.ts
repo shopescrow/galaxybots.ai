@@ -281,9 +281,39 @@ router.post("/auth/reset-password", authRateLimit, async (req, res): Promise<voi
   res.json({ message: "Password has been reset successfully. You can now log in.", success: true });
 });
 
-router.post("/auth/logout", (_req, res): void => {
+router.post("/auth/logout", authenticate, async (req, res): Promise<void> => {
+  const email = req.user!.email;
+
+  const { revokeUserSessions } = await import("./sso");
+
+  revokeUserSessions(email);
   res.clearCookie("token");
-  res.json({ success: true });
+
+  const [user] = await db
+    .select({ ssoProvider: usersTable.ssoProvider, clientId: usersTable.clientId })
+    .from(usersTable)
+    .where(eq(usersTable.email, email));
+
+  let idpLogoutUrl: string | null = null;
+  if (user?.ssoProvider === "saml") {
+    const [config] = await db
+      .select()
+      .from(ssoConfigsTable)
+      .where(
+        and(
+          eq(ssoConfigsTable.clientId, user.clientId),
+          eq(ssoConfigsTable.providerType, "saml"),
+        ),
+      );
+    if (config?.idpSsoUrl) {
+      const sloUrl = config.idpSsoUrl.replace(/\/sso\//, "/slo/").replace(/SSO/, "SLO");
+      if (sloUrl !== config.idpSsoUrl) {
+        idpLogoutUrl = sloUrl;
+      }
+    }
+  }
+
+  res.json({ success: true, idpLogoutUrl });
 });
 
 router.get("/auth/me", authenticate, async (req, res): Promise<void> => {

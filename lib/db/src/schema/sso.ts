@@ -17,6 +17,7 @@ export const ssoConfigsTable = pgTable("sso_configs", {
   forceSso: boolean("force_sso").notNull().default(false),
   scimToken: text("scim_token"),
   scimGroupRoleMapping: jsonb("scim_group_role_mapping"),
+  jitDefaultPermissionProfileId: integer("jit_default_permission_profile_id"),
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
