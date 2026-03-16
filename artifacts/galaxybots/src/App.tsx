@@ -35,6 +35,7 @@ import Prospects from "@/pages/prospects/Prospects";
 import Settings from "@/pages/Settings";
 import Governance from "@/pages/governance/Governance";
 import KnowledgeBase from "@/pages/knowledge-base/KnowledgeBase";
+import DocumentStudio from "@/pages/documents/DocumentStudio";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -96,6 +97,7 @@ function AuthenticatedRoutes() {
       <Route path="/settings" component={Settings} />
       <Route path="/governance" component={Governance} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
+      <Route path="/documents" component={DocumentStudio} />
       <Route component={NotFound} />
     </Switch>
   );

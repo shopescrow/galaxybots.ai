@@ -24,3 +24,4 @@ export * from "./user-preferences";
 export * from "./governance";
 export * from "./knowledge-base";
 export * from "./knowledge-base-sources";
+export * from "./documents";
