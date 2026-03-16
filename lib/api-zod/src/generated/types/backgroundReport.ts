@@ -5,6 +5,7 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
+import type { BackgroundReportRunStatus } from "./backgroundReportRunStatus";
 
 export interface BackgroundReport {
   id: number;
@@ -12,6 +13,7 @@ export interface BackgroundReport {
   botId: number;
   content: string;
   summary: string;
+  runStatus: BackgroundReportRunStatus;
   /** @nullable */
   deliveredAt?: Date | null;
   createdAt: Date;

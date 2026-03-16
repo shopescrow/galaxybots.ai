@@ -19,6 +19,7 @@ import {
 } from "../services/memory";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { addSSEClient, broadcastSSE } from "../services/scheduler";
+import { runAgenticLoop } from "../tools/agentic-loop";
 
 const router: IRouter = Router();
 
@@ -119,6 +120,8 @@ router.get("/bot-assignments", async (req, res): Promise<void> => {
       objective: botAssignmentsTable.objective,
       schedule: botAssignmentsTable.schedule,
       isActive: botAssignmentsTable.isActive,
+      actionMode: botAssignmentsTable.actionMode,
+      actionPrompt: botAssignmentsTable.actionPrompt,
       lastRunAt: botAssignmentsTable.lastRunAt,
       createdAt: botAssignmentsTable.createdAt,
       botName: botsTable.name,
@@ -133,7 +136,7 @@ router.get("/bot-assignments", async (req, res): Promise<void> => {
 });
 
 router.post("/bot-assignments", async (req, res): Promise<void> => {
-  const { botId, objective, schedule } = req.body;
+  const { botId, objective, schedule, actionMode, actionPrompt } = req.body;
   if (!botId || !objective) {
     res.status(400).json({ error: "botId and objective are required" });
     return;
@@ -142,6 +145,12 @@ router.post("/bot-assignments", async (req, res): Promise<void> => {
   const validSchedules = ["hourly", "daily", "weekly"];
   if (schedule && !validSchedules.includes(schedule)) {
     res.status(400).json({ error: `Invalid schedule. Must be one of: ${validSchedules.join(", ")}` });
+    return;
+  }
+
+  const validModes = ["passive", "active"];
+  if (actionMode && !validModes.includes(actionMode)) {
+    res.status(400).json({ error: `Invalid actionMode. Must be one of: ${validModes.join(", ")}` });
     return;
   }
 
@@ -161,6 +170,8 @@ router.post("/bot-assignments", async (req, res): Promise<void> => {
       clientId: req.user!.clientId,
       objective,
       schedule: schedule || "daily",
+      actionMode: actionMode || "passive",
+      actionPrompt: actionPrompt || null,
     })
     .returning();
 
@@ -174,9 +185,26 @@ router.patch("/bot-assignments/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const { isActive } = req.body;
+  const { isActive, actionMode, actionPrompt, schedule } = req.body;
+
+  const validModes = ["passive", "active"];
+  if (actionMode !== undefined && (typeof actionMode !== "string" || !validModes.includes(actionMode))) {
+    res.status(400).json({ error: `Invalid actionMode. Must be one of: ${validModes.join(", ")}` });
+    return;
+  }
+
+  const validSchedules = ["hourly", "daily", "weekly"];
+  if (schedule !== undefined && (typeof schedule !== "string" || !validSchedules.includes(schedule))) {
+    res.status(400).json({ error: `Invalid schedule. Must be one of: ${validSchedules.join(", ")}` });
+    return;
+  }
+
   const updates: Record<string, unknown> = {};
   if (typeof isActive === "string") updates.isActive = isActive;
+  if (actionMode) updates.actionMode = actionMode;
+  if (actionPrompt === null) updates.actionPrompt = null;
+  else if (typeof actionPrompt === "string") updates.actionPrompt = actionPrompt;
+  if (schedule) updates.schedule = schedule;
 
   const [updated] = await db
     .update(botAssignmentsTable)
@@ -227,6 +255,7 @@ router.get("/background-reports", async (req, res): Promise<void> => {
       botId: backgroundReportsTable.botId,
       content: backgroundReportsTable.content,
       summary: backgroundReportsTable.summary,
+      runStatus: backgroundReportsTable.runStatus,
       deliveredAt: backgroundReportsTable.deliveredAt,
       createdAt: backgroundReportsTable.createdAt,
       botName: botsTable.name,
@@ -268,40 +297,87 @@ router.post("/bot-assignments/:id/run", async (req, res): Promise<void> => {
     return;
   }
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    max_completion_tokens: 2000,
-    messages: [
-      {
-        role: "system",
-        content: `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
+  let content: string;
+  let summary: string;
+  let runStatus: "success" | "partial" | "failed" = "success";
+
+  if (assignment.actionMode === "active") {
+    const missionPrompt = assignment.actionPrompt || assignment.objective;
+    const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
+Personality: ${bot.personality}
+Your responsibilities: ${bot.responsibilities.join("; ")}
+
+You are executing a standing order autonomously. Use your available tools to complete the mission objective below. Take real actions — post messages, send emails, create documents, look up data — whatever is needed to fulfill the order. When done, provide a concise summary of what you accomplished.`;
+
+    const result = await runAgenticLoop({
+      model: "gpt-4o-mini",
+      maxIterations: 10,
+      maxTokens: 1500,
+      systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: `STANDING ORDER: ${missionPrompt}\n\nExecute this order now using your available tools. Report back on what you accomplished.`,
+        },
+      ],
+      context: {
+        clientId: req.user!.clientId,
+        botId: bot.id,
+        botName: bot.name,
+      },
+    });
+
+    const hasError = result.events.some((e) => e.type === "error");
+    const hasToolBlocked = result.events.some((e) => e.type === "tool_blocked");
+    if (hasError && !result.finalContent) {
+      runStatus = "failed";
+    } else if (hasError || hasToolBlocked || result.paused) {
+      runStatus = "partial";
+    }
+
+    content = result.finalContent || "Active execution completed but produced no output.";
+
+    const summaryCompletion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 200,
+      messages: [
+        { role: "system", content: "Summarize the following execution report in one concise sentence." },
+        { role: "user", content },
+      ],
+    });
+    summary = summaryCompletion.choices[0]?.message?.content ?? content.substring(0, 200);
+  } else {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 2000,
+      messages: [
+        {
+          role: "system",
+          content: `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 
 You have been assigned an ongoing monitoring responsibility. Produce a professional briefing report on the current status of your assigned objective. Be specific, insightful, and actionable.`,
-      },
-      {
-        role: "user",
-        content: `STANDING OBJECTIVE: ${assignment.objective}\n\nProduce your periodic briefing report.`,
-      },
-    ],
-  });
+        },
+        {
+          role: "user",
+          content: `STANDING OBJECTIVE: ${assignment.objective}\n\nProduce your periodic briefing report.`,
+        },
+      ],
+    });
 
-  const content = completion.choices[0]?.message?.content ?? "Report generation failed.";
+    content = completion.choices[0]?.message?.content ?? "Report generation failed.";
 
-  const summaryCompletion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    max_completion_tokens: 200,
-    messages: [
-      {
-        role: "system",
-        content: "Summarize the following report in one concise sentence.",
-      },
-      { role: "user", content },
-    ],
-  });
-
-  const summary = summaryCompletion.choices[0]?.message?.content ?? content.substring(0, 200);
+    const summaryCompletion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 200,
+      messages: [
+        { role: "system", content: "Summarize the following report in one concise sentence." },
+        { role: "user", content },
+      ],
+    });
+    summary = summaryCompletion.choices[0]?.message?.content ?? content.substring(0, 200);
+  }
 
   const [report] = await db
     .insert(backgroundReportsTable)
@@ -311,6 +387,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
       clientId: req.user!.clientId,
       content,
       summary,
+      runStatus,
       deliveredAt: new Date(),
     })
     .returning();
@@ -327,7 +404,23 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     botName: bot.name,
     clientId: req.user!.clientId,
     summary,
+    runStatus,
   });
+
+  if (runStatus === "failed" || runStatus === "partial") {
+    broadcastSSE("assignment-alert", {
+      reportId: report.id,
+      assignmentId: assignment.id,
+      botId: bot.id,
+      botName: bot.name,
+      clientId: req.user!.clientId,
+      runStatus,
+      summary,
+      message: runStatus === "failed"
+        ? `Standing order failed for ${bot.name}: ${summary}`
+        : `Standing order partially completed by ${bot.name}: ${summary}`,
+    });
+  }
 
   res.status(201).json(report);
 });

@@ -206,6 +206,51 @@ export const GetClientResponse = zod.object({
 });
 
 /**
+ * @summary Update client business profile
+ */
+export const UpdateClientParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateClientBody = zod.object({
+  websiteUrl: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  servicesList: zod.array(zod.string()).nullish(),
+  targetMarket: zod.string().nullish(),
+  businessContext: zod.string().nullish(),
+});
+
+export const UpdateClientResponse = zod.object({
+  id: zod.number(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  contactEmail: zod.string(),
+  plan: zod.enum(["single", "team", "enterprise"]),
+  status: zod.enum(["active", "inactive", "trial"]),
+  websiteUrl: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  servicesList: zod.array(zod.string()).nullish(),
+  targetMarket: zod.string().nullish(),
+  businessContext: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * Accepts a lead payload and triggers a bot qualification mission. Auth uses a per-client webhook secret as Bearer token (not JWT user auth).
+ * @summary Ingest a lead from a client website
+ */
+export const IngestLeadParams = zod.object({
+  clientId: zod.coerce.number(),
+});
+
+export const IngestLeadBody = zod.object({
+  name: zod.string(),
+  contact: zod.string(),
+  serviceInterest: zod.string().optional(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary Get bots hired by a client
  */
 export const GetClientBotsParams = zod.object({
@@ -692,6 +737,8 @@ export const ListBotAssignmentsResponseItem = zod.object({
   objective: zod.string(),
   schedule: zod.string(),
   isActive: zod.string(),
+  actionMode: zod.enum(["passive", "active"]),
+  actionPrompt: zod.string().nullish(),
   lastRunAt: zod.date().nullish(),
   createdAt: zod.date(),
   botName: zod.string().nullish(),
@@ -708,6 +755,8 @@ export const CreateBotAssignmentBody = zod.object({
   botId: zod.number(),
   objective: zod.string(),
   schedule: zod.enum(["hourly", "daily", "weekly"]).optional(),
+  actionMode: zod.enum(["passive", "active"]).optional(),
+  actionPrompt: zod.string().optional(),
 });
 
 /**
@@ -719,6 +768,9 @@ export const UpdateBotAssignmentParams = zod.object({
 
 export const UpdateBotAssignmentBody = zod.object({
   isActive: zod.string().optional(),
+  actionMode: zod.enum(["passive", "active"]).optional(),
+  actionPrompt: zod.string().nullish(),
+  schedule: zod.enum(["hourly", "daily", "weekly"]).optional(),
 });
 
 export const UpdateBotAssignmentResponse = zod.object({
@@ -727,6 +779,8 @@ export const UpdateBotAssignmentResponse = zod.object({
   objective: zod.string(),
   schedule: zod.string(),
   isActive: zod.string(),
+  actionMode: zod.enum(["passive", "active"]),
+  actionPrompt: zod.string().nullish(),
   lastRunAt: zod.date().nullish(),
   createdAt: zod.date(),
   botName: zod.string().nullish(),
@@ -765,6 +819,7 @@ export const ListBackgroundReportsResponseItem = zod.object({
   botId: zod.number(),
   content: zod.string(),
   summary: zod.string(),
+  runStatus: zod.enum(["success", "partial", "failed"]),
   deliveredAt: zod.date().nullish(),
   createdAt: zod.date(),
   botName: zod.string().nullish(),
@@ -1108,5 +1163,40 @@ export const CallStatusResponse = zod.object({
  * @summary Twilio webhook for recording completion
  */
 export const RecordingStatusResponse = zod.object({
+  success: zod.boolean().optional(),
+});
+
+/**
+ * @summary List all knowledge base documents for the authenticated client
+ */
+export const ListKnowledgeBaseDocumentsResponseItem = zod.object({
+  id: zod.number(),
+  clientId: zod.number(),
+  title: zod.string(),
+  sourceFilename: zod.string(),
+  fileType: zod.string(),
+  chunkCount: zod.number(),
+  uploadedAt: zod.date(),
+});
+export const ListKnowledgeBaseDocumentsResponse = zod.array(
+  ListKnowledgeBaseDocumentsResponseItem,
+);
+
+/**
+ * @summary Upload a document to the knowledge base
+ */
+export const UploadKnowledgeBaseDocumentBody = zod.object({
+  file: zod.instanceof(File),
+  title: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a knowledge base document
+ */
+export const DeleteKnowledgeBaseDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteKnowledgeBaseDocumentResponse = zod.object({
   success: zod.boolean().optional(),
 });

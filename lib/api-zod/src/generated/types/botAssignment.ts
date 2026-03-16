@@ -5,6 +5,7 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
+import type { BotAssignmentActionMode } from "./botAssignmentActionMode";
 
 export interface BotAssignment {
   id: number;
@@ -12,6 +13,9 @@ export interface BotAssignment {
   objective: string;
   schedule: string;
   isActive: string;
+  actionMode: BotAssignmentActionMode;
+  /** @nullable */
+  actionPrompt?: string | null;
   /** @nullable */
   lastRunAt?: Date | null;
   createdAt: Date;

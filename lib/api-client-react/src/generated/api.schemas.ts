@@ -172,6 +172,34 @@ export interface CreateClientBody {
   plan: CreateClientBodyPlan;
 }
 
+export interface UpdateClientBody {
+  websiteUrl?: string | null;
+  industry?: string | null;
+  servicesList?: string[] | null;
+  targetMarket?: string | null;
+  businessContext?: string | null;
+}
+
+export interface LeadWebhookBody {
+  name: string;
+  contact: string;
+  serviceInterest?: string;
+  message?: string;
+}
+
+export type LeadWebhookResponseAssignedBotsItem = {
+  id?: number;
+  name?: string;
+  title?: string;
+};
+
+export interface LeadWebhookResponse {
+  sessionId: number;
+  objective: string;
+  assignedBots: LeadWebhookResponseAssignedBotsItem[];
+  message: string;
+}
+
 export type ClientBotStatus =
   (typeof ClientBotStatus)[keyof typeof ClientBotStatus];
 
@@ -373,12 +401,23 @@ export interface BotMemory {
   createdAt: string;
 }
 
+export type BotAssignmentActionMode =
+  (typeof BotAssignmentActionMode)[keyof typeof BotAssignmentActionMode];
+
+export const BotAssignmentActionMode = {
+  passive: "passive",
+  active: "active",
+} as const;
+
 export interface BotAssignment {
   id: number;
   botId: number;
   objective: string;
   schedule: string;
   isActive: string;
+  actionMode: BotAssignmentActionMode;
+  /** @nullable */
+  actionPrompt?: string | null;
   /** @nullable */
   lastRunAt?: string | null;
   createdAt: string;
@@ -397,15 +436,55 @@ export const CreateBotAssignmentBodySchedule = {
   weekly: "weekly",
 } as const;
 
+export type CreateBotAssignmentBodyActionMode =
+  (typeof CreateBotAssignmentBodyActionMode)[keyof typeof CreateBotAssignmentBodyActionMode];
+
+export const CreateBotAssignmentBodyActionMode = {
+  passive: "passive",
+  active: "active",
+} as const;
+
 export interface CreateBotAssignmentBody {
   botId: number;
   objective: string;
   schedule?: CreateBotAssignmentBodySchedule;
+  actionMode?: CreateBotAssignmentBodyActionMode;
+  actionPrompt?: string;
 }
+
+export type UpdateBotAssignmentBodyActionMode =
+  (typeof UpdateBotAssignmentBodyActionMode)[keyof typeof UpdateBotAssignmentBodyActionMode];
+
+export const UpdateBotAssignmentBodyActionMode = {
+  passive: "passive",
+  active: "active",
+} as const;
+
+export type UpdateBotAssignmentBodySchedule =
+  (typeof UpdateBotAssignmentBodySchedule)[keyof typeof UpdateBotAssignmentBodySchedule];
+
+export const UpdateBotAssignmentBodySchedule = {
+  hourly: "hourly",
+  daily: "daily",
+  weekly: "weekly",
+} as const;
 
 export interface UpdateBotAssignmentBody {
   isActive?: string;
+  actionMode?: UpdateBotAssignmentBodyActionMode;
+  /** @nullable */
+  actionPrompt?: string | null;
+  schedule?: UpdateBotAssignmentBodySchedule;
 }
+
+export type BackgroundReportRunStatus =
+  (typeof BackgroundReportRunStatus)[keyof typeof BackgroundReportRunStatus];
+
+export const BackgroundReportRunStatus = {
+  success: "success",
+  partial: "partial",
+  failed: "failed",
+} as const;
 
 export interface BackgroundReport {
   id: number;
@@ -413,6 +492,7 @@ export interface BackgroundReport {
   botId: number;
   content: string;
   summary: string;
+  runStatus: BackgroundReportRunStatus;
   /** @nullable */
   deliveredAt?: string | null;
   createdAt: string;
@@ -698,6 +778,16 @@ export interface CallImprovementRun {
   createdAt: string;
 }
 
+export interface KnowledgeBaseDocument {
+  id: number;
+  clientId: number;
+  title: string;
+  sourceFilename: string;
+  fileType: string;
+  chunkCount: number;
+  uploadedAt: string;
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -833,5 +923,14 @@ export type RecordingStatusBody = {
 };
 
 export type RecordingStatus200 = {
+  success?: boolean;
+};
+
+export type UploadKnowledgeBaseDocumentBody = {
+  file: Blob;
+  title?: string;
+};
+
+export type DeleteKnowledgeBaseDocument200 = {
   success?: boolean;
 };

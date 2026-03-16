@@ -5,20 +5,11 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
-import type { ClientPlan } from "./clientPlan";
-import type { ClientStatus } from "./clientStatus";
 
-export interface Client {
-  id: number;
-  companyName: string;
-  contactName: string;
-  contactEmail: string;
-  plan: ClientPlan;
-  status: ClientStatus;
+export interface UpdateClientBody {
   websiteUrl?: string | null;
   industry?: string | null;
   servicesList?: string[] | null;
   targetMarket?: string | null;
   businessContext?: string | null;
-  createdAt: Date;
 }

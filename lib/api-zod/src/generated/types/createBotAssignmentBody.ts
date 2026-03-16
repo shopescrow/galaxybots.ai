@@ -5,10 +5,13 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateBotAssignmentBodyActionMode } from "./createBotAssignmentBodyActionMode";
 import type { CreateBotAssignmentBodySchedule } from "./createBotAssignmentBodySchedule";
 
 export interface CreateBotAssignmentBody {
   botId: number;
   objective: string;
   schedule?: CreateBotAssignmentBodySchedule;
+  actionMode?: CreateBotAssignmentBodyActionMode;
+  actionPrompt?: string;
 }

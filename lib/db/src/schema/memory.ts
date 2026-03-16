@@ -28,6 +28,8 @@ export const botAssignmentsTable = pgTable("bot_assignments", {
   objective: text("objective").notNull(),
   schedule: text("schedule").notNull().default("daily"),
   isActive: text("is_active").notNull().default("true"),
+  actionMode: text("action_mode").notNull().default("passive"),
+  actionPrompt: text("action_prompt"),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -39,6 +41,7 @@ export const backgroundReportsTable = pgTable("background_reports", {
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   summary: text("summary").notNull(),
+  runStatus: text("run_status").notNull().default("success"),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

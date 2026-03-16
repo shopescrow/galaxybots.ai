@@ -43,6 +43,7 @@ import type {
   CreateTaskSessionBody,
   DeleteBotAssignment200,
   DeleteClientCompliance200,
+  DeleteKnowledgeBaseDocument200,
   DeleteMemory200,
   ErrorResponse,
   ExpandTaskSessionBody,
@@ -57,6 +58,9 @@ import type {
   HireBotBody,
   IncomingCallBody,
   JournalEntry,
+  KnowledgeBaseDocument,
+  LeadWebhookBody,
+  LeadWebhookResponse,
   ListBackgroundReportsParams,
   ListBlogPostsParams,
   ListConversationsParams,
@@ -83,8 +87,10 @@ import type {
   TestReceptionistConnection200,
   TestReceptionistConnectionBody,
   UpdateBotAssignmentBody,
+  UpdateClientBody,
   UpdateClientComplianceBody,
   UpdateReceptionistConfigBody,
+  UploadKnowledgeBaseDocumentBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1100,6 +1106,181 @@ export function useGetClient<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update client business profile
+ */
+export const getUpdateClientUrl = (id: number) => {
+  return `/api/clients/${id}`;
+};
+
+export const updateClient = async (
+  id: number,
+  updateClientBody: UpdateClientBody,
+  options?: RequestInit,
+): Promise<Client> => {
+  return customFetch<Client>(getUpdateClientUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateClientBody),
+  });
+};
+
+export const getUpdateClientMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClient>>,
+    TError,
+    { id: number; data: BodyType<UpdateClientBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateClient>>,
+  TError,
+  { id: number; data: BodyType<UpdateClientBody> },
+  TContext
+> => {
+  const mutationKey = ["updateClient"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateClient>>,
+    { id: number; data: BodyType<UpdateClientBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateClient(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateClientMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateClient>>
+>;
+export type UpdateClientMutationBody = BodyType<UpdateClientBody>;
+export type UpdateClientMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update client business profile
+ */
+export const useUpdateClient = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClient>>,
+    TError,
+    { id: number; data: BodyType<UpdateClientBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateClient>>,
+  TError,
+  { id: number; data: BodyType<UpdateClientBody> },
+  TContext
+> => {
+  return useMutation(getUpdateClientMutationOptions(options));
+};
+
+/**
+ * Accepts a lead payload and triggers a bot qualification mission. Auth uses a per-client webhook secret as Bearer token (not JWT user auth).
+ * @summary Ingest a lead from a client website
+ */
+export const getIngestLeadUrl = (clientId: number) => {
+  return `/api/webhooks/lead/${clientId}`;
+};
+
+export const ingestLead = async (
+  clientId: number,
+  leadWebhookBody: LeadWebhookBody,
+  options?: RequestInit,
+): Promise<LeadWebhookResponse> => {
+  return customFetch<LeadWebhookResponse>(getIngestLeadUrl(clientId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(leadWebhookBody),
+  });
+};
+
+export const getIngestLeadMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestLead>>,
+    TError,
+    { clientId: number; data: BodyType<LeadWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ingestLead>>,
+  TError,
+  { clientId: number; data: BodyType<LeadWebhookBody> },
+  TContext
+> => {
+  const mutationKey = ["ingestLead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ingestLead>>,
+    { clientId: number; data: BodyType<LeadWebhookBody> }
+  > = (props) => {
+    const { clientId, data } = props ?? {};
+
+    return ingestLead(clientId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IngestLeadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ingestLead>>
+>;
+export type IngestLeadMutationBody = BodyType<LeadWebhookBody>;
+export type IngestLeadMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Ingest a lead from a client website
+ */
+export const useIngestLead = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestLead>>,
+    TError,
+    { clientId: number; data: BodyType<LeadWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ingestLead>>,
+  TError,
+  { clientId: number; data: BodyType<LeadWebhookBody> },
+  TContext
+> => {
+  return useMutation(getIngestLeadMutationOptions(options));
+};
 
 /**
  * @summary Get bots hired by a client
@@ -5301,4 +5482,265 @@ export const useRecordingStatus = <
   TContext
 > => {
   return useMutation(getRecordingStatusMutationOptions(options));
+};
+
+/**
+ * @summary List all knowledge base documents for the authenticated client
+ */
+export const getListKnowledgeBaseDocumentsUrl = () => {
+  return `/api/knowledge-base/documents`;
+};
+
+export const listKnowledgeBaseDocuments = async (
+  options?: RequestInit,
+): Promise<KnowledgeBaseDocument[]> => {
+  return customFetch<KnowledgeBaseDocument[]>(
+    getListKnowledgeBaseDocumentsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListKnowledgeBaseDocumentsQueryKey = () => {
+  return [`/api/knowledge-base/documents`] as const;
+};
+
+export const getListKnowledgeBaseDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListKnowledgeBaseDocumentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>
+  > = ({ signal }) => listKnowledgeBaseDocuments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListKnowledgeBaseDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>
+>;
+export type ListKnowledgeBaseDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all knowledge base documents for the authenticated client
+ */
+
+export function useListKnowledgeBaseDocuments<
+  TData = Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listKnowledgeBaseDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListKnowledgeBaseDocumentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a document to the knowledge base
+ */
+export const getUploadKnowledgeBaseDocumentUrl = () => {
+  return `/api/knowledge-base/documents`;
+};
+
+export const uploadKnowledgeBaseDocument = async (
+  uploadKnowledgeBaseDocumentBody: UploadKnowledgeBaseDocumentBody,
+  options?: RequestInit,
+): Promise<KnowledgeBaseDocument> => {
+  const formData = new FormData();
+  formData.append(`file`, uploadKnowledgeBaseDocumentBody.file);
+  if (uploadKnowledgeBaseDocumentBody.title !== undefined) {
+    formData.append(`title`, uploadKnowledgeBaseDocumentBody.title);
+  }
+
+  return customFetch<KnowledgeBaseDocument>(
+    getUploadKnowledgeBaseDocumentUrl(),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getUploadKnowledgeBaseDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadKnowledgeBaseDocument>>,
+    TError,
+    { data: BodyType<UploadKnowledgeBaseDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadKnowledgeBaseDocument>>,
+  TError,
+  { data: BodyType<UploadKnowledgeBaseDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadKnowledgeBaseDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadKnowledgeBaseDocument>>,
+    { data: BodyType<UploadKnowledgeBaseDocumentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return uploadKnowledgeBaseDocument(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadKnowledgeBaseDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadKnowledgeBaseDocument>>
+>;
+export type UploadKnowledgeBaseDocumentMutationBody =
+  BodyType<UploadKnowledgeBaseDocumentBody>;
+export type UploadKnowledgeBaseDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upload a document to the knowledge base
+ */
+export const useUploadKnowledgeBaseDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadKnowledgeBaseDocument>>,
+    TError,
+    { data: BodyType<UploadKnowledgeBaseDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadKnowledgeBaseDocument>>,
+  TError,
+  { data: BodyType<UploadKnowledgeBaseDocumentBody> },
+  TContext
+> => {
+  return useMutation(getUploadKnowledgeBaseDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Delete a knowledge base document
+ */
+export const getDeleteKnowledgeBaseDocumentUrl = (id: number) => {
+  return `/api/knowledge-base/documents/${id}`;
+};
+
+export const deleteKnowledgeBaseDocument = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DeleteKnowledgeBaseDocument200> => {
+  return customFetch<DeleteKnowledgeBaseDocument200>(
+    getDeleteKnowledgeBaseDocumentUrl(id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteKnowledgeBaseDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteKnowledgeBaseDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteKnowledgeBaseDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteKnowledgeBaseDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteKnowledgeBaseDocument>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteKnowledgeBaseDocument(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteKnowledgeBaseDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteKnowledgeBaseDocument>>
+>;
+
+export type DeleteKnowledgeBaseDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a knowledge base document
+ */
+export const useDeleteKnowledgeBaseDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteKnowledgeBaseDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteKnowledgeBaseDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteKnowledgeBaseDocumentMutationOptions(options));
 };

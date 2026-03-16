@@ -11,6 +11,7 @@ import { eq, and, lte, isNull, or, ne } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "./roi";
 import { syncSource } from "./kb-sync";
+import { runAgenticLoop } from "../tools/agentic-loop";
 
 const SCHEDULER_LOCK_ID = 999999;
 
@@ -40,21 +41,7 @@ export function broadcastSSE(event: string, data: Record<string, unknown>) {
   }
 }
 
-async function runAssignment(assignmentId: number) {
-  const [assignment] = await db
-    .select()
-    .from(botAssignmentsTable)
-    .where(eq(botAssignmentsTable.id, assignmentId));
-
-  if (!assignment || assignment.isActive !== "true") return null;
-
-  const [bot] = await db
-    .select()
-    .from(botsTable)
-    .where(eq(botsTable.id, assignment.botId));
-
-  if (!bot) return null;
-
+async function runPassiveAssignment(assignment: typeof botAssignmentsTable.$inferSelect, bot: typeof botsTable.$inferSelect) {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     max_completion_tokens: 2000,
@@ -90,14 +77,100 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
 
   const summary = summaryCompletion.choices[0]?.message?.content ?? content.substring(0, 200);
 
+  return { content, summary, runStatus: "success" as const };
+}
+
+async function runActiveAssignment(assignment: typeof botAssignmentsTable.$inferSelect, bot: typeof botsTable.$inferSelect): Promise<{ content: string; summary: string; runStatus: "success" | "partial" | "failed" }> {
+  const missionPrompt = assignment.actionPrompt || assignment.objective;
+
+  const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
+Personality: ${bot.personality}
+Your responsibilities: ${bot.responsibilities.join("; ")}
+
+You are executing a standing order autonomously. Use your available tools to complete the mission objective below. Take real actions — post messages, send emails, create documents, look up data — whatever is needed to fulfill the order. When done, provide a concise summary of what you accomplished.`;
+
+  const result = await runAgenticLoop({
+    model: "gpt-4o-mini",
+    maxIterations: 10,
+    maxTokens: 1500,
+    systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content: `STANDING ORDER: ${missionPrompt}\n\nExecute this order now using your available tools. Report back on what you accomplished.`,
+      },
+    ],
+    context: {
+      clientId: assignment.clientId ?? undefined,
+      botId: bot.id,
+      botName: bot.name,
+    },
+  });
+
+  const hasError = result.events.some((e) => e.type === "error");
+  const hasToolBlocked = result.events.some((e) => e.type === "tool_blocked");
+  const paused = result.paused === true;
+
+  let runStatus: "success" | "partial" | "failed";
+  if (hasError && !result.finalContent) {
+    runStatus = "failed";
+  } else if (hasError || hasToolBlocked || paused) {
+    runStatus = "partial";
+  } else {
+    runStatus = "success";
+  }
+
+  const content = result.finalContent || "Active execution completed but produced no output.";
+
+  const summaryCompletion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    max_completion_tokens: 200,
+    messages: [
+      {
+        role: "system",
+        content: "Summarize the following execution report in one concise sentence.",
+      },
+      { role: "user", content },
+    ],
+  });
+
+  const summary = summaryCompletion.choices[0]?.message?.content ?? content.substring(0, 200);
+
+  return { content, summary, runStatus };
+}
+
+async function runAssignment(assignmentId: number) {
+  const [assignment] = await db
+    .select()
+    .from(botAssignmentsTable)
+    .where(eq(botAssignmentsTable.id, assignmentId));
+
+  if (!assignment || assignment.isActive !== "true") return null;
+
+  const [bot] = await db
+    .select()
+    .from(botsTable)
+    .where(eq(botsTable.id, assignment.botId));
+
+  if (!bot) return null;
+
+  let reportData: { content: string; summary: string; runStatus: "success" | "partial" | "failed" };
+
+  if (assignment.actionMode === "active") {
+    reportData = await runActiveAssignment(assignment, bot);
+  } else {
+    reportData = await runPassiveAssignment(assignment, bot);
+  }
+
   const [report] = await db
     .insert(backgroundReportsTable)
     .values({
       assignmentId: assignment.id,
       botId: assignment.botId,
       clientId: assignment.clientId,
-      content,
-      summary,
+      content: reportData.content,
+      summary: reportData.summary,
+      runStatus: reportData.runStatus,
       deliveredAt: new Date(),
     })
     .returning();
@@ -113,8 +186,25 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     botId: bot.id,
     botName: bot.name,
     clientId: assignment.clientId,
-    summary,
+    summary: reportData.summary,
+    runStatus: reportData.runStatus,
+    actionMode: assignment.actionMode,
   });
+
+  if (reportData.runStatus === "failed" || reportData.runStatus === "partial") {
+    broadcastSSE("assignment-alert", {
+      reportId: report.id,
+      assignmentId: assignment.id,
+      botId: bot.id,
+      botName: bot.name,
+      clientId: assignment.clientId,
+      runStatus: reportData.runStatus,
+      summary: reportData.summary,
+      message: reportData.runStatus === "failed"
+        ? `Standing order failed for ${bot.name}: ${reportData.summary}`
+        : `Standing order partially completed by ${bot.name}: ${reportData.summary}`,
+    });
+  }
 
   return report;
 }
