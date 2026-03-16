@@ -17,6 +17,7 @@ export * from "./aeo-scores";
 export * from "./receptionist";
 export * from "./users";
 export * from "./audit-log";
+export * from "./bot-audit-log";
 export * from "./session-outcomes";
 export * from "./prospects";
 export * from "./user-preferences";
