@@ -201,15 +201,20 @@ router.put(
       return;
     }
 
-    const values = {
+    const [existing] = await db
+      .select()
+      .from(ssoConfigsTable)
+      .where(eq(ssoConfigsTable.clientId, req.user!.clientId));
+
+    const values: Record<string, unknown> = {
       clientId: req.user!.clientId,
       providerType,
       idpMetadataUrl: idpMetadataUrl || null,
       idpEntityId: idpEntityId || null,
       idpSsoUrl: idpSsoUrl || null,
-      idpCert: idpCert ? encryptCredential(idpCert) : null,
+      idpCert: idpCert ? encryptCredential(idpCert) : (existing?.idpCert ?? null),
       oidcClientId: oidcClientId || null,
-      oidcClientSecret: oidcClientSecret ? encryptCredential(oidcClientSecret) : null,
+      oidcClientSecret: oidcClientSecret ? encryptCredential(oidcClientSecret) : (existing?.oidcClientSecret ?? null),
       oidcIssuerUrl: oidcIssuerUrl || null,
       domainHint: domainHint.toLowerCase(),
       jitDefaultRole: jitDefaultRole || "viewer",
@@ -218,11 +223,6 @@ router.put(
       jitDefaultPermissionProfileId: jitDefaultPermissionProfileId || null,
       enabled: enabled ?? true,
     };
-
-    const [existing] = await db
-      .select()
-      .from(ssoConfigsTable)
-      .where(eq(ssoConfigsTable.clientId, req.user!.clientId));
 
     let config;
     if (existing) {

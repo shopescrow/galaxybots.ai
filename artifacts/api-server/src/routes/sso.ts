@@ -379,7 +379,7 @@ router.post(
     if (profile.sessionNotOnOrAfter) {
       const sessionEnd = new Date(profile.sessionNotOnOrAfter as string).getTime();
       const remaining = sessionEnd - Date.now();
-      if (remaining > 0 && remaining < 24 * 60 * 60 * 1000) {
+      if (remaining > 0) {
         sessionTtlMs = remaining;
         jwtExpiry = `${Math.ceil(remaining / 1000)}s`;
       } else {
@@ -705,7 +705,7 @@ router.get(
 
     if (idpSessionExpiry) {
       const remaining = idpSessionExpiry - Date.now();
-      if (remaining > 0 && remaining < 24 * 60 * 60 * 1000) {
+      if (remaining > 0) {
         sessionTtlMs = remaining;
         jwtExpiry = `${Math.ceil(remaining / 1000)}s`;
       } else {
@@ -836,11 +836,12 @@ router.post(
       wantLogoutResponseSigned: true,
     });
 
+    let logoutProfile: { profile: { nameID?: string } | null; loggedOut: boolean };
     try {
       const sloBody: Record<string, string> = {};
       if (SAMLRequest) sloBody.SAMLRequest = SAMLRequest;
       if (SAMLResponse) sloBody.SAMLResponse = SAMLResponse;
-      await saml.validatePostResponseAsync(sloBody);
+      logoutProfile = await saml.validatePostResponseAsync(sloBody);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "unknown";
       await logSsoEvent("sso_slo_signature_invalid", config.clientId, null, { error: message, issuer: issuerEntityId }, req.ip);
@@ -848,13 +849,17 @@ router.post(
       return;
     }
 
-    const nameIdMatch = decoded.match(/<(?:saml:)?NameID[^>]*>([^<]+)<\/(?:saml:)?NameID>/);
-    if (!nameIdMatch || !nameIdMatch[1]) {
-      res.status(400).json({ error: "No NameID found in verified SLO request" });
+    if (!logoutProfile.loggedOut) {
+      res.status(400).json({ error: "SLO payload did not indicate logout" });
       return;
     }
 
-    const email = nameIdMatch[1].toLowerCase();
+    const email = (logoutProfile.profile?.nameID || "").toLowerCase();
+    if (!email || !email.includes("@")) {
+      res.status(400).json({ error: "No valid NameID in verified SLO payload" });
+      return;
+    }
+
     revokeUserSessions(email);
 
     const [user] = await db
