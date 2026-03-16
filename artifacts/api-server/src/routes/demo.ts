@@ -656,6 +656,7 @@ router.post("/demo/complete", async (req, res): Promise<void> => {
       return;
     }
 
+
     const msgCount = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(taskSessionMessagesTable)
@@ -726,6 +727,7 @@ router.post("/demo/claim", async (req, res): Promise<void> => {
       res.status(410).json({ error: "This demo session has expired. Please start a new demo." });
       return;
     }
+
 
     const [existingUser] = await db
       .select()

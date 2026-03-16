@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Redirect } from "wouter";
+import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -456,6 +457,7 @@ export default function CommandCenter() {
   return (
     <AppLayout>
       <div className="container mx-auto px-4 py-8 sm:py-12">
+        <OnboardingChecklist />
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold flex items-center gap-3">

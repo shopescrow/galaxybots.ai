@@ -270,6 +270,7 @@ router.get("/auth/me", authenticate, async (req, res): Promise<void> => {
       role: usersTable.role,
       displayName: usersTable.displayName,
       bypassPayment: usersTable.bypassPayment,
+      onboarding: usersTable.onboarding,
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)

@@ -2,6 +2,16 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+export interface OnboardingState {
+  companyProfile: boolean;
+  firstClient: boolean;
+  industry: boolean;
+  integrations: boolean;
+  firstMission: boolean;
+  dismissed: boolean;
+  completedAt: string | null;
+}
+
 interface AuthUser {
   id: number;
   email: string;
@@ -10,6 +20,7 @@ interface AuthUser {
   displayName?: string | null;
   plan?: string;
   bypassPayment?: boolean;
+  onboarding?: OnboardingState | null;
 }
 
 interface AuthContextType {
@@ -19,6 +30,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  updateOnboarding: (updates: Partial<OnboardingState>) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -42,19 +55,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("auth_token");
   }, []);
 
+  const fetchUser = useCallback(async (authToken: string) => {
+    const res = await fetch(`${BASE}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) throw new Error("Not authenticated");
+    return res.json();
+  }, []);
+
   useEffect(() => {
     if (!token) {
       setIsLoading(false);
       return;
     }
 
-    fetch(`${BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Not authenticated");
-        return res.json();
-      })
+    fetchUser(token)
       .then((data) => {
         setUser(data);
       })
@@ -64,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [token, clearAuth]);
+  }, [token, clearAuth, fetchUser]);
 
   const login = useCallback(async (email: string, password: string) => {
     let res: Response;
@@ -89,9 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await res.json();
     setToken(data.token);
-    setUser(data.user);
     localStorage.setItem("auth_token", data.token);
-  }, []);
+
+    const userData = await fetchUser(data.token);
+    setUser(userData);
+  }, [fetchUser]);
 
   const register = useCallback(async (registerData: RegisterData) => {
     let res: Response;
@@ -116,9 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await res.json();
     setToken(data.token);
-    setUser(data.user);
     localStorage.setItem("auth_token", data.token);
-  }, []);
+
+    const userData = await fetchUser(data.token);
+    setUser(userData);
+  }, [fetchUser]);
 
   const logout = useCallback(async () => {
     try {
@@ -127,8 +146,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuth();
   }, [clearAuth]);
 
+  const updateOnboarding = useCallback(async (updates: Partial<OnboardingState>) => {
+    if (!token) return;
+    const res = await fetch(`${BASE}/api/onboarding`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error("Failed to update onboarding");
+    const onboarding = await res.json();
+    setUser((prev) => prev ? { ...prev, onboarding } : prev);
+  }, [token]);
+
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await fetchUser(token);
+      setUser(data);
+    } catch {}
+  }, [token, fetchUser]);
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, updateOnboarding, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

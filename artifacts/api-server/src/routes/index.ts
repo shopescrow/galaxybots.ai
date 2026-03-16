@@ -32,6 +32,7 @@ import triggersRouter from "./triggers";
 import commandCenterRouter from "./command-center";
 import analyticsRouter from "./analytics";
 import demoRouter from "./demo";
+import onboardingRouter from "./onboarding";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(pipelinesRouter);
 router.use(triggersRouter);
 router.use(commandCenterRouter);
 router.use(analyticsRouter);
+router.use(onboardingRouter);
 
 export default router;

@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Bot, Network, Shield, Zap, Radio, Crosshair, Play } from "lucide-react";
 import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { BillingWidget } from "@/components/BillingWidget";
+import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
 
 export default function Home() {
@@ -90,6 +91,7 @@ export default function Home() {
 
       <div className="py-24 bg-background relative z-10">
         <div className="container mx-auto px-4">
+          <OnboardingChecklist />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <motion.div 
               initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}

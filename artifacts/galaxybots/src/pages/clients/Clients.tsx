@@ -14,6 +14,7 @@ import { CreateClientBodyPlan } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -74,11 +75,16 @@ export default function Clients() {
     defaultValues: { plan: "single" }
   });
 
+  const { user, updateOnboarding } = useAuth();
+
   const onSubmit = async (data: FormData) => {
     try {
       await createClient.mutateAsync({ data });
       setOpen(false);
       reset();
+      if (user?.onboarding && !user.onboarding.firstClient) {
+        updateOnboarding({ firstClient: true }).catch(() => {});
+      }
     } catch (e) {
       console.error(e);
     }

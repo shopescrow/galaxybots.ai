@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2 } from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
@@ -71,6 +72,7 @@ function IntegrationCard({
   const [editing, setEditing] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, updateOnboarding } = useAuth();
   const Icon = service.icon;
 
   const saveMutation = useMutation({
@@ -88,6 +90,9 @@ function IntegrationCard({
       setEditing(false);
       setCredential("");
       toast({ title: `${service.name} connected`, description: "Integration saved successfully." });
+      if (user?.onboarding && !user.onboarding.integrations) {
+        updateOnboarding({ integrations: true }).catch(() => {});
+      }
     },
     onError: () => {
       toast({ title: "Error", description: `Failed to connect ${service.name}.`, variant: "destructive" });

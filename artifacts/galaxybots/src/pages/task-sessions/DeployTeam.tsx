@@ -24,6 +24,7 @@ import {
   Brain,
   ArrowRight,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProposedBot {
   name: string;
@@ -44,6 +45,7 @@ interface MatchedBot {
 
 export default function DeployTeam() {
   const { toast } = useToast();
+  const { user, updateOnboarding } = useAuth();
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const [objective, setObjective] = useState("");
@@ -166,6 +168,10 @@ export default function DeployTeam() {
       title: "Task Room Deployed",
       description: `Team of ${botIds.length} specialists assembled.`,
     });
+
+    if (user?.onboarding && !user.onboarding.firstMission) {
+      updateOnboarding({ firstMission: true }).catch(() => {});
+    }
 
     navigate(`/task-rooms/${(session as { id: number }).id}`);
   };

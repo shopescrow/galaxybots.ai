@@ -1,7 +1,27 @@
-import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clientsTable } from "./clients";
+
+export interface OnboardingState {
+  companyProfile: boolean;
+  firstClient: boolean;
+  industry: boolean;
+  integrations: boolean;
+  firstMission: boolean;
+  dismissed: boolean;
+  completedAt: string | null;
+}
+
+export const DEFAULT_ONBOARDING: OnboardingState = {
+  companyProfile: false,
+  firstClient: false,
+  industry: false,
+  integrations: false,
+  firstMission: false,
+  dismissed: false,
+  completedAt: null,
+};
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -11,6 +31,7 @@ export const usersTable = pgTable("users", {
   role: text("role").notNull().default("viewer"),
   displayName: text("display_name"),
   bypassPayment: boolean("bypass_payment").notNull().default(false),
+  onboarding: jsonb("onboarding").$type<OnboardingState>().default(DEFAULT_ONBOARDING),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

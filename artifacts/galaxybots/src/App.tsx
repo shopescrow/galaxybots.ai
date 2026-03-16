@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
 import { DemoProvider } from "@/contexts/DemoContext";
+import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 
 import Home from "@/pages/Home";
 import BotRoster from "@/pages/bots/BotRoster";
@@ -74,6 +76,18 @@ function SmartHome() {
 
 function AuthenticatedRoutes() {
   const { user, isLoading } = useAuth();
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardShownThisSession, setWizardShownThisSession] = useState(false);
+
+  useEffect(() => {
+    if (!user || isLoading || wizardShownThisSession) return;
+    const onboarding = user.onboarding;
+    if (!onboarding || onboarding.dismissed || onboarding.completedAt) return;
+    if (!onboarding.companyProfile) {
+      setWizardOpen(true);
+      setWizardShownThisSession(true);
+    }
+  }, [user, isLoading, wizardShownThisSession]);
 
   if (isLoading) {
     return (
@@ -88,6 +102,8 @@ function AuthenticatedRoutes() {
   }
 
   return (
+    <>
+    <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     <Switch>
       <Route path="/command-center" component={CommandCenter} />
       <Route path="/bots" component={BotRoster} />
@@ -122,6 +138,7 @@ function AuthenticatedRoutes() {
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route component={NotFound} />
     </Switch>
+    </>
   );
 }
 

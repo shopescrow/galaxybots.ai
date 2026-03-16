@@ -66,6 +66,7 @@ The platform supports per-user personalization via the `user_preferences` table 
 - **Accent Color:** 8 curated accent color options (purple, cyan, gold, green, orange, red, blue, slate) that override the `--primary` CSS custom property.
 - **Font Size Scaling:** 4 font size options (Small/Default/Large/Extra Large) applied via root CSS classes (`text-scale-sm/md/lg/xl`). Large and Extra Large sizes enable overflow scrolling on content areas via the `.content-scroll` class.
 - **Billing Widget:** An optional billing status card on the home screen showing current plan, status, and a link to manage the subscription. Toggled via user settings.
+- **Onboarding Wizard:** A multi-step modal wizard that walks new users through five setup steps: Company Profile, First Client, Industry, Integrations, and First Mission. Onboarding state is persisted in a JSONB `onboarding` column on the `users` table. A collapsible "Getting Started" checklist widget appears on the Home and Command Center dashboards until all steps are completed or dismissed. The wizard auto-opens on first login when any step is incomplete. Completing all steps triggers a celebration state. API endpoints: `GET/PATCH /api/onboarding`.
 - **API Endpoints:** `GET/PATCH /api/user/preferences`, `POST/DELETE /api/user/preferences/logo`.
 - **Context:** `UserPreferencesContext` manages state and applies preferences instantly without page reload.
 - **Storage Routes:** `POST /api/storage/uploads/request-url`, `GET /api/storage/objects/*`, `GET /api/storage/public-objects/*`.
