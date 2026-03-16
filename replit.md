@@ -133,3 +133,24 @@ The project includes a standalone MCP (Model Context Protocol) server at `artifa
 - BingoLingo integration card on GalaxyBots Integrations page
 
 **Auth model:** External API uses `X-BingoLingo-Key` header (hashed with SHA-256). Internal dashboard/management routes require JWT authentication (same as GalaxyBots). Hub routes are fully public. The frontend sends JWT via cookie (`credentials: "include"`).
+
+## Mobile App — Command Center (Expo/React Native)
+
+**Artifact:** `artifacts/mobile` — Expo Router app with NativeTabs (liquid glass), file-based routing.
+
+**Auth:** Email/password login + biometric (Face ID / fingerprint) via `expo-local-authentication`. JWT stored in `expo-secure-store`. Auth state managed via React Context (`lib/auth-context.tsx`).
+
+**Screens:**
+- **Login** (`app/login.tsx`): Email/password form with biometric unlock toggle
+- **Command Center** (`app/(tabs)/index.tsx`): Metric cards (active bots, pending approvals, sessions, cost), company health cards, activity feed
+- **Approvals** (`app/(tabs)/approvals.tsx`): Governance approval list with approve/reject actions, detail view
+- **Bots** (`app/(tabs)/bots.tsx`): Bot browser with search, SSE streaming chat (`app/chat/[botId].tsx`) with tool-call chips
+- **Journal** (`app/(tabs)/journal.tsx`): Daily journal entries, expandable details
+- **ROI** (`app/(tabs)/roi.tsx`): Hero metric card with share capability
+- **Settings** (`app/(tabs)/settings.tsx`): Biometric toggle, push notification toggle, logout
+
+**API Layer:** `lib/api.ts` — Platform-aware base URL (`EXPO_PUBLIC_DOMAIN`), `apiFetch`/`apiPost` helpers with JWT auth headers. SSE streaming via `expo/fetch`.
+
+**Push Notifications:** `expo-notifications` for device token registration. DB table: `push_tokens` (userId, token, platform). API routes: `POST /api/push-tokens/register`, `DELETE /api/push-tokens/deregister`.
+
+**Shared Components:** `components/ui/` — StatusBadge, MetricCard, SectionHeader, EmptyState, LoadingSkeleton (shimmer animation).

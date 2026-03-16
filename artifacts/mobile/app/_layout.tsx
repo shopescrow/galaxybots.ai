@@ -1,0 +1,177 @@
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from "@expo-google-fonts/inter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack, Redirect, useSegments, useRouter } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
+import React, { useEffect, useRef } from "react";
+import { Platform } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { ActivityIndicator, View } from "react-native";
+import colors from "@/constants/colors";
+
+SplashScreen.preventAutoHideAsync();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+if (Platform.OS === "android") {
+  Notifications.setNotificationChannelAsync("default", {
+    name: "GalaxyBots",
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#6366F1",
+  });
+}
+
+const ALLOWED_ROUTE_PREFIXES = [
+  "/(tabs)",
+  "/chat/",
+  "/approval/",
+  "/roi/",
+];
+
+function isRouteAllowed(route: string): boolean {
+  return ALLOWED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
+}
+
+const queryClient = new QueryClient();
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.light.background }}>
+        <ActivityIndicator size="large" color={colors.light.tint} />
+      </View>
+    );
+  }
+
+  const inAuthGroup = segments[0] === "login";
+
+  if (!isAuthenticated && !inAuthGroup) {
+    return <Redirect href="/login" />;
+  }
+
+  if (isAuthenticated && inAuthGroup) {
+    return <Redirect href="/(tabs)" />;
+  }
+
+  return <>{children}</>;
+}
+
+function NotificationHandler() {
+  const router = useRouter();
+  const responseListener = useRef<Notifications.Subscription>();
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (response) {
+          const data = response.notification.request.content.data as Record<
+            string,
+            string
+          >;
+          if (data?.route && isRouteAllowed(data.route)) {
+            router.push(data.route as never);
+          }
+        }
+      });
+    }
+
+    responseListener.current =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as Record<
+          string,
+          string
+        >;
+        if (data?.route && isRouteAllowed(data.route)) {
+          router.push(data.route as never);
+        }
+      });
+
+    return () => {
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, [router]);
+
+  return null;
+}
+
+function RootLayoutNav() {
+  return (
+    <AuthGate>
+      <NotificationHandler />
+      <Stack screenOptions={{ headerBackTitle: "Back", headerShown: false }}>
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="chat/[botId]"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="approval/[id]"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="roi/[clientId]"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+      </Stack>
+    </AuthGate>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) return null;
+
+  return (
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView>
+            <KeyboardProvider>
+              <AuthProvider>
+                <RootLayoutNav />
+              </AuthProvider>
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
+  );
+}

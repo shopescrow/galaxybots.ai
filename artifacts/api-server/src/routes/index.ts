@@ -43,6 +43,7 @@ import orgAdminRouter from "./org-admin";
 import proposalsRouter from "./proposals";
 import notificationsRouter from "./notifications";
 import clientHealthRouter from "./client-health";
+import pushTokensRouter from "./push-tokens";
 
 const router: IRouter = Router();
 
@@ -88,5 +89,6 @@ router.use(orgAdminRouter);
 router.use(proposalsRouter);
 router.use(notificationsRouter);
 router.use(clientHealthRouter);
+router.use(pushTokensRouter);
 
 export default router;
