@@ -190,17 +190,15 @@ export default function Scenarios() {
                           <Rocket className="w-4 h-4 mr-2" />
                           Launch Mission
                         </Button>
-                        {isAdmin && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="shrink-0"
-                            title="Publish to Marketplace"
-                            onClick={(e) => { e.stopPropagation(); setPublishScenario(scenario); }}
-                          >
-                            <Store className="w-4 h-4" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          title="Publish to Marketplace"
+                          onClick={(e) => { e.stopPropagation(); setPublishScenario(scenario); }}
+                        >
+                          <Store className="w-4 h-4" />
+                        </Button>
                       </div>
                     </Card>
                   </motion.div>

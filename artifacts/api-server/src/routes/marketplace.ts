@@ -45,7 +45,10 @@ router.get("/marketplace", optionalAuth, async (req, res): Promise<void> => {
     .where(eq(marketplaceTemplatesTable.status, "approved"))
     .$dynamic();
 
-  const conditions = [eq(marketplaceTemplatesTable.status, "approved")];
+  const conditions = [
+    eq(marketplaceTemplatesTable.status, "approved"),
+    eq(marketplaceTemplatesTable.visibility, "public"),
+  ];
 
   if (type && typeof type === "string") {
     conditions.push(eq(marketplaceTemplatesTable.type, type));
@@ -55,6 +58,9 @@ router.get("/marketplace", optionalAuth, async (req, res): Promise<void> => {
   }
   if (featured === "true") {
     conditions.push(eq(marketplaceTemplatesTable.featured, true));
+  }
+  if (industry && typeof industry === "string") {
+    conditions.push(sql`${marketplaceTemplatesTable.industryTags}::jsonb @> ${JSON.stringify([industry])}::jsonb`);
   }
   if (search && typeof search === "string") {
     conditions.push(
@@ -240,10 +246,7 @@ router.post(
         ),
       );
 
-    if (existingInstall) {
-      res.status(409).json({ error: "Template already deployed to your account" });
-      return;
-    }
+    const isReinstall = !!existingInstall;
 
     const clientId = req.user!.clientId;
     const userId = req.user!.userId;
@@ -364,16 +367,18 @@ router.post(
           );
         }
 
-        await tx.insert(marketplaceInstallsTable).values({
-          templateId,
-          userId,
-          clientId,
-        });
+        if (!isReinstall) {
+          await tx.insert(marketplaceInstallsTable).values({
+            templateId,
+            userId,
+            clientId,
+          });
 
-        await tx
-          .update(marketplaceTemplatesTable)
-          .set({ installCount: sql`${marketplaceTemplatesTable.installCount} + 1` })
-          .where(eq(marketplaceTemplatesTable.id, templateId));
+          await tx
+            .update(marketplaceTemplatesTable)
+            .set({ installCount: sql`${marketplaceTemplatesTable.installCount} + 1` })
+            .where(eq(marketplaceTemplatesTable.id, templateId));
+        }
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Deployment failed";
@@ -385,7 +390,7 @@ router.post(
       return;
     }
 
-    res.json({ success: true, message: `${template.type} template deployed successfully` });
+    res.json({ success: true, message: `${template.type} template ${isReinstall ? "re-deployed" : "deployed"} successfully`, reinstall: isReinstall });
   },
 );
 

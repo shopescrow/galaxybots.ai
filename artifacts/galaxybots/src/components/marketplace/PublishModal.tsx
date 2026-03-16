@@ -49,6 +49,7 @@ export function PublishModal({
   const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState(defaultDescription);
   const [category, setCategory] = useState(CATEGORIES[0]);
+  const [visibility, setVisibility] = useState<"public" | "unlisted">("public");
   const [tagInput, setTagInput] = useState("");
   const [industryTags, setIndustryTags] = useState<string[]>([]);
 
@@ -64,6 +65,7 @@ export function PublishModal({
           description,
           category,
           industryTags,
+          visibility,
           sourceData,
         }),
       });
@@ -177,6 +179,28 @@ export function PublishModal({
                     )}
                   >
                     {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-tech text-muted-foreground mb-1.5 block">
+                Visibility
+              </label>
+              <div className="flex gap-2">
+                {(["public", "unlisted"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setVisibility(v)}
+                    className={cn(
+                      "px-4 py-2 rounded-lg text-sm font-tech transition-all border flex-1",
+                      visibility === v
+                        ? "bg-primary/20 text-primary border-primary/30"
+                        : "bg-secondary/30 text-muted-foreground border-border/50 hover:bg-secondary/50",
+                    )}
+                  >
+                    {v === "public" ? "Public" : "Unlisted (link only)"}
                   </button>
                 ))}
               </div>

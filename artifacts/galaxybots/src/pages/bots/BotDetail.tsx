@@ -128,19 +128,17 @@ export default function BotDetail() {
                     </ul>
                   </div>
 
-                  {isAdmin && (
-                    <div className="mt-4 pt-4 border-t border-border/50">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2 text-xs font-tech"
-                        onClick={() => setPublishOpen(true)}
-                      >
-                        <Store className="w-3.5 h-3.5" />
-                        Publish to Marketplace
-                      </Button>
-                    </div>
-                  )}
+                  <div className="mt-4 pt-4 border-t border-border/50">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2 text-xs font-tech"
+                      onClick={() => setPublishOpen(true)}
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      Publish to Marketplace
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>

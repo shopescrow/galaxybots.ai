@@ -9,7 +9,7 @@ import { useUserPreferences, ACCENT_COLOR_MAP } from "@/contexts/UserPreferences
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, LANGUAGES } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, X, Check, Palette, Type, LayoutDashboard, Loader2, Image, Globe, Store, Bot, Zap, GitBranch, Trash2, ExternalLink } from "lucide-react";
+import { Upload, X, Check, Palette, Type, LayoutDashboard, Loader2, Image, Globe, Store, Bot, Zap, GitBranch, Trash2, ExternalLink, Pencil, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
@@ -37,6 +37,7 @@ interface MyTemplate {
   type: string;
   title: string;
   status: string;
+  visibility: string;
   installCount: number;
   createdAt: string;
 }
@@ -78,6 +79,23 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-marketplace-templates"] });
       toast({ title: "Template removed from marketplace" });
+    },
+  });
+
+  const unpublishMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${API_BASE}/marketplace/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility: "unlisted" }),
+      });
+      if (!res.ok) throw new Error("Failed to unpublish");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-marketplace-templates"] });
+      toast({ title: "Template unlisted from marketplace" });
     },
   });
 
@@ -409,20 +427,46 @@ export default function Settings() {
                               >
                                 {t.status}
                               </Badge>
+                              {t.visibility === "unlisted" && (
+                                <Badge variant="outline" className="text-[10px] text-muted-foreground border-muted-foreground/30">
+                                  unlisted
+                                </Badge>
+                              )}
                               <span className="text-[10px] text-muted-foreground">
                                 {t.installCount} installs
                               </span>
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground hover:text-red-400 shrink-0"
-                          onClick={() => deleteMutation.mutate(t.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-primary"
+                            title="Edit template"
+                            onClick={() => navigate(`/marketplace/${t.id}`)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-amber-400"
+                            title="Unpublish (make unlisted)"
+                            onClick={() => unpublishMutation.mutate(t.id)}
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-red-400"
+                            title="Delete template"
+                            onClick={() => deleteMutation.mutate(t.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}

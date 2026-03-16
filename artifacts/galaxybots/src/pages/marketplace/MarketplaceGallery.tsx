@@ -18,6 +18,7 @@ import {
   Store,
   ArrowRight,
   Sparkles,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -76,15 +77,17 @@ export default function MarketplaceGallery() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
+  const [industryFilter, setIndustryFilter] = useState("");
 
   const { data: templates = [], isLoading } = useQuery<MarketplaceTemplate[]>({
-    queryKey: ["marketplace", typeFilter, categoryFilter, search, sortBy],
+    queryKey: ["marketplace", typeFilter, categoryFilter, search, sortBy, industryFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (categoryFilter !== "All") params.set("category", categoryFilter);
       if (search.trim()) params.set("search", search.trim());
       if (sortBy === "popular") params.set("sort", "popular");
+      if (industryFilter) params.set("industry", industryFilter);
       const res = await fetch(`${API_BASE}/marketplace?${params}`, {
         credentials: "include",
       });
@@ -92,6 +95,10 @@ export default function MarketplaceGallery() {
       return res.json();
     },
   });
+
+  const allIndustryTags = Array.from(
+    new Set(templates.flatMap((t) => t.industryTags || [])),
+  ).sort();
 
   const featuredTemplates = templates.filter((t) => t.featured);
   const regularTemplates = templates.filter((t) => !t.featured);
@@ -175,6 +182,37 @@ export default function MarketplaceGallery() {
             </button>
           ))}
         </div>
+
+        {allIndustryTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-8">
+            <Tag className="w-3.5 h-3.5 text-muted-foreground mr-1" />
+            <button
+              onClick={() => setIndustryFilter("")}
+              className={cn(
+                "px-3 py-1 rounded-full text-xs font-tech transition-all",
+                !industryFilter
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "bg-secondary/30 text-muted-foreground border border-border/50 hover:bg-secondary/50",
+              )}
+            >
+              All Industries
+            </button>
+            {allIndustryTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setIndustryFilter(tag)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-tech transition-all",
+                  industryFilter === tag
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "bg-secondary/30 text-muted-foreground border border-border/50 hover:bg-secondary/50",
+                )}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
