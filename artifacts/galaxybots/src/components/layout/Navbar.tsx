@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Menu, X, Settings } from "lucide-react";
+import { Menu, X, Settings, Sparkles } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
@@ -9,7 +9,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
 
-const ALL_NAV_LINKS = [
+const ALL_NAV_LINKS: Array<{ href: string; label: string; roles?: string[]; external?: boolean; icon?: (props: { className?: string }) => JSX.Element }> = [
   { href: "/command-center", label: "Command Center", roles: ["owner", "admin"] },
   { href: "/assembly", label: "Assembly" },
   { href: "/bots", label: "Roster" },
@@ -21,6 +21,7 @@ const ALL_NAV_LINKS = [
   { href: "/clients", label: "Clients" },
   { href: "/compliance", label: "Compliance" },
   { href: "/integrations", label: "Integrations" },
+  { href: "/bingolingo/", label: "BingoLingo", external: true, icon: Sparkles },
   { href: "/prospects", label: "Prospects" },
   { href: "/governance", label: "Governance" },
   { href: "/knowledge-base", label: "Knowledge Base" },
@@ -64,20 +65,28 @@ export function Navbar() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-1 font-tech text-sm font-medium">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "px-4 py-2 rounded-lg transition-all duration-200 min-h-[44px] flex items-center",
-                  location.startsWith(link.href)
-                    ? "bg-secondary text-primary"
-                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const classes = cn(
+                "px-4 py-2 rounded-lg transition-all duration-200 min-h-[44px] flex items-center gap-1.5",
+                location.startsWith(link.href)
+                  ? "bg-secondary text-primary"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              );
+              const IconComp = link.icon;
+              if (link.external) {
+                return (
+                  <a key={link.href} href={link.href} className={classes}>
+                    {IconComp && <IconComp className="w-3.5 h-3.5" />}
+                    {link.label}
+                  </a>
+                );
+              }
+              return (
+                <Link key={link.href} href={link.href} className={classes}>
+                  {link.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
 
@@ -108,20 +117,28 @@ export function Navbar() {
 
       {isOpen && (
         <div className="md:hidden absolute top-20 left-0 w-full bg-background border-b border-border/40 p-4 flex flex-col gap-2 shadow-2xl">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "px-4 py-3 rounded-lg transition-colors font-tech font-medium min-h-[44px] flex items-center",
-                location.startsWith(link.href)
-                  ? "bg-secondary text-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const mobileClasses = cn(
+              "px-4 py-3 rounded-lg transition-colors font-tech font-medium min-h-[44px] flex items-center gap-1.5",
+              location.startsWith(link.href)
+                ? "bg-secondary text-primary"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            );
+            const MobileIcon = link.icon;
+            if (link.external) {
+              return (
+                <a key={link.href} href={link.href} className={mobileClasses}>
+                  {MobileIcon && <MobileIcon className="w-4 h-4" />}
+                  {link.label}
+                </a>
+              );
+            }
+            return (
+              <Link key={link.href} href={link.href} className={mobileClasses}>
+                {link.label}
+              </Link>
+            );
+          })}
           <div className="h-px bg-border/50 my-2" />
           <div className="px-4 py-2">
             <LanguageSelector />

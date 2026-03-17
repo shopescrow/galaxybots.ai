@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
-import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket, Users, Heart, Phone } from "lucide-react";
+import { Loader2, ArrowLeft, Building, Zap, BarChart3, Globe, Save, Briefcase, MapPin, Crosshair, Rocket, Users, Heart, Phone, Sparkles, FileText, ExternalLink, Plus } from "lucide-react";
 import { AeoIntelligenceTab } from "./AeoIntelligenceTab";
 import { KnowledgeBaseTab } from "./KnowledgeBaseTab";
 import { StakeholderAccessTab } from "./StakeholderAccessTab";
@@ -66,7 +66,7 @@ export default function ClientDetail() {
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders" | "health" | "calls">("intelligence");
+  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders" | "health" | "calls" | "bingolingo">("intelligence");
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
@@ -118,6 +118,50 @@ export default function ClientDetail() {
       businessContext: editContext || null,
     });
   };
+
+  const BINGOLINGO_API = `${BASE}/../api/bingolingo`.replace(/\/\//g, "/");
+
+  const { data: bingolingoClient, isLoading: blLoading, error: blError, refetch: refetchBl } = useQuery<{
+    id: number;
+    name: string;
+    slug: string;
+    contentCount: number;
+    latestContent: { id: number; title: string; type: string; status: string; createdAt: string } | null;
+  } | null>({
+    queryKey: ["bingolingo-client", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BINGOLINGO_API}/clients/by-galaxybots/${clientId}`, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`Failed to load BingoLingo data (${res.status})`);
+      return res.json();
+    },
+    enabled: !!client,
+    retry: false,
+  });
+
+  const createBlWorkspaceMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BINGOLINGO_API}/clients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: client!.companyName,
+          industry: client!.industry || "General",
+          website: client!.websiteUrl || undefined,
+          galaxybotsClientId: clientId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed to create workspace");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchBl();
+    },
+  });
 
   const clientSlug = client ? findClientSlug(client.companyName) : null;
   const clientScenarios = clientSlug
@@ -288,6 +332,17 @@ export default function ClientDetail() {
               <Users className="w-4 h-4" />
               Stakeholder Access
             </button>
+            <button
+              onClick={() => setActiveTab("bingolingo")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
+                activeTab === "bingolingo"
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              BingoLingo
+            </button>
             {clientScenarios.length > 0 && (
               <button
                 onClick={() => setActiveTab("missions")}
@@ -397,6 +452,99 @@ export default function ClientDetail() {
         {activeTab === "calls" && <CallsTab clientId={clientId} />}
 
         {activeTab === "stakeholders" && <StakeholderAccessTab clientId={clientId} />}
+
+        {activeTab === "bingolingo" && (
+          <Card>
+            <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <Sparkles className="h-5 w-5 text-amber-400" />
+              </div>
+              <CardTitle className="text-lg font-display">BingoLingo Content</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {blLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : blError ? (
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-destructive text-sm">{blError.message}</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchBl()}>Retry</Button>
+                </div>
+              ) : bingolingoClient ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="rounded-lg border bg-background p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                        <FileText className="w-4 h-4" />
+                        Content Pieces
+                      </div>
+                      <div className="text-2xl font-bold">{bingolingoClient.contentCount}</div>
+                    </div>
+                    <div className="rounded-lg border bg-background p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                        <FileText className="w-4 h-4" />
+                        Latest Content
+                      </div>
+                      {bingolingoClient.latestContent ? (
+                        <div>
+                          <p className="font-medium text-sm truncate">{bingolingoClient.latestContent.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-[10px]">{bingolingoClient.latestContent.type}</Badge>
+                            <Badge variant={bingolingoClient.latestContent.status === "published" ? "default" : "secondary"} className="text-[10px]">
+                              {bingolingoClient.latestContent.status}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(bingolingoClient.latestContent.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No content yet</p>
+                      )}
+                    </div>
+                  </div>
+                  <a href={`/bingolingo/clients/${bingolingoClient.id}`}>
+                    <Button variant="glow" className="w-full font-tech gap-2">
+                      <ExternalLink className="w-4 h-4" />
+                      View in BingoLingo
+                    </Button>
+                  </a>
+                </div>
+              ) : (
+                <div className="text-center py-8 space-y-4">
+                  <div className="flex justify-center">
+                    <div className="h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center">
+                      <Sparkles className="h-8 w-8 text-amber-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-medium">No BingoLingo workspace linked</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Create a BingoLingo workspace for {client.companyName} to start generating AI-powered content.
+                    </p>
+                  </div>
+                  <Button
+                    variant="glow"
+                    className="font-tech gap-2"
+                    onClick={() => createBlWorkspaceMutation.mutate()}
+                    disabled={createBlWorkspaceMutation.isPending}
+                  >
+                    {createBlWorkspaceMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    Create BingoLingo Workspace
+                  </Button>
+                  {createBlWorkspaceMutation.isError && (
+                    <p className="text-destructive text-xs">{createBlWorkspaceMutation.error?.message}</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {activeTab === "missions" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

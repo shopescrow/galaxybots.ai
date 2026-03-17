@@ -3,7 +3,7 @@ import { db, bingolingoClientsTable, bingolingoContentTable, bingolingoApiKeysTa
 import { eq, and, desc, sql, count } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { authenticate } from "../middleware/auth";
+import { authenticate, requireRole } from "../middleware/auth";
 
 interface BingoLingoApiKeyRequest extends Request {
   bingolingoClientId?: number;
@@ -295,7 +295,28 @@ Generate the content now.`;
   }
 });
 
-router.post("/bingolingo/generate-internal", authenticate, async (req, res): Promise<void> => {
+router.get("/bingolingo/clients/by-galaxybots/:galaxybotsClientId", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const gbClientId = Number(req.params.galaxybotsClientId);
+  const [client] = await db.select().from(bingolingoClientsTable).where(eq(bingolingoClientsTable.galaxybotsClientId, gbClientId));
+  if (!client) {
+    res.status(404).json({ error: "No BingoLingo client linked to this GalaxyBots client" });
+    return;
+  }
+  const [contentCount] = await db.select({ value: count() }).from(bingolingoContentTable).where(eq(bingolingoContentTable.clientId, client.id));
+  const [latestContent] = await db
+    .select()
+    .from(bingolingoContentTable)
+    .where(eq(bingolingoContentTable.clientId, client.id))
+    .orderBy(desc(bingolingoContentTable.createdAt))
+    .limit(1);
+  res.json({
+    ...client,
+    contentCount: Number(contentCount.value),
+    latestContent: latestContent ?? null,
+  });
+});
+
+router.post("/bingolingo/generate-internal", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
   const { clientId, contentType, topic, tone, keywords } = req.body;
 
   if (!clientId || !contentType || !topic) {

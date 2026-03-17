@@ -1,16 +1,11 @@
 const API_BASE = `${import.meta.env.BASE_URL}../api/bingolingo`.replace(/\/\//g, "/");
 
+const GALAXYBOTS_LOGIN_URL = `${import.meta.env.BASE_URL}../`.replace(/\/\//g, "/") + "login";
+
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  const cookieToken = document.cookie
-    .split("; ")
-    .find((c) => c.startsWith("token="))
-    ?.split("=")[1];
-  if (cookieToken) {
-    headers["Authorization"] = `Bearer ${cookieToken}`;
-  }
   return headers;
 }
 
@@ -23,6 +18,10 @@ async function request(path: string, options?: RequestInit) {
       ...options?.headers,
     },
   });
+  if (res.status === 401) {
+    window.location.href = GALAXYBOTS_LOGIN_URL;
+    throw new Error("Authentication required — redirecting to login");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || res.statusText);

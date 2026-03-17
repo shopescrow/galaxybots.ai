@@ -66,6 +66,7 @@ router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => 
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
+    path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -156,6 +157,7 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
+    path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -290,7 +292,7 @@ router.post("/auth/logout", authenticate, async (req, res): Promise<void> => {
   const { revokeUserSessions } = await import("./sso");
 
   revokeUserSessions(email);
-  res.clearCookie("token");
+  res.clearCookie("token", { path: "/" });
 
   const [user] = await db
     .select({ ssoProvider: usersTable.ssoProvider, clientId: usersTable.clientId })

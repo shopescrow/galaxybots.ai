@@ -1,5 +1,5 @@
-import { Switch, Route, Router as WouterRouter, Link } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/Dashboard";
@@ -11,11 +11,64 @@ import ContentCalendar from "@/pages/ContentCalendar";
 import ContentHub from "@/pages/ContentHub";
 import HubPost from "@/pages/HubPost";
 import NotFound from "@/pages/not-found";
-import { Sparkles, LayoutDashboard, Users } from "lucide-react";
+import { Sparkles, LayoutDashboard, Users, Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
 });
+
+const API_BASE = `${import.meta.env.BASE_URL}../api/bingolingo`.replace(/\/\//g, "/");
+const LOGIN_URL = `${import.meta.env.BASE_URL}../`.replace(/\/\//g, "/") + "login";
+
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+
+  if (location.startsWith("/hub/")) {
+    return <>{children}</>;
+  }
+
+  const { data: authStatus, isLoading, error, refetch } = useQuery({
+    queryKey: ["auth-check"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/dashboard-stats`, { credentials: "include" });
+      if (res.status === 401) {
+        window.location.href = LOGIN_URL;
+        return { authenticated: false };
+      }
+      if (!res.ok) throw new Error("Unable to reach BingoLingo. Please try again.");
+      return { authenticated: true };
+    },
+    retry: 1,
+    staleTime: 60000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-muted-foreground">{error.message}</p>
+          <button onClick={() => refetch()} className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authStatus?.authenticated) {
+    return null;
+  }
+
+  return <>{children}</>;
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -94,7 +147,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthGuard>
+            <Router />
+          </AuthGuard>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

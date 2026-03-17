@@ -763,6 +763,7 @@ router.post(
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
       maxAge: entry.maxAge,
     });
 
@@ -776,7 +777,7 @@ router.post(
   async (req, res): Promise<void> => {
     await logSsoEvent("sso_logout", req.user!.clientId, req.user!.userId, {}, req.ip);
     revokeUserSessions(req.user!.email);
-    res.clearCookie("token");
+    res.clearCookie("token", { path: "/" });
     res.json({ success: true });
   },
 );
