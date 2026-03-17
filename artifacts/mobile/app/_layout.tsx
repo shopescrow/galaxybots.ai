@@ -156,8 +156,6 @@ function RootLayoutNav() {
     </AuthGate>
   );
 }
-  );
-}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({

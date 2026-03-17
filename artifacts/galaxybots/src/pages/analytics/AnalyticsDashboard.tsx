@@ -579,6 +579,147 @@ function ClientHealthAnalyticsPanel() {
                   >
                     {distPieData.map((entry, i) => (
                       <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap gap-3 mt-2 justify-center">
+                {distPieData.map((d) => (
+                  <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                    <span className="text-muted-foreground">{d.name}: {d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm font-tech">
+              No health data yet
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" />
+            Average Health Score Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {trendChartData.length > 1 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={trendChartData}>
+                <defs>
+                  <linearGradient id="healthAnalyticsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="score" stroke="#22c55e" fill="url(#healthAnalyticsGrad)" strokeWidth={2} name="Avg Score" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm font-tech">
+              Not enough data points yet
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {healthData.activityCorrelation && healthData.activityCorrelation.length > 0 && (
+        <Card className="bg-card border-border/50 lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Health vs. Activity Correlation
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Tag</th>
+                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Score</th>
+                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Sessions</th>
+                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Pipelines</th>
+                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Events</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {healthData.activityCorrelation.map((row) => (
+                    <tr key={row.tag} className="border-b border-border/20">
+                      <td className="py-2 px-3">
+                        <Badge variant="outline" className={`text-[9px] ${row.tag === "healthy" ? "text-green-400 border-green-500/30 bg-green-500/10" : row.tag === "at_risk" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" : row.tag === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10" : "text-muted-foreground"}`}>
+                          {row.tag === "at_risk" ? "AT RISK" : row.tag.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="py-2 px-3 text-right font-bold">{row.avgScore}</td>
+                      <td className="py-2 px-3 text-right">{row.avgSessions}</td>
+                      <td className="py-2 px-3 text-right">{row.avgPipelines}</td>
+                      <td className="py-2 px-3 text-right">{row.avgEvents}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="bg-card border-border/50 lg:col-span-2">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Heart className="w-4 h-4" />
+            Client Health Breakdown
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50">
+                  <th className="text-left py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Client</th>
+                  <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Score</th>
+                  <th className="text-center py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Status</th>
+                  <th className="text-center py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Trend</th>
+                  <th className="text-left py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Recommendation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {healthData.clients.map((c) => (
+                  <tr key={c.clientId} className="border-b border-border/20">
+                    <td className="py-2 px-3 font-medium">{c.companyName}</td>
+                    <td className="py-2 px-3 text-right font-bold">{c.score ?? "—"}</td>
+                    <td className="py-2 px-3 text-center">
+                      <Badge variant="outline" className={`text-[9px] ${c.tag === "healthy" ? "text-green-400 border-green-500/30 bg-green-500/10" : c.tag === "at_risk" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" : c.tag === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10" : "text-muted-foreground"}`}>
+                        {c.tag === "at_risk" ? "AT RISK" : c.tag.toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {c.trend === "improving" && <TrendingUp className="w-4 h-4 text-green-400 mx-auto" />}
+                      {c.trend === "declining" && <TrendingDown className="w-4 h-4 text-red-400 mx-auto" />}
+                      {c.trend === "stable" && <span className="text-muted-foreground text-xs">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground truncate max-w-[300px]">
+                      {c.recommendedAction || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 interface VoiceAnalyticsData {
   totalCalls: number;
   avgDurationSeconds: number;
@@ -714,216 +855,11 @@ function VoiceAnalyticsPanel() {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="flex flex-wrap gap-3 mt-2 justify-center">
-                {distPieData.map((d) => (
-                  <div key={d.name} className="flex items-center gap-1.5 text-xs">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                    <span className="text-muted-foreground">{d.name}: {d.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm font-tech">
-              No health data yet
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" />
-            Average Health Score Trend
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {trendChartData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={trendChartData}>
-                <defs>
-                  <linearGradient id="healthAnalyticsGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                  tickFormatter={(v) => new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="score" stroke="#22c55e" fill="url(#healthAnalyticsGrad)" strokeWidth={2} name="Avg Score" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm font-tech">
-              Not enough data points yet
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {healthData.activityCorrelation && healthData.activityCorrelation.length > 0 && (
-        <Card className="bg-card border-border/50 lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Health vs. Activity Correlation
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="text-left py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Tag</th>
-                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Score</th>
-                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Sessions</th>
-                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Pipelines</th>
-                    <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Avg Events</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {healthData.activityCorrelation.map((row) => (
-                    <tr key={row.tag} className="border-b border-border/20">
-                      <td className="py-2 px-3">
-                        <Badge
-                          variant="outline"
-                          className={`text-[9px] ${
-                            row.tag === "healthy" ? "text-green-400 border-green-500/30 bg-green-500/10" :
-                            row.tag === "at_risk" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" :
-                            row.tag === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10" :
-                            "text-muted-foreground"
-                          }`}
-                        >
-                          {row.tag === "at_risk" ? "AT RISK" : row.tag.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="py-2 px-3 text-right font-bold">{row.avgScore}</td>
-                      <td className="py-2 px-3 text-right">{row.avgSessions}</td>
-                      <td className="py-2 px-3 text-right">{row.avgPipelines}</td>
-                      <td className="py-2 px-3 text-right">{row.avgEvents}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="bg-card border-border/50 lg:col-span-2">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <Heart className="w-4 h-4" />
-            Client Health Breakdown
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/50">
-                  <th className="text-left py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Client</th>
-                  <th className="text-right py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Score</th>
-                  <th className="text-center py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Status</th>
-                  <th className="text-center py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Trend</th>
-                  <th className="text-left py-2 px-3 font-tech text-muted-foreground text-xs uppercase">Recommendation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {healthData.clients.map((c) => (
-                  <tr key={c.clientId} className="border-b border-border/20">
-                    <td className="py-2 px-3 font-medium">{c.companyName}</td>
-                    <td className="py-2 px-3 text-right font-bold">{c.score ?? "—"}</td>
-                    <td className="py-2 px-3 text-center">
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] ${
-                          c.tag === "healthy" ? "text-green-400 border-green-500/30 bg-green-500/10" :
-                          c.tag === "at_risk" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" :
-                          c.tag === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10" :
-                          "text-muted-foreground"
-                        }`}
-                      >
-                        {c.tag === "at_risk" ? "AT RISK" : c.tag.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      {c.trend === "improving" && <TrendingUp className="w-4 h-4 text-green-400 mx-auto" />}
-                      {c.trend === "declining" && <TrendingDown className="w-4 h-4 text-red-400 mx-auto" />}
-                      {c.trend === "stable" && <span className="text-muted-foreground text-xs">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-xs text-muted-foreground truncate max-w-[300px]">
-                      {c.recommendedAction || "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </>
             ) : (
               <div className="h-[180px] flex items-center justify-center text-muted-foreground text-xs">No debrief data</div>
             )}
             {urgencyChartData.length > 0 && (
               <div className="flex flex-wrap gap-2 justify-center mt-1">
-                {urgencyChartData.map((u, i) => (
-                  <div key={u.name} className="flex items-center gap-1 text-[10px]">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: URGENCY_COLORS[i] }} />
-                    <span className="text-muted-foreground">{u.name}: {u.value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {voiceData.topIntents.length > 0 && (
-          <div>
-            <p className="text-xs font-tech text-muted-foreground uppercase tracking-wider mb-2">Top Call Intents</p>
-            <div className="space-y-1.5">
-              {voiceData.topIntents.slice(0, 5).map((intent, i) => (
-                <div key={i} className="flex items-center justify-between p-2 rounded bg-secondary/50 text-xs">
-                  <span className="truncate mr-2">{intent.intent}</span>
-                  <Badge variant="secondary" className="font-mono text-[10px]">{intent.count}</Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-}
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: URGENCY_COLORS[i] }} />
-                    <span className="text-muted-foreground">{u.name}: {u.value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {voiceData.topIntents.length > 0 && (
-          <div>
-            <p className="text-xs font-tech text-muted-foreground uppercase tracking-wider mb-2">Top Call Intents</p>
-            <div className="space-y-1.5">
-              {voiceData.topIntents.slice(0, 5).map((intent, i) => (
-                <div key={i} className="flex items-center justify-between p-2 rounded bg-secondary/50 text-xs">
-                  <span className="truncate mr-2">{intent.intent}</span>
-                  <Badge variant="secondary" className="font-mono text-[10px]">{intent.count}</Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
                 {urgencyChartData.map((u, i) => (
                   <div key={u.name} className="flex items-center gap-1 text-[10px]">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: URGENCY_COLORS[i] }} />
