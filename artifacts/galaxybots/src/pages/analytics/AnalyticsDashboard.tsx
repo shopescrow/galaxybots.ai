@@ -19,8 +19,15 @@ import {
   Check,
   AlertTriangle,
   TrendingUp,
+  TrendingDown,
   BarChart3,
   Shield,
+  Play,
+  Users,
+  UserPlus,
+  Heart,
+  Phone,
+  PhoneIncoming,
 } from "lucide-react";
 import {
   BarChart,
@@ -45,7 +52,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Play, Users, UserPlus, Heart, TrendingUp, TrendingDown, BarChart3, Phone, PhoneIncoming } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
