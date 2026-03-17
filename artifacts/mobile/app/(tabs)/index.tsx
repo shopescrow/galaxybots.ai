@@ -213,7 +213,7 @@ export default function CommandCenterScreen() {
                     )}
                   </View>
                 )}
-                <View style={styles.companyMeta}>
+                <View style={companyMeta}>
                   <Text style={styles.companyMetaText}>
                     {c.activeSessions} active {c.activeSessions === 1 ? "session" : "sessions"}
                   </Text>

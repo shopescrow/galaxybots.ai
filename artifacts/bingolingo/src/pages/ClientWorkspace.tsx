@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, FileText, Send, Archive, Eye, Trash2, PenLine, ExternalLink, Key, Settings, Calendar } from "lucide-react";
+import { ArrowLeft, FileText, Send, Archive, Eye, Trash2, PenLine, ExternalLink, Key, Settings, Calendar, TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
 
 const typeLabels: Record<string, string> = {
   blog: "Blog Post",
@@ -43,10 +44,15 @@ export default function ClientWorkspace() {
     enabled: !!clientId,
   });
 
+  const [publishUrlDialogId, setPublishUrlDialogId] = useState<number | null>(null);
+  const [publishUrl, setPublishUrl] = useState("");
+
   const publishMutation = useMutation({
-    mutationFn: (id: number) => api.publishContent(id),
+    mutationFn: ({ id, publishedUrl }: { id: number; publishedUrl?: string }) => api.publishContent(id, publishedUrl || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["content", clientId] });
+      setPublishUrlDialogId(null);
+      setPublishUrl("");
       toast({ title: "Published" });
     },
   });
@@ -197,13 +203,43 @@ export default function ClientWorkspace() {
                           <span className="text-xs text-muted-foreground">
                             {new Date(item.createdAt).toLocaleDateString()}
                           </span>
+                          {item.status === "published" && <AeoImpactBadge contentId={item.id} />}
                         </div>
+                        {item.publishedUrl && (
+                          <div className="mt-1">
+                            <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
+                              <ExternalLink className="h-3 w-3" /> {item.publishedUrl}
+                            </a>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 ml-4">
                         {item.status === "draft" && (
-                          <Button variant="outline" size="sm" onClick={() => publishMutation.mutate(item.id)} disabled={publishMutation.isPending}>
-                            <Send className="h-3 w-3 mr-1" /> Publish
-                          </Button>
+                          publishUrlDialogId === item.id ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                placeholder="Published URL (optional)"
+                                value={publishUrl}
+                                onChange={(e) => setPublishUrl(e.target.value)}
+                                className="text-xs h-8 w-48"
+                              />
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => publishMutation.mutate({ id: item.id, publishedUrl: publishUrl })}
+                                disabled={publishMutation.isPending}
+                              >
+                                {publishMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => { setPublishUrlDialogId(null); setPublishUrl(""); }}>
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => setPublishUrlDialogId(item.id)}>
+                              <Send className="h-3 w-3 mr-1" /> Publish
+                            </Button>
+                          )
                         )}
                         {item.status === "published" && (
                           <Button variant="outline" size="sm" onClick={() => archiveMutation.mutate(item.id)} disabled={archiveMutation.isPending}>
@@ -223,5 +259,50 @@ export default function ClientWorkspace() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+interface AeoImpactData {
+  delta: number | null;
+  baselineScore: number | null;
+  currentScore: number | null;
+  status: string;
+}
+
+function AeoImpactBadge({ contentId }: { contentId: number }) {
+  const { data, isLoading } = useQuery<AeoImpactData>({
+    queryKey: ["aeo-impact", contentId],
+    queryFn: () => api.getContentAeoImpact(contentId),
+    staleTime: 60000,
+  });
+
+  if (isLoading) return null;
+  if (!data || data.status === "no_url") return null;
+  if (data.status === "awaiting_scan" || data.delta === null) {
+    return (
+      <Badge variant="outline" className="text-xs text-muted-foreground">
+        AEO: Scanning...
+      </Badge>
+    );
+  }
+
+  const delta = data.delta;
+  if (delta > 0) {
+    return (
+      <Badge className="text-xs bg-emerald-600 text-white gap-1">
+        <TrendingUp className="h-3 w-3" /> +{delta} AEO
+      </Badge>
+    );
+  } else if (delta < 0) {
+    return (
+      <Badge variant="destructive" className="text-xs gap-1">
+        <TrendingDown className="h-3 w-3" /> {delta} AEO
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-xs text-muted-foreground gap-1">
+      <Minus className="h-3 w-3" /> 0 AEO
+    </Badge>
   );
 }

@@ -8,7 +8,6 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import colors from "@/constants/colors";
-
 function NativeTabLayout() {
   return (
     <NativeTabs>

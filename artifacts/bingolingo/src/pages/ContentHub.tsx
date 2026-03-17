@@ -4,7 +4,52 @@ import { useRoute, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, Eye } from "lucide-react";
+import { ArrowLeft, Calendar, Eye, TrendingUp, TrendingDown, Clock } from "lucide-react";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface AeoImpactData {
+  delta: number | null;
+  baselineScore: number | null;
+  currentScore: number | null;
+  status: string;
+}
+
+function AeoImpactBadge({ contentId }: { contentId: number }) {
+  const { data } = useQuery<AeoImpactData>({
+    queryKey: ["aeo-impact", contentId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/bingolingo/content/${contentId}/aeo-impact`, { credentials: "include" });
+      if (!res.ok) return { delta: null, baselineScore: null, currentScore: null, status: "error" };
+      return res.json();
+    },
+    staleTime: 120000,
+  });
+
+  if (!data || data.status === "no_url" || data.status === "error") return null;
+
+  if (data.status === "awaiting_scan" || data.delta === null) {
+    return (
+      <Badge variant="outline" className="text-[10px] gap-1">
+        <Clock className="w-2.5 h-2.5" />
+        AEO pending
+      </Badge>
+    );
+  }
+
+  const isPositive = data.delta > 0;
+  const isNeutral = data.delta === 0;
+
+  return (
+    <Badge
+      variant="outline"
+      className={`text-[10px] gap-1 ${isPositive ? "text-green-600 border-green-300 bg-green-50" : isNeutral ? "text-gray-500" : "text-red-600 border-red-300 bg-red-50"}`}
+    >
+      {isPositive ? <TrendingUp className="w-2.5 h-2.5" /> : isNeutral ? null : <TrendingDown className="w-2.5 h-2.5" />}
+      AEO {isPositive ? "+" : ""}{data.delta}
+    </Badge>
+  );
+}
 
 export default function ContentHub() {
   const [, params] = useRoute("/hub/:clientSlug");
@@ -52,6 +97,7 @@ export default function ContentHub() {
                     <span className="flex items-center gap-1">
                       <Eye className="h-3 w-3" /> {post.viewCount} views
                     </span>
+                    <AeoImpactBadge contentId={post.id} />
                     {post.keywords && post.keywords.length > 0 && (
                       <div className="flex gap-1">
                         {post.keywords.slice(0, 3).map((kw: string) => (

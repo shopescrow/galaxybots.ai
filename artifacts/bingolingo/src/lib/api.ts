@@ -54,9 +54,10 @@ export const api = {
     request("/content", { method: "POST", body: JSON.stringify(data) }),
   updateContent: (id: number, data: { title?: string; body?: string; metaDescription?: string; status?: string; topic?: string; tone?: string; keywords?: string[] }) =>
     request(`/content/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  publishContent: (id: number) => request(`/content/${id}/publish`, { method: "POST" }),
+  publishContent: (id: number, publishedUrl?: string) => request(`/content/${id}/publish`, { method: "POST", body: JSON.stringify({ publishedUrl }) }),
   archiveContent: (id: number) => request(`/content/${id}/archive`, { method: "POST" }),
   deleteContent: (id: number) => request(`/content/${id}`, { method: "DELETE" }),
+  getContentAeoImpact: (id: number) => request(`/content/${id}/aeo-impact`),
   getCalendar: (clientId: number) => request(`/clients/${clientId}/calendar`),
   getHub: (clientSlug: string) => request(`/hub/${clientSlug}`),
   getHubPost: (clientSlug: string, contentSlug: string) => request(`/hub/${clientSlug}/${contentSlug}`),

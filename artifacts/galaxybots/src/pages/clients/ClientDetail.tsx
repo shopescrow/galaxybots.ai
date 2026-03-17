@@ -209,6 +209,7 @@ export default function ClientDetail() {
             <h1 className="text-2xl sm:text-3xl font-display font-bold flex items-center gap-3">
               <Building className="text-primary w-8 h-8" />
               {client.companyName}
+              <ClientBingoLingoBadge clientId={clientId} />
             </h1>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <Badge variant={
@@ -586,5 +587,35 @@ export default function ClientDetail() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+function ClientBingoLingoBadge({ clientId }: { clientId: number }) {
+  const { data } = useQuery<{ linked: boolean; bingolingoClients?: Array<{ id: number; name: string; slug: string }> }>({
+    queryKey: ["bingolingo-link", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/bingolingo-link/${clientId}`);
+      if (!res.ok) return { linked: false };
+      return res.json();
+    },
+    staleTime: 120000,
+  });
+
+  if (!data?.linked) return null;
+
+  const blClient = data.bingolingoClients?.[0];
+
+  return (
+    <a
+      href={blClient ? `/bingolingo/clients/${blClient.id}` : "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={blClient ? `BingoLingo: ${blClient.name}` : "BingoLingo linked"}
+    >
+      <Badge variant="outline" className="text-[10px] text-gold border-gold/30 bg-gold/5 gap-1 cursor-pointer hover:bg-gold/10">
+        <FileText className="w-2.5 h-2.5" />
+        BingoLingo
+      </Badge>
+    </a>
   );
 }

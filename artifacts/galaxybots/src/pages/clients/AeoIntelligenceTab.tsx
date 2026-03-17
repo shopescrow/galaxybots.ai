@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus, FileText, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
 
@@ -106,6 +106,7 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
             </div>
           </CardContent>
         </Card>
+        <ContentAttributionSection clientId={clientId} />
         <CompetitorsSection clientId={clientId} />
       </div>
     );
@@ -242,6 +243,8 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
           </CardContent>
         </Card>
       )}
+
+      <ContentAttributionSection clientId={clientId} />
 
       <CompetitorsSection clientId={clientId} />
     </div>
@@ -434,6 +437,123 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface ContentAttribution {
+  contentId: number;
+  title: string;
+  publishedUrl: string | null;
+  publishedAt: string | null;
+  type: string;
+  baselineScore: number | null;
+  currentScore: number | null;
+  delta: number | null;
+  enginesGained: string[];
+  enginesLost: string[];
+  status: string;
+}
+
+interface ContentAttributionResponse {
+  linked: boolean;
+  bingolingoClients?: Array<{ id: number; name: string; slug: string }>;
+  content: ContentAttribution[];
+}
+
+function ContentAttributionSection({ clientId }: { clientId: number }) {
+  const { data, isLoading } = useQuery<ContentAttributionResponse>({
+    queryKey: ["content-attribution", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/content-attribution/${clientId}`);
+      if (!res.ok) return { linked: false, content: [] };
+      return res.json();
+    },
+  });
+
+  if (isLoading) return null;
+  if (!data?.linked) return null;
+  if (data.content.length === 0) return null;
+
+  return (
+    <Card className="border-border/40">
+      <CardContent className="p-6">
+        <h3 className="text-lg font-display font-bold flex items-center gap-2 mb-4">
+          <FileText className="w-5 h-5 text-primary" />
+          Content Attribution
+        </h3>
+        <p className="text-xs text-muted-foreground font-tech mb-4">
+          BingoLingo content linked to this client — showing AEO score impact from publish to latest scan.
+        </p>
+        <div className="space-y-2">
+          {data.content.map((item) => (
+            <div
+              key={item.contentId}
+              className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/30"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-tech font-bold text-sm truncate">{item.title}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className="text-[10px]">{item.type}</Badge>
+                  {item.publishedAt && (
+                    <span className="text-[10px] text-muted-foreground font-tech">
+                      Published {format(new Date(item.publishedAt), "MMM d, yyyy")}
+                    </span>
+                  )}
+                  {item.publishedUrl && (
+                    <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline flex items-center gap-0.5">
+                      <ExternalLink className="w-2.5 h-2.5" /> URL
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                {item.status === "awaiting_scan" ? (
+                  <span className="text-xs text-muted-foreground font-tech">Awaiting scan</span>
+                ) : (
+                  <>
+                    <div className="text-right">
+                      <div className="text-[10px] text-muted-foreground font-tech">Baseline → Current</div>
+                      <div className="text-sm font-tech">
+                        <span className="text-muted-foreground">{item.baselineScore}</span>
+                        <span className="text-muted-foreground mx-1">→</span>
+                        <span className={`font-bold ${item.currentScore !== null && item.currentScore >= 70 ? "text-emerald-400" : item.currentScore !== null && item.currentScore >= 40 ? "text-yellow-400" : "text-destructive"}`}>
+                          {item.currentScore}
+                        </span>
+                      </div>
+                    </div>
+                    {item.delta !== null && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-tech ${
+                          item.delta > 0
+                            ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                            : item.delta < 0
+                              ? "text-red-400 border-red-500/30 bg-red-500/10"
+                              : "text-muted-foreground border-border/30"
+                        }`}
+                      >
+                        {item.delta > 0 ? (
+                          <><ArrowUpRight className="w-3 h-3 mr-0.5" />+{item.delta}</>
+                        ) : item.delta < 0 ? (
+                          <><ArrowDownRight className="w-3 h-3 mr-0.5" />{item.delta}</>
+                        ) : (
+                          <><Minus className="w-3 h-3 mr-0.5" />0</>
+                        )}
+                      </Badge>
+                    )}
+                    {item.enginesGained.length > 0 && (
+                      <div className="text-[10px] text-emerald-400 font-tech">
+                        +{item.enginesGained.map(e => ENGINE_LABELS[e] || e).join(", ")}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

@@ -27,6 +27,7 @@ export const bingolingoContentTable = pgTable("bingolingo_content", {
   topic: text("topic"),
   tone: text("tone"),
   keywords: jsonb("keywords").$type<string[]>(),
+  publishedUrl: text("published_url"),
   viewCount: integer("view_count").notNull().default(0),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

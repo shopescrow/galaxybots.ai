@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Building, Plus, Users, Link2, ExternalLink } from "lucide-react";
+import { Loader2, Building, Plus, Users, Link2, ExternalLink, FileText } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -193,7 +193,10 @@ export default function Clients() {
                 <Card key={client.id} className="hover:border-primary/40 transition-colors">
                   <CardHeader className="pb-3 border-b border-border/30">
                     <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg">{client.companyName}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{client.companyName}</CardTitle>
+                        <BingoLingoBadge clientId={client.id} />
+                      </div>
                       <Badge variant={
                         client.status === 'active' ? 'cyan' : 
                         client.status === 'trial' ? 'outline' : 'secondary'
@@ -363,5 +366,35 @@ export default function Clients() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+function BingoLingoBadge({ clientId }: { clientId: number }) {
+  const { data } = useQuery<{ linked: boolean; bingolingoClients?: Array<{ id: number; name: string; slug: string }> }>({
+    queryKey: ["bingolingo-link", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/bingolingo-link/${clientId}`);
+      if (!res.ok) return { linked: false };
+      return res.json();
+    },
+    staleTime: 120000,
+  });
+
+  if (!data?.linked) return null;
+
+  const blClient = data.bingolingoClients?.[0];
+
+  return (
+    <a
+      href={blClient ? `/bingolingo/clients/${blClient.id}` : "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={blClient ? `BingoLingo: ${blClient.name}` : "BingoLingo linked"}
+    >
+      <Badge variant="outline" className="text-[10px] text-gold border-gold/30 bg-gold/5 gap-1 cursor-pointer hover:bg-gold/10">
+        <FileText className="w-2.5 h-2.5" />
+        BingoLingo
+      </Badge>
+    </a>
   );
 }

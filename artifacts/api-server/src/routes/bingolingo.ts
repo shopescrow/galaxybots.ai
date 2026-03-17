@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, bingolingoClientsTable, bingolingoContentTable, bingolingoApiKeysTable } from "@workspace/db";
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { db, bingolingoClientsTable, bingolingoContentTable, bingolingoApiKeysTable, aeoScoresTable, aeoScanRequestsTable, platformApiKeysTable } from "@workspace/db";
+import { eq, and, desc, sql, count, isNotNull } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { authenticate, requireRole } from "../middleware/auth";
@@ -441,24 +441,23 @@ router.get("/bingolingo/content/:id", authenticate, async (req, res): Promise<vo
 
 router.put("/bingolingo/content/:id", authenticate, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const { title, body, metaDescription, status, topic, tone, keywords } = req.body;
+  const { title, body, metaDescription, status, topic, tone, keywords, publishedUrl } = req.body;
 
-  const updateData: {
-    title?: string;
-    body?: string;
-    metaDescription?: string;
-    topic?: string;
-    tone?: string;
-    keywords?: string[];
-    status?: string;
-    publishedAt?: Date;
-  } = {};
+  const [existing] = await db.select().from(bingolingoContentTable).where(eq(bingolingoContentTable.id, id));
+
+  const updateData: Partial<typeof bingolingoContentTable.$inferInsert> = {};
   if (title !== undefined) updateData.title = title;
   if (body !== undefined) updateData.body = body;
   if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
   if (topic !== undefined) updateData.topic = topic;
   if (tone !== undefined) updateData.tone = tone;
   if (keywords !== undefined) updateData.keywords = keywords;
+  if (publishedUrl !== undefined) {
+    if (publishedUrl !== null && publishedUrl !== "") {
+      try { const u = new URL(publishedUrl); if (!["http:", "https:"].includes(u.protocol)) throw new Error(); } catch { res.status(400).json({ error: "publishedUrl must be a valid http/https URL" }); return; }
+    }
+    updateData.publishedUrl = publishedUrl || null;
+  }
   if (status !== undefined) {
     updateData.status = status;
     if (status === "published") {
@@ -476,20 +475,67 @@ router.put("/bingolingo/content/:id", authenticate, async (req, res): Promise<vo
     res.status(404).json({ error: "Content not found" });
     return;
   }
+
+  const wasJustPublished = status === "published" && existing?.status !== "published";
+  if (wasJustPublished && updated.publishedUrl) {
+    queueAeoScanForContent(updated.id, updated.publishedUrl, updated.clientId).catch(() => {});
+  }
+
   res.json(updated);
 });
 
+async function queueAeoScanForContent(contentId: number, publishedUrl: string, bingolingoClientId: number) {
+  try {
+    const [blClient] = await db.select().from(bingolingoClientsTable).where(eq(bingolingoClientsTable.id, bingolingoClientId));
+    const galaxybotsClientId = blClient?.galaxybotsClientId ?? null;
+
+    const [partnerKey] = await db
+      .select()
+      .from(platformApiKeysTable)
+      .where(and(eq(platformApiKeysTable.platform, "piratemonster_mcp"), eq(platformApiKeysTable.status, "active")))
+      .limit(1);
+
+    if (!partnerKey) {
+      console.log("[BL] No active PirateMonster MCP key found, skipping AEO scan queue");
+      return;
+    }
+
+    await db.insert(aeoScanRequestsTable).values({
+      partnerKeyId: partnerKey.id,
+      url: publishedUrl,
+      status: "queued",
+    });
+
+    console.log(`[BL] Queued AEO scan for content #${contentId}: ${publishedUrl}`);
+  } catch (err) {
+    console.error("[BL] Error queuing AEO scan for content:", err);
+  }
+}
+
 router.post("/bingolingo/content/:id/publish", authenticate, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
+  const { publishedUrl } = req.body || {};
+
+  const setData: Partial<typeof bingolingoContentTable.$inferInsert> = { status: "published", publishedAt: new Date() };
+  if (publishedUrl) {
+    try { const u = new URL(publishedUrl); if (!["http:", "https:"].includes(u.protocol)) throw new Error(); } catch { res.status(400).json({ error: "publishedUrl must be a valid http/https URL" }); return; }
+    setData.publishedUrl = publishedUrl;
+  }
+
   const [updated] = await db
     .update(bingolingoContentTable)
-    .set({ status: "published", publishedAt: new Date() })
+    .set(setData)
     .where(eq(bingolingoContentTable.id, id))
     .returning();
   if (!updated) {
     res.status(404).json({ error: "Content not found" });
     return;
   }
+
+  if (updated.publishedUrl) {
+    queueAeoScanForContent(updated.id, updated.publishedUrl, updated.clientId).catch(() => {});
+  }
+
   res.json(updated);
 });
 
@@ -593,6 +639,144 @@ router.get("/bingolingo/hub/:clientSlug/:contentSlug", async (req, res): Promise
     .where(eq(bingolingoContentTable.id, post.id));
 
   res.json({ client, post: { ...post, viewCount: post.viewCount + 1 } });
+});
+
+router.get("/bingolingo/content/:id/aeo-impact", authenticate, async (req, res): Promise<void> => {
+  const contentId = Number(req.params.id);
+  const [content] = await db.select().from(bingolingoContentTable).where(eq(bingolingoContentTable.id, contentId));
+  if (!content) {
+    res.status(404).json({ error: "Content not found" });
+    return;
+  }
+
+  if (!content.publishedUrl) {
+    res.json({ contentId, status: "no_url", baselineScore: null, currentScore: null, delta: null, engineBreakdown: null });
+    return;
+  }
+
+  let scores = await db
+    .select()
+    .from(aeoScoresTable)
+    .where(eq(aeoScoresTable.bingolingoContentId, contentId))
+    .orderBy(desc(aeoScoresTable.scannedAt));
+
+  if (scores.length === 0) {
+    scores = await db
+      .select()
+      .from(aeoScoresTable)
+      .where(eq(aeoScoresTable.sourceUrl, content.publishedUrl))
+      .orderBy(desc(aeoScoresTable.scannedAt));
+  }
+
+  if (scores.length === 0) {
+    res.json({ contentId, status: "awaiting_scan", baselineScore: null, currentScore: null, delta: null, engineBreakdown: null });
+    return;
+  }
+
+  const latest = scores[0];
+  const baseline = scores[scores.length - 1];
+  const baselineEngines = baseline.engineScores as Record<string, { score: number; cited: boolean }>;
+  const latestEngines = latest.engineScores as Record<string, { score: number; cited: boolean }>;
+
+  const engineBreakdown: Record<string, { baselineCited: boolean; currentCited: boolean; baselineScore: number; currentScore: number }> = {};
+  for (const [engine, data] of Object.entries(latestEngines)) {
+    const prev = baselineEngines[engine];
+    engineBreakdown[engine] = {
+      baselineCited: prev?.cited ?? false,
+      currentCited: data.cited,
+      baselineScore: prev?.score ?? 0,
+      currentScore: data.score,
+    };
+  }
+
+  res.json({
+    contentId,
+    status: "tracked",
+    baselineScore: baseline.overallScore,
+    currentScore: latest.overallScore,
+    delta: latest.overallScore - baseline.overallScore,
+    engineBreakdown,
+    scansCount: scores.length,
+    lastScannedAt: latest.scannedAt,
+  });
+});
+
+router.get("/bingolingo/clients/:id/content-attribution", authenticate, async (req, res): Promise<void> => {
+  const bingolingoClientId = Number(req.params.id);
+  const publishedContent = await db
+    .select()
+    .from(bingolingoContentTable)
+    .where(and(
+      eq(bingolingoContentTable.clientId, bingolingoClientId),
+      eq(bingolingoContentTable.status, "published"),
+      isNotNull(bingolingoContentTable.publishedUrl)
+    ))
+    .orderBy(desc(bingolingoContentTable.publishedAt));
+
+  const results = [];
+  for (const content of publishedContent) {
+    let scores = await db
+      .select()
+      .from(aeoScoresTable)
+      .where(eq(aeoScoresTable.bingolingoContentId, content.id))
+      .orderBy(desc(aeoScoresTable.scannedAt));
+
+    if (scores.length === 0 && content.publishedUrl) {
+      scores = await db
+        .select()
+        .from(aeoScoresTable)
+        .where(eq(aeoScoresTable.sourceUrl, content.publishedUrl))
+        .orderBy(desc(aeoScoresTable.scannedAt));
+    }
+
+    if (scores.length === 0) {
+      results.push({
+        contentId: content.id,
+        title: content.title,
+        publishedUrl: content.publishedUrl,
+        publishedAt: content.publishedAt,
+        baselineScore: null,
+        currentScore: null,
+        delta: null,
+        enginesGained: [],
+        enginesLost: [],
+        status: "awaiting_scan",
+      });
+      continue;
+    }
+
+    const latest = scores[0];
+    const baseline = scores[scores.length - 1];
+    const baselineEngines = baseline.engineScores as Record<string, { score: number; cited: boolean }>;
+    const latestEngines = latest.engineScores as Record<string, { score: number; cited: boolean }>;
+
+    const enginesGained: string[] = [];
+    const enginesLost: string[] = [];
+    for (const [engine, data] of Object.entries(latestEngines)) {
+      const prev = baselineEngines[engine];
+      if (prev) {
+        if (data.cited && !prev.cited) enginesGained.push(engine);
+        if (!data.cited && prev.cited) enginesLost.push(engine);
+      } else if (data.cited) {
+        enginesGained.push(engine);
+      }
+    }
+
+    results.push({
+      contentId: content.id,
+      title: content.title,
+      publishedUrl: content.publishedUrl,
+      publishedAt: content.publishedAt,
+      baselineScore: baseline.overallScore,
+      currentScore: latest.overallScore,
+      delta: latest.overallScore - baseline.overallScore,
+      enginesGained,
+      enginesLost,
+      status: "tracked",
+    });
+  }
+
+  res.json(results);
 });
 
 router.get("/bingolingo/dashboard-stats", authenticate, async (_req, res): Promise<void> => {

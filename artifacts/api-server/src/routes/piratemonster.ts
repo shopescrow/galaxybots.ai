@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable, competitorUrlsTable } from "@workspace/db";
-import { eq, desc, and, or, gt, sql } from "drizzle-orm";
+import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable, competitorUrlsTable, bingolingoClientsTable, bingolingoContentTable } from "@workspace/db";
+import { eq, desc, and, or, gt, sql, isNotNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { requireRole } from "../middleware/auth";
@@ -169,8 +169,19 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
       : await matchClientByUrl(sourceUrl);
     const scanType = isCompetitorScan ? "competitor" : "client";
 
+    let bingolingoContentId: number | null = null;
+    const [matchedContent] = await db
+      .select({ id: bingolingoContentTable.id })
+      .from(bingolingoContentTable)
+      .where(eq(bingolingoContentTable.publishedUrl, sourceUrl))
+      .limit(1);
+    if (matchedContent) {
+      bingolingoContentId = matchedContent.id;
+    }
+
     const [record] = await db.insert(aeoScoresTable).values({
       clientId,
+      bingolingoContentId,
       sourceUrl,
       overallScore,
       engineScores,
@@ -186,6 +197,7 @@ router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (
         citationCount,
         recommendations,
         clientId,
+        bingolingoContentId,
         scanType,
       },
     }).returning();
@@ -719,6 +731,130 @@ router.post("/integrations/piratemonster/competitors/:clientId/:competitorId/unt
     console.error("Error untracking competitor:", err);
     res.status(500).json({ error: "Failed to untrack competitor" });
   }
+});
+
+router.get("/integrations/piratemonster/content-attribution/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const galaxybotsClientId = Number(req.params.clientId);
+  if (isNaN(galaxybotsClientId)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+
+  try {
+    const blClients = await db
+      .select()
+      .from(bingolingoClientsTable)
+      .where(eq(bingolingoClientsTable.galaxybotsClientId, galaxybotsClientId));
+
+    if (blClients.length === 0) {
+      res.json({ linked: false, content: [] });
+      return;
+    }
+
+    const results = [];
+    for (const blClient of blClients) {
+      const publishedContent = await db
+        .select()
+        .from(bingolingoContentTable)
+        .where(and(
+          eq(bingolingoContentTable.clientId, blClient.id),
+          eq(bingolingoContentTable.status, "published"),
+          isNotNull(bingolingoContentTable.publishedUrl)
+        ))
+        .orderBy(desc(bingolingoContentTable.publishedAt));
+
+      for (const content of publishedContent) {
+        let scores = await db
+          .select()
+          .from(aeoScoresTable)
+          .where(eq(aeoScoresTable.bingolingoContentId, content.id))
+          .orderBy(desc(aeoScoresTable.scannedAt));
+
+        if (scores.length === 0 && content.publishedUrl) {
+          scores = await db
+            .select()
+            .from(aeoScoresTable)
+            .where(eq(aeoScoresTable.sourceUrl, content.publishedUrl))
+            .orderBy(desc(aeoScoresTable.scannedAt));
+        }
+
+        if (scores.length === 0) {
+          results.push({
+            contentId: content.id,
+            title: content.title,
+            publishedUrl: content.publishedUrl,
+            publishedAt: content.publishedAt,
+            type: content.type,
+            baselineScore: null,
+            currentScore: null,
+            delta: null,
+            enginesGained: [] as string[],
+            enginesLost: [] as string[],
+            status: "awaiting_scan",
+          });
+          continue;
+        }
+
+        const latest = scores[0];
+        const baseline = scores[scores.length - 1];
+        const baselineEngines = baseline.engineScores as Record<string, { score: number; cited: boolean }>;
+        const latestEngines = latest.engineScores as Record<string, { score: number; cited: boolean }>;
+
+        const enginesGained: string[] = [];
+        const enginesLost: string[] = [];
+        for (const [engine, data] of Object.entries(latestEngines)) {
+          const prev = baselineEngines[engine];
+          if (prev) {
+            if (data.cited && !prev.cited) enginesGained.push(engine);
+            if (!data.cited && prev.cited) enginesLost.push(engine);
+          } else if (data.cited) {
+            enginesGained.push(engine);
+          }
+        }
+
+        results.push({
+          contentId: content.id,
+          title: content.title,
+          publishedUrl: content.publishedUrl,
+          publishedAt: content.publishedAt,
+          type: content.type,
+          baselineScore: baseline.overallScore,
+          currentScore: latest.overallScore,
+          delta: latest.overallScore - baseline.overallScore,
+          enginesGained,
+          enginesLost,
+          status: "tracked",
+        });
+      }
+    }
+
+    res.json({
+      linked: true,
+      bingolingoClients: blClients.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+      content: results,
+    });
+  } catch (err) {
+    console.error("Error fetching content attribution:", err);
+    res.status(500).json({ error: "Failed to fetch content attribution" });
+  }
+});
+
+router.get("/integrations/piratemonster/bingolingo-link/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const galaxybotsClientId = Number(req.params.clientId);
+  if (isNaN(galaxybotsClientId)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+
+  const blClients = await db
+    .select()
+    .from(bingolingoClientsTable)
+    .where(eq(bingolingoClientsTable.galaxybotsClientId, galaxybotsClientId));
+
+  res.json({
+    linked: blClients.length > 0,
+    bingolingoClients: blClients.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+  });
 });
 
 export default router;
