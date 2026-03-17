@@ -7,6 +7,7 @@ import { LanguageSelector } from "@/components/LanguageSelector";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePartner } from "@/contexts/PartnerContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
 
 const ALL_NAV_LINKS: Array<{ href: string; label: string; roles?: string[]; external?: boolean; icon?: (props: { className?: string }) => JSX.Element }> = [
@@ -37,6 +38,7 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { preferences } = useUserPreferences();
   const { user } = useAuth();
+  const { partner } = usePartner();
 
   const NAV_LINKS = useMemo(() =>
     ALL_NAV_LINKS.filter((link) => {
@@ -50,7 +52,8 @@ export function Navbar() {
     setIsOpen(false);
   }, [location]);
 
-  const displayLogo = preferences?.logoUrl || logoImg;
+  const displayLogo = partner?.partnerLogo || preferences?.logoUrl || logoImg;
+  const displayName = partner?.partnerName || null;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 supports-[backdrop-filter]:bg-background/60 supports-[backdrop-filter]:backdrop-blur-xl">
@@ -58,10 +61,14 @@ export function Navbar() {
         
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-3 group">
-            <img src={displayLogo} alt="GalaxyBots.ai" className="w-10 h-10 rounded-xl object-cover" />
-            <span className="font-display font-bold text-xl tracking-wider text-foreground">
-              GALAXY<span className="text-primary">BOTS</span>
-            </span>
+            <img src={displayLogo} alt={displayName || "GalaxyBots.ai"} className="w-10 h-10 rounded-xl object-cover" />
+            {displayName ? (
+              <span className="font-display font-bold text-xl tracking-wider text-foreground">{displayName}</span>
+            ) : (
+              <span className="font-display font-bold text-xl tracking-wider text-foreground">
+                GALAXY<span className="text-primary">BOTS</span>
+              </span>
+            )}
           </Link>
 
           <nav className="hidden md:flex items-center gap-1 font-tech text-sm font-medium">

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
+import { PartnerProvider } from "@/contexts/PartnerContext";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 
 import Home from "@/pages/Home";
@@ -60,6 +61,7 @@ import AdminModeration from "@/pages/marketplace/AdminModeration";
 import SSOCallback from "@/pages/auth/SSOCallback";
 import OrgAdmin from "@/pages/settings/OrgAdmin";
 import NotificationsPage from "@/pages/notifications/NotificationsPage";
+import PartnerAdmin from "@/pages/partner/PartnerAdmin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -129,7 +131,6 @@ function AuthenticatedRoutes() {
       <Route path="/hire" component={Hire} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug" component={BlogPost} />
-      <Route path="/partner" component={PartnerLanding} />
       <Route path="/valuation" component={Valuation} />
       <Route path="/global" component={Global} />
       <Route path="/task-rooms" component={TaskSessions} />
@@ -177,6 +178,8 @@ function AppRouter() {
       <Route path="/" component={SmartHome} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/developers" component={DeveloperPortal} />
+      <Route path="/partner/:ref" component={PartnerLanding} />
+      <Route path="/partner-admin" component={PartnerAdmin} />
       <Route>
         <AuthenticatedRoutes />
       </Route>
@@ -189,14 +192,16 @@ export default function App() {
     <LanguageProvider>
       <AuthProvider>
         <UserPreferencesProvider>
-          <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <AppRouter />
-              </WouterRouter>
-              <Toaster />
-            </TooltipProvider>
-          </QueryClientProvider>
+          <PartnerProvider>
+            <QueryClientProvider client={queryClient}>
+              <TooltipProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AppRouter />
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </QueryClientProvider>
+          </PartnerProvider>
         </UserPreferencesProvider>
       </AuthProvider>
     </LanguageProvider>

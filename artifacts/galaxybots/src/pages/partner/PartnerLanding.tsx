@@ -2,7 +2,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { motion, useReducedMotion } from "framer-motion";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePartner } from "@/contexts/PartnerContext";
 import { 
   ArrowRight, Zap, Shield, Gift, CheckCircle, 
   ExternalLink, Users, Building
@@ -20,6 +21,7 @@ type PartnerInfo = {
   ref: string;
   partnerName: string;
   partnerLogo: string | null;
+  primaryColor: string | null;
   welcomeMessage: string;
   offer: string | null;
   isActive: boolean;
@@ -37,6 +39,7 @@ export default function PartnerLanding() {
   const { ref } = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { setPartner } = usePartner();
   const [formData, setFormData] = useState<FormData>({
     companyName: "",
     contactName: "",
@@ -55,6 +58,17 @@ export default function PartnerLanding() {
     enabled: !!ref,
   });
 
+  useEffect(() => {
+    if (partner && partner.isActive) {
+      setPartner({
+        ref: partner.ref,
+        partnerName: partner.partnerName,
+        partnerLogo: partner.partnerLogo,
+        primaryColor: partner.primaryColor ?? null,
+      });
+    }
+  }, [partner]);
+
   const registerMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const res = await fetch(`${BASE}/api/partner/register`, {
@@ -67,7 +81,7 @@ export default function PartnerLanding() {
     },
     onSuccess: () => {
       setRegistered(true);
-      toast({ title: "Welcome to GalaxyBots.ai!", description: "Your account has been created. Your AI board is ready to deploy." });
+      toast({ title: `Welcome to ${partner?.partnerName ?? "the platform"}!`, description: "Your account has been created. Your AI board is ready to deploy." });
     },
     onError: () => {
       toast({ title: "Registration failed", description: "Please try again.", variant: "destructive" });
@@ -118,7 +132,7 @@ export default function PartnerLanding() {
             </div>
             <h2 className="text-2xl sm:text-3xl font-display font-bold">Deployment Initiated</h2>
             <p className="text-muted-foreground text-lg">
-              Your AI executive team is being configured. Welcome to GalaxyBots.ai — referred by {partner.partnerName}.
+              Your AI executive team is being configured. Welcome — referred by {partner.partnerName}.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/bots">
@@ -226,7 +240,7 @@ export default function PartnerLanding() {
               <CardHeader>
                 <CardTitle className="text-2xl font-display">Deploy Your AI Board</CardTitle>
                 <CardDescription>
-                  Activate your GalaxyBots.ai account as a {partner.partnerName} partner. Takes under 60 seconds.
+                  Activate your account as a {partner.partnerName} partner. Takes under 60 seconds.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -301,7 +315,7 @@ export default function PartnerLanding() {
                   </Button>
 
                   <p className="text-xs text-center text-muted-foreground font-tech">
-                    Referred by {partner.partnerName} · GalaxyBots.ai Partner Program
+                    Referred by {partner.partnerName} · Partner Program
                   </p>
                 </form>
               </CardContent>

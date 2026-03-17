@@ -1,9 +1,11 @@
 import { ReactNode } from "react";
 import { Navbar } from "./Navbar";
 import { motion, useReducedMotion } from "framer-motion";
+import { usePartner } from "@/contexts/PartnerContext";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const prefersReducedMotion = useReducedMotion();
+  const { partner } = usePartner();
 
   return (
     <div className="min-h-screen flex flex-col w-full overflow-x-hidden">
@@ -30,9 +32,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <a href="/valuation" className="hover:text-cyan transition-colors min-h-[44px] flex items-center">5-Year Projections</a>
             <a href="/developers" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Developers</a>
           </div>
-          <p className="text-center text-xs text-muted-foreground font-tech">
-            © 2026 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential. Property of Gifted Productions Inc.
-          </p>
+          {partner ? (
+            <p className="text-center text-xs text-muted-foreground font-tech">
+              Powered by <a href="/" className="hover:text-primary transition-colors">GalaxyBots.ai</a>
+            </p>
+          ) : (
+            <p className="text-center text-xs text-muted-foreground font-tech">
+              © 2026 GalaxyBots.ai — White Label Corporate AI Infrastructure. Strictly Confidential. Property of Gifted Productions Inc.
+            </p>
+          )}
         </div>
       </footer>
     </div>

@@ -62,6 +62,7 @@ const PUBLIC_PATHS = [
   "/api/integrations/piratemonster/register-partner",
   "/api/partner/link",
   "/api/partner/register",
+  "/api/partner/admin/login",
   "/api/demo/book",
   "/api/packs",
   "/api/marketplace",
@@ -99,6 +100,12 @@ const PUBLIC_PATH_PREFIXES = [
 app.use("/api", (req, res, next) => {
   const fullPath = `/api${req.path}`;
   if (PUBLIC_PATHS.includes(fullPath) || PUBLIC_PATH_PREFIXES.some(p => fullPath.startsWith(p))) {
+    return next();
+  }
+  if (
+    (req.method === "POST" && /^\/api\/partner\/[^/]+\/clients$/.test(fullPath)) ||
+    (req.method === "PUT" && /^\/api\/partner\/[^/]+$/.test(fullPath))
+  ) {
     return next();
   }
   if (fullPath.startsWith("/api/analytics/") && req.headers.authorization?.startsWith("Bearer gba_")) {

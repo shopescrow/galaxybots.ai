@@ -4,6 +4,7 @@ import { backfillExistingBotPermissions } from "./services/governance";
 import { startWebhookDeliveryWorker } from "./services/webhook-delivery";
 import { getAllTools } from "./tools";
 import { seedDefaultOutreachTemplates } from "./services/seed-outreach-templates";
+import { seedDefaultPartners } from "./services/seed-partners";
 import { pool } from "@workspace/db";
 
 const EXPECTED_TABLES = [
@@ -53,6 +54,7 @@ const EXPECTED_TABLES = [
   "messages",
   "notifications",
   "partner_registrations",
+  "partners",
   "pending_approvals",
   "permission_profile_templates",
   "pipeline_run_steps",
@@ -127,6 +129,9 @@ app.listen(port, async () => {
   startWebhookDeliveryWorker();
   seedDefaultOutreachTemplates().catch((err) => {
     console.error("[seed] Outreach template seeding failed:", err);
+  });
+  seedDefaultPartners().catch((err) => {
+    console.error("[seed] Partner seeding failed:", err);
   });
   backfillExistingBotPermissions(getAllTools).catch((err) => {
     console.error("[governance] Permission backfill failed:", err);
