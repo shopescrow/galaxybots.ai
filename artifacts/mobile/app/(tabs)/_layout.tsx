@@ -139,9 +139,6 @@ function ClassicTabLayout() {
     </Tabs>
   );
 }
-    </Tabs>
-  );
-}
 
 export default function TabLayout() {
   if (isLiquidGlassAvailable()) {

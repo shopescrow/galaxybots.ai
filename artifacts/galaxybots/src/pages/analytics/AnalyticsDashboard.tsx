@@ -502,7 +502,6 @@ function ApiKeysPanel() {
   );
 }
 
-                  <div key={u.name} className="flex items-center gap-1 text-[10px]">
 const HEALTH_COLORS = {
   healthy: "#22c55e",
   at_risk: "#eab308",
