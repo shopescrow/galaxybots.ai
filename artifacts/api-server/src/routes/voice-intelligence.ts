@@ -11,7 +11,7 @@ import {
   pipelinesTable,
   pipelineStepsTable,
 } from "@workspace/db";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireRole } from "../middleware/auth";
@@ -244,7 +244,7 @@ router.get("/voice/calls/:clientId", requireRole("owner", "admin"), async (req, 
       debriefs = await db
         .select()
         .from(callDebriefsTable)
-        .where(sql`${callDebriefsTable.callLogId} = ANY(${sql.raw(`ARRAY[${callIds.join(",")}]`)})`);
+        .where(inArray(callDebriefsTable.callLogId, callIds));
     }
 
     const debriefMap = new Map(debriefs.map(d => [d.callLogId, d]));
