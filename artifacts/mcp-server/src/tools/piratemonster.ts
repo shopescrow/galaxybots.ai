@@ -671,7 +671,7 @@ export function registerPirateMonsterWebhookTools(server: McpServer, ctx: McpSes
           }
           const keyBuffer = crypto.createHash("sha256").update(encryptionKey).digest();
           const iv = crypto.randomBytes(12);
-          const cipher = crypto.createCipheriv("aes-256-gcm", keyBuffer, iv);
+          const cipher = crypto.createCipheriv("aes-256-gcm", keyBuffer, iv, { authTagLength: 16 });
           let encrypted = cipher.update(secret, "utf8", "hex");
           encrypted += cipher.final("hex");
           const authTag = cipher.getAuthTag().toString("hex");
