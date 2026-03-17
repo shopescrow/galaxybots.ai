@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight } from "lucide-react";
+import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -56,6 +56,22 @@ const SERVICES = [
     icon: FileText,
     credentialLabel: "Notion Integration Token",
     credentialPlaceholder: "ntn_xxxxxxxxxxxx...",
+  },
+  {
+    key: "google_sheets",
+    name: "Google Sheets",
+    description: "Read and write rows in Google Sheets using the Sheets API.",
+    icon: Table2,
+    credentialLabel: "Google Sheets OAuth Access Token",
+    credentialPlaceholder: "Paste your OAuth access token here...",
+  },
+  {
+    key: "twilio",
+    name: "Twilio SMS",
+    description: "Send SMS messages via Twilio. Credential must be a JSON string with accountSid and authToken.",
+    icon: MessageSquare,
+    credentialLabel: "Twilio Credential (JSON)",
+    credentialPlaceholder: '{"accountSid":"ACxxxxxxxxxx","authToken":"xxxxxxxx"}',
   },
 ];
 

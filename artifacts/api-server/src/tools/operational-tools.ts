@@ -1200,3 +1200,131 @@ registerTool({
     }
   },
 });
+
+registerTool({
+  name: "read_sheet",
+  description: "Read rows from a Google Sheet using the client's connected Google Sheets OAuth token. Returns an array of row arrays.",
+  inputSchema: z.object({
+    spreadsheetId: z.string().describe("The Google Sheets spreadsheet ID (found in the sheet URL)"),
+    range: z.string().describe("A1 notation range to read (e.g. 'Sheet1!A1:D10')"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "google_sheets");
+    if (!credential) {
+      return { success: false, rows: [], error: "No Google Sheets credential configured for this client. Connect Google Sheets in Integrations settings." };
+    }
+    try {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${credential}` },
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, rows: [], error: `Google Sheets API error: ${response.status} - ${errText}` };
+      }
+      const data = await response.json() as { values?: string[][] };
+      const rows = data.values ?? [];
+      return { success: true, rows, rowCount: rows.length };
+    } catch (err) {
+      return { success: false, rows: [], error: err instanceof Error ? err.message : "Failed to read Google Sheet" };
+    }
+  },
+});
+
+registerTool({
+  name: "write_sheet",
+  description: "Append or update rows in a Google Sheet using the client's connected Google Sheets OAuth token.",
+  inputSchema: z.object({
+    spreadsheetId: z.string().describe("The Google Sheets spreadsheet ID (found in the sheet URL)"),
+    range: z.string().describe("A1 notation range to write to (e.g. 'Sheet1!A1')"),
+    rows: z.array(z.array(z.string())).describe("Array of row arrays to write (each row is an array of cell values)"),
+    append: z.boolean().optional().describe("If true, append rows after existing data. If false, overwrite starting at the range. Defaults to true."),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "google_sheets");
+    if (!credential) {
+      return { success: false, error: "No Google Sheets credential configured for this client. Connect Google Sheets in Integrations settings." };
+    }
+    const shouldAppend = input.append !== false;
+    try {
+      let url: string;
+      let method: string;
+      if (shouldAppend) {
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        method = "POST";
+      } else {
+        url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}?valueInputOption=USER_ENTERED`;
+        method = "PUT";
+      }
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${credential}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ range: input.range, majorDimension: "ROWS", values: input.rows }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, error: `Google Sheets API error: ${response.status} - ${errText}` };
+      }
+      const data = await response.json() as { updates?: { updatedRows?: number } };
+      const updatedRows = data.updates?.updatedRows ?? input.rows.length;
+      return { success: true, message: `${shouldAppend ? "Appended" : "Wrote"} ${updatedRows} row(s) to ${input.range}`, updatedRows };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to write to Google Sheet" };
+    }
+  },
+});
+
+registerTool({
+  name: "send_sms",
+  description: "Send an SMS message via Twilio using the client's connected Twilio credential. The credential must be a JSON string with accountSid and authToken fields.",
+  inputSchema: z.object({
+    to: z.string().describe("Recipient phone number in E.164 format (e.g. +15551234567)"),
+    from: z.string().describe("Sender phone number in E.164 format — must be a Twilio number on the account (e.g. +15559876543)"),
+    body: z.string().describe("SMS message body text"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    const credential = await getClientCredential(context.clientId, "twilio");
+    if (!credential) {
+      return { success: false, error: "No Twilio credential configured for this client. Connect Twilio in Integrations settings." };
+    }
+    let accountSid: string;
+    let authToken: string;
+    try {
+      const parsed = JSON.parse(credential) as { accountSid?: string; authToken?: string };
+      accountSid = parsed.accountSid ?? "";
+      authToken = parsed.authToken ?? "";
+    } catch {
+      return { success: false, error: "Invalid Twilio credential format. Expected JSON: {\"accountSid\":\"...\",\"authToken\":\"...\"}" };
+    }
+    if (!accountSid || !authToken) {
+      return { success: false, error: "Twilio credential must include both accountSid and authToken." };
+    }
+    try {
+      const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+      const body = new URLSearchParams({
+        To: input.to,
+        From: input.from,
+        Body: input.body,
+      });
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: body.toString(),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, error: `Twilio API error: ${response.status} - ${errText}` };
+      }
+      const data = await response.json() as { sid: string; status: string };
+      return { success: true, messageSid: data.sid, status: data.status, message: `SMS sent to ${input.to}` };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Failed to send SMS via Twilio" };
+    }
+  },
+});
