@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare } from "lucide-react";
+import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -72,6 +72,22 @@ const SERVICES = [
     icon: MessageSquare,
     credentialLabel: "Twilio Credential (JSON)",
     credentialPlaceholder: '{"accountSid":"ACxxxxxxxxxx","authToken":"xxxxxxxx"}',
+  },
+  {
+    key: "github",
+    name: "GitHub",
+    description: "Create issues and track engineering tasks in GitHub repositories. Used by Engineering and CTO bots.",
+    icon: Github,
+    credentialLabel: "GitHub Personal Access Token",
+    credentialPlaceholder: "ghp_xxxxxxxxxxxxxxxxxxxx...",
+  },
+  {
+    key: "twitter",
+    name: "Twitter / X",
+    description: "Post tweets and social content using the Twitter API v2. Used by Marketing and CMO bots.",
+    icon: Twitter,
+    credentialLabel: "Twitter Bearer Token",
+    credentialPlaceholder: "AAAA...",
   },
 ];
 

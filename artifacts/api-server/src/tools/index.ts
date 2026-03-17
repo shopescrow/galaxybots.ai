@@ -1,5 +1,6 @@
 import "./definitions";
 import "./operational-tools";
+import "./expanded-tools";
 import "./aeo-tools";
 import "./competitor-tools";
 import "./prospect-tools";
