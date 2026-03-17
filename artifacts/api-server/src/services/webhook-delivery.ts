@@ -17,7 +17,7 @@ function decryptSecret(encryptedValue: string): string {
   const [ivHex, authTagHex, encryptedHex] = withoutPrefix.split(":");
   const iv = Buffer.from(ivHex, "hex");
   const authTag = Buffer.from(authTagHex, "hex");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuffer, iv);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuffer, iv, { authTagLength: 16 });
   decipher.setAuthTag(authTag);
   let decrypted = decipher.update(encryptedHex, "hex", "utf8");
   decrypted += decipher.final("utf8");
