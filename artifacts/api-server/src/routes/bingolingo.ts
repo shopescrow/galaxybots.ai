@@ -780,29 +780,40 @@ router.get("/bingolingo/clients/:id/content-attribution", authenticate, async (r
 });
 
 router.get("/bingolingo/dashboard-stats", authenticate, async (_req, res): Promise<void> => {
-  const [clientCount] = await db.select({ value: count() }).from(bingolingoClientsTable);
-  const [contentCount] = await db.select({ value: count() }).from(bingolingoContentTable);
-  const [publishedCount] = await db.select({ value: count() }).from(bingolingoContentTable).where(eq(bingolingoContentTable.status, "published"));
-  const [draftCount] = await db.select({ value: count() }).from(bingolingoContentTable).where(eq(bingolingoContentTable.status, "draft"));
+  try {
+    const [clientCount] = await db.select({ value: count() }).from(bingolingoClientsTable);
+    const [contentCount] = await db.select({ value: count() }).from(bingolingoContentTable);
+    const [publishedCount] = await db.select({ value: count() }).from(bingolingoContentTable).where(eq(bingolingoContentTable.status, "published"));
+    const [draftCount] = await db.select({ value: count() }).from(bingolingoContentTable).where(eq(bingolingoContentTable.status, "draft"));
 
-  const [totalViews] = await db
-    .select({ value: sql<number>`COALESCE(SUM(${bingolingoContentTable.viewCount}), 0)` })
-    .from(bingolingoContentTable);
+    const [totalViews] = await db
+      .select({ value: sql<number>`COALESCE(SUM(${bingolingoContentTable.viewCount}), 0)` })
+      .from(bingolingoContentTable);
 
-  const recentContent = await db
-    .select()
-    .from(bingolingoContentTable)
-    .orderBy(desc(bingolingoContentTable.createdAt))
-    .limit(5);
+    const recentContent = await db
+      .select()
+      .from(bingolingoContentTable)
+      .orderBy(desc(bingolingoContentTable.createdAt))
+      .limit(5);
 
-  res.json({
-    clients: Number(clientCount.value),
-    totalContent: Number(contentCount.value),
-    published: Number(publishedCount.value),
-    drafts: Number(draftCount.value),
-    totalViews: Number(totalViews.value),
-    recentContent,
-  });
+    res.json({
+      clients: Number(clientCount.value),
+      totalContent: Number(contentCount.value),
+      published: Number(publishedCount.value),
+      drafts: Number(draftCount.value),
+      totalViews: Number(totalViews.value),
+      recentContent,
+    });
+  } catch (error) {
+    res.json({
+      clients: 0,
+      totalContent: 0,
+      published: 0,
+      drafts: 0,
+      totalViews: 0,
+      recentContent: [],
+    });
+  }
 });
 
 router.post("/bingolingo/ext/generate", authenticateApiKey, async (req, res): Promise<void> => {
