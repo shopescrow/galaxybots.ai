@@ -3,7 +3,7 @@ import { useBot } from "@/hooks/use-bots";
 import { useStartConversation, useConversations, useChatMessages, useSendChatMessage } from "@/hooks/use-chat";
 import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
 import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
-import { useParams } from "wouter";
+import { useParams, Redirect } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,14 @@ export default function BotDetail() {
       setIsStarting(false);
     }
   };
+
+  const isCFOBot = !botLoading && !!bot && (
+    (bot.title === "Finance Director" && bot.department === "Finance & Legal") ||
+    bot.name === "CFO Sentinel Marcus"
+  );
+  if (isCFOBot) {
+    return <Redirect to={`/bots/${botId}/cfo-dashboard`} />;
+  }
 
   return (
     <AppLayout>

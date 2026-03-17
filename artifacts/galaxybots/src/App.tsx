@@ -29,6 +29,7 @@ import Assembly from "@/pages/Assembly";
 import Compliance from "@/pages/compliance/Compliance";
 import Integrations from "@/pages/integrations/Integrations";
 import AIReceptionist from "@/pages/bots/AIReceptionist";
+import CFODashboard from "@/pages/bots/CFODashboard";
 import ROIDashboard from "@/pages/roi/ROIDashboard";
 import SharedReport from "@/pages/roi/SharedReport";
 import Billing from "@/pages/Billing";
@@ -119,6 +120,7 @@ function AuthenticatedRoutes() {
       <Route path="/command-center" component={CommandCenter} />
       <Route path="/bots" component={BotRoster} />
       <Route path="/bots/ai-receptionist" component={AIReceptionist} />
+      <Route path="/bots/:id/cfo-dashboard" component={CFODashboard} />
       <Route path="/bots/:id" component={BotDetail} />
       <Route path="/boardroom" component={Boardroom} />
       <Route path="/journal" component={Journal} />
