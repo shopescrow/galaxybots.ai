@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
-import { DemoProvider } from "@/contexts/DemoContext";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 
 import Home from "@/pages/Home";
@@ -51,8 +50,7 @@ import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 import ForgotUsername from "@/pages/auth/ForgotUsername";
 import ForgotPassword from "@/pages/auth/ForgotPassword";
-import LiveDemo from "@/pages/demo/LiveDemo";
-import DemoClaim from "@/pages/demo/DemoClaim";
+import BookDemo from "@/pages/demo/BookDemo";
 import PacksLibrary from "@/pages/packs/PacksLibrary";
 import PackDetail from "@/pages/packs/PackDetail";
 import MarketplaceGallery from "@/pages/marketplace/MarketplaceGallery";
@@ -166,8 +164,7 @@ function AppRouter() {
       <Route path="/register" component={Register} />
       <Route path="/forgot-username" component={ForgotUsername} />
       <Route path="/forgot-password" component={ForgotPassword} />
-      <Route path="/demo" component={LiveDemo} />
-      <Route path="/demo/claim" component={DemoClaim} />
+      <Route path="/demo" component={BookDemo} />
       <Route path="/sso/callback" component={SSOCallback} />
       <Route path="/packs" component={PacksLibrary} />
       <Route path="/packs/:packId" component={PackDetail} />
@@ -189,18 +186,16 @@ export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <DemoProvider>
-          <UserPreferencesProvider>
-            <QueryClientProvider client={queryClient}>
-              <TooltipProvider>
-                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                  <AppRouter />
-                </WouterRouter>
-                <Toaster />
-              </TooltipProvider>
-            </QueryClientProvider>
-          </UserPreferencesProvider>
-        </DemoProvider>
+        <UserPreferencesProvider>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <AppRouter />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </QueryClientProvider>
+        </UserPreferencesProvider>
       </AuthProvider>
     </LanguageProvider>
   );
