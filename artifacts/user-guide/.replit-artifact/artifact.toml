@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/user-guide/"
+title = "GalaxyBots New User Guide"
+version = "1.0.0"
+id = "artifacts/user-guide"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+localPort = 18666
+name = "web"
+paths = ["/user-guide/"]
+
+[services.development]
+run = "pnpm --filter @workspace/user-guide run dev"
+
+[services.env]
+PORT = "18666"
+BASE_PATH = "/user-guide/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/user-guide", "run", "build"]
+publicDir = "artifacts/user-guide/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

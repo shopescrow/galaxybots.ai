@@ -142,6 +142,7 @@ function AuthenticatedRoutes() {
       <Route path="/assembly" component={Assembly} />
       <Route path="/compliance" component={Compliance} />
       <Route path="/integrations" component={Integrations} />
+      <Route path="/roi" component={ROIDashboard} />
       <Route path="/clients/:id/roi" component={ROIDashboard} />
       <Route path="/billing" component={Billing} />
       <Route path="/scenarios" component={Scenarios} />

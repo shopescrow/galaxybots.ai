@@ -242,13 +242,30 @@ export default function ROIDashboard() {
   if (!roi) {
     return (
       <AppLayout>
-        <div className="container mx-auto px-4 py-12 text-center">
-          <p className="text-muted-foreground">No ROI data available.</p>
-          <Link href="/clients">
-            <Button variant="outline" className="mt-4">
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Clients
-            </Button>
-          </Link>
+        <div className="container mx-auto px-4 py-12 text-center max-w-md">
+          {isNaN(clientId) ? (
+            <>
+              <BarChart3 className="w-12 h-12 text-primary mx-auto mb-4 opacity-60" />
+              <h2 className="text-xl font-semibold mb-2">ROI Dashboard</h2>
+              <p className="text-muted-foreground mb-6">
+                Select a client to view their ROI report — hours saved, dollars recovered, and bot performance at a glance.
+              </p>
+              <Link href="/clients">
+                <Button>
+                  <Users className="w-4 h-4 mr-2" /> View Clients
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-muted-foreground">No ROI data available for this client.</p>
+              <Link href="/clients">
+                <Button variant="outline" className="mt-4">
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Back to Clients
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </AppLayout>
     );

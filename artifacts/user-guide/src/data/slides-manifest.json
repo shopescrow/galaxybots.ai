@@ -1,0 +1,106 @@
+[
+  {
+    "id": "ug-001-title",
+    "position": 1,
+    "filepath": "src/pages/slides/Slide01Title.tsx",
+    "title": "Your AI Executive Team Starts Here",
+    "description": "Hero title slide establishing the GalaxyBots brand and guide purpose.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-002-login",
+    "position": 2,
+    "filepath": "src/pages/slides/Slide02Login.tsx",
+    "title": "Step 1 — Log In",
+    "description": "Three-step login flow with illustrated form mockup.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-003-command-center",
+    "position": 3,
+    "filepath": "src/pages/slides/Slide03CommandCenter.tsx",
+    "title": "Step 2 — Your Command Center",
+    "description": "Real UI screenshot with callout annotations for Activity Feed, Approvals, and Company Status.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-004-bot-roster",
+    "position": 4,
+    "filepath": "src/pages/slides/Slide04BotRoster.tsx",
+    "title": "Step 3 — Meet Your Bot Team",
+    "description": "Three-column card grid showing CFO Bot, Marketing Director, and CMO Bot.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-005-open-channel",
+    "position": 5,
+    "filepath": "src/pages/slides/Slide05OpenChannel.tsx",
+    "title": "Step 4 — Open a Channel",
+    "description": "Numbered step list with stylized bot profile card and Open Channel button.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-006-send-directive",
+    "position": 6,
+    "filepath": "src/pages/slides/Slide06SendDirective.tsx",
+    "title": "Step 5 — Send Your Directive",
+    "description": "Chat UI mockup showing a user directive and CFO Bot response.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-007-deep-thinking",
+    "position": 7,
+    "filepath": "src/pages/slides/Slide07DeepThinking.tsx",
+    "title": "Pro Tip — Deep Thinking Mode",
+    "description": "Bold centered callout slide about the 10-perspective deep analysis feature.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-008-deploy-team",
+    "position": 8,
+    "filepath": "src/pages/slides/Slide08DeployTeam.tsx",
+    "title": "Step 6 — Deploy a Team",
+    "description": "Four-node horizontal flow diagram: Define Objective → Optima Prime → Team Assembly → Launch.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-009-optima-prime",
+    "position": 9,
+    "filepath": "src/pages/slides/Slide09OptimaPrime.tsx",
+    "title": "Optima Prime — AI Commander",
+    "description": "Big stat slide with AI Commander gold display text and three bullet capabilities.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-010-task-boardroom",
+    "position": 10,
+    "filepath": "src/pages/slides/Slide10TaskBoardroom.tsx",
+    "title": "Step 7 — Lead Your Task Boardroom",
+    "description": "Two-column layout with description and mock task room conversation thread.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-011-approvals",
+    "position": 11,
+    "filepath": "src/pages/slides/Slide11Approvals.tsx",
+    "title": "Step 8 — Managing Approvals",
+    "description": "Three-step horizontal flow: Bots Request → Review → Approve/Reject.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-012-closing",
+    "position": 12,
+    "filepath": "src/pages/slides/Slide12Closing.tsx",
+    "title": "You're Ready to Lead",
+    "description": "Closing hero slide with three icon+label pairs and brand tagline.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ug-013-quick-start",
+    "position": 13,
+    "filepath": "src/pages/slides/Slide13QuickStart.tsx",
+    "title": "Quick Start Reference Card",
+    "description": "Dense two-column reference card with all 8 steps and key platform locations.",
+    "speakerNotes": ""
+  }
+]

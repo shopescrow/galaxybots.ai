@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --bg-deep: #08091A;
+  --bg-card: #0E1029;
+  --gold: #D4A853;
+  --gold-light: #E8C97A;
+  --blue: #3D7FE8;
+  --blue-light: #6BA3F5;
+  --text-primary: #E8EAF0;
+  --text-muted: #6B7296;
+  --text-caption: #4A5078;
+  --border-subtle: rgba(212, 168, 83, 0.15);
+  --destination-color: #3D7FE8;
+
+  font-family: "Inter", system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #08091A;
+  color: #E8EAF0;
+}
+
+.slide {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.font-display {
+  font-family: "Outfit", sans-serif;
+}
+
+.gold-rule {
+  width: 5vw;
+  height: 0.25vh;
+  background: linear-gradient(90deg, #D4A853, transparent);
+  margin-bottom: 3vh;
+}
+
+.destination-cue {
+  color: var(--destination-color);
+  font-family: "Inter", sans-serif;
+  font-size: 1.5vw;
+  font-weight: 500;
+  margin-top: 2vh;
+  letter-spacing: 0.02em;
+}
