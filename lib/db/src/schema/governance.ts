@@ -40,6 +40,9 @@ export const pendingApprovalsTable = pgTable("pending_approvals", {
   pausedLoopContext: jsonb("paused_loop_context"),
   sessionId: integer("session_id"),
   conversationId: integer("conversation_id"),
+  slaDeadline: timestamp("sla_deadline", { withTimezone: true }),
+  escalatedAt: timestamp("escalated_at", { withTimezone: true }),
+  isTimeSensitive: boolean("is_time_sensitive").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

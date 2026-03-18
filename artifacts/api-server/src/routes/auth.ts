@@ -5,6 +5,7 @@ import { eq, or, ilike, and } from "drizzle-orm";
 import { signToken, authenticate } from "../middleware/auth";
 import { recordLoginSignal } from "../middleware/health-signals";
 import { authRateLimit } from "../middleware/rate-limit";
+import { checkWorkflowTriggers, seedBuiltInWorkflows } from "../services/workflow-engine";
 
 const router: IRouter = Router();
 
@@ -81,6 +82,17 @@ router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => 
     },
     token,
   });
+
+  seedBuiltInWorkflows(client.id)
+    .then(() =>
+      checkWorkflowTriggers("new_client_created", {
+        clientId: client.id,
+        companyName: client.companyName,
+        contactName: client.contactName,
+        contactEmail: client.contactEmail,
+      }, client.id)
+    )
+    .catch((e) => console.error("[auth] Failed to seed workflows or trigger new_client_created:", e));
 });
 
 router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {

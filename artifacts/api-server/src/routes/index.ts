@@ -50,6 +50,8 @@ import developerRouter from "./developer";
 import voiceIntelligenceRouter from "./voice-intelligence";
 import briefsRouter from "./briefs";
 import missionTemplatesRouter from "./mission-templates";
+import workflowsRouter from "./workflows";
+import activityRouter from "./activity";
 
 const router: IRouter = Router();
 
@@ -102,5 +104,7 @@ router.use(developerRouter);
 router.use(voiceIntelligenceRouter);
 router.use(briefsRouter);
 router.use(missionTemplatesRouter);
+router.use(workflowsRouter);
+router.use(activityRouter);
 
 export default router;

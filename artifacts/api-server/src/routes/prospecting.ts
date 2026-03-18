@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db, confidenceConfigsTable, prospectsTable, platformAuditLogTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
+import { checkWorkflowTriggers } from "../services/workflow-engine";
 
 const router = Router();
 
@@ -201,6 +202,16 @@ router.patch("/prospecting/prospects/:id/review", async (req: Request, res: Resp
     });
 
     res.json(updated);
+
+    if (action === "approve" || (action === "correct" && updates.status === "qualified")) {
+      checkWorkflowTriggers("prospect_qualified", {
+        prospectId: id,
+        companyName: updated.companyName,
+        status: updated.status,
+        confidenceScore: updated.confidenceScore,
+        clientId,
+      }, clientId).catch((e) => console.error("[workflow-trigger] prospect_qualified:", e));
+    }
   } catch (err) {
     console.error("Review error:", err);
     res.status(500).json({ error: "Failed to review prospect" });

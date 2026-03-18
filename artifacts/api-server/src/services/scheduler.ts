@@ -17,16 +17,23 @@ import {
   partnersTable,
   partnerRegistrationsTable,
   partnerTierReviewLogTable,
+  pendingApprovalsTable,
+  approvalSlaConfigsTable,
+  workflowsTable,
+  workflowRunsTable,
 } from "@workspace/db";
-import { eq, and, lte, isNull, or, ne, desc, gt, isNotNull, count } from "drizzle-orm";
+import { eq, and, lte, isNull, or, ne, desc, gt, isNotNull, count, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "./roi";
 import { generateMorningBriefs, generateWeeklyBriefs } from "./briefing";
 import { syncSource } from "./kb-sync";
-import { runAgenticLoop } from "../tools/agentic-loop";
+import { runAgenticLoop, resumeAgenticLoopWithRejection } from "../tools/agentic-loop";
+import type { ToolContext } from "../tools";
 import { shouldPauseAutonomous } from "./cost-caps";
 import { createNotification } from "./notifications";
 import { computeAllHealthScores, generateWeeklyPulse } from "./client-health";
+import nodemailer from "nodemailer";
+import { executeWorkflow, checkWorkflowTriggers, resumeWorkflowRunFromDelay } from "./workflow-engine";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -40,25 +47,7 @@ const SCHEDULE_INTERVALS: Record<string, number> = {
   weekly: 7 * 24 * 60 * 60 * 1000,
 };
 
-let sseClients: Array<{ id: string; clientId: number; res: import("express").Response }> = [];
-
-export function addSSEClient(id: string, res: import("express").Response, clientId: number) {
-  sseClients.push({ id, clientId, res });
-  res.on("close", () => {
-    sseClients = sseClients.filter((c) => c.id !== id);
-  });
-}
-
-export function broadcastSSE(event: string, data: Record<string, unknown>) {
-  const targetClientId = data.clientId as number | undefined;
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    if (targetClientId !== undefined && client.clientId !== targetClientId) continue;
-    try {
-      client.res.write(payload);
-    } catch (_e) {}
-  }
-}
+export { addSSEClient, broadcastSSE } from "./sse";
 
 async function runPassiveAssignment(assignment: typeof botAssignmentsTable.$inferSelect, bot: typeof botsTable.$inferSelect) {
   const completion = await openai.chat.completions.create({
@@ -521,6 +510,20 @@ async function checkCompetitorAlerts() {
               engineChanges,
             });
 
+            const gainedCitations = engineChanges.filter((c) => c.gained);
+            if (gainedCitations.length > 0) {
+              checkWorkflowTriggers("competitor_citation_gained", {
+                clientId: client.id,
+                companyName: client.companyName,
+                competitorName: comp.companyName,
+                competitorUrl: comp.url,
+                enginesGained: gainedCitations.map((c) => c.engine),
+                newScore: latest.overallScore,
+                previousScore: previous.overallScore,
+                scoreDelta,
+              }, client.id).catch((e) => console.error("[workflow-trigger] competitor_citation_gained:", e));
+            }
+
             const alertDetails = [];
             if (absScoreDelta >= 10) {
               alertDetails.push(`score ${scoreDelta > 0 ? "increased" : "decreased"} by ${absScoreDelta} points (${previous.overallScore} -> ${latest.overallScore})`);
@@ -854,6 +857,258 @@ async function checkPartnerTierCompliance() {
   console.log(`[scheduler] Partner tier review complete for ${partners.length} partner(s)`);
 }
 
+const TIME_SENSITIVE_TOOLS = ["send_email", "create_invoice", "send_notification", "post_to_slack"];
+
+export async function checkApprovalSLAs() {
+  try {
+    const now = new Date();
+    const pendingApprovals = await db
+      .select()
+      .from(pendingApprovalsTable)
+      .where(eq(pendingApprovalsTable.status, "pending"));
+
+    if (pendingApprovals.length === 0) return;
+
+    const clientIds = [...new Set(pendingApprovals.map((a) => a.clientId))];
+    const slaConfigs = await db
+      .select()
+      .from(approvalSlaConfigsTable)
+      .where(
+        clientIds.length === 1
+          ? eq(approvalSlaConfigsTable.clientId, clientIds[0])
+          : inArray(approvalSlaConfigsTable.clientId, clientIds)
+      );
+    const slaConfigMap: Record<number, typeof slaConfigs[0]> = Object.fromEntries(
+      slaConfigs.map((c) => [c.clientId, c])
+    );
+
+    for (const approval of pendingApprovals) {
+      const config = slaConfigMap[approval.clientId];
+      const isTimeSensitive = approval.isTimeSensitive || TIME_SENSITIVE_TOOLS.includes(approval.toolName);
+      const slaMinutes = isTimeSensitive
+        ? (config?.timeSensitiveSlaMinutes ?? 60)
+        : (config?.defaultSlaMinutes ?? 240);
+
+      let slaDeadline = approval.slaDeadline;
+      if (!slaDeadline) {
+        slaDeadline = new Date(approval.createdAt.getTime() + slaMinutes * 60 * 1000);
+        await db
+          .update(pendingApprovalsTable)
+          .set({ slaDeadline, isTimeSensitive })
+          .where(eq(pendingApprovalsTable.id, approval.id));
+      }
+
+      if (now < slaDeadline) continue;
+
+      const doubleDeadline = new Date(slaDeadline.getTime() + slaMinutes * 60 * 1000);
+
+      if (now >= doubleDeadline) {
+        const updated = await db
+          .update(pendingApprovalsTable)
+          .set({
+            status: "rejected",
+            resolvedAt: now,
+            rejectionReason: "SLA timeout — rejected automatically",
+          })
+          .where(and(eq(pendingApprovalsTable.id, approval.id), eq(pendingApprovalsTable.status, "pending")))
+          .returning();
+
+        if (updated.length === 0) continue;
+
+        const rejectionReason = "SLA timeout — rejected automatically";
+
+        const pausedCtx = approval.pausedLoopContext as {
+          model: string;
+          maxIterations: number;
+          maxTokens: number;
+          systemPrompt: string;
+          messages: unknown[];
+          remainingIterations: number;
+          toolCallId: string;
+          allToolCallIds?: string[];
+        } | null;
+
+        if (pausedCtx) {
+          const toolContext: ToolContext = {
+            clientId: approval.clientId,
+            botId: approval.botId,
+            botName: approval.botName ?? undefined,
+            sessionId: approval.sessionId ?? undefined,
+            conversationId: approval.conversationId ?? undefined,
+          };
+          resumeAgenticLoopWithRejection({
+            pausedLoopContext: pausedCtx,
+            toolName: approval.toolName,
+            rejectionReason,
+            context: toolContext,
+          }).catch((e) => console.error("[sla] Failed to resume agentic loop after SLA rejection:", e));
+        }
+
+        createNotification({
+          clientId: approval.clientId,
+          category: "system",
+          severity: "critical",
+          title: "Approval auto-rejected (SLA timeout)",
+          body: `${approval.botName ?? "Bot"}'s request to use "${approval.toolName}" was auto-rejected after ${slaMinutes * 2} minutes without a decision.`,
+          link: "/command-center",
+          metadata: { approvalId: approval.id, toolName: approval.toolName },
+        }).catch((e) => console.error("[sla] Failed to create auto-reject notification:", e));
+
+        broadcastSSE("activity", {
+          id: `sla-reject-${approval.id}-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          clientId: approval.clientId,
+          source: "system",
+          eventType: "approval",
+          severity: "critical",
+          title: "Approval auto-rejected (SLA timeout)",
+          description: `Tool "${approval.toolName}" request was auto-rejected after ${slaMinutes * 2} minutes`,
+          metadata: { approvalId: approval.id, toolName: approval.toolName, reason: rejectionReason },
+        });
+
+        broadcastSSE("approval-sla-rejected", {
+          clientId: approval.clientId,
+          approvalId: approval.id,
+          toolName: approval.toolName,
+          reason: rejectionReason,
+        });
+      } else if (!approval.escalatedAt) {
+        await db
+          .update(pendingApprovalsTable)
+          .set({ escalatedAt: now })
+          .where(eq(pendingApprovalsTable.id, approval.id));
+
+        createNotification({
+          clientId: approval.clientId,
+          category: "system",
+          severity: "critical",
+          title: "Approval SLA breached — action required",
+          body: `${approval.botName ?? "Bot"}'s request to use "${approval.toolName}" is overdue. Auto-reject in ${slaMinutes} minutes if not resolved.`,
+          link: "/command-center",
+          metadata: { approvalId: approval.id, toolName: approval.toolName },
+        }).catch((e) => console.error("[sla] Failed to create SLA breach notification:", e));
+
+        broadcastSSE("approval-sla-breached", {
+          clientId: approval.clientId,
+          approvalId: approval.id,
+          toolName: approval.toolName,
+          slaDeadline: slaDeadline.toISOString(),
+          secondaryApproverEmail: config?.secondaryApproverEmail ?? null,
+        });
+
+        if (config?.secondaryApproverEmail) {
+          const smtpUser = process.env.SMTP_USER;
+          const smtpPass = process.env.SMTP_PASS;
+          if (smtpUser && smtpPass) {
+            const transporter = nodemailer.createTransport({
+              host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+              port: Number(process.env.SMTP_PORT ?? 587),
+              secure: false,
+              auth: { user: smtpUser, pass: smtpPass },
+            });
+            transporter.sendMail({
+              from: `"GalaxyBots" <${smtpUser}>`,
+              to: config.secondaryApproverEmail,
+              subject: `[Action Required] Approval SLA breached for ${approval.toolName}`,
+              text: [
+                `An approval request is overdue and has been escalated to you.`,
+                ``,
+                `Bot: ${approval.botName ?? "Unknown"}`,
+                `Tool: ${approval.toolName}`,
+                `Tool input: ${typeof approval.toolInput === "object" ? JSON.stringify(approval.toolInput) : (approval.toolInput ?? "No input provided")}`,
+                `SLA deadline: ${slaDeadline.toISOString()}`,
+                `Auto-reject in: ${slaMinutes} minutes`,
+                ``,
+                `Please review at: ${process.env.APP_URL ?? "https://galaxybots.app"}/command-center`,
+              ].join("\n"),
+            }).catch((e: Error) => console.error("[sla] Failed to send escalation email:", e));
+          } else {
+            console.warn("[sla] Escalation email skipped — SMTP_USER/SMTP_PASS not configured");
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[sla] Error checking approval SLAs:", err);
+  }
+}
+
+function matchesCronField(field: string, value: number): boolean {
+  if (field === "*") return true;
+  if (field.includes(",")) return field.split(",").some((f) => matchesCronField(f.trim(), value));
+  if (field.includes("-")) {
+    const [lo, hi] = field.split("-").map(Number);
+    return value >= lo && value <= hi;
+  }
+  if (field.includes("/")) {
+    const [base, step] = field.split("/");
+    const stepNum = Number(step);
+    const start = base === "*" ? 0 : Number(base);
+    return value >= start && (value - start) % stepNum === 0;
+  }
+  return Number(field) === value;
+}
+
+function cronDueInWindow(cron: string, since: Date, now: Date): boolean {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+  const [minuteF, hourF, domF, monthF, dowF] = parts;
+  const windowMs = now.getTime() - since.getTime();
+  const steps = Math.max(1, Math.ceil(windowMs / 60000));
+  for (let i = 0; i < steps; i++) {
+    const t = new Date(now.getTime() - i * 60000);
+    if (
+      matchesCronField(minuteF, t.getMinutes()) &&
+      matchesCronField(hourF, t.getHours()) &&
+      matchesCronField(domF, t.getDate()) &&
+      matchesCronField(monthF, t.getMonth() + 1) &&
+      matchesCronField(dowF, t.getDay())
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function checkScheduledWorkflows() {
+  const now = new Date();
+
+  const workflows = await db
+    .select()
+    .from(workflowsTable)
+    .where(and(eq(workflowsTable.enabled, true), eq(workflowsTable.triggerType, "schedule")));
+
+  for (const workflow of workflows) {
+    const config = (workflow.triggerConfig ?? {}) as Record<string, unknown>;
+    const cron = (config.cron ?? config.cronExpression) as string | undefined;
+    const intervalMinutes = Number(config.intervalMinutes ?? 0);
+
+    const lastRun = workflow.lastRunAt;
+    let shouldRun = false;
+
+    if (cron) {
+      const checkSince = lastRun ?? workflow.createdAt;
+      shouldRun = cronDueInWindow(cron, checkSince, now);
+      if (lastRun) {
+        const msSinceLast = now.getTime() - lastRun.getTime();
+        const minsBetween = msSinceLast / 60000;
+        if (minsBetween < 59) shouldRun = false;
+      }
+    } else if (intervalMinutes > 0) {
+      const nextRun = lastRun
+        ? new Date(lastRun.getTime() + intervalMinutes * 60 * 1000)
+        : new Date(workflow.createdAt.getTime());
+      shouldRun = now >= nextRun;
+    }
+
+    if (shouldRun) {
+      executeWorkflow(workflow.id, "schedule", { scheduledAt: now.toISOString(), cron: cron ?? null }).catch((err) => {
+        console.error(`[scheduler] Scheduled workflow ${workflow.id} failed:`, err);
+      });
+    }
+  }
+}
+
 export async function startScheduler() {
   if (schedulerInterval) return;
 
@@ -879,6 +1134,52 @@ export async function startScheduler() {
     };
   }
 
+  async function resumePausedWorkflows() {
+    const now = new Date();
+    const pausedRuns = await db
+      .select()
+      .from(workflowRunsTable)
+      .where(eq(workflowRunsTable.status, "paused"));
+
+    for (const run of pausedRuns) {
+      const logEntries = (run.log ?? []) as Array<Record<string, unknown>>;
+      const resumeEntry = logEntries.find((e) => e.type === "delay_resume");
+      if (!resumeEntry) continue;
+
+      const resumeAt = new Date(resumeEntry.resumeAt as string);
+      if (now < resumeAt) continue;
+
+      const remainingNodeIds = resumeEntry.remainingNodeIds as string[];
+      const variables = (resumeEntry.variables ?? {}) as Record<string, unknown>;
+      const payload = (resumeEntry.payload ?? {}) as Record<string, unknown>;
+
+      const [workflow] = await db.select().from(workflowsTable).where(eq(workflowsTable.id, run.workflowId));
+      if (!workflow || !workflow.enabled) {
+        await db.update(workflowRunsTable).set({ status: "failed", completedAt: now }).where(eq(workflowRunsTable.id, run.id));
+        continue;
+      }
+
+      if (remainingNodeIds.length === 0) {
+        const completedLog = logEntries.filter((e) => e.type !== "delay_resume");
+        await db.update(workflowRunsTable).set({
+          status: "done",
+          completedAt: now,
+          log: completedLog,
+        }).where(eq(workflowRunsTable.id, run.id));
+        continue;
+      }
+
+      const priorLog = logEntries.filter((e) => e.type !== "delay_resume");
+      await db.update(workflowRunsTable).set({
+        status: "running",
+        log: priorLog,
+      }).where(eq(workflowRunsTable.id, run.id));
+
+      resumeWorkflowRunFromDelay(run.id, run.workflowId, remainingNodeIds[0], payload, priorLog)
+        .catch((e) => console.error(`[scheduler] Failed to resume paused workflow run ${run.id}:`, e));
+    }
+  }
+
   schedulerInterval = setInterval(() => {
     checkDueAssignments().catch(handleTickError("assignments"));
     checkWeeklyBriefings().catch(handleTickError("weekly briefings"));
@@ -891,6 +1192,9 @@ export async function startScheduler() {
     checkPartnerTierCompliance().catch(handleTickError("partner tier review"));
     generateMorningBriefs().catch(handleTickError("morning intelligence briefs"));
     generateWeeklyBriefs().catch(handleTickError("weekly intelligence briefs"));
+    checkApprovalSLAs().catch(handleTickError("approval SLAs"));
+    checkScheduledWorkflows().catch(handleTickError("scheduled workflows"));
+    resumePausedWorkflows().catch(handleTickError("resume paused workflows"));
   }, 5 * 60 * 1000);
 }
 

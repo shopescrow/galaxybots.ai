@@ -7,6 +7,8 @@ import {
   Sparkles,
   Search,
   Layout,
+  Workflow,
+  Activity,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -35,6 +37,8 @@ export const NAV_GROUPS: NavGroup[] = [
     roles: ["owner", "admin"],
     children: [
       { href: "/command-center", label: "Command Center", description: "Owner/admin overview" },
+      { href: "/activity", label: "Activity Stream", description: "Unified cross-platform activity feed" },
+      { href: "/process-studio", label: "Process Studio", description: "Visual workflow builder" },
       { href: "/assembly", label: "Assembly", description: "Build and configure assemblies" },
       { href: "/global", label: "Global Assembly", description: "Global assembly management" },
       { href: "/task-rooms", label: "Task Rooms", description: "Collaborative task rooms" },

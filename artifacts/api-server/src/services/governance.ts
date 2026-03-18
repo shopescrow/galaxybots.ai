@@ -5,10 +5,12 @@ import {
   brandVoiceConfigsTable,
   clientBotsTable,
   botsTable,
+  approvalSlaConfigsTable,
 } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { createNotification } from "./notifications";
+import { emitActivityEvent } from "./activity-events";
 
 export interface PermissionCheckResult {
   allowed: boolean;
@@ -46,6 +48,16 @@ export async function checkToolPermission(
   }
 
   if (permission.requiresApproval) {
+    const [slaConfig] = await db
+      .select()
+      .from(approvalSlaConfigsTable)
+      .where(eq(approvalSlaConfigsTable.clientId, clientId));
+
+    const trustedCategories: string[] = slaConfig?.trustedCategories ?? ["web_search", "read_email"];
+    if (trustedCategories.includes(toolName)) {
+      return { allowed: true, requiresApproval: false, reason: `Tool "${toolName}" is trusted — approval bypassed` };
+    }
+
     return { allowed: true, requiresApproval: true };
   }
 
@@ -73,6 +85,26 @@ export async function createPendingApproval(params: {
   conversationId?: number;
   pausedLoopContext?: PausedLoopContext;
 }): Promise<number> {
+  const timeSensitiveTools = [
+    "send_email",
+    "create_invoice",
+    "send_notification",
+    "post_to_slack",
+    "send_sms",
+    "schedule_meeting",
+  ];
+  const isTimeSensitive = timeSensitiveTools.includes(params.toolName);
+
+  const [slaConfig] = await db
+    .select()
+    .from(approvalSlaConfigsTable)
+    .where(eq(approvalSlaConfigsTable.clientId, params.clientId));
+
+  const slaMinutes = isTimeSensitive
+    ? (slaConfig?.timeSensitiveSlaMinutes ?? 60)
+    : (slaConfig?.defaultSlaMinutes ?? 240);
+  const slaDeadline = new Date(Date.now() + slaMinutes * 60 * 1000);
+
   const [approval] = await db
     .insert(pendingApprovalsTable)
     .values({
@@ -85,6 +117,8 @@ export async function createPendingApproval(params: {
       sessionId: params.sessionId ?? null,
       conversationId: params.conversationId ?? null,
       pausedLoopContext: params.pausedLoopContext ?? null,
+      slaDeadline,
+      isTimeSensitive,
     })
     .returning();
 
@@ -109,6 +143,17 @@ export async function createPendingApproval(params: {
     metadata: { approvalId: approval.id, badge },
     isApproval: true,
   }).catch(() => {});
+
+  emitActivityEvent({
+    clientId: params.clientId,
+    type: "approval_created",
+    title: "Approval Request Created",
+    description: `${params.botName ?? "A bot"} requested permission to use "${params.toolName}"`,
+    severity: "warning",
+    source: "galaxybots",
+    metadata: { approvalId: approval.id, toolName: params.toolName, botId: params.botId },
+    link: `/command-center`,
+  });
 
   return approval.id;
 }

@@ -7,6 +7,8 @@ import { requireRole } from "../middleware/auth";
 import { createNotification } from "../services/notifications";
 import crypto from "node:crypto";
 import { scoreConfidence } from "./prospecting";
+import { checkWorkflowTriggers } from "../services/workflow-engine";
+import { emitActivityEvent } from "../services/activity-events";
 
 const router: IRouter = Router();
 
@@ -342,6 +344,26 @@ router.post("/integrations/piratemonster/webhook", (req, res, next) => requireIn
       overallScore,
       citationCount,
       scannedAt,
+    });
+
+    checkWorkflowTriggers("aeo_score_changed", {
+      aeoScoreId: record.id,
+      sourceUrl,
+      overallScore,
+      previousScore: previousScore?.overallScore ?? null,
+      scoreDrop: previousScore ? previousScore.overallScore - overallScore : 0,
+      scanType,
+      clientId,
+    }, clientId).catch((e) => console.error("[workflow-trigger] aeo_score_changed:", e));
+
+    emitActivityEvent({
+      clientId,
+      eventType: "aeo_update",
+      source: "piratemonster",
+      severity: previousScore && overallScore < previousScore.overallScore ? "warning" : "info",
+      title: `AEO scan complete — score ${overallScore}`,
+      description: `${sourceUrl} scored ${overallScore}${previousScore ? ` (was ${previousScore.overallScore})` : ""}`,
+      metadata: { aeoScoreId: record.id, sourceUrl, overallScore, previousScore: previousScore?.overallScore ?? null, scanType },
     });
 
     if (previousScore) {

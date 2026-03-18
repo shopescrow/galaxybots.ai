@@ -69,6 +69,8 @@ import PartnerApply from "@/pages/partner/PartnerApply";
 import PartnerAdminPortal from "@/pages/partner/PartnerAdminPortal";
 import UsageDashboard from "@/pages/usage/UsageDashboard";
 import BriefsPage from "@/pages/briefs/BriefsPage";
+import ProcessStudio from "@/pages/process-studio/ProcessStudio";
+import ActivityStream from "@/pages/activity/ActivityStream";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -165,6 +167,8 @@ function AuthenticatedRoutes() {
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/usage" component={UsageDashboard} />
       <Route path="/briefs" component={BriefsPage} />
+      <Route path="/process-studio" component={ProcessStudio} />
+      <Route path="/activity" component={ActivityStream} />
       <Route component={NotFound} />
     </Switch>
     </>

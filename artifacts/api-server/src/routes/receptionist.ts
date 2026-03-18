@@ -6,6 +6,7 @@ import { syncCallToCRM, sendTestWebhook } from "../services/crm-adapter";
 import { shouldRunImprovement, runImprovementPass, storeCallTranscriptMemory } from "../services/receptionist-improvement";
 import { generateCallDebrief } from "./voice-intelligence";
 import nodemailer from "nodemailer";
+import { checkWorkflowTriggers } from "../services/workflow-engine";
 
 type ReceptionistConfig = InferSelectModel<typeof receptionistConfigsTable>;
 type CallLog = InferSelectModel<typeof callLogsTable>;
@@ -541,6 +542,15 @@ router.post("/receptionist/call-status", requireCredentials, validateTwilioSigna
           console.error("[AI Receptionist] Improvement pass failed:", err);
         });
       }
+
+      checkWorkflowTriggers("twilio_call_ended", {
+        callSid: CallSid,
+        callLogId: callLog.id,
+        configId: callLog.configId,
+        clientId: config.clientId,
+        durationSeconds: Number(req.body.CallDuration || 0),
+        status: "completed",
+      }, config.clientId).catch((e) => console.error("[workflow-trigger] twilio_call_ended:", e));
     }
   }
 

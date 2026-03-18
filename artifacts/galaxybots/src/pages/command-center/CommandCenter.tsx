@@ -2,9 +2,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import {
   Loader2,
@@ -23,6 +24,11 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Timer,
+  Workflow,
+  ArrowRight,
+  Settings,
+  Save,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Redirect, useSearch } from "wouter";
@@ -50,6 +56,9 @@ type Approval = {
   toolInput: unknown;
   status: string;
   createdAt: string;
+  slaDeadline?: string | null;
+  escalatedAt?: string | null;
+  isTimeSensitive?: boolean;
 };
 
 type Alert = {
@@ -78,14 +87,27 @@ type CompanyCard = {
   healthTrend: string | null;
 };
 
+type UnifiedActivityEvent = {
+  id: string;
+  timestamp: string;
+  source: string;
+  eventType: string;
+  description: string;
+  clientId: number | null;
+  clientName?: string;
+  severity: "info" | "warning" | "critical";
+  link?: string;
+  metadata?: unknown;
+};
+
 function useCommandCenterData() {
   const { token } = useAuth();
   const headers = { Authorization: `Bearer ${token}` };
 
-  const activity = useQuery<{ items: ActivityItem[]; total: number }>({
-    queryKey: ["command-center", "activity"],
+  const activity = useQuery<{ items: UnifiedActivityEvent[]; total: number }>({
+    queryKey: ["command-center", "activity-unified"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/command-center/activity?limit=30`, { headers });
+      const res = await fetch(`${BASE}/api/activity?limit=30`, { headers });
       if (!res.ok) throw new Error("Failed to load activity");
       return res.json();
     },
@@ -140,7 +162,13 @@ function formatToolName(name: string) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-function ActivityFeed({ items }: { items: ActivityItem[] }) {
+const SEVERITY_ICON: Record<string, React.ReactNode> = {
+  info: <Activity className="w-3.5 h-3.5 text-blue-400" />,
+  warning: <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />,
+  critical: <XCircle className="w-3.5 h-3.5 text-red-400" />,
+};
+
+function ActivityFeed({ items }: { items: UnifiedActivityEvent[] }) {
   if (items.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground">
@@ -154,39 +182,29 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
     <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
       {items.map((item) => (
         <div
-          key={`${item.type}-${item.id}`}
+          key={item.id}
           className="flex items-start gap-3 p-3 rounded-xl hover:bg-secondary/30 transition-colors"
         >
-          <div className="mt-0.5">
-            {item.type === "tool_call" ? (
-              <Zap className="w-4 h-4 text-primary" />
-            ) : (
-              <Activity className="w-4 h-4 text-cyan-400" />
-            )}
+          <div className="mt-0.5 shrink-0">
+            {SEVERITY_ICON[item.severity] ?? <Activity className="w-3.5 h-3.5 text-blue-400" />}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium truncate">
-                {formatToolName(item.action)}
-              </span>
-              {item.botName && (
-                <Badge variant="outline" className="text-[10px] shrink-0">
-                  {item.botName}
-                </Badge>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm truncate">{item.description}</p>
+              {item.link && (
+                <Link href={item.link}>
+                  <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-foreground shrink-0" />
+                </Link>
               )}
             </div>
             <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
-              {formatTime(item.createdAt)}
-              {item.type === "tool_call" && (
-                <Badge variant="secondary" className="text-[9px]">
-                  TOOL
-                </Badge>
-              )}
-              {item.type === "audit" && (
-                <Badge variant="secondary" className="text-[9px]">
-                  AUDIT
-                </Badge>
+              {formatTime(item.timestamp)}
+              <Badge variant="secondary" className="text-[9px]">
+                {item.source}
+              </Badge>
+              {item.clientName && (
+                <span className="truncate">{item.clientName}</span>
               )}
             </div>
           </div>
@@ -194,6 +212,27 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
       ))}
     </div>
   );
+}
+
+function getSlaUrgency(
+  slaDeadline: string | null | undefined,
+  createdAt: string,
+  isTimeSensitive?: boolean | null,
+): { color: string; label: string; pct: number } {
+  if (!slaDeadline) return { color: "text-green-400", label: "", pct: 100 };
+  const now = Date.now();
+  const deadline = new Date(slaDeadline).getTime();
+  const created = new Date(createdAt).getTime();
+  const remaining = deadline - now;
+  if (remaining <= 0) return { color: "text-red-400", label: "SLA BREACHED", pct: 0 };
+  const totalWindow = deadline - created;
+  const windowMs = totalWindow > 0 ? totalWindow : (isTimeSensitive ? 60 : 240) * 60 * 1000;
+  const pct = Math.max(0, Math.min(100, (remaining / windowMs) * 100));
+  const mins = Math.round(remaining / 60000);
+  if (mins < 30) return { color: "text-red-400", label: `${mins}m left`, pct };
+  if (mins < 120) return { color: "text-amber-400", label: `${mins}m left`, pct };
+  const hours = Math.round(mins / 60);
+  return { color: "text-green-400", label: `${hours}h left`, pct };
 }
 
 function PendingApprovals({ approvals }: { approvals: Approval[] }) {
@@ -247,66 +286,95 @@ function PendingApprovals({ approvals }: { approvals: Approval[] }) {
     );
   }
 
+  const sorted = [...approvals].sort((a, b) => {
+    const aDeadline = a.slaDeadline ? new Date(a.slaDeadline).getTime() : Infinity;
+    const bDeadline = b.slaDeadline ? new Date(b.slaDeadline).getTime() : Infinity;
+    return aDeadline - bDeadline;
+  });
+
   return (
     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-      {approvals.map((a) => (
-        <div
-          key={a.id}
-          className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-sm font-medium truncate">
-                  {formatToolName(a.toolName)}
-                </span>
-              </div>
-              {a.botName && (
-                <p className="text-xs text-muted-foreground ml-6">
-                  Requested by {a.botName}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground ml-6 mt-1">
-                <Clock className="w-3 h-3 inline mr-1" />
-                {formatTime(a.createdAt)}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs font-tech h-8 text-green-400 border-green-500/30 hover:bg-green-500/10"
-                disabled={processingId === a.id}
-                onClick={() => {
-                  setProcessingId(a.id);
-                  approveMutation.mutate(a.id);
-                }}
-              >
-                {processingId === a.id && approveMutation.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
+      {sorted.map((a) => {
+        const sla = getSlaUrgency(a.slaDeadline, a.createdAt, a.isTimeSensitive);
+        const isBreached = a.slaDeadline && new Date(a.slaDeadline).getTime() < Date.now();
+        const borderColor = isBreached ? "border-red-500/40 bg-red-500/5" : a.isTimeSensitive ? "border-amber-500/30 bg-amber-500/5" : "border-amber-500/20 bg-amber-500/5";
+        return (
+          <div key={a.id} className={`p-4 rounded-xl border ${borderColor}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className={`w-4 h-4 shrink-0 ${isBreached ? "text-red-400" : "text-amber-400"}`} />
+                  <span className="text-sm font-medium truncate">{formatToolName(a.toolName)}</span>
+                  {a.isTimeSensitive && (
+                    <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30 shrink-0">
+                      TIME-SENSITIVE
+                    </Badge>
+                  )}
+                </div>
+                {a.botName && (
+                  <p className="text-xs text-muted-foreground ml-6">Requested by {a.botName}</p>
                 )}
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs font-tech h-8 text-red-400 border-red-500/30 hover:bg-red-500/10"
-                disabled={processingId === a.id}
-                onClick={() => {
-                  setProcessingId(a.id);
-                  rejectMutation.mutate(a.id);
-                }}
-              >
-                <XCircle className="w-3 h-3 mr-1" />
-                Reject
-              </Button>
+                <div className="flex items-center gap-3 ml-6 mt-1">
+                  <p className="text-xs text-muted-foreground">
+                    <Clock className="w-3 h-3 inline mr-1" />
+                    {formatTime(a.createdAt)}
+                  </p>
+                  {sla.label && (
+                    <p className={`text-xs font-medium flex items-center gap-1 ${sla.color}`}>
+                      <Timer className="w-3 h-3" />
+                      {sla.label}
+                    </p>
+                  )}
+                </div>
+                {a.slaDeadline && (
+                  <div className="ml-6 mt-2">
+                    <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          sla.pct <= 10 ? "bg-red-500" : sla.pct <= 40 ? "bg-amber-500" : "bg-green-500"
+                        }`}
+                        style={{ width: `${sla.pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs font-tech h-8 text-green-400 border-green-500/30 hover:bg-green-500/10"
+                  disabled={processingId === a.id}
+                  onClick={() => {
+                    setProcessingId(a.id);
+                    approveMutation.mutate(a.id);
+                  }}
+                >
+                  {processingId === a.id && approveMutation.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                  )}
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs font-tech h-8 text-red-400 border-red-500/30 hover:bg-red-500/10"
+                  disabled={processingId === a.id}
+                  onClick={() => {
+                    setProcessingId(a.id);
+                    rejectMutation.mutate(a.id);
+                  }}
+                >
+                  <XCircle className="w-3 h-3 mr-1" />
+                  Reject
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -513,6 +581,143 @@ function CompanyStatusCards({ companies }: { companies: CompanyCard[] }) {
   );
 }
 
+type SlaConfig = {
+  defaultSlaMinutes: number;
+  timeSensitiveSlaMinutes: number;
+  secondaryApproverEmail: string | null;
+  trustedCategories: string[];
+};
+
+function SlaSettingsPanel() {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  const { data: slaConfig, isLoading } = useQuery<SlaConfig>({
+    queryKey: ["sla-config"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/approval-sla-config`, { headers });
+      if (!res.ok) return { defaultSlaMinutes: 240, timeSensitiveSlaMinutes: 60, secondaryApproverEmail: null, trustedCategories: [] };
+      return res.json();
+    },
+  });
+
+  const [defaultSla, setDefaultSla] = useState<string>("");
+  const [timeSensitiveSla, setTimeSensitiveSla] = useState<string>("");
+  const [secondaryEmail, setSecondaryEmail] = useState<string>("");
+  const [trustedCats, setTrustedCats] = useState<string>("");
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (slaConfig && !initialized) {
+      setDefaultSla(String(slaConfig.defaultSlaMinutes));
+      setTimeSensitiveSla(String(slaConfig.timeSensitiveSlaMinutes));
+      setSecondaryEmail(slaConfig.secondaryApproverEmail ?? "");
+      setTrustedCats((slaConfig.trustedCategories ?? []).join(", "));
+      setInitialized(true);
+    }
+  }, [slaConfig, initialized]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/approval-sla-config`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          defaultSlaMinutes: Number(defaultSla) || 240,
+          timeSensitiveSlaMinutes: Number(timeSensitiveSla) || 60,
+          secondaryApproverEmail: secondaryEmail || null,
+          trustedCategories: trustedCats.split(",").map((s) => s.trim()).filter(Boolean),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save SLA settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sla-config"] });
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3 border-b border-border/30">
+        <CardTitle className="text-lg flex items-center gap-2 font-tech">
+          <Settings className="w-5 h-5 text-primary" />
+          Approval SLA Settings
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-4">
+        {isLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Default SLA (minutes)</label>
+                <Input
+                  type="number"
+                  value={defaultSla}
+                  onChange={(e) => setDefaultSla(e.target.value)}
+                  placeholder="240"
+                  className="h-9 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">Standard approval deadline. Default: 240 min (4h)</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Time-Sensitive SLA (minutes)</label>
+                <Input
+                  type="number"
+                  value={timeSensitiveSla}
+                  onChange={(e) => setTimeSensitiveSla(e.target.value)}
+                  placeholder="60"
+                  className="h-9 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">For email/SMS/invoice tools. Default: 60 min (1h)</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Secondary Approver Email</label>
+              <Input
+                type="email"
+                value={secondaryEmail}
+                onChange={(e) => setSecondaryEmail(e.target.value)}
+                placeholder="manager@company.com"
+                className="h-9 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">Receives email when SLA is breached</p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Trusted Categories (auto-approved)</label>
+              <Input
+                value={trustedCats}
+                onChange={(e) => setTrustedCats(e.target.value)}
+                placeholder="web_search, read_email"
+                className="h-9 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">Comma-separated tool names that bypass approval queue</p>
+            </div>
+            <Button
+              size="sm"
+              className="gap-1.5 font-tech"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Save Settings
+            </Button>
+            {saveMutation.isSuccess && (
+              <p className="text-xs text-green-400">Settings saved successfully</p>
+            )}
+            {saveMutation.isError && (
+              <p className="text-xs text-red-400">Failed to save settings</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function CommandCenter() {
   const { user } = useAuth();
   const { activity, approvals, alerts, companies } = useCommandCenterData();
@@ -584,6 +789,37 @@ export default function CommandCenter() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <Link href="/activity">
+            <div className="p-4 rounded-xl border border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Activity className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium">Activity Stream</p>
+                    <p className="text-xs text-muted-foreground">Cross-platform unified feed</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </div>
+            </div>
+          </Link>
+          <Link href="/process-studio">
+            <div className="p-4 rounded-xl border border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Workflow className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium">Process Studio</p>
+                    <p className="text-xs text-muted-foreground">Visual workflow builder</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </div>
+            </div>
+          </Link>
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -637,6 +873,8 @@ export default function CommandCenter() {
                 <AlertsSection alerts={alerts.data || []} />
               </CardContent>
             </Card>
+
+            <SlaSettingsPanel />
 
             <div>
               <h2 className="text-xl font-display font-bold mb-4 flex items-center gap-2">

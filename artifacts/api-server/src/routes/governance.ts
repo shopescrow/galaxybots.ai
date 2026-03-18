@@ -15,6 +15,9 @@ import { getAllTools, getTool, type ToolContext } from "../tools";
 import { SENSITIVE_TOOLS, SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS, READ_ONLY_ANALYST_TOOLS, applyBrandVoiceGuardrails } from "../services/governance";
 import { resumeAgenticLoop, resumeAgenticLoopWithRejection } from "../tools/agentic-loop";
 import { sendPushToClient } from "../services/push-sender";
+import { checkWorkflowTriggers } from "../services/workflow-engine";
+import { emitActivityEvent } from "../services/activity-events";
+import { createNotification } from "../services/notifications";
 
 async function persistResumedOutput(
   approval: { conversationId: number | null; sessionId: number | null; botId: number; botName: string | null },
@@ -302,7 +305,33 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
     }
   }
 
+  emitActivityEvent({
+    clientId: approval.clientId,
+    eventType: "approval",
+    source: "system",
+    severity: "info",
+    title: `Tool approved: ${approval.toolName}`,
+    description: `${approval.botName ?? "Bot"} was approved to use "${approval.toolName}"`,
+    metadata: { approvalId: approval.id, toolName: approval.toolName, resolvedBy: req.user!.userId },
+  });
+  createNotification({
+    clientId: approval.clientId,
+    category: "approval",
+    severity: "info",
+    title: `Tool approved: ${approval.toolName}`,
+    body: `${approval.botName ?? "Bot"} was approved to use "${approval.toolName}"`,
+    link: "/command-center",
+    metadata: { approvalId: approval.id, toolName: approval.toolName, resolvedBy: req.user!.userId, eventType: "approval_resolution" },
+  }).catch(() => {});
+
   res.json({ ...updated, toolResult, resumeResult });
+
+  checkWorkflowTriggers("approval_completed", {
+    approvalId: id,
+    toolName: approval.toolName,
+    status: "approved",
+    clientId,
+  }, clientId).catch((e) => console.error("[workflow-trigger] approval_completed:", e));
 
   const pendingCount = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -402,7 +431,33 @@ router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), a
     }
   }
 
+  emitActivityEvent({
+    clientId: approval.clientId,
+    eventType: "approval",
+    source: "system",
+    severity: "warning",
+    title: `Tool rejected: ${approval.toolName}`,
+    description: `${approval.botName ?? "Bot"}'s request to use "${approval.toolName}" was rejected — ${rejectionReason}`,
+    metadata: { approvalId: approval.id, toolName: approval.toolName, rejectionReason, resolvedBy: req.user!.userId },
+  });
+  createNotification({
+    clientId: approval.clientId,
+    category: "approval",
+    severity: "warning",
+    title: `Tool rejected: ${approval.toolName}`,
+    body: `${approval.botName ?? "Bot"}'s request to use "${approval.toolName}" was rejected — ${rejectionReason.substring(0, 200)}`,
+    link: "/command-center",
+    metadata: { approvalId: approval.id, toolName: approval.toolName, rejectionReason, resolvedBy: req.user!.userId, eventType: "approval_resolution" },
+  }).catch(() => {});
+
   res.json({ ...updated, resumeResult });
+
+  checkWorkflowTriggers("approval_completed", {
+    approvalId: id,
+    toolName: approval.toolName,
+    status: "rejected",
+    clientId,
+  }, clientId).catch((e) => console.error("[workflow-trigger] approval_rejected:", e));
 
   const pendingCount = await db
     .select({ count: sql<number>`count(*)::int` })
