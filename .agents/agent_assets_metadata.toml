@@ -6,3 +6,9 @@ id = "Yo8sgXmYVnJ-Cdon0Ewem"
 uri = "file://7lawn11_autonomous_operations_consulting_report.md"
 type = "text"
 title = "7 Lawn 11 — AI Consulting Team Analysis Report"
+
+[[outputs]]
+id = "9fOqYD0KuFwxUxxLxeJix"
+uri = "file://GalaxyBots-New-User-Guide.pdf"
+type = "pdf"
+title = "GalaxyBots New User Guide — 13-Slide PDF"
