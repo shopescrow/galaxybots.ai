@@ -5,8 +5,11 @@ import {
   developerApiKeysTable,
   developerApiUsageLogTable,
   apiChangelogTable,
+  mcpToolCallsTable,
+  mcpOAuthClientsTable,
+  platformApiKeysTable,
 } from "@workspace/db";
-import { eq, and, desc, sql, gte } from "drizzle-orm";
+import { eq, and, desc, sql, gte, count } from "drizzle-orm";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -419,6 +422,143 @@ router.get("/developer/changelog", async (_req, res): Promise<void> => {
   } catch (err) {
     console.error("Changelog fetch error:", err);
     res.status(500).json({ error: "Failed to fetch changelog" });
+  }
+});
+
+router.get("/developer/mcp/stats", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const toolCallVolume = await db
+      .select({
+        toolName: mcpToolCallsTable.toolName,
+        callCount: sql<number>`COUNT(*)::int`,
+        errorCount: sql<number>`SUM(CASE WHEN ${mcpToolCallsTable.responseStatus} = 'error' THEN 1 ELSE 0 END)::int`,
+        avgLatencyMs: sql<number>`AVG(${mcpToolCallsTable.latencyMs})::int`,
+      })
+      .from(mcpToolCallsTable)
+      .innerJoin(
+        platformApiKeysTable,
+        and(
+          eq(mcpToolCallsTable.partnerKeyId, platformApiKeysTable.id),
+          eq(platformApiKeysTable.clientId, clientId),
+        ),
+      )
+      .where(gte(mcpToolCallsTable.calledAt, sevenDaysAgo))
+      .groupBy(mcpToolCallsTable.toolName)
+      .orderBy(desc(sql`COUNT(*)`));
+
+    const dailyVolume = await db
+      .select({
+        date: sql<string>`DATE(${mcpToolCallsTable.calledAt})`,
+        callCount: sql<number>`COUNT(*)::int`,
+        errorCount: sql<number>`SUM(CASE WHEN ${mcpToolCallsTable.responseStatus} = 'error' THEN 1 ELSE 0 END)::int`,
+      })
+      .from(mcpToolCallsTable)
+      .innerJoin(
+        platformApiKeysTable,
+        and(
+          eq(mcpToolCallsTable.partnerKeyId, platformApiKeysTable.id),
+          eq(platformApiKeysTable.clientId, clientId),
+        ),
+      )
+      .where(gte(mcpToolCallsTable.calledAt, sevenDaysAgo))
+      .groupBy(sql`DATE(${mcpToolCallsTable.calledAt})`)
+      .orderBy(sql`DATE(${mcpToolCallsTable.calledAt})`);
+
+    const oauthClients = await db
+      .select({
+        id: mcpOAuthClientsTable.id,
+        clientId: mcpOAuthClientsTable.clientId,
+        clientName: mcpOAuthClientsTable.clientName,
+        allowedScopes: mcpOAuthClientsTable.allowedScopes,
+        createdAt: mcpOAuthClientsTable.createdAt,
+      })
+      .from(mcpOAuthClientsTable)
+      .where(eq(mcpOAuthClientsTable.clientIdOwner, clientId))
+      .orderBy(desc(mcpOAuthClientsTable.createdAt));
+
+    const totalCallsResult = await db
+      .select({ totalCalls: sql<number>`COUNT(*)::int` })
+      .from(mcpToolCallsTable)
+      .innerJoin(
+        platformApiKeysTable,
+        and(
+          eq(mcpToolCallsTable.partnerKeyId, platformApiKeysTable.id),
+          eq(platformApiKeysTable.clientId, clientId),
+        ),
+      )
+      .where(gte(mcpToolCallsTable.calledAt, sevenDaysAgo));
+
+    const totalCalls = totalCallsResult[0]?.totalCalls ?? 0;
+
+    res.json({
+      toolCallVolume: toolCallVolume.map(t => ({
+        toolName: t.toolName,
+        callCount: Number(t.callCount),
+        errorCount: Number(t.errorCount || 0),
+        avgLatencyMs: Math.round(Number(t.avgLatencyMs || 0)),
+        errorRate: t.callCount > 0 ? Math.round((Number(t.errorCount || 0) / Number(t.callCount)) * 100) : 0,
+      })),
+      dailyVolume: dailyVolume.map(d => ({
+        date: d.date,
+        callCount: Number(d.callCount),
+        errorCount: Number(d.errorCount || 0),
+      })),
+      oauthClients,
+      totalCallsLast7Days: Number(totalCalls),
+    });
+  } catch (err) {
+    console.error("MCP stats error:", err);
+    res.status(500).json({ error: "Failed to fetch MCP stats" });
+  }
+});
+
+router.get("/developer/mcp/sessions", async (req, res): Promise<void> => {
+  const clientId = req.user?.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  const mcpApiKey = process.env.MCP_API_KEY;
+  const mcpPort = process.env.MCP_PORT || "23320";
+
+  if (!mcpApiKey) {
+    res.json({ sessions: [], count: 0, note: "MCP_API_KEY not configured" });
+    return;
+  }
+
+  try {
+    const clientKeys = await db
+      .select({ id: platformApiKeysTable.id })
+      .from(platformApiKeysTable)
+      .where(
+        and(
+          eq(platformApiKeysTable.clientId, clientId),
+          eq(platformApiKeysTable.status, "active"),
+        ),
+      );
+    const clientKeyIds = new Set(clientKeys.map(k => k.id));
+
+    const response = await fetch(`http://localhost:${mcpPort}/__mcp/sessions`, {
+      headers: { Authorization: `Bearer ${mcpApiKey}` },
+    });
+    if (!response.ok) {
+      res.json({ sessions: [], count: 0 });
+      return;
+    }
+    const data = await response.json() as { sessions: { partnerKeyId: number | null; callerType: string; [key: string]: unknown }[]; count: number };
+
+    const filtered = data.sessions.filter(s =>
+      s.callerType === "galaxybots" ? false :
+      s.partnerKeyId != null && clientKeyIds.has(s.partnerKeyId)
+    );
+
+    res.json({ sessions: filtered, count: filtered.length });
+  } catch {
+    res.json({ sessions: [], count: 0 });
   }
 });
 

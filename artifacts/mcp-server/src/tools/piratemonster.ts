@@ -270,30 +270,44 @@ export function registerPirateMonsterReadTools(server: McpServer, ctx: McpSessio
 
   if (isToolAllowed("pm_compare_urls", allowedTools)) server.tool(
     "pm_compare_urls",
-    "Compare AEO scores side-by-side for 2-5 URLs, showing Cloud 9 score, citations, per-engine breakdown, and freshness per URL.",
+    "Compare AEO scores side-by-side for 2-5 URLs, showing Cloud 9 score, citations, per-engine breakdown, and freshness per URL. Pass progressToken for per-URL progress updates.",
     {
       urls: z.array(z.string().url()).min(2).max(5).describe("2-5 URLs to compare"),
+      progressToken: z.union([z.string(), z.number()]).optional().describe("Optional MCP progress token for per-URL progress updates"),
     },
-    async ({ urls }) => {
+    async ({ urls, progressToken }, extra) => {
       const start = Date.now();
+      const sendProgress = async (message: string, progress: number, total: number) => {
+        const token = progressToken ?? extra._meta?.progressToken;
+        if (token !== undefined && extra.sendNotification) {
+          try {
+            await extra.sendNotification({
+              method: "notifications/progress",
+              params: { progressToken: token, progress, total, message },
+            });
+          } catch { }
+        }
+      };
+
       try {
-        const comparisons = await Promise.all(
-          urls.map(async (url) => {
-            const [latest] = await db
-              .select()
-              .from(aeoScoresTable)
-              .where(eq(aeoScoresTable.sourceUrl, url))
-              .orderBy(desc(aeoScoresTable.scannedAt))
-              .limit(1);
+        const comparisons: unknown[] = [];
+        for (let i = 0; i < urls.length; i++) {
+          const url = urls[i];
+          await sendProgress(`analyzing_${i + 1}_of_${urls.length}`, i, urls.length);
 
-            if (!latest) {
-              return { url, status: "no_data" as const };
-            }
+          const [latest] = await db
+            .select()
+            .from(aeoScoresTable)
+            .where(eq(aeoScoresTable.sourceUrl, url))
+            .orderBy(desc(aeoScoresTable.scannedAt))
+            .limit(1);
 
+          if (!latest) {
+            comparisons.push({ url, status: "no_data" as const });
+          } else {
             const engines = latest.engineScores as Record<string, { score: number; cited: boolean }>;
             const { dataFreshnessHours, freshnessStatus } = computeFreshness(latest.scannedAt);
-
-            return {
+            comparisons.push({
               url,
               status: "ok" as const,
               overallScore: latest.overallScore,
@@ -302,10 +316,11 @@ export function registerPirateMonsterReadTools(server: McpServer, ctx: McpSessio
               lastScannedAt: latest.scannedAt.toISOString(),
               dataFreshnessHours,
               freshnessStatus,
-            };
-          })
-        );
+            });
+          }
+        }
 
+        await sendProgress("complete", urls.length, urls.length);
         await logToolCall(partnerKeyId, { toolName: "pm_compare_urls", inputJson: { urls }, responseStatus: "ok", latencyMs: Date.now() - start, cached: false });
         return { content: [{ type: "text" as const, text: JSON.stringify({ comparisons }, null, 2) }] };
       } catch (err) {
@@ -375,17 +390,47 @@ export function registerPirateMonsterScanTools(server: McpServer, ctx: McpSessio
 
   if (isToolAllowed("pm_request_scan", allowedTools)) server.tool(
     "pm_request_scan",
-    "Queue a new AEO scan for a URL. Scans are processed asynchronously and results delivered via webhook.",
+    "Queue a new AEO scan for a URL. Scans are processed asynchronously and results delivered via webhook. Pass progressToken for scan stage notifications.",
     {
       url: z.string().url().describe("The URL to scan"),
+      progressToken: z.union([z.string(), z.number()]).optional().describe("Optional MCP progress token for streaming scan stage updates"),
     },
-    async ({ url }) => {
+    async ({ url, progressToken }, extra) => {
       const start = Date.now();
+      const sendProgress = async (message: string, progress: number, total: number) => {
+        const token = progressToken ?? extra._meta?.progressToken;
+        if (token !== undefined && extra.sendNotification) {
+          try {
+            await extra.sendNotification({
+              method: "notifications/progress",
+              params: { progressToken: token, progress, total, message },
+            });
+          } catch { }
+        }
+      };
+
+      const AEO_ENGINES = [
+        "chatgpt", "gemini", "perplexity", "claude",
+        "copilot", "you_com", "brave_leo", "mistral", "grok",
+      ];
+      const TOTAL_STEPS = AEO_ENGINES.length + 3;
+      const hasProgressToken = !!(progressToken ?? extra._meta?.progressToken);
+
+      const sendEngineProgress = async (engine: string, index: number, phase: "queued" | "complete", partialScore?: number) => {
+        const scoreStr = partialScore !== undefined ? ` score=${partialScore}` : "";
+        const message = phase === "queued"
+          ? `engine_queued:${engine}`
+          : `engine_complete:${engine}${scoreStr}`;
+        await sendProgress(message, index + 1, TOTAL_STEPS);
+      };
+
       try {
         if (!partnerKeyId) {
           await logToolCall(partnerKeyId, { toolName: "pm_request_scan", inputUrl: url, responseStatus: "unauthorized", latencyMs: Date.now() - start, cached: false });
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Partner key required" }) }], isError: true };
         }
+
+        await sendProgress("checking_existing_scan", 0, TOTAL_STEPS);
 
         const existing = await db
           .select()
@@ -403,6 +448,7 @@ export function registerPirateMonsterScanTools(server: McpServer, ctx: McpSessio
           .limit(1);
 
         if (existing.length > 0) {
+          await sendProgress("already_in_queue", TOTAL_STEPS, TOTAL_STEPS);
           await logToolCall(partnerKeyId, { toolName: "pm_request_scan", inputUrl: url, responseStatus: "existing", latencyMs: Date.now() - start, cached: false });
           return {
             content: [{ type: "text" as const, text: JSON.stringify({
@@ -413,18 +459,90 @@ export function registerPirateMonsterScanTools(server: McpServer, ctx: McpSessio
           };
         }
 
+        await sendProgress("submitting_scan_request", 1, TOTAL_STEPS);
+
         const [request] = await db.insert(aeoScanRequestsTable).values({
           partnerKeyId,
           url,
           status: "queued",
         }).returning();
 
+        for (let i = 0; i < AEO_ENGINES.length; i++) {
+          await sendEngineProgress(AEO_ENGINES[i], i + 1, "queued");
+        }
+
+        await sendProgress(`scan_queued — ${AEO_ENGINES.length} engines dispatched`, TOTAL_STEPS - 1, TOTAL_STEPS);
+
+        if (hasProgressToken) {
+          const POLL_INTERVAL_MS = 3000;
+          const MAX_POLL_MS = 60000;
+          let pollElapsed = 0;
+          let lastEmittedStatus = "queued";
+
+          while (pollElapsed < MAX_POLL_MS) {
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            pollElapsed += POLL_INTERVAL_MS;
+
+            const [current] = await db
+              .select({ status: aeoScanRequestsTable.status, completedAt: aeoScanRequestsTable.completedAt, scoreId: aeoScanRequestsTable.scoreId })
+              .from(aeoScanRequestsTable)
+              .where(eq(aeoScanRequestsTable.id, request.id))
+              .limit(1);
+
+            if (!current) break;
+
+            if (current.status !== lastEmittedStatus) {
+              lastEmittedStatus = current.status;
+              await sendProgress(`scan_status:${current.status}`, TOTAL_STEPS - 1, TOTAL_STEPS);
+            }
+
+            if (current.status === "complete" || current.status === "completed") {
+              if (current.scoreId) {
+                const [score] = await db
+                  .select({ overallScore: aeoScoresTable.overallScore, citationCount: aeoScoresTable.citationCount, engineScores: aeoScoresTable.engineScores })
+                  .from(aeoScoresTable)
+                  .where(eq(aeoScoresTable.id, current.scoreId))
+                  .limit(1);
+
+                if (score) {
+                  const engines = score.engineScores as Record<string, { score: number; cited: boolean }> | null;
+                  if (engines) {
+                    for (const [engineName, engineData] of Object.entries(engines)) {
+                      await sendEngineProgress(engineName, TOTAL_STEPS - 1, "complete", engineData.score);
+                    }
+                  }
+                  await sendProgress(`scan_complete — score:${score.overallScore} citations:${score.citationCount}`, TOTAL_STEPS, TOTAL_STEPS);
+                  await logToolCall(partnerKeyId, { toolName: "pm_request_scan", inputUrl: url, responseStatus: "complete", latencyMs: Date.now() - start, cached: false });
+                  return {
+                    content: [{ type: "text" as const, text: JSON.stringify({
+                      requestId: request.id,
+                      scoreId: current.scoreId,
+                      status: "complete",
+                      overallScore: score.overallScore,
+                      citationCount: score.citationCount,
+                      engines,
+                      message: `Scan complete. Overall AEO score: ${score.overallScore}/100, cited by ${score.citationCount} engines.`,
+                    }) }],
+                  };
+                }
+              }
+              await sendProgress("scan_complete", TOTAL_STEPS, TOTAL_STEPS);
+              break;
+            } else if (current.status === "failed") {
+              await sendProgress("scan_failed", TOTAL_STEPS, TOTAL_STEPS);
+              break;
+            }
+          }
+        }
+
+        await sendProgress("scan_queued_processing_async", TOTAL_STEPS, TOTAL_STEPS);
         await logToolCall(partnerKeyId, { toolName: "pm_request_scan", inputUrl: url, responseStatus: "queued", latencyMs: Date.now() - start, cached: false });
         return {
           content: [{ type: "text" as const, text: JSON.stringify({
             requestId: request.id,
             status: "queued",
-            message: "Results delivered via webhook when scan completes",
+            engines: AEO_ENGINES,
+            message: "Scan queued for 9 AEO engines (ChatGPT, Gemini, Perplexity, Claude, Copilot, You.com, Brave Leo, Mistral, Grok). Use pm_get_scan_status or pm_get_score to retrieve results.",
           }) }],
         };
       } catch (err) {

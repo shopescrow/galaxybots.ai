@@ -53,3 +53,61 @@ export async function apiPost<T = unknown>(path: string, body: unknown): Promise
   }
   return res.json() as Promise<T>;
 }
+
+export interface StreamEvent {
+  type: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
+export async function apiPostStream(
+  path: string,
+  body: unknown,
+  onEvent: (event: StreamEvent) => void | Promise<void>
+): Promise<string> {
+  const url = `${API_BASE}${path}`;
+  console.log(`[MCP:API] POST (stream) ${url}`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${getServiceToken()}`,
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API POST ${path} failed (${res.status}): ${text}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalContent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const raw = line.slice(6).trim();
+      if (!raw) continue;
+      try {
+        const event = JSON.parse(raw) as StreamEvent;
+        if (event.type === "done" && typeof event.content === "string") {
+          finalContent = event.content;
+        }
+        await onEvent(event);
+      } catch {
+      }
+    }
+  }
+
+  return finalContent;
+}

@@ -31,6 +31,10 @@ import {
   AlertTriangle,
   ExternalLink,
   LogIn,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Server,
 } from "lucide-react";
 import {
   Select,
@@ -1032,9 +1036,285 @@ function WebhooksSection() {
   );
 }
 
+interface McpStats {
+  toolCallVolume: { toolName: string; callCount: number; errorCount: number; avgLatencyMs: number; errorRate: number }[];
+  dailyVolume: { date: string; callCount: number; errorCount: number }[];
+  oauthClients: { id: number; clientId: string; clientName: string; allowedScopes: string[]; createdAt: string }[];
+  totalCallsLast7Days: number;
+}
+
+interface McpSession {
+  sessionId: string;
+  clientName: string;
+  connectedAt: string;
+  toolCallCount: number;
+  callerType: string;
+  oauthClientId: string | null;
+}
+
+interface McpSessionsData {
+  sessions: McpSession[];
+  count: number;
+}
+
+function McpConnectionsSection() {
+  const { user } = useAuth();
+  const [pingResult, setPingResult] = useState<{ ok: boolean; latency?: number; error?: string } | null>(null);
+  const [pinging, setPinging] = useState(false);
+
+  const { data: stats, isLoading, refetch } = useQuery<McpStats>({
+    queryKey: ["developer", "mcp", "stats"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/developer/mcp/stats`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const { data: sessionsData, refetch: refetchSessions } = useQuery<McpSessionsData>({
+    queryKey: ["developer", "mcp", "sessions"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/developer/mcp/sessions`, { credentials: "include" });
+      if (!res.ok) return { sessions: [], count: 0 };
+      return res.json();
+    },
+    enabled: !!user,
+    refetchInterval: 15000,
+  });
+
+  const testConnection = async () => {
+    setPinging(true);
+    const start = Date.now();
+    try {
+      const res = await fetch(`${window.location.origin}/__mcp/health`);
+      const latency = Date.now() - start;
+      setPingResult({ ok: res.ok, latency });
+    } catch (err) {
+      setPingResult({ ok: false, error: err instanceof Error ? err.message : "Connection failed" });
+    } finally {
+      setPinging(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <LoginGate message="Sign in to view your MCP Connections dashboard." />
+    );
+  }
+
+  const maxCalls = stats?.toolCallVolume.reduce((m, t) => Math.max(m, t.callCount), 1) ?? 1;
+  const maxDaily = stats?.dailyVolume.reduce((m, d) => Math.max(m, d.callCount), 1) ?? 1;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-display font-bold">MCP Connections</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs" onClick={() => { refetch(); refetchSessions(); }}>
+            <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+          </Button>
+          <Button
+            size="sm"
+            className="text-xs"
+            onClick={testConnection}
+            disabled={pinging}
+          >
+            {pinging ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wifi className="w-3 h-3 mr-1" />}
+            Test Connection
+          </Button>
+        </div>
+      </div>
+
+      {pingResult && (
+        <div className={`rounded-lg border p-3 ${pingResult.ok ? "border-emerald-500/30 bg-emerald-500/5" : "border-red-500/30 bg-red-500/5"}`}>
+          <div className="flex items-center gap-2 text-xs">
+            {pingResult.ok ? <Wifi className="w-4 h-4 text-emerald-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
+            <span className="font-bold">
+              {pingResult.ok ? `MCP server reachable — ${pingResult.latency}ms round-trip` : `Connection failed: ${pingResult.error}`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : stats ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="border-border/50">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground font-tech uppercase">Tool Calls (7d)</p>
+                <p className="text-2xl font-display font-bold">{stats.totalCallsLast7Days.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground font-tech uppercase">Active Sessions</p>
+                <p className="text-2xl font-display font-bold">{sessionsData?.count ?? 0}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground font-tech uppercase">OAuth Clients</p>
+                <p className="text-2xl font-display font-bold">{stats.oauthClients.length}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50">
+              <CardContent className="p-4 text-center">
+                <p className="text-xs text-muted-foreground font-tech uppercase">Unique Tools Used</p>
+                <p className="text-2xl font-display font-bold">{stats.toolCallVolume.length}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="text-sm font-tech uppercase tracking-wider text-muted-foreground">
+                Active SSE Sessions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {sessionsData && sessionsData.sessions.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-4 gap-2 text-[10px] font-tech text-muted-foreground uppercase px-2 pb-1 border-b border-border/30">
+                    <span className="col-span-2">Client</span>
+                    <span>Connected</span>
+                    <span className="text-right">Calls</span>
+                  </div>
+                  {sessionsData.sessions.map((s) => (
+                    <div key={s.sessionId} className="grid grid-cols-4 gap-2 text-xs px-2 py-1 rounded-md hover:bg-secondary/20">
+                      <div className="col-span-2 space-y-0.5">
+                        <div className="font-bold truncate">{s.clientName}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">{s.callerType}</div>
+                      </div>
+                      <div className="text-muted-foreground text-[10px] self-center">
+                        {new Date(s.connectedAt).toLocaleTimeString()}
+                      </div>
+                      <div className="text-right self-center font-mono">{s.toolCallCount}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  No active sessions. Connect a client via Claude Desktop, Cursor, or any MCP-compatible tool.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {stats.toolCallVolume.length > 0 && (
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-sm font-tech uppercase tracking-wider text-muted-foreground">
+                  Tool Call Volume (Last 7 Days)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-5 gap-2 text-[10px] font-tech text-muted-foreground uppercase px-2 pb-1 border-b border-border/30">
+                    <span className="col-span-2">Tool</span>
+                    <span className="text-right">Calls</span>
+                    <span className="text-right">Errors</span>
+                    <span className="text-right">Avg ms</span>
+                  </div>
+                  {stats.toolCallVolume.map((t) => (
+                    <div key={t.toolName} className="space-y-1">
+                      <div className="grid grid-cols-5 gap-2 text-xs px-2">
+                        <span className="col-span-2 font-mono truncate">{t.toolName}</span>
+                        <span className="text-right">{t.callCount}</span>
+                        <span className={`text-right ${t.errorCount > 0 ? "text-red-400" : "text-muted-foreground"}`}>{t.errorCount}</span>
+                        <span className="text-right text-muted-foreground">{t.avgLatencyMs}ms</span>
+                      </div>
+                      <div className="px-2">
+                        <div className="h-1.5 bg-secondary/50 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary/60 rounded-full"
+                            style={{ width: `${Math.min(100, (t.callCount / maxCalls) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {stats.dailyVolume.length > 0 && (
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-sm font-tech uppercase tracking-wider text-muted-foreground">
+                  Daily Tool Calls
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1">
+                  {stats.dailyVolume.map((d) => (
+                    <div key={d.date} className="flex items-center gap-3 text-xs">
+                      <span className="text-muted-foreground font-mono w-24">{d.date}</span>
+                      <div className="flex-1 h-4 bg-secondary/50 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gold/60 rounded-full"
+                          style={{ width: `${Math.min(100, (d.callCount / maxDaily) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="w-12 text-right">{d.callCount}</span>
+                      {d.errorCount > 0 && (
+                        <span className="text-red-400 text-[10px]">{d.errorCount} err</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {stats.oauthClients.length > 0 && (
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-sm font-tech uppercase tracking-wider text-muted-foreground">
+                  OAuth Clients
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {stats.oauthClients.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 text-xs">
+                      <div className="space-y-0.5">
+                        <div className="font-bold">{c.clientName}</div>
+                        <div className="font-mono text-muted-foreground text-[10px]">{c.clientId}</div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {(c.allowedScopes as string[]).map(s => (
+                          <Badge key={s} variant="outline" className="text-[10px]">{s}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {stats.toolCallVolume.length === 0 && stats.oauthClients.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No MCP activity in the last 7 days. Connect a client to get started.
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function McpGuideSection() {
   const { user } = useAuth();
   const mcpUrl = `${window.location.origin}/__mcp/sse`;
+  const queryClient = useQueryClient();
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
   const { data: keys } = useQuery<DevKey[]>({
     queryKey: ["developer", "keys"],
@@ -1046,8 +1326,29 @@ function McpGuideSection() {
     enabled: !!user,
   });
 
-  const activeKey = keys?.find(k => k.status === "active");
-  const keyPlaceholder = activeKey ? `${activeKey.keyPrefix}... (use your full key)` : "YOUR_API_KEY";
+  const generateMcpKey = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/developer/keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "MCP Client", scopes: ["read"] }),
+      });
+      if (!res.ok) throw new Error("Failed to generate key");
+      return res.json() as Promise<{ apiKey: string }>;
+    },
+    onSuccess: (data) => {
+      setGeneratedKey(data.apiKey);
+      queryClient.invalidateQueries({ queryKey: ["developer", "keys"] });
+    },
+  });
+
+  const activeKeys = keys?.filter(k => k.status === "active") || [];
+  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
+  const selectedKey = selectedKeyId !== null ? activeKeys.find(k => k.id === selectedKeyId) : null;
+  const keyPlaceholder = generatedKey ?? "YOUR_API_KEY";
+  const hasRealKey = !!generatedKey;
+
 
   return (
     <div className="space-y-4">
@@ -1068,17 +1369,50 @@ function McpGuideSection() {
             <Label className="text-xs text-muted-foreground">SSE Endpoint:</Label>
             <code className="text-xs font-mono bg-secondary/80 px-2 py-1 rounded">{mcpUrl}</code>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Authentication: Pass your developer API key (<code className="bg-secondary/80 px-1 py-0.5 rounded">gbdev_...</code>) as a Bearer token in the connection.
-            {!user && " Sign in and create a key in the My Keys tab to get started."}
-          </p>
-          {activeKey && (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <p className="text-xs text-primary font-bold mb-1">Your Active Key</p>
-              <p className="text-xs text-muted-foreground font-mono">
-                {activeKey.keyPrefix}... ({activeKey.label}) — use the full key from the My Keys tab
-              </p>
+          {user && !hasRealKey && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+              <p className="text-xs text-primary font-semibold">Get a ready-to-paste config</p>
+              {activeKeys.length > 0 && !generatedKey && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Select an existing key to use in the snippets below, or generate a new dedicated MCP key:</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {activeKeys.map(k => (
+                      <Button
+                        key={k.id}
+                        size="sm"
+                        variant={selectedKeyId === k.id ? "default" : "outline"}
+                        onClick={() => { setSelectedKeyId(k.id); }}
+                        className="text-xs"
+                      >
+                        {k.label || k.keyPrefix + "..."}
+                      </Button>
+                    ))}
+                  </div>
+                  {selectedKey && (
+                    <p className="text-xs text-amber-400">Selected: <span className="font-mono">{selectedKey.keyPrefix}...</span> — full key value was shown once at creation. If you no longer have it, generate a new key.</p>
+                  )}
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={() => generateMcpKey.mutate()}
+                disabled={generateMcpKey.isPending}
+                className="shrink-0"
+              >
+                {generateMcpKey.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Key className="w-4 h-4 mr-1" />}
+                Generate New MCP Key
+              </Button>
             </div>
+          )}
+          {hasRealKey && (
+            <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
+              <p className="text-xs text-green-400 font-semibold mb-1">Key generated — copy your config below</p>
+              <p className="text-xs text-muted-foreground font-mono break-all">{generatedKey}</p>
+              <p className="text-xs text-muted-foreground mt-1">Save this key — it won't be shown again.</p>
+            </div>
+          )}
+          {!user && (
+            <p className="text-xs text-muted-foreground">Sign in and create a key in the My Keys tab to get started.</p>
           )}
         </CardContent>
       </Card>
@@ -1089,9 +1423,10 @@ function McpGuideSection() {
             Claude Desktop
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground mb-2">
-            Add this to your <code className="bg-secondary/80 px-1 py-0.5 rounded">claude_desktop_config.json</code>:
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Add this to your <code className="bg-secondary/80 px-1 py-0.5 rounded">claude_desktop_config.json</code>
+            {!hasRealKey && " (generate a key above to auto-fill your credentials)"}:
           </p>
           <CodeBlock language="json" code={JSON.stringify({
             mcpServers: {
@@ -1104,6 +1439,38 @@ function McpGuideSection() {
               }
             }
           }, null, 2)} />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const config = JSON.stringify({ mcpServers: { galaxybots: { transport: "sse", url: mcpUrl, headers: { Authorization: `Bearer ${keyPlaceholder}` } } } }, null, 2);
+                navigator.clipboard.writeText(config);
+              }}
+            >
+              <Copy className="w-3 h-3 mr-1" />
+              Copy Config
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const t0 = Date.now();
+                try {
+                  const healthUrl = mcpUrl.replace("/sse", "/health");
+                  const res = await fetch(healthUrl);
+                  const rtt = Date.now() - t0;
+                  if (res.ok) alert(`Connection successful — MCP server reachable (${rtt}ms RTT)`);
+                  else alert(`Connection failed: HTTP ${res.status} (${rtt}ms)`);
+                } catch {
+                  alert("Connection failed — MCP server may be offline");
+                }
+              }}
+            >
+              <Activity className="w-3 h-3 mr-1" />
+              Test Connection
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -1454,6 +1821,9 @@ export default function DeveloperPortal() {
             <TabsTrigger value="mcp" className="text-xs gap-1">
               <Terminal className="w-3 h-3" /> MCP Guide
             </TabsTrigger>
+            <TabsTrigger value="mcp-connections" className="text-xs gap-1">
+              <Server className="w-3 h-3" /> MCP Connections
+            </TabsTrigger>
             <TabsTrigger value="usage" className="text-xs gap-1">
               <Activity className="w-3 h-3" /> Usage
             </TabsTrigger>
@@ -1468,6 +1838,7 @@ export default function DeveloperPortal() {
           <TabsContent value="playground"><PlaygroundSection /></TabsContent>
           <TabsContent value="webhooks"><WebhooksSection /></TabsContent>
           <TabsContent value="mcp"><McpGuideSection /></TabsContent>
+          <TabsContent value="mcp-connections"><McpConnectionsSection /></TabsContent>
           <TabsContent value="usage"><UsageSection /></TabsContent>
           <TabsContent value="changelog"><ChangelogSection /></TabsContent>
         </Tabs>

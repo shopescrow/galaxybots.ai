@@ -52,3 +52,4 @@ export * from "./subscription-plans";
 export * from "./partner-tiers";
 export * from "./confidence-configs";
 export * from "./prospecting-patterns";
+export * from "./mcp-oauth-clients";
