@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
 import CaptchaCheckbox from "@/components/auth/CaptchaCheckbox";
-import { Eye, EyeOff, Play, Shield } from "lucide-react";
+import { Eye, EyeOff, Shield } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -209,23 +209,6 @@ export default function Login() {
                 Register
               </button>
             </p>
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-600" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-slate-800/80 px-2 text-slate-500">or</span>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-              onClick={() => navigate("/demo")}
-            >
-              <Play className="w-4 h-4" />
-              Try Live Demo — No Account Needed
-            </Button>
           </form>
         </CardContent>
       </Card>
