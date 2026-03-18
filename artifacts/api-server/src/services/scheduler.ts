@@ -21,6 +21,7 @@ import {
 import { eq, and, lte, isNull, or, ne, desc, gt, isNotNull, count } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "./roi";
+import { generateMorningBriefs, generateWeeklyBriefs } from "./briefing";
 import { syncSource } from "./kb-sync";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { shouldPauseAutonomous } from "./cost-caps";
@@ -888,6 +889,8 @@ export async function startScheduler() {
     checkHealthScores().catch(handleTickError("health scores"));
     checkWeeklyPulse().catch(handleTickError("weekly pulse"));
     checkPartnerTierCompliance().catch(handleTickError("partner tier review"));
+    generateMorningBriefs().catch(handleTickError("morning intelligence briefs"));
+    generateWeeklyBriefs().catch(handleTickError("weekly intelligence briefs"));
   }, 5 * 60 * 1000);
 }
 

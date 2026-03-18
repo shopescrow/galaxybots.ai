@@ -12,6 +12,7 @@ import { KnowledgeBaseTab } from "./KnowledgeBaseTab";
 import { StakeholderAccessTab } from "./StakeholderAccessTab";
 import { ClientHealthTab } from "./ClientHealthTab";
 import { CallsTab } from "./CallsTab";
+import { IntelligenceBriefingsTab } from "./IntelligenceBriefingsTab";
 import { SCENARIOS, SCENARIO_CLIENTS } from "@/data/scenarios";
 import { useState, useEffect } from "react";
 import { BookOpen } from "lucide-react";
@@ -66,7 +67,7 @@ export default function ClientDetail() {
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders" | "health" | "calls" | "bingolingo">("intelligence");
+  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders" | "health" | "calls" | "bingolingo" | "briefings">("intelligence");
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
@@ -344,6 +345,17 @@ export default function ClientDetail() {
               <Sparkles className="w-4 h-4" />
               BingoLingo
             </button>
+            <button
+              onClick={() => setActiveTab("briefings")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all ${
+                activeTab === "briefings"
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Zap className="w-4 h-4" />
+              Briefings
+            </button>
             {clientScenarios.length > 0 && (
               <button
                 onClick={() => setActiveTab("missions")}
@@ -546,6 +558,8 @@ export default function ClientDetail() {
             </CardContent>
           </Card>
         )}
+
+        {activeTab === "briefings" && <IntelligenceBriefingsTab clientId={clientId} />}
 
         {activeTab === "missions" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

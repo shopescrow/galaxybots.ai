@@ -90,6 +90,8 @@ const EXPECTED_TABLES = [
   "users",
   "webhook_deliveries",
   "world_state",
+  "intelligence_briefs",
+  "briefing_settings",
 ];
 
 async function validateDatabaseTables() {

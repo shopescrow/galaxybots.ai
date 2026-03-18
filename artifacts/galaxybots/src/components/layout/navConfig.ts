@@ -72,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: BarChart2,
     children: [
       { href: "/analytics", label: "Analytics", description: "Data analytics" },
+      { href: "/briefs", label: "Intelligence Briefings", description: "Daily & weekly briefings" },
       { href: "/knowledge-base", label: "Knowledge Base", description: "Knowledge repository" },
       { href: "/documents", label: "Documents", description: "Document management" },
       { href: "/bots/ai-receptionist", label: "AI Receptionist", description: "Front-desk automation" },

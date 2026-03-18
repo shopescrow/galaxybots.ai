@@ -67,6 +67,7 @@ import Pricing from "@/pages/Pricing";
 import PartnerApply from "@/pages/partner/PartnerApply";
 import PartnerAdminPortal from "@/pages/partner/PartnerAdminPortal";
 import UsageDashboard from "@/pages/usage/UsageDashboard";
+import BriefsPage from "@/pages/briefs/BriefsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -162,6 +163,7 @@ function AuthenticatedRoutes() {
       <Route path="/settings/org" component={OrgAdmin} />
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/usage" component={UsageDashboard} />
+      <Route path="/briefs" component={BriefsPage} />
       <Route component={NotFound} />
     </Switch>
     </>
