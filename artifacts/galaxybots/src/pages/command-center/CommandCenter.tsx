@@ -24,8 +24,8 @@ import {
   TrendingDown,
   Minus,
 } from "lucide-react";
-import { useState } from "react";
-import { Redirect } from "wouter";
+import { useState, useEffect } from "react";
+import { Redirect, useSearch } from "wouter";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -516,6 +516,21 @@ function CompanyStatusCards({ companies }: { companies: CompanyCard[] }) {
 export default function CommandCenter() {
   const { user } = useAuth();
   const { activity, approvals, alerts, companies } = useCommandCenterData();
+  const searchString = useSearch();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get("scroll") === "approvals") {
+      const tryScroll = () => {
+        const el = document.getElementById("pending-approvals");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      };
+      const timer = setTimeout(tryScroll, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [searchString]);
 
   if (user && user.role !== "owner" && user.role !== "admin") {
     return <Redirect to="/" />;
@@ -588,7 +603,7 @@ export default function CommandCenter() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card id="pending-approvals">
                 <CardHeader className="pb-3 border-b border-border/30">
                   <CardTitle className="text-lg flex items-center gap-2 font-tech">
                     <AlertTriangle className="w-5 h-5 text-amber-400" />

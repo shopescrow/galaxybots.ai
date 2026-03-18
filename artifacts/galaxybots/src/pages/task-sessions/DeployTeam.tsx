@@ -23,8 +23,10 @@ import {
   Baby,
   Brain,
   ArrowRight,
+  Library,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { MissionTemplatesModal } from "@/components/MissionTemplates";
 
 interface ProposedBot {
   name: string;
@@ -60,6 +62,8 @@ export default function DeployTeam() {
   >(new Map());
   const [fabricatingIdx, setFabricatingIdx] = useState<number | null>(null);
   const [lastPrefillScenarioId, setLastPrefillScenarioId] = useState<string | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateHintBots, setTemplateHintBots] = useState<string[]>([]);
 
   const analyzeMutation = useAnalyzeTaskMutation();
   const createSessionMutation = useCreateTaskSessionMutation();
@@ -68,6 +72,12 @@ export default function DeployTeam() {
   useEffect(() => {
     const params = new URLSearchParams(searchString);
     const scenarioId = params.get("scenario");
+    const showTemplates = params.get("templates");
+
+    if (showTemplates === "true") {
+      setTemplatesOpen(true);
+    }
+
     if (scenarioId && scenarioId !== lastPrefillScenarioId) {
       const scenario = getScenarioById(scenarioId);
       if (scenario) {
@@ -101,7 +111,48 @@ export default function DeployTeam() {
     const result = await analyzeMutation.mutateAsync({
       data: { objective: objective.trim() },
     });
-    setProposal(result as typeof proposal);
+    const analysisResult = result as typeof proposal;
+    setProposal(analysisResult);
+
+    if (templateHintBots.length > 0 && analysisResult?.proposedBots) {
+      const hintLower = templateHintBots.map((b) => b.toLowerCase());
+      const preSelected = new Map<number, { approved: boolean; botId?: number }>();
+      for (let idx = 0; idx < analysisResult.proposedBots.length; idx++) {
+        const bot = analysisResult.proposedBots[idx];
+        const botNameLower = bot.name.toLowerCase();
+        const botTitleLower = (bot.title || "").toLowerCase();
+        const isRecommended = hintLower.some(
+          (hint) =>
+            botNameLower.includes(hint) ||
+            botTitleLower.includes(hint) ||
+            hint.includes(botNameLower) ||
+            hint.includes(botTitleLower)
+        );
+        if (isRecommended) {
+          preSelected.set(idx, { approved: true });
+        }
+      }
+      if (preSelected.size > 0) {
+        setApprovedNewBots(preSelected);
+        toast({
+          title: "Recommended bots pre-selected",
+          description: `${preSelected.size} template-recommended bot(s) pre-selected. Review and confirm your team.`,
+        });
+      }
+    }
+  };
+
+  const handleTemplateLaunch = (templateObjective: string, recommendedBots: string[]) => {
+    setObjective(templateObjective);
+    setProposal(null);
+    setApprovedNewBots(new Map());
+    setTemplateHintBots(recommendedBots);
+    toast({
+      title: "Template loaded",
+      description: recommendedBots.length > 0
+        ? `Objective pre-filled. Recommended bots: ${recommendedBots.slice(0, 3).join(", ")}. Click Analyze to assemble your team.`
+        : "Objective pre-filled. Click Analyze to assemble your team.",
+    });
   };
 
   const handleApproveBot = async (idx: number, bot: ProposedBot) => {
@@ -183,15 +234,25 @@ export default function DeployTeam() {
     <AppLayout>
       <div className="relative w-full min-h-[calc(100vh-5rem)] bg-background">
         <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-          <div className="mb-8">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold text-primary flex items-center gap-3">
-              <Rocket className="w-7 h-7 sm:w-8 sm:h-8" />
-              Deploy Task Team
-            </h1>
-            <p className="text-muted-foreground mt-2 font-tech">
-              Describe your business objective and Optima Prime will assemble
-              the optimal cross-functional team.
-            </p>
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-display font-bold text-primary flex items-center gap-3">
+                <Rocket className="w-7 h-7 sm:w-8 sm:h-8" />
+                Deploy Task Team
+              </h1>
+              <p className="text-muted-foreground mt-2 font-tech">
+                Describe your business objective and Optima Prime will assemble
+                the optimal cross-functional team.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="font-tech text-sm flex-shrink-0 border-primary/30 hover:border-primary/60"
+              onClick={() => setTemplatesOpen(true)}
+            >
+              <Library className="w-4 h-4 mr-2" />
+              Browse Templates
+            </Button>
           </div>
 
           <Card className="p-6 bg-black/40 border-primary/30 backdrop-blur-md mb-6">
@@ -259,6 +320,30 @@ export default function DeployTeam() {
               </Button>
             </form>
           </Card>
+
+          {templateHintBots.length > 0 && !analyzeMutation.isPending && !proposal && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4"
+            >
+              <Card className="p-4 bg-violet-500/5 border-violet-500/20">
+                <p className="text-xs font-tech font-semibold text-violet-400/80 uppercase tracking-widest mb-2">
+                  Template Recommended Bots
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {templateHintBots.map((bot) => (
+                    <Badge key={bot} variant="outline" className="text-xs border-violet-500/30 text-violet-300 font-tech">
+                      {bot}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground font-tech mt-2">
+                  Optima Prime will match or create these roles based on your objective.
+                </p>
+              </Card>
+            </motion.div>
+          )}
 
           {analyzeMutation.isPending && (
             <motion.div
@@ -446,6 +531,12 @@ export default function DeployTeam() {
           </AnimatePresence>
         </div>
       </div>
+
+      <MissionTemplatesModal
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onLaunch={handleTemplateLaunch}
+      />
     </AppLayout>
   );
 }

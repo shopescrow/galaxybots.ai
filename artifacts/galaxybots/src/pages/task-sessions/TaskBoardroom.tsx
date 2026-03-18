@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-task-sessions";
 import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
 import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
+import { SaveAsTemplateModal } from "@/components/SaveAsTemplate";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "wouter";
 import { format } from "date-fns";
@@ -30,6 +31,8 @@ import {
   Check,
   X,
   Target,
+  Save,
+  BookmarkPlus,
 } from "lucide-react";
 
 export default function TaskBoardroom() {
@@ -41,6 +44,7 @@ export default function TaskBoardroom() {
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(
     new Set(),
   );
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: session, isLoading: sessionLoading } =
@@ -197,11 +201,22 @@ export default function TaskBoardroom() {
           </div>
 
           <div className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-primary" />
-              <span className="font-tech font-bold text-xs text-primary uppercase tracking-wider">
-                Team ({teamBots.length})
-              </span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                <span className="font-tech font-bold text-xs text-primary uppercase tracking-wider">
+                  Team ({teamBots.length})
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2"
+                onClick={() => setSaveTemplateOpen(true)}
+              >
+                <Save className="w-3 h-3 mr-1" />
+                Save as Template
+              </Button>
             </div>
             <div className="space-y-2">
               {teamBots.map((bot) => (
@@ -291,7 +306,7 @@ export default function TaskBoardroom() {
 
           <div className="flex items-center gap-3 px-4 py-3 border-b border-primary/20 bg-black/30 lg:hidden">
             <Target className="w-4 h-4 text-primary flex-shrink-0" />
-            <p className="text-sm text-foreground/80 truncate font-tech">
+            <p className="text-sm text-foreground/80 truncate font-tech flex-1">
               {session.objective}
             </p>
             <Badge
@@ -300,6 +315,15 @@ export default function TaskBoardroom() {
             >
               {teamBots.length} BOTS
             </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2 flex-shrink-0"
+              onClick={() => setSaveTemplateOpen(true)}
+            >
+              <BookmarkPlus className="w-3 h-3 mr-1" />
+              Save Template
+            </Button>
           </div>
 
           <div
@@ -408,6 +432,13 @@ export default function TaskBoardroom() {
           </div>
         </div>
       </div>
+
+      <SaveAsTemplateModal
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
+        defaultObjective={session.objective || ""}
+        defaultBots={teamBots.map((b) => b.name)}
+      />
     </AppLayout>
   );
 }

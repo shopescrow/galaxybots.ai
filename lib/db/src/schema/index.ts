@@ -54,3 +54,4 @@ export * from "./confidence-configs";
 export * from "./prospecting-patterns";
 export * from "./mcp-oauth-clients";
 export * from "./intelligence-briefs";
+export * from "./mission-templates";

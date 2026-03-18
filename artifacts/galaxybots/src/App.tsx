@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
 import { PartnerProvider } from "@/contexts/PartnerContext";
+import { ActiveClientProvider } from "@/contexts/ActiveClientContext";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 
 import Home from "@/pages/Home";
@@ -206,6 +207,7 @@ export default function App() {
     <LanguageProvider>
       <AuthProvider>
         <UserPreferencesProvider>
+          <ActiveClientProvider>
           <PartnerProvider>
             <QueryClientProvider client={queryClient}>
               <TooltipProvider>
@@ -216,6 +218,7 @@ export default function App() {
               </TooltipProvider>
             </QueryClientProvider>
           </PartnerProvider>
+          </ActiveClientProvider>
         </UserPreferencesProvider>
       </AuthProvider>
     </LanguageProvider>

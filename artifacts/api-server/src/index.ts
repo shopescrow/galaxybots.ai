@@ -6,6 +6,7 @@ import { ProspectingWorker } from "./services/prospecting-worker";
 import { getAllTools } from "./tools";
 import { seedDefaultOutreachTemplates } from "./services/seed-outreach-templates";
 import { seedDefaultPartners } from "./services/seed-partners";
+import { seedMissionTemplates } from "./services/seed-mission-templates";
 import { pool } from "@workspace/db";
 
 const EXPECTED_TABLES = [
@@ -92,6 +93,7 @@ const EXPECTED_TABLES = [
   "world_state",
   "intelligence_briefs",
   "briefing_settings",
+  "mission_templates",
 ];
 
 async function validateDatabaseTables() {
@@ -143,6 +145,9 @@ app.listen(port, async () => {
   });
   seedDefaultPartners().catch((err) => {
     console.error("[seed] Partner seeding failed:", err);
+  });
+  seedMissionTemplates().catch((err) => {
+    console.error("[seed] Mission template seeding failed:", err);
   });
   backfillExistingBotPermissions(getAllTools).catch((err) => {
     console.error("[governance] Permission backfill failed:", err);

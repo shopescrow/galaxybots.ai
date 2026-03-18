@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Shield, Lock, Unlock, AlertTriangle, CheckCircle, XCircle,
@@ -45,6 +45,20 @@ export default function Governance() {
   const { user } = useAuth();
   const isAuthorized = user?.role === "owner" || user?.role === "admin";
 
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    return tab && ["permissions", "approvals", "brand-voice", "templates"].includes(tab) ? tab : "permissions";
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (tab && ["permissions", "approvals", "brand-voice", "templates"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [window.location.search]);
+
   if (!isAuthorized) {
     return (
       <AppLayout title="Governance" subtitle="Bot permissions, approval gates, and brand voice">
@@ -60,7 +74,7 @@ export default function Governance() {
 
   return (
     <AppLayout title="Governance" subtitle="Bot permissions, approval gates, and brand voice">
-      <Tabs defaultValue="permissions" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="bg-slate-800/50 border border-slate-700/50">
           <TabsTrigger value="permissions" className="data-[state=active]:bg-blue-600">
             <Shield className="w-4 h-4 mr-2" />Permissions

@@ -40,6 +40,21 @@ router.get("/roi/client/:clientId/briefing", async (req, res): Promise<void> => 
   }
 });
 
+router.post("/briefings/trigger", async (req, res): Promise<void> => {
+  const clientId = Number(req.user?.clientId);
+  if (isNaN(clientId) || !clientId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  try {
+    const briefing = await generateWeeklyBriefing(clientId);
+    res.json(briefing);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to generate briefing" });
+  }
+});
+
 router.post("/roi/client/:clientId/shareable", async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {

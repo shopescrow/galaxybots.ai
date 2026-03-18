@@ -62,12 +62,19 @@ function findClientSlug(companyName: string): string | null {
   return null;
 }
 
+const VALID_CLIENT_TABS = ["intelligence", "profile", "knowledge-base", "missions", "stakeholders", "health", "calls", "bingolingo", "briefings"] as const;
+type ClientTab = typeof VALID_CLIENT_TABS[number];
+
 export default function ClientDetail() {
   const params = useParams<{ id: string }>();
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"intelligence" | "profile" | "knowledge-base" | "missions" | "stakeholders" | "health" | "calls" | "bingolingo" | "briefings">("intelligence");
+  const [activeTab, setActiveTab] = useState<ClientTab>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get("tab");
+    return (VALID_CLIENT_TABS as readonly string[]).includes(tab ?? "") ? (tab as ClientTab) : "intelligence";
+  });
 
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],

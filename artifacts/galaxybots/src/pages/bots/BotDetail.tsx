@@ -52,6 +52,8 @@ export default function BotDetail() {
   const [publishOpen, setPublishOpen] = useState(false);
   const isAdmin = user?.role === "owner" || user?.role === "admin";
 
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
+
   const handleStartChat = async () => {
     if (!bot) return;
     setIsStarting(true);
@@ -63,6 +65,22 @@ export default function BotDetail() {
       setIsStarting(false);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("startChat") === "true" && bot && conversations !== undefined && !activeConvo && !isStarting) {
+      handleStartChat();
+    }
+  }, [bot, conversations]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("startChat") === "true" && activeConvo) {
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 300);
+    }
+  }, [activeConvo]);
 
   const isCFOBot = !botLoading && !!bot && (
     (bot.title === "Finance Director" && bot.department === "Finance & Legal") ||
@@ -228,7 +246,7 @@ export default function BotDetail() {
                         </Button>
                       </div>
                     ) : (
-                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} canUseMoA={canUseMoA} />
+                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} canUseMoA={canUseMoA} inputRef={chatInputRef} />
                     )}
                   </CardContent>
                 </Card>
@@ -294,12 +312,14 @@ function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botN
   return <WorkingIndicator botName={botName} />;
 }
 
-function ChatInterface({ conversationId, botName, canUseMoA }: { conversationId: number, botName: string, canUseMoA: boolean }) {
+function ChatInterface({ conversationId, botName, canUseMoA, inputRef }: { conversationId: number, botName: string, canUseMoA: boolean, inputRef?: React.RefObject<HTMLInputElement | null> }) {
   const { data: messages, isLoading } = useChatMessages(conversationId);
   const [input, setInput] = useState("");
   const [moaEnabled, setMoaEnabled] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const resolvedInputRef = (inputRef ?? localInputRef) as React.RefObject<HTMLInputElement>;
   const queryClient = useQueryClient();
 
   const onStreamComplete = useCallback(() => {
@@ -472,6 +492,7 @@ function ChatInterface({ conversationId, botName, canUseMoA }: { conversationId:
               {!canUseMoA ? <Lock className="w-3.5 h-3.5" /> : <Brain className="w-4 h-4" />}
             </button>
             <Input 
+              ref={resolvedInputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={moaEnabled ? "Issue directive for deep analysis…" : "Issue directive..."} 

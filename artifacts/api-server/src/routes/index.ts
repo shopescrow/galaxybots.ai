@@ -49,6 +49,7 @@ import pushTokensRouter from "./push-tokens";
 import developerRouter from "./developer";
 import voiceIntelligenceRouter from "./voice-intelligence";
 import briefsRouter from "./briefs";
+import missionTemplatesRouter from "./mission-templates";
 
 const router: IRouter = Router();
 
@@ -100,5 +101,6 @@ router.use(pushTokensRouter);
 router.use(developerRouter);
 router.use(voiceIntelligenceRouter);
 router.use(briefsRouter);
+router.use(missionTemplatesRouter);
 
 export default router;

@@ -974,6 +974,45 @@ router.get("/integrations/piratemonster/content-attribution/:clientId", requireR
   }
 });
 
+router.post("/aeo/scan/request", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { url } = req.body;
+  if (!url || typeof url !== "string") {
+    res.status(400).json({ error: "url is required" });
+    return;
+  }
+
+  const orgClientId = req.user?.clientId;
+  if (!orgClientId) {
+    res.status(403).json({ error: "No organization context found." });
+    return;
+  }
+
+  const [partnerKey] = await db
+    .select({ id: platformApiKeysTable.id })
+    .from(platformApiKeysTable)
+    .where(
+      and(
+        eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+        eq(platformApiKeysTable.status, "active"),
+        eq(platformApiKeysTable.clientId, orgClientId)
+      )
+    )
+    .limit(1);
+
+  if (!partnerKey) {
+    res.status(422).json({ error: "No active PirateMonster integration found for your organization. Configure it in Integrations to enable AEO scans." });
+    return;
+  }
+
+  await db.insert(aeoScanRequestsTable).values({
+    partnerKeyId: partnerKey.id,
+    url: url.trim(),
+    status: "queued",
+  });
+
+  res.json({ success: true, message: "AEO scan queued. Results will appear in the AEO Intelligence tab once processing completes." });
+});
+
 router.get("/integrations/piratemonster/bingolingo-link/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
   const galaxybotsClientId = Number(req.params.clientId);
   if (isNaN(galaxybotsClientId)) {
