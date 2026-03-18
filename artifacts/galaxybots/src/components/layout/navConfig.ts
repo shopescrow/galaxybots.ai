@@ -63,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Building2,
     children: [
       { href: "/clients", label: "Clients", description: "Client management" },
+      { href: "/roi", label: "ROI Dashboard", description: "Client ROI and value reporting" },
       { href: "/compliance", label: "Compliance", description: "Compliance tracking" },
       { href: "/proposals", label: "Proposals", description: "Proposals management" },
       { href: "/prospector", label: "Prospector", description: "Autonomous B2B intelligence" },
