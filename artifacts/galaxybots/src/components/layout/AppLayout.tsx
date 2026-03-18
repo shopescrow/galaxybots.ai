@@ -43,9 +43,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="container mx-auto px-4">
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 mb-4 text-xs font-tech text-muted-foreground">
               <a href="/how-it-works" className="hover:text-primary transition-colors min-h-[44px] flex items-center">How It Works</a>
+              <a href="/pricing" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Pricing</a>
               <a href="/blog" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Blog</a>
               <a href="/hire" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Hire Directors</a>
               <a href="/bots" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Roster</a>
+              <a href="/partner-apply" className="hover:text-gold transition-colors min-h-[44px] flex items-center">Partner Program</a>
               <a href="/partner/bingolingo" className="hover:text-gold transition-colors min-h-[44px] flex items-center">BingoLingo.ai Partner</a>
               <a href="/valuation" className="hover:text-cyan transition-colors min-h-[44px] flex items-center">5-Year Projections</a>
               <a href="/developers" className="hover:text-primary transition-colors min-h-[44px] flex items-center">Developers</a>

@@ -61,7 +61,10 @@ import AdminModeration from "@/pages/marketplace/AdminModeration";
 import SSOCallback from "@/pages/auth/SSOCallback";
 import OrgAdmin from "@/pages/settings/OrgAdmin";
 import NotificationsPage from "@/pages/notifications/NotificationsPage";
-import PartnerAdmin from "@/pages/partner/PartnerAdmin";
+import Pricing from "@/pages/Pricing";
+import PartnerApply from "@/pages/partner/PartnerApply";
+import PartnerAdminPortal from "@/pages/partner/PartnerAdminPortal";
+import UsageDashboard from "@/pages/usage/UsageDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -153,6 +156,7 @@ function AuthenticatedRoutes() {
       <Route path="/admin/marketplace" component={AdminModeration} />
       <Route path="/settings/org" component={OrgAdmin} />
       <Route path="/notifications" component={NotificationsPage} />
+      <Route path="/usage" component={UsageDashboard} />
       <Route component={NotFound} />
     </Switch>
     </>
@@ -177,9 +181,12 @@ function AppRouter() {
       <Route path="/roi/shared/:token" component={SharedReport} />
       <Route path="/" component={SmartHome} />
       <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/pricing" component={Pricing} />
+      <Route path="/partner-apply" component={PartnerApply} />
+      <Route path="/partner-admin/:ref" component={PartnerAdminPortal} />
+      <Route path="/partner-admin" component={PartnerAdminPortal} />
       <Route path="/developers" component={DeveloperPortal} />
       <Route path="/partner/:ref" component={PartnerLanding} />
-      <Route path="/partner-admin" component={PartnerAdmin} />
       <Route>
         <AuthenticatedRoutes />
       </Route>

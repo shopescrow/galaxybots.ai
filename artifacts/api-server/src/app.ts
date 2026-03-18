@@ -63,6 +63,9 @@ const PUBLIC_PATHS = [
   "/api/partner/link",
   "/api/partner/register",
   "/api/partner/admin/login",
+  "/api/partner/apply",
+  "/api/billing/plans",
+  "/api/billing/addons",
   "/api/demo/book",
   "/api/packs",
   "/api/marketplace",
@@ -81,6 +84,7 @@ const PUBLIC_PATHS = [
 ];
 
 const PUBLIC_PATH_PREFIXES = [
+  "/api/partner/",
   "/api/packs/",
   "/api/marketplace/",
   "/api/webhooks/lead/",

@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import Stripe from "stripe";
-import { db, clientsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, clientsTable, subscriptionPlansTable, accountSubscriptionsTable, accessorialAddonsTable, accessorialSubscriptionsTable, usageEventsTable } from "@workspace/db";
+import { eq, and, gte, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
@@ -196,5 +196,192 @@ router.post(
     res.json({ success: true, client: updated });
   }
 );
+
+router.get("/billing/plans", async (_req, res): Promise<void> => {
+  try {
+    const plans = await db
+      .select()
+      .from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.isActive, true))
+      .orderBy(subscriptionPlansTable.monthlyPrice);
+    res.json(plans);
+  } catch (error) {
+    console.error("Error fetching plans:", error);
+    res.status(500).json({ error: "Failed to fetch plans" });
+  }
+});
+
+router.get("/billing/addons", async (_req, res): Promise<void> => {
+  try {
+    const addons = await db
+      .select()
+      .from(accessorialAddonsTable)
+      .where(eq(accessorialAddonsTable.isActive, true))
+      .orderBy(accessorialAddonsTable.monthlyPrice);
+    res.json(addons);
+  } catch (error) {
+    console.error("Error fetching addons:", error);
+    res.status(500).json({ error: "Failed to fetch addons" });
+  }
+});
+
+router.get("/billing/subscription", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  try {
+    const clientId = req.user!.clientId;
+
+    const [sub] = await db
+      .select({
+        id: accountSubscriptionsTable.id,
+        creditBalance: accountSubscriptionsTable.creditBalance,
+        billingCycleStart: accountSubscriptionsTable.billingCycleStart,
+        billingCycleEnd: accountSubscriptionsTable.billingCycleEnd,
+        status: accountSubscriptionsTable.status,
+        planTier: subscriptionPlansTable.tier,
+        planMonthlyPrice: subscriptionPlansTable.monthlyPrice,
+        planIncludedCredits: subscriptionPlansTable.includedCredits,
+        overageRate: subscriptionPlansTable.overageRatePerCredit,
+      })
+      .from(accountSubscriptionsTable)
+      .innerJoin(subscriptionPlansTable, eq(accountSubscriptionsTable.planId, subscriptionPlansTable.id))
+      .where(and(eq(accountSubscriptionsTable.clientId, clientId), eq(accountSubscriptionsTable.status, "active")));
+
+    const activeAddons = await db
+      .select({
+        id: accessorialAddonsTable.id,
+        key: accessorialAddonsTable.key,
+        name: accessorialAddonsTable.name,
+        description: accessorialAddonsTable.description,
+        monthlyPrice: accessorialAddonsTable.monthlyPrice,
+      })
+      .from(accessorialSubscriptionsTable)
+      .innerJoin(accessorialAddonsTable, eq(accessorialSubscriptionsTable.addonId, accessorialAddonsTable.id))
+      .where(and(eq(accessorialSubscriptionsTable.clientId, clientId), eq(accessorialSubscriptionsTable.status, "active")));
+
+    res.json({ subscription: sub || null, addons: activeAddons });
+  } catch (error) {
+    console.error("Error fetching subscription:", error);
+    res.status(500).json({ error: "Failed to fetch subscription" });
+  }
+});
+
+router.post("/billing/subscribe", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  try {
+    const clientId = req.user!.clientId;
+    const { planTier } = req.body;
+
+    const [plan] = await db
+      .select()
+      .from(subscriptionPlansTable)
+      .where(and(eq(subscriptionPlansTable.tier, planTier), eq(subscriptionPlansTable.isActive, true)));
+
+    if (!plan) {
+      res.status(404).json({ error: "Plan not found" });
+      return;
+    }
+
+    await db
+      .update(accountSubscriptionsTable)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(and(eq(accountSubscriptionsTable.clientId, clientId), eq(accountSubscriptionsTable.status, "active")));
+
+    const cycleEnd = new Date();
+    cycleEnd.setMonth(cycleEnd.getMonth() + 1);
+
+    const [sub] = await db.insert(accountSubscriptionsTable).values({
+      clientId,
+      planId: plan.id,
+      creditBalance: plan.includedCredits,
+      billingCycleStart: new Date(),
+      billingCycleEnd: cycleEnd,
+      status: "active",
+    }).returning();
+
+    res.status(201).json({ success: true, subscription: sub });
+  } catch (error) {
+    console.error("Error subscribing:", error);
+    res.status(500).json({ error: "Failed to subscribe" });
+  }
+});
+
+router.get("/billing/usage", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  try {
+    const clientId = req.user!.clientId;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const events = await db
+      .select()
+      .from(usageEventsTable)
+      .where(and(eq(usageEventsTable.clientId, clientId), gte(usageEventsTable.createdAt, thirtyDaysAgo)))
+      .orderBy(desc(usageEventsTable.createdAt));
+
+    const dailyUsage: Record<string, number> = {};
+    let totalCredits = 0;
+
+    for (const event of events) {
+      totalCredits += event.creditsDeducted;
+      const day = event.createdAt.toISOString().slice(0, 10);
+      dailyUsage[day] = (dailyUsage[day] || 0) + event.creditsDeducted;
+    }
+
+    const dailyArray = Object.entries(dailyUsage)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, credits]) => ({ date, credits }));
+
+    res.json({ totalCreditsUsed: totalCredits, dailyUsage: dailyArray, recentEvents: events.slice(0, 20) });
+  } catch (error) {
+    console.error("Error fetching usage:", error);
+    res.status(500).json({ error: "Failed to fetch usage" });
+  }
+});
+
+router.post("/billing/addons/toggle", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  try {
+    const clientId = req.user!.clientId;
+    const { addonKey, activate } = req.body;
+
+    const [addon] = await db
+      .select()
+      .from(accessorialAddonsTable)
+      .where(eq(accessorialAddonsTable.key, addonKey));
+
+    if (!addon) {
+      res.status(404).json({ error: "Add-on not found" });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(accessorialSubscriptionsTable)
+      .where(and(eq(accessorialSubscriptionsTable.clientId, clientId), eq(accessorialSubscriptionsTable.addonId, addon.id)));
+
+    if (activate) {
+      if (existing) {
+        await db
+          .update(accessorialSubscriptionsTable)
+          .set({ status: "active", deactivatedAt: null })
+          .where(and(eq(accessorialSubscriptionsTable.clientId, clientId), eq(accessorialSubscriptionsTable.addonId, addon.id)));
+      } else {
+        await db.insert(accessorialSubscriptionsTable).values({
+          clientId,
+          addonId: addon.id,
+          status: "active",
+        });
+      }
+      res.json({ success: true, status: "active" });
+    } else {
+      if (existing) {
+        await db
+          .update(accessorialSubscriptionsTable)
+          .set({ status: "inactive", deactivatedAt: new Date() })
+          .where(and(eq(accessorialSubscriptionsTable.clientId, clientId), eq(accessorialSubscriptionsTable.addonId, addon.id)));
+      }
+      res.json({ success: true, status: "inactive" });
+    }
+  } catch (error) {
+    console.error("Error toggling addon:", error);
+    res.status(500).json({ error: "Failed to toggle add-on" });
+  }
+});
 
 export default router;
