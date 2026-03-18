@@ -1,9 +1,4 @@
 export default function Slide11Approvals() {
-  const steps = [
-    { label: "Bots Request Action", icon: "🤖", color: "#6B7296", bg: "rgba(107,114,150,0.10)", border: "rgba(107,114,150,0.25)" },
-    { label: "You Review in Command Center", icon: "🧑‍💼", color: "#D4A853", bg: "rgba(212,168,83,0.12)", border: "rgba(212,168,83,0.35)" },
-    { label: "Approve or Reject", icon: "✅", color: "#3D7FE8", bg: "rgba(61,127,232,0.12)", border: "rgba(61,127,232,0.35)" },
-  ];
   return (
     <div className="relative w-screen h-screen overflow-hidden" style={{ background: "#08091A" }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(212,168,83,0.06) 0%, transparent 55%)" }} />
@@ -17,20 +12,32 @@ export default function Slide11Approvals() {
           Sensitive actions require your sign-off before execution
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: "0", flex: 1 }}>
-          {steps.map((step, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-              <div style={{ flex: 1, background: step.bg, border: `1px solid ${step.border}`, borderRadius: "1vw", padding: "3.5vh 2vw", textAlign: "center" }}>
-                <div style={{ fontSize: "3vw", marginBottom: "1.5vh" }}>{step.icon}</div>
-                <div style={{ fontFamily: "Outfit", fontSize: "1.8vw", fontWeight: 700, color: step.color, lineHeight: 1.2 }}>{step.label}</div>
-              </div>
-              {i < steps.length - 1 && (
-                <div style={{ display: "flex", alignItems: "center", padding: "0 1vw" }}>
-                  <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
-                  <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
-                </div>
-              )}
+          <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+            <div style={{ flex: 1, background: "rgba(107,114,150,0.10)", border: "1px solid rgba(107,114,150,0.25)", borderRadius: "1vw", padding: "3.5vh 2vw", textAlign: "center" }}>
+              <div style={{ fontFamily: "Outfit", fontSize: "3vw", fontWeight: 900, color: "#6B7296", marginBottom: "1.5vh" }}>AI</div>
+              <div style={{ fontFamily: "Outfit", fontSize: "1.8vw", fontWeight: 700, color: "#6B7296", lineHeight: 1.2 }}>Bots Request Action</div>
             </div>
-          ))}
+            <div style={{ display: "flex", alignItems: "center", padding: "0 1vw" }}>
+              <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
+              <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+            <div style={{ flex: 1, background: "rgba(212,168,83,0.12)", border: "1px solid rgba(212,168,83,0.35)", borderRadius: "1vw", padding: "3.5vh 2vw", textAlign: "center" }}>
+              <div style={{ fontFamily: "Outfit", fontSize: "3vw", fontWeight: 900, color: "#D4A853", marginBottom: "1.5vh" }}>→</div>
+              <div style={{ fontFamily: "Outfit", fontSize: "1.8vw", fontWeight: 700, color: "#D4A853", lineHeight: 1.2 }}>You Review in Command Center</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", padding: "0 1vw" }}>
+              <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
+              <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+            <div style={{ flex: 1, background: "rgba(61,127,232,0.12)", border: "1px solid rgba(61,127,232,0.35)", borderRadius: "1vw", padding: "3.5vh 2vw", textAlign: "center" }}>
+              <div style={{ fontFamily: "Outfit", fontSize: "3vw", fontWeight: 900, color: "#3D7FE8", marginBottom: "1.5vh" }}>OK</div>
+              <div style={{ fontFamily: "Outfit", fontSize: "1.8vw", fontWeight: 700, color: "#3D7FE8", lineHeight: 1.2 }}>Approve or Reject</div>
+            </div>
+          </div>
         </div>
         <p style={{ fontFamily: "Inter", fontSize: "1.6vw", color: "#6B7296", marginTop: "3vh", textAlign: "center", fontStyle: "italic" }}>
           "You govern every consequential decision. Nothing runs without your authority."

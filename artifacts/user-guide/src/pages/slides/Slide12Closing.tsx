@@ -1,9 +1,4 @@
 export default function Slide12Closing() {
-  const items = [
-    { label: "Bots", icon: "🤖" },
-    { label: "Deploy Team", icon: "🚀" },
-    { label: "Command Center", icon: "🎛️" },
-  ];
   return (
     <div className="relative w-screen h-screen overflow-hidden" style={{ background: "#08091A" }}>
       <div
@@ -30,14 +25,24 @@ export default function Slide12Closing() {
           Your AI executive team is standing by
         </p>
         <div style={{ display: "flex", gap: "4vw", marginBottom: "6vh" }}>
-          {items.map((item) => (
-            <div key={item.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5vh" }}>
-              <div style={{ width: "7vw", height: "7vw", borderRadius: "50%", background: "rgba(212,168,83,0.10)", border: "1px solid rgba(212,168,83,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3vw" }}>
-                {item.icon}
-              </div>
-              <div style={{ fontFamily: "Outfit", fontSize: "1.6vw", fontWeight: 600, color: "#E8EAF0" }}>{item.label}</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5vh" }}>
+            <div style={{ width: "7vw", height: "7vw", borderRadius: "50%", background: "rgba(212,168,83,0.10)", border: "1px solid rgba(212,168,83,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontFamily: "Outfit", fontWeight: 900, fontSize: "2vw", color: "#D4A853" }}>AI</span>
             </div>
-          ))}
+            <div style={{ fontFamily: "Outfit", fontSize: "1.6vw", fontWeight: 600, color: "#E8EAF0" }}>Bots</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5vh" }}>
+            <div style={{ width: "7vw", height: "7vw", borderRadius: "50%", background: "rgba(212,168,83,0.10)", border: "1px solid rgba(212,168,83,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontFamily: "Outfit", fontWeight: 900, fontSize: "1.8vw", color: "#D4A853" }}>DT</span>
+            </div>
+            <div style={{ fontFamily: "Outfit", fontSize: "1.6vw", fontWeight: 600, color: "#E8EAF0" }}>Deploy Team</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5vh" }}>
+            <div style={{ width: "7vw", height: "7vw", borderRadius: "50%", background: "rgba(212,168,83,0.10)", border: "1px solid rgba(212,168,83,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontFamily: "Outfit", fontWeight: 900, fontSize: "1.6vw", color: "#D4A853" }}>CC</span>
+            </div>
+            <div style={{ fontFamily: "Outfit", fontSize: "1.6vw", fontWeight: 600, color: "#E8EAF0" }}>Command Center</div>
+          </div>
         </div>
         <div style={{ width: "8vw", height: "0.25vh", background: "linear-gradient(90deg, transparent, #D4A853, transparent)", marginBottom: "2.5vh" }} />
         <div style={{ fontFamily: "Inter", fontSize: "1.6vw", color: "#D4A853", letterSpacing: "0.05em" }}>

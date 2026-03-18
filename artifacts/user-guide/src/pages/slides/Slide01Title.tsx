@@ -34,7 +34,8 @@ export default function Slide01Title() {
               color: "#E8EAF0",
             }}
           >
-            Your AI Executive<br />Team Starts Here
+            Your AI Executive
+            <span style={{ display: "block" }}>Team Starts Here</span>
           </h1>
           <p
             style={{

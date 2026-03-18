@@ -1,10 +1,4 @@
 export default function Slide08DeployTeam() {
-  const nodes = [
-    { label: "Define Objective", sub: "What do you need accomplished?", color: "#D4A853", bg: "rgba(212,168,83,0.12)" },
-    { label: "Optima Prime Analysis", sub: "AI Commander assembles your team", color: "#3D7FE8", bg: "rgba(61,127,232,0.12)" },
-    { label: "Team Assembly", sub: "Right specialists, selected", color: "#D4A853", bg: "rgba(212,168,83,0.12)" },
-    { label: "Launch Task Room", sub: "All bots, one space, one goal", color: "#3D7FE8", bg: "rgba(61,127,232,0.12)" },
-  ];
   return (
     <div className="relative w-screen h-screen overflow-hidden" style={{ background: "#08091A" }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 50% at 50% 100%, rgba(61,127,232,0.08) 0%, transparent 60%)" }} />
@@ -19,20 +13,42 @@ export default function Slide08DeployTeam() {
         </p>
         <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0", width: "100%" }}>
-            {nodes.map((node, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-                <div style={{ flex: 1, background: node.bg, border: `1px solid ${node.color}40`, borderRadius: "1vw", padding: "2.5vh 1.5vw", textAlign: "center" }}>
-                  <div style={{ fontFamily: "Outfit", fontSize: "1.7vw", fontWeight: 700, color: node.color, marginBottom: "0.8vh" }}>{node.label}</div>
-                  <div style={{ fontFamily: "Inter", fontSize: "1.3vw", color: "#6B7296" }}>{node.sub}</div>
-                </div>
-                {i < nodes.length - 1 && (
-                  <div style={{ display: "flex", alignItems: "center", padding: "0 0.8vw" }}>
-                    <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
-                    <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
-                  </div>
-                )}
+            <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+              <div style={{ flex: 1, background: "rgba(212,168,83,0.12)", border: "1px solid rgba(212,168,83,0.40)", borderRadius: "1vw", padding: "2.5vh 1.5vw", textAlign: "center" }}>
+                <div style={{ fontFamily: "Outfit", fontSize: "1.7vw", fontWeight: 700, color: "#D4A853", marginBottom: "0.8vh" }}>Define Objective</div>
+                <div style={{ fontFamily: "Inter", fontSize: "1.3vw", color: "#6B7296" }}>What do you need accomplished?</div>
               </div>
-            ))}
+              <div style={{ display: "flex", alignItems: "center", padding: "0 0.8vw" }}>
+                <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
+                <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+              <div style={{ flex: 1, background: "rgba(61,127,232,0.12)", border: "1px solid rgba(61,127,232,0.40)", borderRadius: "1vw", padding: "2.5vh 1.5vw", textAlign: "center" }}>
+                <div style={{ fontFamily: "Outfit", fontSize: "1.7vw", fontWeight: 700, color: "#3D7FE8", marginBottom: "0.8vh" }}>Optima Prime Analysis</div>
+                <div style={{ fontFamily: "Inter", fontSize: "1.3vw", color: "#6B7296" }}>AI Commander assembles your team</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", padding: "0 0.8vw" }}>
+                <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
+                <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+              <div style={{ flex: 1, background: "rgba(212,168,83,0.12)", border: "1px solid rgba(212,168,83,0.40)", borderRadius: "1vw", padding: "2.5vh 1.5vw", textAlign: "center" }}>
+                <div style={{ fontFamily: "Outfit", fontSize: "1.7vw", fontWeight: 700, color: "#D4A853", marginBottom: "0.8vh" }}>Team Assembly</div>
+                <div style={{ fontFamily: "Inter", fontSize: "1.3vw", color: "#6B7296" }}>Right specialists, selected</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", padding: "0 0.8vw" }}>
+                <div style={{ width: "3vw", height: "2px", background: "linear-gradient(90deg, #D4A853, #3D7FE8)" }} />
+                <div style={{ width: 0, height: 0, borderTop: "0.6vh solid transparent", borderBottom: "0.6vh solid transparent", borderLeft: "1vw solid #3D7FE8" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+              <div style={{ flex: 1, background: "rgba(61,127,232,0.12)", border: "1px solid rgba(61,127,232,0.40)", borderRadius: "1vw", padding: "2.5vh 1.5vw", textAlign: "center" }}>
+                <div style={{ fontFamily: "Outfit", fontSize: "1.7vw", fontWeight: 700, color: "#3D7FE8", marginBottom: "0.8vh" }}>Launch Task Room</div>
+                <div style={{ fontFamily: "Inter", fontSize: "1.3vw", color: "#6B7296" }}>All bots, one space, one goal</div>
+              </div>
+            </div>
           </div>
         </div>
         <div style={{ marginTop: "2.5vh", fontFamily: "Inter", fontSize: "1.5vw", color: "#3D7FE8", fontWeight: 500 }}>

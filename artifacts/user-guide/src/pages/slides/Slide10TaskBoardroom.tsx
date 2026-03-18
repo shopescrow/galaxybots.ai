@@ -1,14 +1,4 @@
 export default function Slide10TaskBoardroom() {
-  const bullets = [
-    "Direct the full team in one space",
-    "Request specialist additions mid-session",
-    "Track every action in real time",
-  ];
-  const msgs = [
-    { role: "You", text: "Team, I need a full competitive analysis by EOD.", isUser: true },
-    { role: "CMO Bot", text: "On it. Pulling competitor AEO scores now.", isUser: false },
-    { role: "CFO Bot", text: "I'll cross-reference against their funding history.", isUser: false },
-  ];
   return (
     <div className="relative w-screen h-screen overflow-hidden" style={{ background: "#08091A" }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 80% at 0% 50%, rgba(212,168,83,0.05) 0%, transparent 55%)" }} />
@@ -24,12 +14,18 @@ export default function Slide10TaskBoardroom() {
               "You are the Architect. Your team listens, collaborates, and executes."
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh" }}>
-              {bullets.map((b, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "1.5vw" }}>
-                  <div style={{ minWidth: "0.8vw", height: "0.8vw", borderRadius: "50%", background: "#D4A853" }} />
-                  <div style={{ fontFamily: "Inter", fontSize: "1.6vw", color: "#E8EAF0" }}>{b}</div>
-                </div>
-              ))}
+              <div style={{ display: "flex", alignItems: "center", gap: "1.5vw" }}>
+                <div style={{ minWidth: "0.8vw", height: "0.8vw", borderRadius: "50%", background: "#D4A853" }} />
+                <div style={{ fontFamily: "Inter", fontSize: "1.6vw", color: "#E8EAF0" }}>Direct the full team in one space</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "1.5vw" }}>
+                <div style={{ minWidth: "0.8vw", height: "0.8vw", borderRadius: "50%", background: "#D4A853" }} />
+                <div style={{ fontFamily: "Inter", fontSize: "1.6vw", color: "#E8EAF0" }}>Request specialist additions mid-session</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "1.5vw" }}>
+                <div style={{ minWidth: "0.8vw", height: "0.8vw", borderRadius: "50%", background: "#D4A853" }} />
+                <div style={{ fontFamily: "Inter", fontSize: "1.6vw", color: "#E8EAF0" }}>Track every action in real time</div>
+              </div>
             </div>
             <div style={{ marginTop: "auto", fontFamily: "Inter", fontSize: "1.5vw", color: "#3D7FE8", fontWeight: 500 }}>
               → Boardroom in left nav
@@ -37,12 +33,18 @@ export default function Slide10TaskBoardroom() {
           </div>
           <div style={{ width: "32vw", background: "#0E1029", border: "1px solid rgba(212,168,83,0.2)", borderRadius: "1.2vw", padding: "2.5vh 2vw", display: "flex", flexDirection: "column", gap: "1.5vh", flexShrink: 0 }}>
             <div style={{ fontFamily: "Inter", fontSize: "1.2vw", color: "#6B7296", textTransform: "uppercase", letterSpacing: "0.15em", borderBottom: "1px solid rgba(107,114,150,0.2)", paddingBottom: "1vh" }}>Task Boardroom</div>
-            {msgs.map((m, i) => (
-              <div key={i} style={{ alignSelf: m.isUser ? "flex-end" : "flex-start", background: m.isUser ? "rgba(61,127,232,0.12)" : "rgba(107,114,150,0.08)", border: `1px solid ${m.isUser ? "rgba(61,127,232,0.25)" : "rgba(107,114,150,0.2)"}`, borderRadius: "0.8vw", padding: "1.2vh 1.5vw", maxWidth: "26vw" }}>
-                <div style={{ fontFamily: "Inter", fontSize: "1.1vw", color: m.isUser ? "#6BA3F5" : "#D4A853", fontWeight: 600, marginBottom: "0.4vh" }}>{m.role}</div>
-                <div style={{ fontFamily: "Inter", fontSize: "1.4vw", color: "#E8EAF0", lineHeight: 1.4 }}>{m.text}</div>
-              </div>
-            ))}
+            <div style={{ alignSelf: "flex-end", background: "rgba(61,127,232,0.12)", border: "1px solid rgba(61,127,232,0.25)", borderRadius: "0.8vw", padding: "1.2vh 1.5vw", maxWidth: "26vw" }}>
+              <div style={{ fontFamily: "Inter", fontSize: "1.1vw", color: "#6BA3F5", fontWeight: 600, marginBottom: "0.4vh" }}>You</div>
+              <div style={{ fontFamily: "Inter", fontSize: "1.4vw", color: "#E8EAF0", lineHeight: 1.4 }}>Team, I need a full competitive analysis by EOD.</div>
+            </div>
+            <div style={{ alignSelf: "flex-start", background: "rgba(107,114,150,0.08)", border: "1px solid rgba(107,114,150,0.2)", borderRadius: "0.8vw", padding: "1.2vh 1.5vw", maxWidth: "26vw" }}>
+              <div style={{ fontFamily: "Inter", fontSize: "1.1vw", color: "#D4A853", fontWeight: 600, marginBottom: "0.4vh" }}>CMO Bot</div>
+              <div style={{ fontFamily: "Inter", fontSize: "1.4vw", color: "#E8EAF0", lineHeight: 1.4 }}>On it. Pulling competitor AEO scores now.</div>
+            </div>
+            <div style={{ alignSelf: "flex-start", background: "rgba(107,114,150,0.08)", border: "1px solid rgba(107,114,150,0.2)", borderRadius: "0.8vw", padding: "1.2vh 1.5vw", maxWidth: "26vw" }}>
+              <div style={{ fontFamily: "Inter", fontSize: "1.1vw", color: "#D4A853", fontWeight: 600, marginBottom: "0.4vh" }}>CFO Bot</div>
+              <div style={{ fontFamily: "Inter", fontSize: "1.4vw", color: "#E8EAF0", lineHeight: 1.4 }}>I'll cross-reference against their funding history.</div>
+            </div>
           </div>
         </div>
       </div>
