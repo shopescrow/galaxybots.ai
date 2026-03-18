@@ -2,6 +2,7 @@ import app from "./app";
 import { startScheduler } from "./services/scheduler";
 import { backfillExistingBotPermissions } from "./services/governance";
 import { startWebhookDeliveryWorker } from "./services/webhook-delivery";
+import { ProspectingWorker } from "./services/prospecting-worker";
 import { getAllTools } from "./tools";
 import { seedDefaultOutreachTemplates } from "./services/seed-outreach-templates";
 import { seedDefaultPartners } from "./services/seed-partners";
@@ -134,6 +135,7 @@ app.listen(port, async () => {
   await validateDatabaseTables();
   await startScheduler();
   startWebhookDeliveryWorker();
+  ProspectingWorker.start();
   seedDefaultOutreachTemplates().catch((err) => {
     console.error("[seed] Outreach template seeding failed:", err);
   });

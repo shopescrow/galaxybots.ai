@@ -1,7 +1,8 @@
-import { Router } from "express";
-import { db, prospectsTable, prospectOutreachLogTable, prospectOutreachTemplatesTable, clientsTable } from "@workspace/db";
+import { Router, type Request, type Response } from "express";
+import { db, prospectsTable, prospectOutreachLogTable, prospectOutreachTemplatesTable, clientsTable, prospectingJobsTable } from "@workspace/db";
 import { eq, and, desc, sql, gte, isNotNull } from "drizzle-orm";
 import { z } from "zod";
+import { ProspectingJobRequestSchema } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -22,11 +23,11 @@ function isValidStatus(s: string): s is ProspectStatus {
   return (VALID_STATUSES as string[]).includes(s);
 }
 
-function isPlatformAdmin(req: Express.Request): boolean {
-  return req.user?.bypassPayment === true;
+function isPlatformAdmin(req: Request): boolean {
+  return req.user?.role === "platform" || req.user?.bypassPayment === true;
 }
 
-function getEffectiveClientId(req: Express.Request): number | null {
+function getEffectiveClientId(req: Request): number | null {
   if (isPlatformAdmin(req) && req.query.clientId) {
     const parsed = Number(req.query.clientId);
     return isNaN(parsed) ? null : parsed;
@@ -34,11 +35,124 @@ function getEffectiveClientId(req: Express.Request): number | null {
   return req.user?.clientId ?? null;
 }
 
-function buildConditions(...conds: ReturnType<typeof eq>[]) {
-  return conds.length > 1 ? and(...conds) : conds[0];
+function buildConditions(...conds: (ReturnType<typeof eq> | undefined)[]) {
+  const filtered = conds.filter(Boolean) as ReturnType<typeof eq>[];
+  return filtered.length > 1 ? and(...filtered) : filtered[0];
 }
 
-router.get("/prospects", async (req, res) => {
+router.get("/prospecting/jobs/:jobId", async (req: Request, res: Response) => {
+  try {
+    const jobId = Number(req.params.jobId);
+    if (isNaN(jobId)) {
+      res.status(400).json({ error: "Invalid job ID" });
+      return;
+    }
+
+    const clientId = getEffectiveClientId(req);
+    if (!clientId) {
+      res.status(403).json({ error: "Client context required" });
+      return;
+    }
+
+    const [job] = await db.select().from(prospectingJobsTable).where(and(eq(prospectingJobsTable.id, jobId), eq(prospectingJobsTable.clientId, clientId)));
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+
+    res.json(job);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch job" });
+  }
+});
+
+router.post("/prospecting/jobs", async (req: Request, res: Response) => {
+  try {
+    const clientId = getEffectiveClientId(req);
+    if (!clientId) {
+      res.status(403).json({ error: "Client context required" });
+      return;
+    }
+
+    const idempotencyKey = req.headers["idempotency-key"] as string;
+    if (idempotencyKey) {
+      const [existing] = await db.select().from(prospectingJobsTable).where(eq(prospectingJobsTable.idempotencyKey, idempotencyKey));
+      if (existing) {
+        res.json(existing);
+        return;
+      }
+    }
+
+    const parsed = ProspectingJobRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+
+    const { query, location, limit, webhookUrl } = parsed.data;
+
+    const [job] = await db.insert(prospectingJobsTable).values({
+      clientId,
+      idempotencyKey: idempotencyKey || `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      query,
+      location,
+      limit,
+      webhookUrl,
+      status: "pending",
+      requestedBy: req.user?.role === "platform" ? "platform" : "user",
+      source: req.user?.role === "platform" ? "piratemonster" : "galaxybots",
+    }).returning();
+
+    res.status(201).json(job);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create job" });
+  }
+});
+
+router.get("/prospecting/prospects", async (req: Request, res: Response) => {
+  try {
+    const clientId = getEffectiveClientId(req);
+    if (!clientId) {
+      res.status(403).json({ error: "Client context required" });
+      return;
+    }
+
+    const { status, limit, jobId, icpScoreMin } = req.query;
+    const maxResults = Math.min(Number(limit) || 50, 100);
+    const conditions: (ReturnType<typeof eq> | undefined)[] = [eq(prospectsTable.clientId, clientId)];
+
+    if (status && typeof status === "string" && isValidStatus(status)) {
+      conditions.push(eq(prospectsTable.status, status));
+    }
+    if (jobId) {
+      const jId = Number(jobId);
+      if (!isNaN(jId)) {
+        conditions.push(eq(prospectsTable.jobId, jId));
+      }
+    }
+
+    let queryBuilder = db.select().from(prospectsTable)
+      .where(buildConditions(...conditions))
+      .orderBy(desc(prospectsTable.createdAt));
+
+    if (icpScoreMin) {
+      const minScore = Number(icpScoreMin);
+      if (!isNaN(minScore)) {
+        queryBuilder = db.select().from(prospectsTable)
+          .where(and(buildConditions(...conditions)!, sql`${prospectsTable.icpScore} >= ${minScore}`))
+          .orderBy(desc(prospectsTable.createdAt));
+      }
+    }
+
+    const results = await queryBuilder.limit(maxResults);
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch prospects" });
+  }
+});
+
+router.get("/prospects", async (req: Request, res: Response) => {
   try {
     const clientId = getEffectiveClientId(req);
     if (!clientId) {

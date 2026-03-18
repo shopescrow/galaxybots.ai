@@ -9,6 +9,7 @@ import { stripeWebhookHandler } from "./routes/billing";
 import { analyticsApiKeyAuth } from "./middleware/analytics-api-key";
 import { instrumentHealthSignals } from "./middleware/health-signals";
 import { developerApiKeyAuth } from "./middleware/developer-api-key";
+import { platformApiKeyAuth } from "./middleware/platform-api-key";
 
 const app: Express = express();
 
@@ -117,6 +118,9 @@ app.use("/api", (req, res, next) => {
   }
   if (req.headers.authorization?.startsWith("Bearer gbdev_")) {
     return developerApiKeyAuth(req, res, next);
+  }
+  if (req.headers["x-platform-key"]) {
+    return platformApiKeyAuth(req, res, next);
   }
   return authenticate(req, res, next);
 });

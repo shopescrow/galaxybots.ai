@@ -1,5 +1,6 @@
-import { pgTable, serial, text, timestamp, integer, jsonb, real, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb, real, index, boolean, numeric, unique } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
+import { prospectingJobsTable } from "./prospecting_jobs";
 
 export const prospectsTable = pgTable("prospects", {
   id: serial("id").primaryKey(),
@@ -11,9 +12,14 @@ export const prospectsTable = pgTable("prospects", {
   socialLinks: jsonb("social_links").$type<Record<string, string>>().default({}),
   sourceUrl: text("source_url").notNull(),
   confidenceScore: real("confidence_score").notNull().default(0),
+  icpScore: numeric("icp_score"),
+  icpCriteria: jsonb("icp_criteria"),
   status: text("status", { enum: ["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"] }).notNull().default("new"),
   errorCategory: text("error_category", { enum: ["network", "parsing", "not_found", "validation"] }),
+  retryStrategy: text("retry_strategy", { enum: ["exponential", "fixed", "none", "escalate"] }).default("none"),
   attemptCount: integer("attempt_count").notNull().default(1),
+  enrichmentCostCredits: numeric("enrichment_cost_credits").notNull().default("0"),
+  jobId: integer("job_id").references(() => prospectingJobsTable.id, { onDelete: "set null" }),
   extractionNotes: text("extraction_notes"),
   convertedClientId: integer("converted_client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   convertedAt: timestamp("converted_at", { withTimezone: true }),
@@ -24,6 +30,7 @@ export const prospectsTable = pgTable("prospects", {
   index("prospects_status_idx").on(table.status),
   index("prospects_client_id_idx").on(table.clientId),
   index("prospects_confidence_idx").on(table.confidenceScore),
+  unique("prospects_client_id_domain_idx").on(table.clientId, table.domain),
 ]);
 
 export const prospectOutreachLogTable = pgTable("prospect_outreach_log", {

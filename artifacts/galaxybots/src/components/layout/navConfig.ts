@@ -5,6 +5,8 @@ import {
   BarChart2,
   Settings,
   Sparkles,
+  Search,
+  Layout,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -59,6 +61,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/clients", label: "Clients", description: "Client management" },
       { href: "/compliance", label: "Compliance", description: "Compliance tracking" },
       { href: "/proposals", label: "Proposals", description: "Proposals management" },
+      { href: "/prospector", label: "Prospector", description: "Autonomous B2B intelligence" },
       { href: "/prospects", label: "Prospects", description: "Prospect pipeline" },
       { href: "/client-portal", label: "Client Portal", description: "Client-facing portal" },
     ],
@@ -82,6 +85,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/integrations", label: "Integrations", description: "Third-party connections" },
       { href: "/billing", label: "Billing", description: "Billing and subscription" },
       { href: "/marketplace", label: "Marketplace", description: "Apps and add-ons" },
+      { href: "/five-year-plan", label: "Strategic Plan", description: "5-Year business strategy" },
       { href: "/packs", label: "Industry Packs", description: "Vertical-specific packs" },
       { href: "/developers", label: "Developer Portal", description: "API and developer tools" },
     ],

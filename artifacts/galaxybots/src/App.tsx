@@ -36,6 +36,7 @@ import SharedReport from "@/pages/roi/SharedReport";
 import Billing from "@/pages/Billing";
 import Scenarios from "@/pages/scenarios/Scenarios";
 import Prospects from "@/pages/prospects/Prospects";
+import Prospector from "@/pages/prospects/Prospector";
 import Settings from "@/pages/Settings";
 import Governance from "@/pages/governance/Governance";
 import KnowledgeBase from "@/pages/knowledge-base/KnowledgeBase";
@@ -45,6 +46,7 @@ import SharedProposal from "@/pages/proposals/SharedProposal";
 import Pipelines from "@/pages/pipelines/Pipelines";
 import CommandCenter from "@/pages/command-center/CommandCenter";
 import AnalyticsDashboard from "@/pages/analytics/AnalyticsDashboard";
+import PitchDeck from "@/pages/five-year-plan/PitchDeck";
 import ClientPortal from "@/pages/client-portal/ClientPortal";
 import DeveloperPortal from "@/pages/developers/DeveloperPortal";
 import NotFound from "@/pages/not-found";
@@ -147,6 +149,7 @@ function AuthenticatedRoutes() {
       <Route path="/billing" component={Billing} />
       <Route path="/scenarios" component={Scenarios} />
       <Route path="/prospects" component={Prospects} />
+      <Route path="/prospector" component={Prospector} />
       <Route path="/settings" component={Settings} />
       <Route path="/governance" component={Governance} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
@@ -154,6 +157,7 @@ function AuthenticatedRoutes() {
       <Route path="/proposals" component={ProposalStudio} />
       <Route path="/pipelines" component={Pipelines} />
       <Route path="/analytics" component={AnalyticsDashboard} />
+      <Route path="/five-year-plan" component={PitchDeck} />
       <Route path="/admin/marketplace" component={AdminModeration} />
       <Route path="/settings/org" component={OrgAdmin} />
       <Route path="/notifications" component={NotificationsPage} />

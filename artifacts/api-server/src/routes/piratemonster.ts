@@ -1,11 +1,12 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable, competitorUrlsTable, bingolingoClientsTable, bingolingoContentTable } from "@workspace/db";
-import { eq, desc, and, or, gt, sql, isNotNull } from "drizzle-orm";
+import { db, aeoScoresTable, clientsTable, botsTable, partnerRegistrationsTable, platformApiKeysTable, aeoWebhooksTable, aeoScanRequestsTable, mcpToolCallsTable, webhookDeliveriesTable, competitorUrlsTable, bingolingoClientsTable, bingolingoContentTable, prospectsTable, platformAuditLogTable, confidenceConfigsTable, prospectingJobsTable } from "@workspace/db";
+import { eq, desc, and, or, gt, sql, isNotNull, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { runAgenticLoop } from "../tools/agentic-loop";
 import { requireRole } from "../middleware/auth";
 import { createNotification } from "../services/notifications";
 import crypto from "node:crypto";
+import { scoreConfidence } from "./prospecting";
 
 const router: IRouter = Router();
 
@@ -37,6 +38,20 @@ const WebhookPayloadSchema = z.object({
     (val) => !isNaN(new Date(val).getTime()),
     { message: "scannedAt must be a valid ISO 8601 date string" }
   ),
+});
+
+const PirateMonsterProspectSchema = z.object({
+  companyName: z.string(),
+  domain: z.string(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  socialLinks: z.record(z.string().url()).optional().nullable(),
+});
+
+const PirateMonsterBatchWebhookSchema = z.object({
+  clientId: z.number(),
+  jobId: z.number().optional(),
+  prospects: z.array(PirateMonsterProspectSchema),
 });
 
 const RecommendPayloadSchema = z.object({
@@ -138,7 +153,127 @@ async function updateScanRequests(sourceUrl: string, scoreId: number) {
   }
 }
 
-router.post("/integrations/piratemonster/webhook", requireInboundSecret, async (req, res): Promise<void> => {
+router.post("/prospecting/webhook/piratemonster", (req, res, next) => requireInboundSecret(req, res, next), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const parsed = PirateMonsterBatchWebhookSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid batch payload", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+
+    const { clientId, jobId, prospects } = parsed.data;
+
+    // Fetch confidence config to score inbound prospects
+    const [config] = await db.select().from(confidenceConfigsTable).where(eq(confidenceConfigsTable.clientId, clientId));
+    const defaultWeights = { emailWeight: "0.25", phoneWeight: "0.25", domainWeight: "0.20", socialWeight: "0.15", nameWeight: "0.15" };
+    
+    let inserted = 0;
+    let reviewQueued = 0;
+
+    const valuesToInsert = prospects.map(p => {
+      const confidence = scoreConfidence(p, config || defaultWeights);
+      const status = confidence.score < 0.70 ? "review_needed" : "enriched";
+      if (status === "review_needed") reviewQueued++;
+      else inserted++;
+
+      return {
+        clientId,
+        jobId: jobId || null,
+        companyName: p.companyName,
+        domain: p.domain,
+        email: p.email,
+        phone: p.phone,
+        socialLinks: p.socialLinks,
+        status,
+        confidenceScore: sql`${confidence.score}`,
+        source: "piratemonster",
+        updatedAt: new Date()
+      };
+    });
+
+    if (valuesToInsert.length > 0) {
+      await db.insert(prospectsTable).values(valuesToInsert as any);
+
+      // Audit log entry for the batch
+      await db.insert(platformAuditLogTable).values({
+        clientId,
+        action: "piratemonster_webhook_batch",
+        resource: "prospect",
+        metadata: {
+          compliancePlatform: "kilopro",
+          jobId,
+          count: prospects.length,
+          inserted,
+          reviewQueued
+        }
+      });
+    }
+
+    res.json({ inserted, reviewQueued });
+  } catch (err) {
+    console.error("PirateMonster prospecting webhook error:", err);
+    res.status(500).json({ error: "Failed to process prospecting webhook" });
+  }
+});
+
+router.post("/prospecting/jobs/dispatch", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const clientId = req.user?.clientId;
+    if (!clientId) {
+      res.status(403).json({ error: "Client context required" });
+      return;
+    }
+
+    const idempotencyKey = req.headers["idempotency-key"] as string;
+    if (!idempotencyKey) {
+      res.status(400).json({ error: "Idempotency-Key header required" });
+      return;
+    }
+
+    // Deduplicate
+    const [existingJob] = await db.select().from(prospectingJobsTable).where(and(eq(prospectingJobsTable.clientId, clientId), eq(prospectingJobsTable.idempotencyKey, idempotencyKey)));
+    if (existingJob) {
+      res.json(existingJob);
+      return;
+    }
+
+    if (!PIRATEMONSTER_API_KEY) {
+      res.status(503).json({ error: "PirateMonster API key not configured" });
+      return;
+    }
+
+    const [job] = await db.insert(prospectingJobsTable).values({
+      clientId,
+      query: req.body.query,
+      location: req.body.location,
+      limit: req.body.limit || 50,
+      status: "pending",
+      idempotencyKey,
+      source: "piratemonster",
+      requestedBy: req.user?.userId ? req.user.userId.toString() : "user"
+    } as any).returning();
+
+    await db.insert(platformAuditLogTable).values({
+      clientId,
+      userId: req.user?.userId || null,
+      action: "prospecting_job_dispatch",
+      resource: "prospecting_job",
+      resourceId: job.id.toString(),
+      metadata: {
+        compliancePlatform: "kilopro",
+        source: "piratemonster",
+        query: req.body.query
+      }
+    });
+
+    res.json(job);
+  } catch (err) {
+    console.error("Dispatch error:", err);
+    res.status(500).json({ error: "Failed to dispatch job to PirateMonster" });
+  }
+});
+
+router.post("/integrations/piratemonster/webhook", (req, res, next) => requireInboundSecret(req, res, next), async (req, res): Promise<void> => {
   try {
     const parsed = WebhookPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -402,7 +537,7 @@ router.get("/integrations/piratemonster/config", async (_req, res): Promise<void
   });
 });
 
-router.post("/integrations/piratemonster/register-partner", requireInboundSecret, async (_req, res): Promise<void> => {
+router.post("/integrations/piratemonster/register-partner", (req, res, next) => requireInboundSecret(req, res, next), async (_req, res): Promise<void> => {
   try {
     const existing = await db
       .select()

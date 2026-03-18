@@ -674,8 +674,145 @@ function PirateMonsterPanel() {
   );
 }
 
+interface AuditEvent {
+  id: number;
+  action: string;
+  createdAt: string;
+}
+
+interface ProspectorStats {
+  dispatched: number;
+  received: number;
+  lastWebhook: string | null;
+  avgConfidence: number;
+}
+
+function KiloProCard({ auditStats }: { auditStats: { lastEvent: AuditEvent | null, count: number } }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg text-primary">
+              <Shield className="w-6 h-6" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">KiloPro Compliance</CardTitle>
+              <CardDescription>Enterprise Grade Audit & Governance</CardDescription>
+            </div>
+          </div>
+          <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Active</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-xs">
+          <div className="space-y-1">
+            <div className="text-muted-foreground font-medium">Last Audit Event</div>
+            <div className="truncate">
+              {auditStats.lastEvent ? auditStats.lastEvent.action : "No events"}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-muted-foreground font-medium">Event Count (24h)</div>
+            <div className="">{auditStats.count}</div>
+          </div>
+        </div>
+      </CardContent>
+      <div className="border-t bg-muted/30 p-3 flex justify-between">
+        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <Activity className="w-3 h-3 text-primary" />
+          Real-time monitoring enabled
+        </div>
+        <Button variant="ghost" size="sm" className="h-7 text-xs">Configure</Button>
+      </div>
+    </Card>
+  );
+}
+
+function PirateMonsterProspectorCard({ pmStats }: { pmStats: ProspectorStats }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+              <Zap className="w-6 h-6" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">PirateMonster Prospector</CardTitle>
+              <CardDescription>Autonomous B2B Lead Generation</CardDescription>
+            </div>
+          </div>
+          <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Active</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-4 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="space-y-1">
+            <div>Dispatched</div>
+            <div className="text-sm font-medium text-foreground">{pmStats.dispatched} Jobs</div>
+          </div>
+          <div className="space-y-1">
+            <div>Received</div>
+            <div className="text-sm font-medium text-foreground">{pmStats.received} Leads</div>
+          </div>
+          <div className="space-y-1">
+            <div>Avg Confidence</div>
+            <div className="text-sm font-medium text-foreground">{(pmStats.avgConfidence * 100).toFixed(0)}%</div>
+          </div>
+        </div>
+        <div className="p-2 bg-muted/50 rounded text-[10px] flex items-center gap-2">
+          <Webhook className="w-3 h-3 text-primary" />
+          Last Webhook: {pmStats.lastWebhook ? format(new Date(pmStats.lastWebhook), "HH:mm:ss") : "Never"}
+        </div>
+      </CardContent>
+      <div className="border-t bg-muted/30 p-3 flex justify-between">
+        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <CheckCircle2 className="w-3 h-3 text-green-500" />
+          Webhook connection stable
+        </div>
+        <Button variant="ghost" size="sm" className="h-7 text-xs">View Logs</Button>
+      </div>
+    </Card>
+  );
+}
+
 export default function Integrations() {
   const [clientId, setClientId] = useState<number>(1);
+  const { toast } = useToast();
+  const [auditStats, setAuditStats] = useState<{ lastEvent: AuditEvent | null, count: number }>({ lastEvent: null, count: 0 });
+  const [pmStats, setPmStats] = useState<ProspectorStats>({ dispatched: 0, received: 0, lastWebhook: null, avgConfidence: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [auditRes, pmRes] = await Promise.all([
+          fetch(`${API_BASE}/audit?limit=1`),
+          fetch(`${API_BASE}/prospecting/stats`)
+        ]);
+
+        if (auditRes.ok) {
+          const logs = await auditRes.json();
+          setAuditStats({ lastEvent: logs[0] || null, count: logs.length });
+        }
+
+        if (pmRes.ok) {
+          const stats = await pmRes.json();
+          setPmStats({
+            dispatched: stats.totalJobs || 0,
+            received: stats.totalProspects || 0,
+            lastWebhook: stats.patterns?.[0]?.updatedAt || null,
+            avgConfidence: parseFloat(stats.avgConfidence || "0")
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   const { data: clients } = useQuery<Array<{ id: number; companyName: string }>>({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -742,6 +879,11 @@ export default function Integrations() {
         <PirateMonsterMcpPanel />
 
         <PirateMonsterPanel />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <KiloProCard auditStats={auditStats} />
+          <PirateMonsterProspectorCard pmStats={pmStats} />
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center py-12">
