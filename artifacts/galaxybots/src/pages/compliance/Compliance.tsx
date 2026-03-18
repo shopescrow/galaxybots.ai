@@ -446,7 +446,7 @@ function ClientComplianceSection() {
               <select
                 value={clientId}
                 onChange={(e) => setSelectedClientId(Number(e.target.value))}
-                className="appearance-none flex h-12 rounded-lg border border-border/50 bg-input/50 px-4 pr-10 py-2 text-sm font-tech text-foreground min-w-[240px]"
+                className="appearance-none flex h-12 rounded-lg border border-border/50 bg-input/50 px-4 pr-10 py-2 text-sm font-tech text-foreground w-full sm:w-auto sm:min-w-[240px]"
               >
                 {clients.map(c => (
                   <option key={c.id} value={c.id}>{c.companyName}</option>

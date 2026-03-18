@@ -83,31 +83,33 @@ export default function ClientWorkspace() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/clients">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">{client.name}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline">{client.industry}</Badge>
-            {client.website && (
-              <a href={client.website} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
-                {client.website} <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/clients">
+            <Button variant="ghost" size="icon" className="shrink-0">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{client.name}</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <Badge variant="outline">{client.industry}</Badge>
+              {client.website && (
+                <a href={client.website} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 truncate max-w-[200px]">
+                  {client.website} <ExternalLink className="h-3 w-3 shrink-0" />
+                </a>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 sm:ml-auto shrink-0">
           <Link href={`/clients/${clientId}/generate`}>
-            <Button className="gap-2">
-              <PenLine className="h-4 w-4" /> Generate Content
+            <Button className="gap-2" size="sm">
+              <PenLine className="h-4 w-4" /> Generate
             </Button>
           </Link>
           <Link href={`/clients/${clientId}/calendar`}>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" size="sm">
               <Calendar className="h-4 w-4" /> Calendar
             </Button>
           </Link>
@@ -184,11 +186,9 @@ export default function ClientWorkspace() {
               {filteredContent.map((item: any) => (
                 <Card key={item.id}>
                   <CardContent className="pt-4 pb-4">
-                    <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium truncate">{item.title}</h3>
-                        </div>
+                        <h3 className="font-medium truncate mb-1">{item.title}</h3>
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant="outline" className="text-xs">{typeLabels[item.type] || item.type}</Badge>
                           <Badge variant={item.status === "published" ? "default" : item.status === "draft" ? "secondary" : "outline"}>
@@ -207,21 +207,21 @@ export default function ClientWorkspace() {
                         </div>
                         {item.publishedUrl && (
                           <div className="mt-1">
-                            <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
-                              <ExternalLink className="h-3 w-3" /> {item.publishedUrl}
+                            <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 truncate max-w-full">
+                              <ExternalLink className="h-3 w-3 shrink-0" /> <span className="truncate">{item.publishedUrl}</span>
                             </a>
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 ml-4">
+                      <div className="flex items-center gap-1 shrink-0">
                         {item.status === "draft" && (
                           publishUrlDialogId === item.id ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <Input
                                 placeholder="Published URL (optional)"
                                 value={publishUrl}
                                 onChange={(e) => setPublishUrl(e.target.value)}
-                                className="text-xs h-8 w-48"
+                                className="text-xs h-8 w-full sm:w-40"
                               />
                               <Button
                                 variant="default"

@@ -97,10 +97,10 @@ export default function Clients() {
       <div className="container mx-auto px-4 py-12">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold flex items-center gap-3">
-              <Building className="text-primary w-7 h-7 sm:w-8 sm:h-8" />
+              <Building className="text-primary w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
               Client Database
             </h1>
             <p className="text-muted-foreground font-tech mt-1">Manage active deployments, licenses, and partner referrals.</p>
@@ -108,7 +108,7 @@ export default function Clients() {
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button variant="glow" className="font-tech tracking-wide">
+              <Button variant="glow" className="font-tech tracking-wide shrink-0">
                 <Plus className="w-4 h-4 mr-2" /> NEW DEPLOYMENT
               </Button>
             </DialogTrigger>

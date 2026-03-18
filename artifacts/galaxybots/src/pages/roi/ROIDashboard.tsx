@@ -292,7 +292,7 @@ export default function ROIDashboard() {
               Proof-of-Value metrics for your AI executive team
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 shrink-0">
             <Dialog open={rateDialogOpen} onOpenChange={setRateDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="ghost" size="sm" onClick={() => setNewRate(String(roi?.hourlyRate || 150))}>

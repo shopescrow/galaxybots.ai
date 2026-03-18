@@ -67,9 +67,9 @@ export default function ContentHub() {
   const { client, posts } = data;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="text-center py-12 border-b">
-        <h1 className="text-4xl font-bold tracking-tight">{client.name}</h1>
+    <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+      <div className="text-center py-8 sm:py-12 border-b">
+        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">{client.name}</h1>
         {client.tagline && <p className="text-lg text-muted-foreground mt-2">{client.tagline}</p>}
         <Badge variant="outline" className="mt-3">{client.industry}</Badge>
       </div>
@@ -89,17 +89,17 @@ export default function ContentHub() {
                   {post.metaDescription && (
                     <p className="text-muted-foreground text-sm mb-3">{post.metaDescription}</p>
                   )}
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      {new Date(post.publishedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      {new Date(post.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </span>
                     <span className="flex items-center gap-1">
                       <Eye className="h-3 w-3" /> {post.viewCount} views
                     </span>
                     <AeoImpactBadge contentId={post.id} />
                     {post.keywords && post.keywords.length > 0 && (
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap gap-1">
                         {post.keywords.slice(0, 3).map((kw: string) => (
                           <Badge key={kw} variant="secondary" className="text-xs">{kw}</Badge>
                         ))}

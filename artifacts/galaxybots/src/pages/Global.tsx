@@ -141,7 +141,7 @@ export default function Global() {
             One Board.<br />
             <span className="text-gradient">Every Language.</span>
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             GalaxyBots.ai operates in 15 languages across every major global market. Your AI directors think, advise, and respond in the language of your business — wherever in the world you operate.
           </p>
         </motion.div>

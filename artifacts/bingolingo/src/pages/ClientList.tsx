@@ -14,13 +14,13 @@ export default function ClientList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
           <p className="text-muted-foreground mt-1">Manage your content clients</p>
         </div>
         <Link href="/clients/new">
-          <Button className="gap-2">
+          <Button className="gap-2 shrink-0">
             <Plus className="h-4 w-4" /> Add Client
           </Button>
         </Link>

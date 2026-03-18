@@ -145,9 +145,9 @@ export default function HubPost() {
       </div>
 
       <article>
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-4">{post.title}</h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <header className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4 leading-tight">{post.title}</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm text-muted-foreground">
             <span>{client.name}</span>
             <span className="flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5" />

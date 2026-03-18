@@ -34,14 +34,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 sm:space-y-8">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">BingoLingo.ai</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">BingoLingo.ai</h1>
           <p className="text-muted-foreground mt-1">Content Intelligence Platform</p>
         </div>
         <Link href="/clients/new">
-          <Button className="gap-2">
+          <Button className="gap-2 shrink-0">
             <Plus className="h-4 w-4" /> Add Client
           </Button>
         </Link>
@@ -63,7 +63,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-lg">Clients</CardTitle>

@@ -11,7 +11,8 @@ import ContentCalendar from "@/pages/ContentCalendar";
 import ContentHub from "@/pages/ContentHub";
 import HubPost from "@/pages/HubPost";
 import NotFound from "@/pages/not-found";
-import { Sparkles, LayoutDashboard, Users, Loader2 } from "lucide-react";
+import { Sparkles, LayoutDashboard, Users, Loader2, Menu, X } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -70,11 +71,32 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const NAV_ITEMS = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/clients", label: "Clients", icon: Users },
+];
+
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location]);
+
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [menuOpen]);
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+      <header className="border-b bg-card sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer">
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -83,21 +105,48 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="font-bold text-lg">BingoLingo.ai</span>
             </div>
           </Link>
-          <nav className="flex items-center gap-1">
-            <Link href="/">
-              <span className="px-3 py-1.5 text-sm rounded-md hover:bg-accent transition-colors cursor-pointer flex items-center gap-1.5">
-                <LayoutDashboard className="h-3.5 w-3.5" /> Dashboard
-              </span>
-            </Link>
-            <Link href="/clients">
-              <span className="px-3 py-1.5 text-sm rounded-md hover:bg-accent transition-colors cursor-pointer flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" /> Clients
-              </span>
-            </Link>
+
+          {/* Desktop nav */}
+          <nav className="hidden sm:flex items-center gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
+              return (
+                <Link key={item.href} href={item.href}>
+                  <span className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer flex items-center gap-1.5 min-h-[36px] ${isActive ? "bg-accent text-foreground" : "hover:bg-accent"}`}>
+                    <item.icon className="h-3.5 w-3.5" /> {item.label}
+                  </span>
+                </Link>
+              );
+            })}
           </nav>
+
+          {/* Mobile hamburger */}
+          <button
+            className="sm:hidden p-2 rounded-md min-w-[44px] min-h-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
+
+        {/* Mobile dropdown nav */}
+        {menuOpen && (
+          <div className="sm:hidden border-t bg-card px-4 py-3 flex flex-col gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
+              return (
+                <Link key={item.href} href={item.href}>
+                  <span className={`px-3 py-3 text-sm rounded-md transition-colors cursor-pointer flex items-center gap-2 min-h-[44px] ${isActive ? "bg-accent text-foreground font-medium" : "hover:bg-accent"}`}>
+                    <item.icon className="h-4 w-4" /> {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </header>
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {children}
       </main>
     </div>
@@ -108,7 +157,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="max-w-4xl mx-auto px-6 h-14 flex items-center">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer">
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -119,7 +168,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
       </header>
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {children}
       </main>
     </div>

@@ -64,11 +64,11 @@ export default function NewClient() {
           <CardContent className="space-y-4">
             <div>
               <Label className="text-sm text-muted-foreground">API Key</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <code className="flex-1 px-3 py-2 rounded bg-background border text-sm font-mono break-all">
+              <div className="flex items-start gap-2 mt-1">
+                <code className="flex-1 min-w-0 px-3 py-2 rounded bg-background border text-sm font-mono break-all overflow-x-auto">
                   {apiKeyResult}
                 </code>
-                <Button variant="outline" size="sm" onClick={handleCopy}>
+                <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0">
                   {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
