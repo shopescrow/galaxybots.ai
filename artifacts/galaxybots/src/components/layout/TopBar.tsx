@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Menu, Settings, Search, LogOut, User } from "lucide-react";
+import { Menu, Settings, Search, LogOut, User, CheckCircle } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "../ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -9,6 +9,7 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { usePartner } from "@/contexts/PartnerContext";
 import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
+import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 
 interface TopBarProps {
   onSidebarToggle: () => void;
@@ -72,6 +73,36 @@ function UserAvatar() {
         </div>
       )}
     </div>
+  );
+}
+
+const ONBOARDING_STEP_KEYS = ["companyProfile", "firstClient", "industry", "integrations", "firstMission"] as const;
+
+function OnboardingProgressBadge() {
+  const { user } = useAuth();
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const onboarding = user?.onboarding;
+
+  if (!onboarding || onboarding.dismissed || onboarding.completedAt) return null;
+
+  const completed = ONBOARDING_STEP_KEYS.filter((k) => onboarding[k]).length;
+  const total = ONBOARDING_STEP_KEYS.length;
+  const percent = Math.round((completed / total) * 100);
+
+  if (completed === total) return null;
+
+  return (
+    <>
+      <button
+        onClick={() => setWizardOpen(true)}
+        className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+        title={`Setup ${percent}% complete`}
+      >
+        <CheckCircle className="w-3.5 h-3.5" />
+        <span>{percent}%</span>
+      </button>
+      <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
+    </>
   );
 }
 
@@ -149,6 +180,7 @@ export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBa
             <Settings className="w-4 h-4" />
           </Button>
         </Link>
+        <OnboardingProgressBadge />
         <UserAvatar />
       </div>
     </header>

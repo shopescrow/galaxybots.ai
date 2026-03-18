@@ -1,6 +1,17 @@
-import { pgTable, serial, text, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+
+export interface WebsiteIntel {
+  scrapedAt: string;
+  title?: string;
+  summary?: string;
+  industry?: string;
+  valueProposition?: string;
+  productCategories?: string[];
+  targetMarket?: string;
+  rawContent?: string;
+}
 
 export const clientsTable = pgTable("clients", {
   id: serial("id").primaryKey(),
@@ -16,6 +27,7 @@ export const clientsTable = pgTable("clients", {
   targetMarket: text("target_market"),
   businessContext: text("business_context"),
   webhookSecret: text("webhook_secret"),
+  websiteIntel: jsonb("website_intel").$type<WebsiteIntel>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

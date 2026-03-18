@@ -18,11 +18,11 @@ import { useLocation } from "wouter";
 import OnboardingWizard from "./OnboardingWizard";
 
 const STEPS = [
-  { key: "companyProfile" as const, label: "Set up company profile", icon: Building2, path: null },
-  { key: "firstClient" as const, label: "Add your first client", icon: Users, path: "/clients" },
-  { key: "industry" as const, label: "Select your industry", icon: Factory, path: null },
-  { key: "integrations" as const, label: "Connect an integration", icon: Plug, path: "/integrations" },
-  { key: "firstMission" as const, label: "Launch your first mission", icon: Rocket, path: "/deploy-team" },
+  { key: "companyProfile" as const, label: "Set up company profile", icon: Building2, path: null, estimate: "30 sec" },
+  { key: "firstClient" as const, label: "Add your first client", icon: Users, path: "/clients", estimate: "1 min" },
+  { key: "industry" as const, label: "Select your industry", icon: Factory, path: null, estimate: "10 sec" },
+  { key: "integrations" as const, label: "Connect Gmail", icon: Plug, path: "/integrations", estimate: "1 click" },
+  { key: "firstMission" as const, label: "Launch your first mission", icon: Rocket, path: "/deploy-team", estimate: "2 min" },
 ];
 
 export default function OnboardingChecklist() {
@@ -107,7 +107,10 @@ export default function OnboardingChecklist() {
                   }`}>
                     {done ? <Check className="w-3.5 h-3.5" /> : <Icon className="w-3 h-3 text-muted-foreground" />}
                   </div>
-                  <span className={done ? "line-through opacity-60" : ""}>{step.label}</span>
+                  <span className={`flex-1 ${done ? "line-through opacity-60" : ""}`}>{step.label}</span>
+                  {!done && (
+                    <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">{step.estimate}</span>
+                  )}
                 </button>
               );
             })}

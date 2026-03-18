@@ -56,3 +56,4 @@ export * from "./mcp-oauth-clients";
 export * from "./intelligence-briefs";
 export * from "./mission-templates";
 export * from "./workflows";
+export * from "./activation-emails";

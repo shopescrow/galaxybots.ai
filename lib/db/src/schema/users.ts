@@ -11,6 +11,11 @@ export interface OnboardingState {
   firstMission: boolean;
   dismissed: boolean;
   completedAt: string | null;
+  companyProfileStartedAt?: string | null;
+  firstClientStartedAt?: string | null;
+  industryStartedAt?: string | null;
+  integrationsStartedAt?: string | null;
+  firstMissionStartedAt?: string | null;
 }
 
 export const DEFAULT_ONBOARDING: OnboardingState = {

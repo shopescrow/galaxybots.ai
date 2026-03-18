@@ -11,6 +11,7 @@ import {
   knowledgeBaseChunksTable,
   taskSessionsTable,
   taskSessionBotsTable,
+  type WebsiteIntel,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import jwt from "jsonwebtoken";
@@ -18,6 +19,53 @@ import { authenticate, requireRole, type AuthUser } from "../middleware/auth";
 import { ALL_PACKS, getPackById } from "../data/packs";
 import type { VerticalPack } from "../data/packs";
 import { generateEmbedding } from "../services/memory";
+import { openai } from "@workspace/integrations-openai-ai-server";
+
+async function generatePersonalizedObjective(
+  packName: string,
+  companyName: string,
+  websiteIntel: WebsiteIntel | null | undefined,
+  industry: string | null | undefined,
+  fallbackObjective: string,
+): Promise<string> {
+  if (!websiteIntel?.summary && !websiteIntel?.valueProposition && !industry) {
+    return fallbackObjective;
+  }
+
+  try {
+    const context = [
+      websiteIntel?.summary ? `Company overview: ${websiteIntel.summary}` : null,
+      websiteIntel?.valueProposition ? `Value proposition: ${websiteIntel.valueProposition}` : null,
+      websiteIntel?.industry ? `Industry: ${websiteIntel.industry}` : industry ? `Industry: ${industry}` : null,
+      websiteIntel?.targetMarket ? `Target market: ${websiteIntel.targetMarket}` : null,
+      websiteIntel?.productCategories?.length ? `Products/services: ${websiteIntel.productCategories.join(", ")}` : null,
+    ].filter(Boolean).join("\n");
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 300,
+      messages: [
+        {
+          role: "system",
+          content: `You are a senior business strategy consultant creating a personalized AI mission brief. Given company intelligence, create a specific, actionable mission objective for an AI executive team. The mission should reference the company's actual business context. Be specific, professional, and compelling. Keep it to 2-3 sentences max.`,
+        },
+        {
+          role: "user",
+          content: `Pack: ${packName}\nCompany: ${companyName}\n\n${context}\n\nCreate a personalized mission objective for this company's first AI-powered mission. Reference their specific industry, products, or market position.`,
+        },
+      ],
+    });
+
+    const personalizedObjective = completion.choices[0]?.message?.content?.trim();
+    if (personalizedObjective && personalizedObjective.length > 20) {
+      return `${personalizedObjective}\n\n---\n${fallbackObjective}`;
+    }
+  } catch (err) {
+    console.error("[packs] Failed to generate personalized objective:", err);
+  }
+
+  return fallbackObjective;
+}
 
 function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
@@ -158,6 +206,22 @@ router.post(
       return;
     }
 
+    let [clientData] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId));
+
+    if (!clientData?.websiteIntel && clientData?.websiteUrl) {
+      const POLL_INTERVAL_MS = 2000;
+      const MAX_WAIT_MS = 10000;
+      const pollStart = Date.now();
+      while (Date.now() - pollStart < MAX_WAIT_MS) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const [refreshed] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId));
+        if (refreshed?.websiteIntel) {
+          clientData = refreshed;
+          break;
+        }
+      }
+    }
+
     const allBots = await db.select().from(botsTable);
 
     const chunkEmbeddings: Map<string, (number[] | null)[]> = new Map();
@@ -243,8 +307,26 @@ router.post(
       }
 
       let welcomeSessionId: number | null = null;
+      let isFirstScenario = true;
+      const websiteIntel = clientData?.websiteIntel as WebsiteIntel | null | undefined;
       for (const scenario of pack.scenarios) {
-        const objective = `[${pack.name}] ${scenario.title}\n\nCategory: ${scenario.category} | Difficulty: ${scenario.difficulty}\n\nSituation: ${scenario.situation}\n\nMission Objective: ${scenario.missionObjective}\n\nRecommended Actions:\n${scenario.actions.map((a, i) => `${i + 1}. ${a}`).join("\n")}`;
+        const baseObjective = `[${pack.name}] ${scenario.title}\n\nCategory: ${scenario.category} | Difficulty: ${scenario.difficulty}\n\nSituation: ${scenario.situation}\n\nMission Objective: ${scenario.missionObjective}\n\nRecommended Actions:\n${scenario.actions.map((a, i) => `${i + 1}. ${a}`).join("\n")}`;
+
+        let objective = baseObjective;
+        if (isFirstScenario && (websiteIntel || clientData?.industry)) {
+          try {
+            objective = await generatePersonalizedObjective(
+              pack.name,
+              clientData?.companyName ?? "your company",
+              websiteIntel,
+              clientData?.industry,
+              baseObjective,
+            );
+          } catch (_e) {
+            objective = baseObjective;
+          }
+        }
+        isFirstScenario = false;
 
         const [session] = await tx
           .insert(taskSessionsTable)

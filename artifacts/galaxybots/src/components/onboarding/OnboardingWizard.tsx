@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth, type OnboardingState } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,13 @@ import {
   ChevronLeft,
   SkipForward,
   PartyPopper,
+  Globe,
+  Loader2,
+  Mail,
+  Calendar,
+  BarChart3,
+  FileText,
+  MessageSquare,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -26,30 +33,35 @@ const STEPS = [
     label: "Company Profile",
     icon: Building2,
     description: "Tell us about your company so your AI team can represent you accurately.",
+    estimate: "30 seconds",
   },
   {
     key: "firstClient" as const,
     label: "First Client",
     icon: Users,
     description: "Add your first client to start managing relationships with AI assistance.",
+    estimate: "1 minute",
   },
   {
     key: "industry" as const,
     label: "Industry",
     icon: Factory,
     description: "Select your industry vertical so bots can tailor their strategies.",
+    estimate: "10 seconds",
   },
   {
     key: "integrations" as const,
     label: "Integrations",
     icon: Plug,
     description: "Connect at least one external service to unlock your bots' full potential.",
+    estimate: "1 click",
   },
   {
     key: "firstMission" as const,
     label: "First Mission",
     icon: Rocket,
     description: "Launch your first bot mission and see your AI team in action.",
+    estimate: "2 minutes",
   },
 ];
 
@@ -74,21 +86,57 @@ const OTHER_INDUSTRIES = [
   "Other",
 ];
 
+const ALL_OAUTH_INTEGRATIONS = [
+  { key: "gmail", name: "Gmail", icon: Mail, color: "text-red-400", industries: ["*"] },
+  { key: "hubspot", name: "HubSpot CRM", icon: BarChart3, color: "text-orange-400", industries: ["Technology", "Legal", "Consulting", "Real Estate", "Healthcare", "*"] },
+  { key: "slack", name: "Slack", icon: MessageSquare, color: "text-green-400", industries: ["Technology", "Consulting", "*"] },
+  { key: "google_calendar", name: "Google Calendar", icon: Calendar, color: "text-blue-400", industries: ["Healthcare", "Legal", "Real Estate", "Restaurant", "*"] },
+  { key: "notion", name: "Notion", icon: FileText, color: "text-gray-300", industries: ["Technology", "Consulting", "*"] },
+];
+
+function getRecommendedIntegrations(industry: string | null | undefined) {
+  const industryKey = industry ?? "";
+  const gmail = ALL_OAUTH_INTEGRATIONS.find((i) => i.key === "gmail")!;
+  const others = ALL_OAUTH_INTEGRATIONS.filter((i) => i.key !== "gmail");
+  const scored = others.map((intg) => ({
+    ...intg,
+    score: intg.industries.includes(industryKey) ? 2 : intg.industries.includes("*") ? 1 : 0,
+  }));
+  const sorted = [...scored].sort((a, b) => b.score - a.score);
+  return [gmail, ...sorted.slice(0, 3)];
+}
+
 interface OnboardingWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) {
-  const { user, token, updateOnboarding } = useAuth();
+  const { user, token, updateOnboarding, refreshUser } = useAuth();
   const [, navigate] = useLocation();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState("");
+  const [clientIndustry, setClientIndustry] = useState<string | null>(null);
+  const [scrapingWebsite, setScrapingWebsite] = useState(false);
+  const [connectingOAuth, setConnectingOAuth] = useState<string | null>(null);
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  useEffect(() => {
+    if (open && user?.clientId && token) {
+      fetch(`${BASE}/api/clients/${user.clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.industry) setClientIndustry(data.industry);
+        })
+        .catch(() => {});
+    }
+  }, [open, user?.clientId, token]);
 
   const onboarding: OnboardingState = user?.onboarding ?? {
     companyProfile: false,
@@ -109,6 +157,13 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
     onOpenChange(false);
   };
 
+  const markStepStarted = useCallback(async (stepKey: keyof OnboardingState) => {
+    const startedAtKey = `${stepKey}StartedAt` as keyof OnboardingState;
+    if (!onboarding[startedAtKey]) {
+      await updateOnboarding({ [startedAtKey]: new Date().toISOString() } as Partial<OnboardingState>).catch(() => {});
+    }
+  }, [onboarding, updateOnboarding]);
+
   const handleCompanyProfile = async () => {
     if (!companyName.trim()) return;
     setLoading(true);
@@ -127,6 +182,20 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
       if (res.ok) {
         await updateOnboarding({ companyProfile: true });
         setCurrentStep(1);
+
+        if (websiteUrl.trim()) {
+          setScrapingWebsite(true);
+          fetch(`${BASE}/api/clients/${user?.clientId}/scrape-website`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ url: websiteUrl.trim() }),
+          }).catch(() => {}).finally(() => {
+            setTimeout(() => setScrapingWebsite(false), 30000);
+          });
+        }
       }
     } finally {
       setLoading(false);
@@ -190,6 +259,59 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
     }
   };
 
+  const handleOAuthConnect = useCallback(async (service: string) => {
+    if (!user?.id || !user?.clientId) return;
+    setConnectingOAuth(service);
+    try {
+      const initiateRes = await fetch(
+        `${BASE}/api/oauth/initiate/${service}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!initiateRes.ok) {
+        console.error(`[oauth] Failed to get auth URL for ${service}`);
+        setConnectingOAuth(null);
+        return;
+      }
+      const { authUrl } = await initiateRes.json();
+      if (!authUrl) {
+        setConnectingOAuth(null);
+        return;
+      }
+
+      const popup = window.open(authUrl, `oauth_${service}`, "width=600,height=700,scrollbars=yes,resizable=yes");
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.source !== popup) return;
+        if (event.data?.type === "oauth_success" && event.data?.service === service) {
+          window.removeEventListener("message", handleMessage);
+          setConnectingOAuth(null);
+          await updateOnboarding({ integrations: true });
+          await refreshUser();
+          popup?.close();
+        } else if (event.data?.type === "oauth_error" && event.data?.service === service) {
+          window.removeEventListener("message", handleMessage);
+          setConnectingOAuth(null);
+          console.error(`[oauth] Error connecting ${service}:`, event.data.error);
+          popup?.close();
+        }
+      };
+
+      window.addEventListener("message", handleMessage);
+
+      const timer = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(timer);
+          window.removeEventListener("message", handleMessage);
+          setConnectingOAuth(null);
+        }
+      }, 1000);
+    } catch (err) {
+      console.error("[oauth] Failed to initiate OAuth:", err);
+      setConnectingOAuth(null);
+    }
+  }, [user, token, BASE, updateOnboarding, refreshUser]);
+
   const handleGoToClients = () => {
     onOpenChange(false);
     navigate("/clients");
@@ -207,6 +329,12 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
 
   const step = STEPS[currentStep];
   const StepIcon = step.icon;
+
+  useEffect(() => {
+    if (open) {
+      markStepStarted(step.key).catch(() => {});
+    }
+  }, [open, currentStep, step.key]);
 
   if (allComplete) {
     return (
@@ -281,14 +409,23 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
             </div>
             <div>
               <h3 className="font-semibold text-base">{step.label}</h3>
-              <p className="text-xs text-muted-foreground">{step.description}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground">{step.description}</p>
+              </div>
             </div>
-            {onboarding[step.key] && (
-              <Badge className="ml-auto bg-green-600 text-white text-[10px]">
-                <Check className="w-3 h-3 mr-1" />
-                Done
-              </Badge>
-            )}
+            <div className="ml-auto flex items-center gap-2">
+              {step.estimate && (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/40">
+                  {step.estimate}
+                </Badge>
+              )}
+              {onboarding[step.key] && (
+                <Badge className="bg-green-600 text-white text-[10px]">
+                  <Check className="w-3 h-3 mr-1" />
+                  Done
+                </Badge>
+              )}
+            </div>
           </div>
 
           {step.key === "companyProfile" && !onboarding.companyProfile && (
@@ -305,13 +442,21 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="wiz-website" className="text-sm">Website (optional)</Label>
-                <Input
-                  id="wiz-website"
-                  value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="https://acme.com"
-                  className="bg-background"
-                />
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="wiz-website"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://acme.com"
+                    className="bg-background pl-9"
+                  />
+                </div>
+                {websiteUrl.trim() && (
+                  <p className="text-[11px] text-primary/70">
+                    We'll analyze your website to personalize your first mission brief.
+                  </p>
+                )}
               </div>
               <Button onClick={handleCompanyProfile} disabled={!companyName.trim() || loading} size="sm" variant="glow">
                 {loading ? "Saving..." : "Save & Continue"}
@@ -376,12 +521,50 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
 
           {step.key === "integrations" && !onboarding.integrations && (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect Gmail, Google Calendar, HubSpot, Notion, or other services so your bots can take real action on your behalf.
-              </p>
-              <Button onClick={handleGoToIntegrations} size="sm" variant="glow" className="gap-1.5">
-                <Plug className="w-4 h-4" />
-                Connect Integration
+              {(() => {
+                const industry = selectedIndustry || clientIndustry;
+                const recommendedIntegrations = getRecommendedIntegrations(industry);
+                return (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {industry
+                        ? `Top integrations recommended for ${industry} — connect one to get started:`
+                        : "Connect one service to unlock your bots' full potential. Any one counts — you can add more later."}
+                    </p>
+                    <div className="grid gap-2">
+                      {recommendedIntegrations.map((svc) => {
+                        const Icon = svc.icon;
+                        const isConnecting = connectingOAuth === svc.key;
+                        return (
+                          <button
+                            key={svc.key}
+                            onClick={() => handleOAuthConnect(svc.key)}
+                            disabled={!!connectingOAuth}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/30 bg-background hover:border-primary/40 hover:bg-primary/5 transition-colors text-left disabled:opacity-50"
+                          >
+                            <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                              {isConnecting ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                              ) : (
+                                <Icon className={`w-4 h-4 ${svc.color}`} />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{svc.name}</div>
+                            </div>
+                            <span className="text-xs text-primary font-medium">
+                              {isConnecting ? "Connecting..." : "Connect"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+              <Button onClick={handleGoToIntegrations} size="sm" variant="outline" className="gap-1.5 text-xs w-full">
+                <Plug className="w-3.5 h-3.5" />
+                See all integrations
               </Button>
             </div>
           )}
@@ -405,6 +588,13 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
             </p>
           )}
         </div>
+
+        {scrapingWebsite && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary/80">
+            <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+            Analyzing your website to personalize your first mission...
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <Button

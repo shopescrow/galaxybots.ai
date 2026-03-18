@@ -52,6 +52,7 @@ import briefsRouter from "./briefs";
 import missionTemplatesRouter from "./mission-templates";
 import workflowsRouter from "./workflows";
 import activityRouter from "./activity";
+import oauthRouter from "./oauth";
 
 const router: IRouter = Router();
 
@@ -106,5 +107,6 @@ router.use(briefsRouter);
 router.use(missionTemplatesRouter);
 router.use(workflowsRouter);
 router.use(activityRouter);
+router.use(oauthRouter);
 
 export default router;

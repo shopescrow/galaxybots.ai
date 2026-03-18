@@ -11,6 +11,10 @@ const STEP_KEYS: ReadonlyArray<keyof Pick<OnboardingState,
   "companyProfile" | "firstClient" | "industry" | "integrations" | "firstMission"
 >> = ["companyProfile", "firstClient", "industry", "integrations", "firstMission"];
 
+const STARTED_AT_KEYS: ReadonlyArray<keyof Pick<OnboardingState,
+  "companyProfileStartedAt" | "firstClientStartedAt" | "industryStartedAt" | "integrationsStartedAt" | "firstMissionStartedAt"
+>> = ["companyProfileStartedAt", "firstClientStartedAt", "industryStartedAt", "integrationsStartedAt", "firstMissionStartedAt"];
+
 const router: IRouter = Router();
 
 router.get("/onboarding", authenticate, async (req, res): Promise<void> => {
@@ -44,6 +48,12 @@ router.patch("/onboarding", authenticate, async (req, res): Promise<void> => {
   const merged: OnboardingState = { ...current };
   for (const key of BOOLEAN_KEYS) {
     if (typeof updates[key] === "boolean") {
+      merged[key] = updates[key];
+    }
+  }
+
+  for (const key of STARTED_AT_KEYS) {
+    if (typeof updates[key] === "string") {
       merged[key] = updates[key];
     }
   }

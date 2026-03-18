@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { db, clientsTable, clientBotsTable, botsTable, botToolPermissionsTable } from "@workspace/db";
+import { db, clientsTable, clientBotsTable, botsTable, botToolPermissionsTable, type WebsiteIntel } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   GetClientBotsParams,
@@ -11,6 +11,88 @@ import {
 import { requireRole } from "../middleware/auth";
 import { getAllTools } from "../tools";
 import { SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS } from "../services/governance";
+import { openai } from "@workspace/integrations-openai-ai-server";
+import dns from "dns/promises";
+
+function isPrivateIpv4(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return false;
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 240
+  );
+}
+
+function isPrivateIpv6(ip: string): boolean {
+  const normalized = ip.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  return (
+    normalized === "::1" ||
+    normalized.startsWith("fe80:") ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized === "::" ||
+    normalized.startsWith("::ffff:127.") ||
+    normalized.startsWith("::ffff:10.") ||
+    normalized.startsWith("::ffff:169.254.")
+  );
+}
+
+async function isSafeExternalUrl(rawUrl: string): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) return false;
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  const blockedNames = [
+    "localhost",
+    "metadata.google.internal",
+    "169.254.169.254",
+    "instance-data",
+  ];
+  if (blockedNames.includes(hostname)) return false;
+  if (hostname.endsWith(".local") || hostname.endsWith(".internal") || hostname.endsWith(".localhost")) return false;
+
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    if (isPrivateIpv4(hostname)) return false;
+  } else if (hostname.includes(":") || hostname.startsWith("[")) {
+    if (isPrivateIpv6(hostname)) return false;
+  } else {
+    try {
+      const [ipv4Results, ipv6Results] = await Promise.allSettled([
+        dns.resolve4(hostname),
+        dns.resolve6(hostname),
+      ]);
+      const allIps: string[] = [];
+      if (ipv4Results.status === "fulfilled") allIps.push(...ipv4Results.value);
+      if (ipv6Results.status === "fulfilled") allIps.push(...ipv6Results.value);
+      if (allIps.length === 0) return false;
+      for (const ip of allIps) {
+        if (ip.includes(":")) {
+          if (isPrivateIpv6(ip)) return false;
+        } else {
+          if (isPrivateIpv4(ip)) return false;
+        }
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 const UpdateClientBody = z.object({
   websiteUrl: z.string().nullish(),
@@ -178,6 +260,100 @@ router.post("/clients/:id/bots", requireRole("owner", "admin"), async (req, res)
   });
 
   res.status(201).json(clientBot);
+});
+
+router.post("/clients/:id/scrape-website", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || (!isPlatformAdmin(req) && id !== req.user!.clientId)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, id));
+  if (!client) {
+    res.status(404).json({ error: "Client not found" });
+    return;
+  }
+
+  const url = req.body.url || client.websiteUrl;
+  if (!url) {
+    res.status(400).json({ error: "No website URL provided" });
+    return;
+  }
+
+  res.json({ status: "scraping", message: "Website analysis started" });
+
+  setImmediate(async () => {
+    try {
+      const safe = await isSafeExternalUrl(url).catch(() => false);
+      if (!safe) {
+        console.warn(`[website-intel] Blocked unsafe URL for client ${id}: ${url}`);
+        return;
+      }
+
+      const response = await fetch(url, {
+        headers: { "User-Agent": "GalaxyBots/1.0 (Website Analyzer)" },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!response.ok) return;
+
+      const html = await response.text();
+      const { load } = await import("cheerio");
+      const $ = load(html);
+      $("script, style, nav, footer, header, noscript, iframe").remove();
+      const rawContent = $("body").text().replace(/\s+/g, " ").trim().slice(0, 8000);
+      const title = $("title").text().trim();
+
+      if (!rawContent || rawContent.length < 50) return;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_completion_tokens: 500,
+        messages: [
+          {
+            role: "system",
+            content: "You are a business analyst. Extract key business information from the following website content. Return a JSON object with these fields: summary (2-3 sentence company overview), industry (single industry label), valueProposition (the core value they deliver), productCategories (array of up to 5 main products/services), targetMarket (who their customers are). Return ONLY valid JSON.",
+          },
+          {
+            role: "user",
+            content: `Website: ${url}\nTitle: ${title}\n\nContent:\n${rawContent}`,
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const analysisText = completion.choices[0]?.message?.content;
+      if (!analysisText) return;
+
+      let analysis: Record<string, unknown>;
+      try {
+        analysis = JSON.parse(analysisText);
+      } catch {
+        return;
+      }
+
+      const intel: WebsiteIntel = {
+        scrapedAt: new Date().toISOString(),
+        title: title || undefined,
+        summary: typeof analysis.summary === "string" ? analysis.summary : undefined,
+        industry: typeof analysis.industry === "string" ? analysis.industry : undefined,
+        valueProposition: typeof analysis.valueProposition === "string" ? analysis.valueProposition : undefined,
+        productCategories: Array.isArray(analysis.productCategories) ? analysis.productCategories.filter((x): x is string => typeof x === "string") : undefined,
+        targetMarket: typeof analysis.targetMarket === "string" ? analysis.targetMarket : undefined,
+        rawContent: rawContent.slice(0, 2000),
+      };
+
+      await db
+        .update(clientsTable)
+        .set({ websiteIntel: intel })
+        .where(eq(clientsTable.id, id));
+
+      console.log(`[website-intel] Scraped and analyzed website for client ${id}: ${url}`);
+    } catch (err) {
+      console.error(`[website-intel] Failed to scrape website for client ${id}:`, err);
+    }
+  });
 });
 
 export default router;

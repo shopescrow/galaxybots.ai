@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter } from "lucide-react";
+import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, HelpCircle, ExternalLink as ExternalLinkIcon } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -30,66 +30,134 @@ const SERVICES = [
     name: "Gmail",
     description: "Send and read emails on behalf of the client using Gmail API.",
     icon: Mail,
+    oauthSupported: true,
     credentialLabel: "Gmail OAuth Access Token",
     credentialPlaceholder: "Paste your OAuth access token here...",
+    helpUrl: "https://developers.google.com/gmail/api/auth/about-auth",
+    helpText: "Go to Google Cloud Console → APIs → Credentials → OAuth 2.0 Client IDs",
   },
   {
     key: "google_calendar",
     name: "Google Calendar",
     description: "Create and list calendar events using Google Calendar API.",
     icon: Calendar,
+    oauthSupported: true,
     credentialLabel: "Google Calendar OAuth Access Token",
     credentialPlaceholder: "Paste your OAuth access token here...",
+    helpUrl: "https://developers.google.com/calendar/api/guides/auth",
+    helpText: "Go to Google Cloud Console → APIs → Credentials → OAuth 2.0 Client IDs",
   },
   {
     key: "hubspot",
     name: "HubSpot",
     description: "Manage CRM contacts and deals using HubSpot private app token.",
     icon: BarChart3,
+    oauthSupported: true,
     credentialLabel: "HubSpot Private App Access Token",
     credentialPlaceholder: "pat-na1-xxxx-xxxx-xxxx...",
+    helpUrl: "https://developers.hubspot.com/docs/api/private-apps",
+    helpText: "HubSpot → Settings → Integrations → Private Apps → Create a private app",
   },
   {
     key: "notion",
     name: "Notion",
     description: "Create and read documents/pages using Notion integration token.",
     icon: FileText,
+    oauthSupported: true,
     credentialLabel: "Notion Integration Token",
     credentialPlaceholder: "ntn_xxxxxxxxxxxx...",
+    helpUrl: "https://www.notion.so/my-integrations",
+    helpText: "Notion → Settings → Integrations → Develop your own integrations → New integration",
+  },
+  {
+    key: "slack",
+    name: "Slack",
+    description: "Post messages and notifications to Slack channels on behalf of your team.",
+    icon: MessageSquare,
+    oauthSupported: true,
+    credentialLabel: "Slack Bot Token",
+    credentialPlaceholder: "xoxb-xxxxxxxxxxxx...",
+    helpUrl: "https://api.slack.com/apps",
+    helpText: "Slack API → Your Apps → Create New App → OAuth & Permissions → Bot Token Scopes",
   },
   {
     key: "google_sheets",
     name: "Google Sheets",
     description: "Read and write rows in Google Sheets using the Sheets API.",
     icon: Table2,
-    credentialLabel: "Google Sheets OAuth Access Token",
-    credentialPlaceholder: "Paste your OAuth access token here...",
+    oauthSupported: false,
+    credentialLabel: "Google Sheets Service Account JSON",
+    credentialPlaceholder: '{"type":"service_account","project_id":"..."}',
+    helpUrl: "https://developers.google.com/sheets/api/guides/authorizing",
+    helpText: "Google Cloud Console → IAM → Service Accounts → Create → Download JSON key",
   },
   {
     key: "twilio",
     name: "Twilio SMS",
-    description: "Send SMS messages via Twilio. Credential must be a JSON string with accountSid and authToken.",
+    description: "Send SMS messages via Twilio.",
     icon: MessageSquare,
-    credentialLabel: "Twilio Credential (JSON)",
+    oauthSupported: false,
+    credentialLabel: "Twilio Credentials (JSON)",
     credentialPlaceholder: '{"accountSid":"ACxxxxxxxxxx","authToken":"xxxxxxxx"}',
+    helpUrl: "https://console.twilio.com/",
+    helpText: "Twilio Console → Account → API Keys & Tokens. Copy Account SID and Auth Token.",
   },
   {
     key: "github",
     name: "GitHub",
-    description: "Create issues and track engineering tasks in GitHub repositories. Used by Engineering and CTO bots.",
+    description: "Create issues and track engineering tasks in GitHub repositories.",
     icon: Github,
+    oauthSupported: false,
     credentialLabel: "GitHub Personal Access Token",
     credentialPlaceholder: "ghp_xxxxxxxxxxxxxxxxxxxx...",
+    helpUrl: "https://github.com/settings/tokens",
+    helpText: "GitHub → Settings → Developer settings → Personal access tokens → Generate new token",
   },
   {
     key: "twitter",
     name: "Twitter / X",
-    description: "Post tweets and social content using the Twitter API v2. Used by Marketing and CMO bots.",
+    description: "Post tweets and social content using the Twitter API v2.",
     icon: Twitter,
+    oauthSupported: false,
     credentialLabel: "Twitter Bearer Token",
     credentialPlaceholder: "AAAA...",
+    helpUrl: "https://developer.twitter.com/en/portal/dashboard",
+    helpText: "Twitter Developer Portal → Projects & Apps → Your App → Keys and tokens → Bearer Token",
   },
 ];
+
+function HelpTooltip({ text, url }: { text: string; url: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+        aria-label="Where do I find this?"
+      >
+        <HelpCircle className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-5 z-20 w-64 rounded-lg border border-border/60 bg-background shadow-lg p-3 text-xs space-y-2">
+            <p className="font-medium text-foreground">Where do I find this?</p>
+            <p className="text-muted-foreground leading-relaxed">{text}</p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Open documentation
+              <ExternalLinkIcon className="w-3 h-3" />
+            </a>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function IntegrationCard({
   service,
@@ -102,16 +170,20 @@ function IntegrationCard({
 }) {
   const [credential, setCredential] = useState("");
   const [editing, setEditing] = useState(false);
+  const [connectingOAuth, setConnectingOAuth] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user, updateOnboarding } = useAuth();
+  const { user, token, updateOnboarding, refreshUser } = useAuth();
   const Icon = service.icon;
 
   const saveMutation = useMutation({
     mutationFn: async (cred: string) => {
       const res = await fetch(`${API_BASE}/client-integrations`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ clientId, service: service.key, credential: cred }),
       });
       if (!res.ok) throw new Error("Failed to save integration");
@@ -134,7 +206,10 @@ function IntegrationCard({
   const disconnectMutation = useMutation({
     mutationFn: async () => {
       if (!existing) return;
-      const res = await fetch(`${API_BASE}/client-integrations/${clientId}/${existing.id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/client-integrations/${clientId}/${existing.id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error("Failed to disconnect");
       return res.json();
     },
@@ -143,6 +218,63 @@ function IntegrationCard({
       toast({ title: `${service.name} disconnected` });
     },
   });
+
+  const handleOAuthConnect = useCallback(async () => {
+    if (!user?.id || !clientId) return;
+    setConnectingOAuth(true);
+    try {
+      const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const initiateRes = await fetch(
+        `${BASE}/api/oauth/initiate/${service.key}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!initiateRes.ok) {
+        const err = await initiateRes.json().catch(() => ({}));
+        if (!err.configured) {
+          toast({ title: "OAuth not configured", description: `${service.name} OAuth is not set up. You can connect manually using the API key form below.`, variant: "destructive" });
+        }
+        setConnectingOAuth(false);
+        return;
+      }
+      const { authUrl } = await initiateRes.json();
+      if (!authUrl) { setConnectingOAuth(false); return; }
+
+      const popup = window.open(authUrl, `oauth_${service.key}`, "width=600,height=700,scrollbars=yes,resizable=yes");
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.source !== popup) return;
+        if (event.data?.type === "oauth_success" && event.data?.service === service.key) {
+          window.removeEventListener("message", handleMessage);
+          setConnectingOAuth(false);
+          queryClient.invalidateQueries({ queryKey: ["client-integrations", clientId] });
+          toast({ title: `${service.name} connected`, description: "OAuth connection successful." });
+          if (user?.onboarding && !user.onboarding.integrations) {
+            await updateOnboarding({ integrations: true }).catch(() => {});
+          }
+          await refreshUser();
+          popup?.close();
+        } else if (event.data?.type === "oauth_error" && event.data?.service === service.key) {
+          window.removeEventListener("message", handleMessage);
+          setConnectingOAuth(false);
+          toast({ title: "Connection failed", description: event.data.error || "OAuth failed.", variant: "destructive" });
+          popup?.close();
+        }
+      };
+
+      window.addEventListener("message", handleMessage);
+      const timer = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(timer);
+          window.removeEventListener("message", handleMessage);
+          setConnectingOAuth(false);
+        }
+      }, 1000);
+    } catch (err) {
+      console.error("[oauth] Failed:", err);
+      setConnectingOAuth(false);
+    }
+  }, [user, token, clientId, service.key, queryClient, toast, updateOnboarding, refreshUser]);
 
   const isConnected = existing?.status === "connected";
 
@@ -155,6 +287,11 @@ function IntegrationCard({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <CardTitle className="text-lg">{service.name}</CardTitle>
+            {service.oauthSupported && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/40">
+                OAuth
+              </Badge>
+            )}
             {isConnected ? (
               <Badge variant="default" className="gap-1 bg-green-600">
                 <CheckCircle2 className="h-3 w-3" /> Connected
@@ -168,11 +305,11 @@ function IntegrationCard({
           <CardDescription className="mt-1">{service.description}</CardDescription>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         {isConnected && !editing ? (
           <div className="flex gap-2">
             <div className="flex-1 rounded bg-muted px-3 py-2 text-sm text-muted-foreground font-mono">
-              ••••••••{existing.credential.slice(-8)}
+              {service.oauthSupported ? "OAuth connected ✓" : `••••••••${existing.credential.slice(-8)}`}
             </div>
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               Update
@@ -186,31 +323,61 @@ function IntegrationCard({
               Disconnect
             </Button>
           </div>
-        ) : (
-          <div className="flex gap-2">
-            <Input
-              type="password"
-              placeholder={service.credentialPlaceholder}
-              value={credential}
-              onChange={(e) => setCredential(e.target.value)}
-              className="flex-1 font-mono text-sm"
-            />
+        ) : service.oauthSupported && !editing ? (
+          <div className="space-y-2">
             <Button
               size="sm"
-              onClick={() => saveMutation.mutate(credential)}
-              disabled={!credential.trim() || saveMutation.isPending}
+              variant="glow"
+              onClick={handleOAuthConnect}
+              disabled={connectingOAuth}
+              className="gap-2"
             >
-              {saveMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {connectingOAuth ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Connecting...</>
               ) : (
-                "Connect"
+                `Connect with ${service.name}`
               )}
             </Button>
-            {editing && (
-              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setCredential(""); }}>
-                Cancel
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+            >
+              Connect manually with API key instead
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground font-medium">{service.credentialLabel}</label>
+              {service.helpText && service.helpUrl && (
+                <HelpTooltip text={service.helpText} url={service.helpUrl} />
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder={service.credentialPlaceholder}
+                value={credential}
+                onChange={(e) => setCredential(e.target.value)}
+                className="flex-1 font-mono text-sm"
+              />
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate(credential)}
+                disabled={!credential.trim() || saveMutation.isPending}
+              >
+                {saveMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Connect"
+                )}
               </Button>
-            )}
+              {(editing || service.oauthSupported) && (
+                <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setCredential(""); }}>
+                  Cancel
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </CardContent>
@@ -782,6 +949,19 @@ export default function Integrations() {
   const { toast } = useToast();
   const [auditStats, setAuditStats] = useState<{ lastEvent: AuditEvent | null, count: number }>({ lastEvent: null, count: 0 });
   const [pmStats, setPmStats] = useState<ProspectorStats>({ dispatched: 0, received: 0, lastWebhook: null, avgConfidence: 0 });
+  const [highlightedService] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("highlight");
+  });
+
+  useEffect(() => {
+    if (highlightedService) {
+      const el = document.getElementById(`integration-${highlightedService}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [highlightedService]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -892,12 +1072,17 @@ export default function Integrations() {
         ) : (
           <div className="grid gap-4">
             {SERVICES.map((service) => (
-              <IntegrationCard
+              <div
                 key={service.key}
-                service={service}
-                existing={integrationMap.get(service.key)}
-                clientId={clientId}
-              />
+                id={`integration-${service.key}`}
+                className={highlightedService === service.key ? "ring-2 ring-primary ring-offset-2 ring-offset-background rounded-xl transition-all" : ""}
+              >
+                <IntegrationCard
+                  service={service}
+                  existing={integrationMap.get(service.key)}
+                  clientId={clientId}
+                />
+              </div>
             ))}
           </div>
         )}
