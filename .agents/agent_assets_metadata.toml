@@ -12,3 +12,9 @@ id = "9fOqYD0KuFwxUxxLxeJix"
 uri = "file://GalaxyBots-New-User-Guide.pdf"
 type = "pdf"
 title = "GalaxyBots New User Guide — 13-Slide PDF"
+
+[[outputs]]
+id = "k56BiFPjmrnlMYsVKUgzE"
+uri = "file://GalaxyBots-Narrator-Script.md"
+type = "text"
+title = "GalaxyBots Narrator Script — 13 Slides"
