@@ -8,6 +8,7 @@
     "seed-bots": "tsx ./src/seed-bots.ts",
     "seed-blog": "tsx ./src/seed-blog.ts",
     "seed-kilopro": "tsx ./src/seed-kilopro.ts",
+    "generate-whitepaper": "tsx ./src/generate-whitepaper.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
