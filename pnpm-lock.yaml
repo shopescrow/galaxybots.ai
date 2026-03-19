@@ -632,6 +632,8 @@ importers:
         specifier: 'catalog:'
         version: 7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  artifacts/mcp-extension: {}
+
   artifacts/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
