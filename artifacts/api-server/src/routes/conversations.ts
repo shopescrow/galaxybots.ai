@@ -16,6 +16,7 @@ import { applyBrandVoiceGuardrails } from "../services/governance";
 import { buildKnowledgeBaseContext } from "../services/knowledge-base";
 import { logLlmUsage } from "../services/llm-usage";
 import { getPackOverlayForBot } from "../services/pack-overlays";
+import { recordSlaDirective, resolveSlaResponse } from "../services/sla";
 
 const router: IRouter = Router();
 
@@ -97,6 +98,11 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Bot not found" });
     return;
   }
+
+  const slaEventId = await recordSlaDirective({
+    botId: bot.id,
+    clientId: req.user!.clientId,
+  }).catch(() => null);
 
   const [userMsg] = await db.insert(messages).values({
     conversationId: params.data.id,
@@ -197,6 +203,10 @@ You have access to tools that allow you to search the web, read/write shared sta
     }
   }
 
+  if (slaEventId !== null) {
+    resolveSlaResponse({ slaEventId }).catch(() => {});
+  }
+
   let botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
 
   if (req.user!.clientId) {
@@ -256,6 +266,11 @@ router.post("/conversations/:id/messages/stream", async (req, res): Promise<void
   };
 
   try {
+    const streamSlaEventId = await recordSlaDirective({
+      botId: bot.id,
+      clientId: req.user!.clientId,
+    }).catch(() => null);
+
     const [userMsg] = await db.insert(messages).values({
       conversationId: params.data.id,
       role: "user",
@@ -466,6 +481,10 @@ Now write the single definitive synthesized response:`;
       }
 
       botResponseContent = finalContent || "I understand. Let me consider this from a strategic perspective.";
+    }
+
+    if (streamSlaEventId !== null) {
+      resolveSlaResponse({ slaEventId: streamSlaEventId }).catch(() => {});
     }
 
     if (req.user!.clientId) {

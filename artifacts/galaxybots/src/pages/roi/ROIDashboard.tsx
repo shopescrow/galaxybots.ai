@@ -22,6 +22,8 @@ import {
   Send,
   MessageSquare,
   UserCheck,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import {
   BarChart,
@@ -177,6 +179,21 @@ export default function ROIDashboard() {
     queryFn: async () => {
       const res = await fetch(`${BASE}/api/roi/client/${clientId}/briefing`);
       if (!res.ok) throw new Error("Failed to fetch briefing");
+      return res.json();
+    },
+    enabled: !isNaN(clientId),
+  });
+
+  const { data: slaOverview } = useQuery<{
+    overallComplianceRate: number;
+    totalEvents: number;
+    totalBreached: number;
+    bots: Array<{ botId: number; botName: string; total: number; breached: number; complianceRate: number; status: "green" | "yellow" | "red" }>;
+  }>({
+    queryKey: ["sla-overview", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/analytics/sla-overview`);
+      if (!res.ok) throw new Error("SLA overview failed");
       return res.json();
     },
     enabled: !isNaN(clientId),
@@ -655,6 +672,51 @@ export default function ROIDashboard() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {slaOverview && slaOverview.totalEvents > 0 && (
+          <Card className="border-border/50 border-primary/20 mb-8">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-tech text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4" />
+                SLA Performance — Last 7 Days
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-xs text-muted-foreground mb-1">Overall Compliance</p>
+                  <p className={`text-xl font-bold ${slaOverview.overallComplianceRate >= 95 ? "text-green-400" : slaOverview.overallComplianceRate >= 85 ? "text-yellow-400" : "text-red-400"}`}>
+                    {slaOverview.overallComplianceRate}%
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                  <p className="text-xs text-muted-foreground mb-1">Total Events</p>
+                  <p className="text-xl font-bold">{slaOverview.totalEvents}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10">
+                  <p className="text-xs text-muted-foreground mb-1">Breaches</p>
+                  <p className="text-xl font-bold text-red-400">{slaOverview.totalBreached}</p>
+                </div>
+              </div>
+              {slaOverview.bots.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-tech text-muted-foreground uppercase tracking-wider mb-2">Bot Breakdown</p>
+                  {slaOverview.bots.slice(0, 5).map((bot) => (
+                    <div key={bot.botId} className="flex items-center justify-between text-sm gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${bot.status === "green" ? "bg-green-400" : bot.status === "yellow" ? "bg-yellow-400" : "bg-red-400"}`} />
+                        <span className="truncate text-muted-foreground">{bot.botName}</span>
+                      </div>
+                      <span className={`font-medium shrink-0 ${bot.status === "green" ? "text-green-400" : bot.status === "yellow" ? "text-yellow-400" : "text-red-400"}`}>
+                        {bot.complianceRate}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

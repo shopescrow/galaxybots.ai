@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, botsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, botsTable, botSlaEventsTable, botSlaOverridesTable, slaTiersTable, clientsTable } from "@workspace/db";
+import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { GetBotParams, ListBotsResponse, GetBotResponse } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { llmRateLimit } from "../middleware/rate-limit";
+import { getEffectiveSlaTargets } from "../services/sla";
+import { z } from "zod/v4";
 
 const router: IRouter = Router();
 
@@ -159,6 +161,211 @@ router.get("/bots/:id", async (req, res): Promise<void> => {
   }
 
   res.json(GetBotResponse.parse(bot));
+});
+
+const SLA_TIER_MAP: Record<string, string> = {
+  free: "standard", starter: "standard", standard: "standard",
+  team: "priority", priority: "priority", enterprise: "enterprise",
+};
+
+router.get("/bots/:id/sla", async (req, res): Promise<void> => {
+  const botId = parseInt(req.params.id);
+  if (isNaN(botId)) { res.status(400).json({ error: "Invalid bot id" }); return; }
+
+  const clientId = req.user?.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  const periodParam = (req.query.period as string) || "7d";
+  const days = periodParam === "30d" ? 30 : 7;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  try {
+    const [client] = await db.select({ plan: clientsTable.plan }).from(clientsTable).where(eq(clientsTable.id, clientId));
+    const tierKey = SLA_TIER_MAP[client?.plan ?? "standard"] ?? "standard";
+    const [tier] = await db.select().from(slaTiersTable).where(eq(slaTiersTable.tierId, tierKey));
+    const targets = await getEffectiveSlaTargets(botId, clientId);
+
+    const events = await db
+      .select()
+      .from(botSlaEventsTable)
+      .where(
+        and(
+          eq(botSlaEventsTable.botId, botId),
+          eq(botSlaEventsTable.clientId, clientId),
+          gte(botSlaEventsTable.createdAt, since)
+        )
+      )
+      .orderBy(desc(botSlaEventsTable.createdAt));
+
+    const responseEvents = events.filter((e) => e.eventType === "response" && e.resolvedAt !== null);
+    const completionEvents = events.filter((e) => e.eventType === "completion");
+
+    const responseMet = responseEvents.filter((e) => !e.breached).length;
+    const completionMet = completionEvents.filter((e) => !e.breached).length;
+
+    const responseComplianceRate = responseEvents.length > 0
+      ? Math.round((responseMet / responseEvents.length) * 1000) / 10
+      : null;
+    const completionComplianceRate = completionEvents.length > 0
+      ? Math.round((completionMet / completionEvents.length) * 1000) / 10
+      : null;
+
+    const netDurations = responseEvents
+      .map((e) => e.netDurationMs)
+      .filter((d): d is number => d !== null);
+    const avgResponseMs = netDurations.length > 0
+      ? Math.round(netDurations.reduce((a, b) => a + b, 0) / netDurations.length)
+      : null;
+
+    const sorted = [...netDurations].sort((a, b) => a - b);
+    const p95ResponseMs = sorted.length > 0
+      ? sorted[Math.floor(sorted.length * 0.95)] ?? null
+      : null;
+
+    const avgHoldMs = responseEvents.length > 0
+      ? Math.round(responseEvents.reduce((sum, e) => sum + (e.approvalHoldMs ?? 0), 0) / responseEvents.length)
+      : 0;
+
+    const recentBreaches = events
+      .filter((e) => e.breached)
+      .slice(0, 10)
+      .map((e) => ({
+        id: e.id,
+        sessionId: e.sessionId,
+        eventType: e.eventType,
+        directedAt: e.directedAt,
+        resolvedAt: e.resolvedAt,
+        netDurationMs: e.netDurationMs,
+        targetMs: e.targetMs,
+        tier: e.tier,
+      }));
+
+    const dailyStats: Record<string, { responseDurations: number[]; breached: number; total: number }> = {};
+    for (const e of responseEvents) {
+      const day = new Date(e.createdAt).toISOString().slice(0, 10);
+      if (!dailyStats[day]) dailyStats[day] = { responseDurations: [], breached: 0, total: 0 };
+      dailyStats[day].total++;
+      if (e.netDurationMs !== null) dailyStats[day].responseDurations.push(e.netDurationMs);
+      if (e.breached) dailyStats[day].breached++;
+    }
+
+    const trendData = Object.entries(dailyStats)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, s]) => ({
+        date,
+        avgResponseMs: s.responseDurations.length > 0
+          ? Math.round(s.responseDurations.reduce((a, b) => a + b, 0) / s.responseDurations.length)
+          : null,
+        total: s.total,
+        breached: s.breached,
+      }));
+
+    res.json({
+      botId,
+      clientId,
+      period: periodParam,
+      targets,
+      tier: {
+        id: tierKey,
+        name: tier?.tierName ?? tierKey,
+        responseTargetMs: tier?.responseTargetMs ?? 90000,
+        completionTargetMinutes: tier?.completionTargetMinutes ?? 240,
+        escalationChannels: (tier?.escalationChannels ?? []) as string[],
+      },
+      responseCompliance: {
+        rate: responseComplianceRate,
+        met: responseMet,
+        total: responseEvents.length,
+        avgResponseMs,
+        p95ResponseMs,
+        avgHoldMs,
+      },
+      completionCompliance: {
+        rate: completionComplianceRate,
+        met: completionMet,
+        total: completionEvents.length,
+      },
+      recentBreaches,
+      trendData,
+    });
+  } catch (err) {
+    console.error("Bot SLA fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch SLA data" });
+  }
+});
+
+router.put("/bots/:id/sla", async (req, res): Promise<void> => {
+  const botId = parseInt(req.params.id);
+  if (isNaN(botId)) { res.status(400).json({ error: "Invalid bot id" }); return; }
+
+  const clientId = req.user?.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  const role = req.user?.role;
+  if (role !== "owner" && role !== "admin") {
+    res.status(403).json({ error: "Only owners and admins can update SLA overrides" });
+    return;
+  }
+
+  const schema = z.object({
+    responseTargetMs: z.number().int().min(1000).optional(),
+    completionTargetMinutes: z.number().int().min(1).optional(),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  try {
+    const [client] = await db.select({ plan: clientsTable.plan }).from(clientsTable).where(eq(clientsTable.id, clientId));
+    const tierKey = SLA_TIER_MAP[client?.plan ?? "standard"] ?? "standard";
+    const [tier] = await db.select().from(slaTiersTable).where(eq(slaTiersTable.tierId, tierKey));
+
+    if (tier && parsed.data.responseTargetMs !== undefined) {
+      if (parsed.data.responseTargetMs > tier.responseTargetMs) {
+        res.status(400).json({
+          error: `Response target cannot be looser than tier default (${tier.responseTargetMs}ms for ${tier.tierName})`,
+        });
+        return;
+      }
+    }
+    if (tier && parsed.data.completionTargetMinutes !== undefined) {
+      if (parsed.data.completionTargetMinutes > tier.completionTargetMinutes) {
+        res.status(400).json({
+          error: `Completion target cannot be looser than tier default (${tier.completionTargetMinutes}min for ${tier.tierName})`,
+        });
+        return;
+      }
+    }
+
+    const [existing] = await db
+      .select()
+      .from(botSlaOverridesTable)
+      .where(and(eq(botSlaOverridesTable.botId, botId), eq(botSlaOverridesTable.clientId, clientId)));
+
+    if (existing) {
+      await db
+        .update(botSlaOverridesTable)
+        .set({
+          responseTargetMs: parsed.data.responseTargetMs ?? existing.responseTargetMs,
+          completionTargetMinutes: parsed.data.completionTargetMinutes ?? existing.completionTargetMinutes,
+          updatedAt: new Date(),
+        })
+        .where(eq(botSlaOverridesTable.id, existing.id));
+    } else {
+      await db.insert(botSlaOverridesTable).values({
+        botId,
+        clientId,
+        responseTargetMs: parsed.data.responseTargetMs ?? null,
+        completionTargetMinutes: parsed.data.completionTargetMinutes ?? null,
+      });
+    }
+
+    const targets = await getEffectiveSlaTargets(botId, clientId);
+    res.json({ success: true, targets });
+  } catch (err) {
+    console.error("Bot SLA update error:", err);
+    res.status(500).json({ error: "Failed to update SLA override" });
+  }
 });
 
 export default router;

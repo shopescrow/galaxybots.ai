@@ -25,6 +25,7 @@ import {
   clientIntegrationsTable,
   activationEmailsTable,
 } from "@workspace/db";
+import { checkSlaBreaches } from "./sla";
 import { eq, and, lte, isNull, or, ne, desc, gt, isNotNull, count, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "./roi";
@@ -1325,6 +1326,8 @@ export async function checkActivationNurture() {
   }
 }
 
+let slaBreachInterval: ReturnType<typeof setInterval> | null = null;
+
 export async function startScheduler() {
   if (schedulerInterval) return;
 
@@ -1396,6 +1399,10 @@ export async function startScheduler() {
     }
   }
 
+  slaBreachInterval = setInterval(() => {
+    checkSlaBreaches().catch(handleTickError("SLA breach check"));
+  }, 60 * 1000);
+
   schedulerInterval = setInterval(() => {
     checkDueAssignments().catch(handleTickError("assignments"));
     checkWeeklyBriefings().catch(handleTickError("weekly briefings"));
@@ -1419,5 +1426,9 @@ export function stopScheduler() {
   if (schedulerInterval) {
     clearInterval(schedulerInterval);
     schedulerInterval = null;
+  }
+  if (slaBreachInterval) {
+    clearInterval(slaBreachInterval);
+    slaBreachInterval = null;
   }
 }

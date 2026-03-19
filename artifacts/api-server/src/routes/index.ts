@@ -54,6 +54,7 @@ import workflowsRouter from "./workflows";
 import activityRouter from "./activity";
 import oauthRouter from "./oauth";
 import mcpMarketingRouter from "./mcp-marketing";
+import ttsRouter from "./tts";
 
 const router: IRouter = Router();
 
@@ -110,5 +111,6 @@ router.use(workflowsRouter);
 router.use(activityRouter);
 router.use(oauthRouter);
 router.use(mcpMarketingRouter);
+router.use(ttsRouter);
 
 export default router;

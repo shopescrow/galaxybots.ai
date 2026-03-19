@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store, BarChart3 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import { MemoryAudit } from "@/components/memory/MemoryAudit";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { PublishModal } from "@/components/marketplace/PublishModal";
+import { BotSlaPerformance } from "@/components/sla/BotSlaPerformance";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
@@ -48,7 +49,7 @@ export default function BotDetail() {
   
   const startConvo = useStartConversation();
   const [isStarting, setIsStarting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "memory" | "governance">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "memory" | "governance" | "performance">("chat");
   const [publishOpen, setPublishOpen] = useState(false);
   const isAdmin = user?.role === "owner" || user?.role === "admin";
 
@@ -221,6 +222,15 @@ export default function BotDetail() {
                     Governance
                   </Button>
                 )}
+                <Button
+                  variant={activeTab === "performance" ? "glow" : "ghost"}
+                  size="sm"
+                  className="font-tech text-xs"
+                  onClick={() => setActiveTab("performance")}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
+                  Performance
+                </Button>
               </div>
 
               {activeTab === "chat" ? (
@@ -257,6 +267,10 @@ export default function BotDetail() {
               ) : activeTab === "governance" ? (
                 <div className="flex-1 overflow-y-auto pb-10">
                   <BotGovernancePanel botId={botId} botName={bot.name} />
+                </div>
+              ) : activeTab === "performance" ? (
+                <div className="flex-1 overflow-y-auto pb-10">
+                  <BotSlaPerformance botId={botId} isAdmin={isAdmin} />
                 </div>
               ) : null}
             </div>

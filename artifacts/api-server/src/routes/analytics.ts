@@ -8,8 +8,13 @@ import {
   pipelineRunsTable,
   pipelinesTable,
   backgroundReportsTable,
+  botSlaEventsTable,
+  botsTable,
+  clientsTable,
+  slaTiersTable,
+  botSlaOverridesTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "crypto";
 import {
@@ -537,6 +542,83 @@ router.delete("/analytics/api-keys/:id", async (req, res): Promise<void> => {
   } catch (err) {
     console.error("API key delete error:", err);
     res.status(500).json({ error: "Failed to delete API key" });
+  }
+});
+
+router.get("/analytics/sla-overview", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const allBots = await db
+      .select({ id: botsTable.id, name: botsTable.name })
+      .from(botsTable);
+
+    const slaStats = await db
+      .select({
+        botId: botSlaEventsTable.botId,
+        total: sql<number>`COUNT(*)`,
+        breached: sql<number>`SUM(CASE WHEN ${botSlaEventsTable.breached} THEN 1 ELSE 0 END)`,
+      })
+      .from(botSlaEventsTable)
+      .where(
+        and(
+          eq(botSlaEventsTable.clientId, clientId),
+          gte(botSlaEventsTable.createdAt, sevenDaysAgo)
+        )
+      )
+      .groupBy(botSlaEventsTable.botId);
+
+    const botsMap = Object.fromEntries(allBots.map((b) => [b.id, b.name]));
+
+    const overview = slaStats.map((s) => {
+      const total = Number(s.total);
+      const breached = Number(s.breached);
+      const met = total - breached;
+      const complianceRate = total > 0 ? Math.round((met / total) * 1000) / 10 : 100;
+
+      let status: "green" | "yellow" | "red" = "green";
+      if (complianceRate < 85) status = "red";
+      else if (complianceRate < 95) status = "yellow";
+
+      return {
+        botId: s.botId,
+        botName: botsMap[s.botId] ?? `Bot #${s.botId}`,
+        total,
+        breached,
+        complianceRate,
+        status,
+      };
+    });
+
+    const platformBreach7d = await db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        breached: sql<number>`SUM(CASE WHEN ${botSlaEventsTable.breached} THEN 1 ELSE 0 END)`,
+      })
+      .from(botSlaEventsTable)
+      .where(
+        and(
+          eq(botSlaEventsTable.clientId, clientId),
+          gte(botSlaEventsTable.createdAt, sevenDaysAgo)
+        )
+      );
+
+    const totalEvents = Number(platformBreach7d[0]?.total ?? 0);
+    const totalBreached = Number(platformBreach7d[0]?.breached ?? 0);
+    const overallComplianceRate = totalEvents > 0 ? Math.round(((totalEvents - totalBreached) / totalEvents) * 1000) / 10 : 100;
+
+    res.json({
+      overallComplianceRate,
+      totalEvents,
+      totalBreached,
+      bots: overview.sort((a, b) => a.complianceRate - b.complianceRate),
+    });
+  } catch (err) {
+    console.error("SLA overview error:", err);
+    res.status(500).json({ error: "Failed to fetch SLA overview" });
   }
 });
 
