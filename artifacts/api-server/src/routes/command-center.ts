@@ -192,7 +192,7 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
         created_at AS "lastAction",
         tool_name AS "lastToolName"
       FROM tool_activity_log
-      WHERE client_id = ANY(${clientIds})
+      WHERE client_id IN (${sql.join(clientIds.map((id) => sql`${id}`), sql`, `)})
       ORDER BY client_id, created_at DESC
     `),
     db
@@ -218,7 +218,7 @@ router.get("/command-center/companies", requireRole("owner", "admin"), async (re
         recommended_action AS "recommendedAction",
         computed_at AS "computedAt"
       FROM client_health_scores
-      WHERE client_id = ANY(${clientIds})
+      WHERE client_id IN (${sql.join(clientIds.map((id) => sql`${id}`), sql`, `)})
       ORDER BY client_id, computed_at DESC
     `),
   ]);
