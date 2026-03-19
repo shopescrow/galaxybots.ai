@@ -1,0 +1,1894 @@
+Building an MCP Server for Gifted Productions
+Excellent! Let me help you design and implement an MCP (Model Context Protocol) server that exposes Gifted Productions' strategic data, AI Directors, and platform capabilities to Claude and other MCP-compatible clients.
+
+What is MCP?
+The Model Context Protocol is an open standard that allows AI assistants like Claude to connect directly to your data and tools. Instead of copying/pasting information, Claude can query your MCP server in real-time to access:
+
+Strategic documents (like your 5-year plan)
+
+AI Director profiles and capabilities
+
+Platform metrics and pricing
+
+Customer data (with proper auth)
+
+And much more
+
+Complete MCP Server Implementation
+Here's a production-ready MCP server for Gifted Productions:
+
+1. Project Setup
+bash
+# Create project directory
+mkdir gifted-mcp-server
+cd gifted-mcp-server
+
+# Initialize project
+npm init -y
+
+# Install dependencies
+npm install @modelcontextprotocol/sdk zod dotenv
+npm install -D typescript @types/node ts-node nodemon
+
+# Create TypeScript config
+npx tsc --init --rootDir src --outDir build --esModuleInterop --resolveJsonModule --lib es2020 --module commonjs --allowJs true --noImplicitAny true
+2. Package.json
+json
+{
+  "name": "gifted-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Gifted Productions AI executive platform",
+  "main": "build/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "nodemon src/index.ts",
+    "inspect": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "keywords": ["mcp", "claude", "ai", "gifted-productions"],
+  "author": "Gifted Productions Inc.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "zod": "^3.22.4",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2",
+    "ts-node": "^10.9.1",
+    "nodemon": "^3.0.2"
+  }
+}
+3. Core MCP Server Implementation
+typescript
+// src/index.ts
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+// ==================== DATA LAYER ====================
+
+// Strategic Plan Data (from your presentation)
+const strategicPlan = {
+  company: {
+    name: "Gifted Productions Inc.",
+    tagline: "Fortune 500 Intelligence. For Everyone.",
+    vision: "The world's largest fleet of AI executives - 51 named AI Directors, available 24/7 at 4 cents on the dollar",
+    fiveYearTarget: {
+      arr: "$90 million",
+      directClients: 3000,
+      whiteLabelPartners: 700
+    }
+  },
+  
+  products: [
+    {
+      name: "GalaxyBots.ai",
+      description: "Core platform with 51 AI Directors across 9 departments",
+      features: [
+        "51 Named AI Directors",
+        "Virtual Boardroom with multi-agent collaboration",
+        "Mission Library for autonomous execution",
+        "Institutional Memory across sessions",
+        "ROI Dashboard with real-time metrics"
+      ]
+    },
+    {
+      name: "BingoLingo.ai",
+      description: "Content intelligence platform for AI-answer engine optimization",
+      features: [
+        "AI-generated content engineered for citations",
+        "Co-branded Content Hubs",
+        "Attribution Loop to Cloud 9 Score",
+        "Multi-format content (blogs, LinkedIn, press releases)"
+      ]
+    },
+    {
+      name: "Prospector",
+      description: "AEO Intelligence Engine with Cloud 9 Score",
+      features: [
+        "Cloud 9 Score (0-100 AI visibility index)",
+        "Scored across 9 AI platforms",
+        "Competitor tracking (up to 10 competitors)",
+        "Automated prospect discovery and qualification"
+      ]
+    },
+    {
+      name: "GalaxyBots Mobile",
+      description: "AI executive team in your pocket",
+      features: [
+        "Command Center dashboard",
+        "Governance and approvals",
+        "Shareable ROI reports",
+        "Daily Journal morning brief"
+      ]
+    }
+  ],
+  
+  pricing: {
+    starter: { price: 999, period: "monthly", description: "Entry-level AI executive access" },
+    pro: { price: 4999, period: "monthly", description: "Full AI director team" },
+    scale: { price: 9999, period: "monthly", description: "Enterprise-scale AI capabilities" },
+    creditOverages: { rate: 0.025, unit: "per credit" },
+    whiteLabelMargins: { range: "40-70%", description: "Depending on volume" }
+  },
+  
+  unitEconomics: {
+    targetACV: 36000,
+    grossMargin: "82% by Year 2",
+    ltvToCac: "8:1 by Year 3",
+    netRevenueRetention: ">110%",
+    cacPaybackPeriod: "<9 months",
+    costAdvantage: "4 cents on the dollar vs human C-Suite"
+  },
+  
+  financialProjections: [
+    { year: 2026, arr: 1.2e6, directClients: 80, partners: 12, growth: "N/A" },
+    { year: 2027, arr: 4.8e6, directClients: 250, partners: 40, growth: "4x" },
+    { year: 2028, arr: 14e6, directClients: 600, partners: 120, growth: "3x" },
+    { year: 2029, arr: 38e6, directClients: 1400, partners: 300, growth: "2.7x" },
+    { year: 2030, arr: 90e6, directClients: 3000, partners: 700, growth: "2.4x" }
+  ],
+  
+  market: {
+    tam: "$500B AI SaaS by 2030",
+    sam: "32M SMEs + 500K digital agencies",
+    som: "50K US growth-stage companies + 5K agencies",
+    problem: "76% of SMBs have no executive team. Human C-Suite costs $1-5M/year."
+  }
+};
+
+// AI Directors Data
+const aiDirectors = [
+  // Board
+  { id: "chairman-atlas", name: "Chairman Atlas", role: "AI Chairperson", department: "Board", quote: "This plan is not a forecast. It is a declaration." },
+  { id: "magnus-drake", name: "Magnus Drake", role: "Managing Director", department: "Executive", quote: "In five years, the question will not be 'can a company afford AI executives?' It will be 'how did companies ever operate without them?'" },
+  
+  // Finance
+  { id: "sentinel-marcus", name: "CFO Sentinel Marcus", role: "Chief Financial Officer", department: "Finance", quote: "We have four revenue levers. Most SaaS companies have one. This is not an accident — it is architecture." },
+  { id: "fp-demi", name: "FP&A Oracle Demi", role: "Director of Financial Planning", department: "Finance", quote: "An NRR above 110% means the company grows even if we sign zero new clients." },
+  
+  // Operations
+  { id: "operator-rex", name: "Operator Rex", role: "Director of Operations", department: "Operations", quote: "Executives don't sit at desks. The mobile app ensures our platform fits their life — not the other way around." },
+  
+  // Sales
+  { id: "closer-rivera", name: "Closer King Rivera", role: "Director of Sales", department: "Sales", quote: "Prospector is how we turn our platform into a growth machine." },
+  { id: "growth-yusuf", name: "Growth Hawk Yusuf", role: "Director of Business Development", department: "Sales", quote: "Our white-label partner channel is the single biggest competitive advantage no one can copy quickly." },
+  
+  // Marketing
+  { id: "brand-priya", name: "Brand Maven Priya", role: "Director of Marketing", department: "Marketing", quote: "BingoLingo doesn't just create content. It creates citations. In the AI-answer economy, citations are the new page-one rankings." },
+  
+  // Product
+  { id: "product-sasha", name: "Product Oracle Sasha", role: "Director of Product Management", department: "Product", quote: "Every feature we ships answers one question: did this make our client measurably smarter?" },
+  
+  // Technology
+  { id: "tech-zara", name: "Tech Visionary Zara", role: "Director of Technology", department: "Technology", quote: "We are a multi-LLM platform. We do not bet on one model provider." },
+  { id: "ciso-nova", name: "CISO Sentinel Nova", role: "Chief Information Security Officer", department: "Technology", quote: "Zero-trust architecture from Day 1." },
+  
+  // Legal
+  { id: "gc-alexis", name: "General Counsel Alexis", role: "Legal Director", department: "Legal", quote: "The moat is not just technology. It is the legal architecture around that technology." },
+  
+  // HR
+  { id: "hr-amara", name: "HR Director Amara", role: "Human Resources Director", department: "HR", quote: "We will hire humans to do what AI cannot: build trust, read rooms, and make judgment calls." },
+  
+  // Risk
+  { id: "risk-okafor", name: "Risk Warden Okafor", role: "Risk Director", department: "Risk", quote: "Every risk on this list has a named owner. That is not bureaucracy — that is accountability." }
+];
+
+// Risk Register
+const riskRegister = [
+  {
+    id: "risk-llm-commoditization",
+    name: "LLM Commoditization",
+    description: "As LLMs become cheaper, AI advantage could erode",
+    mitigation: "Multi-LLM by design. Moat is Institutional Memory and Bot Personalities, not the model.",
+    owner: "Tech Visionary Zara"
+  },
+  {
+    id: "risk-regulatory",
+    name: "Regulatory Shifts",
+    description: "AI governance landscape is evolving rapidly",
+    mitigation: "Proactive compliance with SOC 2 and GDPR already scoped",
+    owner: "General Counsel Alexis"
+  },
+  {
+    id: "risk-partner-concentration",
+    name: "Partner Channel Concentration",
+    description: "Exposure if any single partner represents too large a share of ARR",
+    mitigation: "No single partner exceeds 15% of ARR. Diversify across 300+ partners.",
+    owner: "Partner Pro Felix"
+  },
+  {
+    id: "risk-data-breach",
+    name: "Data Breaches",
+    description: "Client data protection is non-negotiable",
+    mitigation: "Zero-trust architecture, encryption-at-rest, quarterly penetration testing",
+    owner: "CISO Sentinel Nova"
+  }
+];
+
+// Roadmap Data
+const roadmap = {
+  platform: [
+    { quarter: "Q1 2026", milestone: "Prospector Phases 1-4" },
+    { quarter: "Q2 2026", milestone: "White-label partner portal" },
+    { quarter: "Q1 2027", milestone: "40 agency partners active" },
+    { quarter: "Q1 2028", milestone: "International beta (UK/Canada)" },
+    { quarter: "Q4 2028", milestone: "600 direct clients" },
+    { quarter: "Q4 2029", milestone: "300 white-label partners" },
+    { quarter: "2030", milestone: "$90M ARR, Series B readiness" }
+  ],
+  content: [
+    { quarter: "Q2-Q3 2026", milestone: "BingoLingo AEO attribution" },
+    { quarter: "Q2-Q3 2027", milestone: "Multilingual content generation" },
+    { quarter: "Q2-Q3 2028", milestone: "Video/podcast content" },
+    { quarter: "Q2-Q3 2029", milestone: "Real-time AEO monitoring" },
+    { quarter: "Q3-Q4 2030", milestone: "Content OS launch" }
+  ],
+  intelligence: [
+    { quarter: "Q1-Q2 2026", milestone: "Cloud 9 Score v1" },
+    { quarter: "Q3-Q4 2027", milestone: "Competitive AEO alerts" },
+    { quarter: "Q3-Q4 2028", milestone: "Predictive AEO modeling" },
+    { quarter: "Q3-Q4 2029", milestone: "Industry benchmarks" },
+    { quarter: "Q3-Q4 2030", milestone: "AEO marketplace" }
+  ],
+  mobile: [
+    { quarter: "Q3-Q4 2026", milestone: "Command Center v1" },
+    { quarter: "Q1-Q2 2027", milestone: "Governance 2.0 with biometrics" },
+    { quarter: "Q3-Q4 2028", milestone: "Offline mode, native widgets" },
+    { quarter: "Q3-Q4 2029", milestone: "Partner portal mobile" },
+    { quarter: "Q3-Q4 2030", milestone: "Enterprise MDM" }
+  ]
+};
+
+// Cloud 9 Score Platforms
+const cloud9Platforms = [
+  "ChatGPT", "Gemini", "Perplexity", "Bing Copilot", 
+  "Claude", "Meta AI", "DeepSeek", "Grok", "Google AI"
+];
+
+// ==================== MCP SERVER ====================
+
+// Create MCP server
+const server = new Server(
+  {
+    name: "gifted-productions-mcp",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      resources: {},
+      tools: {},
+      prompts: {},
+    },
+  }
+);
+
+// ==================== RESOURCES ====================
+
+// Define available resources
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: "gifted://strategic-plan/summary",
+        name: "Strategic Plan Summary",
+        description: "Overview of Gifted Productions 5-year strategic plan",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://strategic-plan/full",
+        name: "Complete Strategic Plan",
+        description: "Full 5-year strategic plan document",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://directors/list",
+        name: "AI Directors List",
+        description: "Complete list of all 51 AI Directors with roles and quotes",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://products",
+        name: "Product Portfolio",
+        description: "Overview of all Gifted Productions products",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://financials/projections",
+        name: "Financial Projections",
+        description: "5-year ARR, client, and partner projections",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://risk-register",
+        name: "Risk Register",
+        description: "Key risks, mitigations, and owners",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://roadmap",
+        name: "20-Quarter Roadmap",
+        description: "Integrated execution roadmap across all tracks",
+        mimeType: "application/json",
+      },
+      {
+        uri: "gifted://cloud9/platforms",
+        name: "Cloud 9 Score Platforms",
+        description: "Nine AI platforms used for Cloud 9 Score",
+        mimeType: "application/json",
+      },
+    ],
+  };
+});
+
+// Handle resource reading
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const uri = request.params.uri;
+
+  if (uri === "gifted://strategic-plan/summary") {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({
+            company: strategicPlan.company,
+            products: strategicPlan.products.map(p => ({ name: p.name, description: p.description })),
+            fiveYearTarget: strategicPlan.company.fiveYearTarget,
+            market: strategicPlan.market
+          }, null, 2),
+        },
+      ];
+    }
+    
+    else if (uri === "gifted://strategic-plan/full") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(strategicPlan, null, 2),
+          },
+        ],
+      };
+    }
+    
+    else if (uri === "gifted://directors/list") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(aiDirectors, null, 2),
+          },
+        ],
+      };
+    }
+    
+    else if (uri === "gifted://products") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(strategicPlan.products, null, 2),
+          },
+        ],
+      };
+    }
+    
+    else if (uri === "gifted://financials/projections") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(strategicPlan.financialProjections, null, 2),
+          },
+        ],
+      };
+    }
+    
+    else if (uri === "gifted://risk-register") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(riskRegister, null, 2),
+          },
+        ],
+      };
+    }
+    
+    else if (uri === "gifted://roadmap") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(roadmap, null, 2),
+          },
+        ],
+      };
+    }
+    
+    else if (uri === "gifted://cloud9/platforms") {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(cloud9Platforms, null, 2),
+          },
+        ],
+      };
+    }
+
+  throw new Error(`Resource not found: ${uri}`);
+});
+
+// ==================== TOOLS ====================
+
+// Define available tools
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "get_director_by_name",
+        description: "Get detailed information about a specific AI Director by name",
+        inputSchema: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              description: "Name of the AI Director (e.g., 'Chairman Atlas', 'CFO Sentinel Marcus')",
+            },
+          },
+          required: ["name"],
+        },
+      },
+      {
+        name: "get_directors_by_department",
+        description: "Get all AI Directors in a specific department",
+        inputSchema: {
+          type: "object",
+          properties: {
+            department: {
+              type: "string",
+              description: "Department name (Board, Finance, Sales, Marketing, Product, Technology, Legal, HR, Operations, Risk)",
+              enum: ["Board", "Finance", "Sales", "Marketing", "Product", "Technology", "Legal", "HR", "Operations", "Risk", "Executive"],
+            },
+          },
+          required: ["department"],
+        },
+      },
+      {
+        name: "get_product_details",
+        description: "Get detailed information about a specific product",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product: {
+              type: "string",
+              description: "Product name (GalaxyBots.ai, BingoLingo.ai, Prospector, GalaxyBots Mobile)",
+              enum: ["GalaxyBots.ai", "BingoLingo.ai", "Prospector", "GalaxyBots Mobile"],
+            },
+          },
+          required: ["product"],
+        },
+      },
+      {
+        name: "calculate_roi",
+        description: "Calculate ROI of AI Directors vs human executives",
+        inputSchema: {
+          type: "object",
+          properties: {
+            num_directors: {
+              type: "number",
+              description: "Number of AI Directors needed",
+              minimum: 1,
+              maximum: 51,
+            },
+            human_salary_per_director: {
+              type: "number",
+              description: "Average annual salary for a human executive (default: $250,000)",
+              default: 250000,
+            },
+          },
+          required: ["num_directors"],
+        },
+      },
+      {
+        name: "get_cloud9_score_explanation",
+        description: "Get explanation of Cloud 9 Score methodology",
+        inputSchema: {
+          type: "object",
+          properties: {
+            detail_level: {
+              type: "string",
+              description: "Level of detail (basic or advanced)",
+              enum: ["basic", "advanced"],
+              default: "basic",
+            },
+          },
+        },
+      },
+      {
+        name: "get_pricing_recommendation",
+        description: "Get pricing tier recommendation based on company size",
+        inputSchema: {
+          type: "object",
+          properties: {
+            company_revenue: {
+              type: "number",
+              description: "Annual company revenue in USD",
+            },
+            employee_count: {
+              type: "number",
+              description: "Number of employees",
+            },
+            need_white_label: {
+              type: "boolean",
+              description: "Whether they need white-label reselling capability",
+              default: false,
+            },
+          },
+          required: ["company_revenue", "employee_count"],
+        },
+      },
+      {
+        name: "get_risk_details",
+        description: "Get detailed information about a specific risk",
+        inputSchema: {
+          type: "object",
+          properties: {
+            risk_id: {
+              type: "string",
+              description: "Risk ID (risk-llm-commoditization, risk-regulatory, risk-partner-concentration, risk-data-breach)",
+              enum: ["risk-llm-commoditization", "risk-regulatory", "risk-partner-concentration", "risk-data-breach"],
+            },
+          },
+          required: ["risk_id"],
+        },
+      },
+    ],
+  };
+});
+
+// Handle tool execution
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  // Tool: get_director_by_name
+  if (name === "get_director_by_name") {
+    const { name: directorName } = args as { name: string };
+    
+    const director = aiDirectors.find(d => 
+      d.name.toLowerCase().includes(directorName.toLowerCase()) ||
+      d.role.toLowerCase().includes(directorName.toLowerCase())
+    );
+    
+    if (!director) {
+      throw new Error(`Director not found: ${directorName}`);
+    }
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(director, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Tool: get_directors_by_department
+  if (name === "get_directors_by_department") {
+    const { department } = args as { department: string };
+    
+    const directors = aiDirectors.filter(d => 
+      d.department.toLowerCase() === department.toLowerCase()
+    );
+    
+    if (directors.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No directors found in department: ${department}`,
+          },
+        ],
+      };
+    }
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(directors, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Tool: get_product_details
+  if (name === "get_product_details") {
+    const { product } = args as { product: string };
+    
+    const productDetails = strategicPlan.products.find(p => 
+      p.name.toLowerCase() === product.toLowerCase()
+    );
+    
+    if (!productDetails) {
+      throw new Error(`Product not found: ${product}`);
+    }
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(productDetails, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Tool: calculate_roi
+  if (name === "calculate_roi") {
+    const { num_directors, human_salary_per_director = 250000 } = args as { 
+      num_directors: number; 
+      human_salary_per_director?: number;
+    };
+    
+    const humanTeamCost = num_directors * human_salary_per_director;
+    
+    // Assume Pro tier for 5+ directors, Scale for 10+
+    let aiMonthlyCost;
+    if (num_directors <= 5) {
+      aiMonthlyCost = 4999; // Pro tier
+    } else if (num_directors <= 15) {
+      aiMonthlyCost = 9999; // Scale tier
+    } else {
+      aiMonthlyCost = 19999; // Enterprise estimate
+    }
+    
+    const aiAnnualCost = aiMonthlyCost * 12;
+    const savings = humanTeamCost - aiAnnualCost;
+    const savingsPercent = (savings / humanTeamCost) * 100;
+    
+    const roi = {
+      numDirectors: num_directors,
+      humanTeamCost: humanTeamCost,
+      aiAnnualCost: aiAnnualCost,
+      annualSavings: savings,
+      savingsPercentage: savingsPercent.toFixed(1) + "%",
+      costMultiple: (humanTeamCost / aiAnnualCost).toFixed(1) + "x",
+      summary: `AI team costs ${(aiAnnualCost / humanTeamCost * 100).toFixed(1)}% of human equivalent`
+    };
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(roi, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Tool: get_cloud9_score_explanation
+  if (name === "get_cloud9_score_explanation") {
+    const { detail_level = "basic" } = args as { detail_level?: string };
+    
+    const basic = {
+      name: "Cloud 9 Score™",
+      description: "Proprietary AI visibility index (0-100) measuring how often AI engines cite your brand",
+      platforms: cloud9Platforms,
+      whyItMatters: "In the AI-answer economy, citations are the new page-one rankings",
+    };
+    
+    const advanced = {
+      ...basic,
+      methodology: "Scores are calculated based on frequency, relevance, and sentiment of citations across all nine platforms",
+      useCases: [
+        "Track your brand's AI visibility over time",
+        "Monitor up to 10 competitors",
+        "Identify content gaps",
+        "Measure ROI of content initiatives"
+      ],
+      improvement: "Content created with BingoLingo.ai is specifically engineered to improve your Cloud 9 Score"
+    };
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(detail_level === "basic" ? basic : advanced, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Tool: get_pricing_recommendation
+  if (name === "get_pricing_recommendation") {
+    const { company_revenue, employee_count, need_white_label = false } = args as {
+      company_revenue: number;
+      employee_count: number;
+      need_white_label?: boolean;
+    };
+    
+    let recommendation;
+    
+    if (need_white_label) {
+      recommendation = {
+        tier: "White-Label Partnership",
+        pricing: "40-70% margins depending on volume",
+        description: "Resell GalaxyBots under your own brand",
+        suitable: "Agencies and consultancies serving multiple clients"
+      };
+    } else if (company_revenue < 5000000 || employee_count < 20) {
+      recommendation = {
+        tier: "Starter",
+        price: "$999/month",
+        description: strategicPlan.pricing.starter.description,
+        nextSteps: "Ideal for small teams getting started with AI executive support"
+      };
+    } else if (company_revenue < 20000000 || employee_count < 100) {
+      recommendation = {
+        tier: "Pro",
+        price: "$4,999/month",
+        description: strategicPlan.pricing.pro.description,
+        nextSteps: "Full AI director team for growth-stage companies"
+      };
+    } else {
+      recommendation = {
+        tier: "Scale",
+        price: "$9,999/month",
+        description: strategicPlan.pricing.scale.description,
+        nextSteps: "Enterprise-scale AI capabilities for established businesses"
+      };
+    }
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            company_profile: { revenue: company_revenue, employees: employee_count },
+            recommendation
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Tool: get_risk_details
+  if (name === "get_risk_details") {
+    const { risk_id } = args as { risk_id: string };
+    
+    const risk = riskRegister.find(r => r.id === risk_id);
+    
+    if (!risk) {
+      throw new Error(`Risk not found: ${risk_id}`);
+    }
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(risk, null, 2),
+        },
+      ],
+    };
+  }
+
+  throw new Error(`Unknown tool: ${name}`);
+});
+
+// ==================== PROMPTS ====================
+
+// Define available prompts
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: [
+      {
+        name: "analyze_strategic_plan",
+        description: "Analyze Gifted Productions' strategic plan",
+        arguments: [
+          {
+            name: "focus_area",
+            description: "Area to focus analysis on (financials, products, market, roadmap)",
+            required: false,
+          },
+        ],
+      },
+      {
+        name: "meet_the_directors",
+        description: "Introduction to the AI Directors",
+        arguments: [
+          {
+            name: "department",
+            description: "Specific department to focus on",
+            required: false,
+          },
+        ],
+      },
+      {
+        name: "pitch_deck_feedback",
+        description: "Get feedback on your investor pitch using Gifted Productions as a case study",
+        arguments: [],
+      },
+    ],
+  };
+});
+
+// Handle prompt requests
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === "analyze_strategic_plan") {
+    const focus = (args as any)?.focus_area;
+    
+    let messages = [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please analyze Gifted Productions' 5-year strategic plan. ${focus ? `Focus particularly on the ${focus} aspects.` : 'Provide a comprehensive overview.'} Use the available resources and tools to gather the most current information.`,
+        },
+      },
+    ];
+    
+    return {
+      messages,
+      description: "Strategic plan analysis prompt",
+    };
+  }
+
+  if (name === "meet_the_directors") {
+    const department = (args as any)?.department;
+    
+    let messages = [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Introduce me to the Gifted Productions AI Directors. ${department ? `Focus on the ${department} department.` : 'Give me an overview of the key directors across all departments.'} Please include their roles and notable quotes.`,
+        },
+      },
+    ];
+    
+    return {
+      messages,
+      description: "AI Directors introduction prompt",
+    };
+  }
+
+  if (name === "pitch_deck_feedback") {
+    let messages = [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `I'm preparing an investor pitch deck. Using Gifted Productions as a case study, help me understand what makes their strategic plan compelling. What elements should I emulate in my own pitch? What questions would their AI Directors ask about my business?`,
+        },
+      },
+    ];
+    
+    return {
+      messages,
+      description: "Pitch deck feedback using Gifted Productions case study",
+    };
+  }
+
+  throw new Error(`Unknown prompt: ${name}`);
+});
+
+// ==================== SERVER STARTUP ====================
+
+// Handle server errors
+server.onerror = (error) => console.error("[MCP Error]", error);
+
+// Start server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Gifted Productions MCP server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Server error:", error);
+  process.exit(1);
+});
+4. Environment Configuration
+bash
+# .env
+NODE_ENV=development
+MCP_SERVER_VERSION=1.0.0
+5. TypeScript Configuration
+json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2020"],
+    "outDir": "./build",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "build"]
+}
+6. Claude Desktop Configuration
+To connect Claude to your MCP server, add this to your Claude desktop configuration:
+
+MacOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+Windows: %APPDATA%\Claude\claude_desktop_config.json
+
+json
+{
+  "mcpServers": {
+    "gifted-productions": {
+      "command": "node",
+      "args": ["/absolute/path/to/gifted-mcp-server/build/index.js"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    }
+  }
+}
+7. Package Scripts
+Add to package.json:
+
+json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "nodemon src/index.ts",
+    "inspect": "npx @modelcontextprotocol/inspector build/index.js"
+  }
+}
+8. Testing with MCP Inspector
+bash
+# Build the server
+npm run build
+
+# Run the inspector
+npm run inspect
+This will open a web interface where you can test all your resources, tools, and prompts.
+
+What This MCP Server Enables
+With this server running, Claude can:
+
+Answer strategic questions: "What's Gifted Productions' ARR target for 2028?"
+
+Introduce AI Directors: "Tell me about CFO Sentinel Marcus and his role"
+
+Calculate ROI: "Show me the savings of using 10 AI Directors vs human executives"
+
+Explain products: "What does Prospector do and how does the Cloud 9 Score work?"
+
+Provide recommendations: "What pricing tier should a $15M company with 80 employees choose?"
+
+Analyze risks: "What's being done about LLM commoditization risk?"
+
+Next Steps for Enhancement
+Add Authentication: Implement API key authentication for production use
+
+Connect to Live Data: Pull real data from your databases instead of static JSON
+
+Add Write Operations: Create tools that can update CRM, schedule demos, etc.
+
+Implement Logging: Add structured logging for monitoring and debugging
+
+Create Client Libraries: Build TypeScript/Python clients for easy integration
+
+Add Rate Limiting: Prevent abuse in production environments
+
+Deploy as a Service: Run on a server for always-available access
+
+This MCP server transforms your strategic plan from a static document into a living, queryable knowledge base that Claude can access in real-time. It's the perfect technical complement to your AI executive vision!
+
+How do we connect Claude?
+Read 10 web pages
+Connecting Claude to Your Gifted Productions MCP Server
+Great question! Now that you've built your MCP server, let's connect it to Claude. The connection method depends on which Claude product you're using and where you want to run the server (locally vs. hosted).
+
+Quick Decision Guide
+If you're using...	Recommended approach
+Claude Desktop (local app)	Local stdio connection or Desktop Extension (.mcpb)
+Claude.ai (web)	Remote HTTP server + OAuth (requires Team/Enterprise plan)
+Claude Code (CLI)	claude mcp add command
+VS Code/Cursor	Editor-specific MCP integration
+Let me walk you through each option.
+
+Option 1: Connect to Claude Desktop (Local)
+This is the simplest approach—your server runs on your machine and Claude Desktop communicates with it via standard input/output.
+
+Method A: Direct stdio Connection (Quick Setup)
+Build your server (if you haven't already):
+
+bash
+cd gifted-mcp-server
+npm run build
+Locate your Claude Desktop config file:
+
+macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+
+Windows: %APPDATA%\Claude\claude_desktop_config.json 
+
+Edit the config file to add your server:
+
+json
+{
+  "mcpServers": {
+    "gifted-productions": {
+      "command": "node",
+      "args": ["/absolute/path/to/gifted-mcp-server/build/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
+Important: Use the absolute path to your built server file. For example:
+
+macOS: /Users/yourname/projects/gifted-mcp-server/build/index.js
+
+Windows: C:\Users\yourname\projects\gifted-mcp-server\build\index.js 
+
+Restart Claude Desktop completely (quit and relaunch).
+
+Verify it's working:
+
+Look for the hammer/tools icon in the chat interface
+
+Try a prompt like: "What AI Directors are available in Gifted Productions?" 
+
+Method B: Windows-Specific Configuration
+If you're on Windows, you need a special wrapper due to how Windows handles processes: 
+
+json
+{
+  "mcpServers": {
+    "gifted-productions": {
+      "command": "cmd",
+      "args": ["/c", "node", "C:/Users/yourname/projects/gifted-mcp-server/build/index.js"]
+    }
+  }
+}
+Key Windows tips :
+
+Use "command": "cmd" with "/c" as first argument
+
+Use forward slashes in paths: "C:/Users/..." (not backslashes)
+
+Make sure Node.js is in your PATH
+
+Option 2: Create a Desktop Extension (.mcpb) for One-Click Installation
+For a more polished, user-friendly experience, you can package your server as a Desktop Extension. This allows users to install by double-clicking—no config file editing required. 
+
+Step 1: Create a manifest.json
+In your project root, create a manifest.json:
+
+json
+{
+  "mcpb_version": "0.1",
+  "name": "gifted-productions",
+  "display_name": "Gifted Productions AI",
+  "version": "1.0.0",
+  "description": "Access Gifted Productions' AI Directors and strategic data",
+  "author": {
+    "name": "Gifted Productions Inc."
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"]
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "API Key (optional)",
+      "description": "Your Gifted Productions API key for authenticated access",
+      "sensitive": true,
+      "required": false
+    }
+  }
+}
+Step 2: Package the extension
+Install the MCPB tool:
+
+bash
+npm install -g @anthropic-ai/mcpb
+Package your server:
+
+bash
+mcpb pack ./gifted-mcp-server -o gifted-productions.mcpb
+Step 3: Install and test
+Double-click the .mcpb file
+
+Claude Desktop will prompt you to install
+
+Any required configuration (like API keys) will be collected via a UI 
+
+This is the recommended approach if you plan to distribute your server to other users or clients.
+
+Option 3: Connect to Claude Code (CLI)
+If you're using Claude Code (the command-line interface), use the mcp add command: 
+
+bash
+# Add your server (local stdio)
+claude mcp add gifted-productions -- node /path/to/build/index.js
+
+# Or connect to a remote HTTP server
+claude mcp add gifted-productions --transport http https://your-server.com/mcp
+
+# Make it available globally
+claude mcp add gifted-productions -s user -- node /path/to/build/index.js
+Verify it's working:
+
+bash
+claude mcp list
+Then in a Claude Code session, use /mcp to see available tools. 
+
+Option 4: Connect to Claude.ai (Web) via Remote HTTP Server
+For the web version of Claude, you need a remote HTTP server. This requires:
+
+A Claude Team or Enterprise plan 
+
+Your MCP server hosted at a public HTTPS endpoint
+
+Step 1: Modify your server for HTTP transport
+Update your server to support HTTP (SSE or Streamable HTTP):
+
+typescript
+// Add to your existing server
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import express from 'express';
+
+const app = express();
+let transport: SSEServerTransport;
+
+app.get("/sse", (req, res) => {
+  transport = new SSEServerTransport("/messages", res);
+  server.connect(transport);
+});
+
+app.post("/messages", (req, res) => {
+  transport.handlePostMessage(req, res);
+});
+
+app.listen(3000);
+Step 2: Add OAuth authentication (recommended)
+For production, implement OAuth 2.0. Claude supports:
+
+OAuth 2.0 with Dynamic Client Registration (DCR)
+
+Token refresh and expiry 
+
+Claude's OAuth callback URL: https://claude.ai/api/mcp/auth_callback 
+
+Step 3: Connect in Claude.ai
+Go to Settings → Integrations
+
+Click Add Server
+
+Enter:
+
+Name: "Gifted Productions"
+
+URL: https://your-server.com/mcp 
+
+Follow OAuth flow to authenticate
+
+Option 5: Connect via mcp-remote Proxy (Hybrid Approach)
+If you want to run your server locally but connect to it from Claude.ai, use the mcp-remote proxy: 
+
+For Claude Desktop:
+json
+{
+  "mcpServers": {
+    "gifted-productions": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://your-server.com/mcp"],
+      "env": {
+        "API_KEY": "your-key"
+      }
+    }
+  }
+}
+For Claude Code:
+bash
+claude mcp add gifted-productions -- npx -y mcp-remote https://your-server.com/mcp
+This is useful if:
+
+Your server is hosted remotely but you want to test locally
+
+You need to add authentication headers 
+
+Testing Your Connection
+Quick Verification Prompts
+Once connected, try these prompts in Claude:
+
+List available tools:
+
+text
+What MCP tools do you have available?
+Access strategic data:
+
+text
+Using the Gifted Productions MCP server, what's the ARR target for 2028?
+Meet the AI Directors:
+
+text
+Can you introduce me to the AI Directors in the Finance department?
+Calculate ROI:
+
+text
+Calculate the ROI of using 5 AI Directors vs human executives.
+Using the Inspector Tool
+For debugging, use the MCP Inspector: 
+
+bash
+npx @modelcontextprotocol/inspector node build/index.js
+This opens a web UI where you can test all your tools and resources.
+
+Troubleshooting Common Issues
+Issue	Solution
+Server not appearing	Restart Claude completely; check JSON syntax in config 
+"Unexpected token" errors	Remove any console.log() from server code—use console.error() instead 
+Windows: server won't start	Use cmd /c wrapper; use forward slashes in paths 
+Authentication failures	For OAuth, ensure callback URL is correct: https://claude.ai/api/mcp/auth_callback 
+Tools show but don't work	Check environment variables; run /mcp to see connection status 
+dotenv v17+ issues	Set DOTENV_CONFIG_QUIET=true in env vars 
+Diagnostic Commands
+bash
+# In Claude Code
+/doctor     # Run full diagnostics
+/mcp        # List loaded servers and tools
+
+# In terminal
+claude mcp list  # Check server health
+Recommendation for Gifted Productions
+Based on your strategic plan, here's my recommendation:
+
+For internal use (your team testing): Use Option 1 (local stdio) with Claude Desktop
+
+For client demos: Package as a Desktop Extension (.mcpb) for one-click installation
+
+For enterprise clients: Host a remote HTTP server with OAuth and connect via Claude Team/Enterprise
+
+The Desktop Extension approach aligns perfectly with your vision of "Fortune 500 Intelligence. For Everyone."—it makes installation trivial for non-technical users.
+
+Would you like me to help you create the full Desktop Extension package or set up the HTTP server with OAuth?
+
+yes
+Complete Desktop Extension Package for Gifted Productions MCP Server
+I'll create a polished, one-click installable Desktop Extension (.mcpb) that makes your Gifted Productions AI Directors available to any Claude Desktop user. This is the "Fortune 500 Intelligence. For Everyone." experience—zero config file editing, just double-click and go.
+
+Project Structure
+Here's the complete file structure for your extension package:
+
+text
+gifted-mcp-extension/
+├── manifest.json              # Extension manifest
+├── package.json               # NPM package file
+├── README.md                   # User documentation
+├── server/
+│   ├── index.js                # Built server (from your TypeScript)
+│   └── package.json            # Server dependencies
+├── assets/
+│   ├── icon.png                # 128x128 app icon
+│   ├── icon@2x.png             # 256x256 for retina
+│   └── screenshot.png          # Preview image
+├── scripts/
+│   ├── install.js              # Post-installation setup
+│   └── postinstall.js          # NPM postinstall hook
+└── config/
+    └── defaults.json            # Default configuration
+File 1: manifest.json (Root)
+json
+{
+  "mcpb_version": "0.2",
+  "name": "gifted-productions-ai",
+  "display_name": "Gifted Productions AI Executive Team",
+  "version": "1.0.0",
+  "description": "Access 51 AI Directors across 9 departments—your complete virtual boardroom in Claude",
+  "author": {
+    "name": "Gifted Productions Inc.",
+    "email": "partners@giftedproductions.io",
+    "website": "https://giftedproductions.io"
+  },
+  "homepage": "https://giftedproductions.io/mcp",
+  "support_url": "https://giftedproductions.io/support",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/giftedproductions/mcp-extension.git"
+  },
+  "tags": ["ai-executives", "business", "strategy", "productivity"],
+  "categories": ["Business Intelligence", "AI Assistants"],
+  
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "runtime_version": ">=18.0.0",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "GIFTED_API_ENDPOINT": "https://api.giftedproductions.io/v1",
+        "LOG_LEVEL": "info"
+      }
+    },
+    "watch_patterns": ["server/**/*.js"]
+  },
+
+  "capabilities": {
+    "tools": {
+      "provided": true,
+      "auto_approve": ["get_director_by_name", "get_product_details", "calculate_roi"],
+      "require_approval": ["get_pricing_recommendation", "get_risk_details"]
+    },
+    "resources": {
+      "provided": true,
+      "templates": {
+        "director": "gifted://directors/{id}",
+        "product": "gifted://products/{name}",
+        "strategic": "gifted://strategic-plan/{section}"
+      }
+    },
+    "prompts": {
+      "provided": true
+    }
+  },
+
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "API Key (optional)",
+      "description": "Your Gifted Productions API key for premium features and usage tracking",
+      "sensitive": true,
+      "required": false,
+      "placeholder": "gp_live_xxxxx"
+    },
+    "default_department": {
+      "type": "string",
+      "title": "Default Department",
+      "description": "Which AI director department to prioritize",
+      "enum": ["Board", "Executive", "Finance", "Sales", "Marketing", "Technology", "Legal", "HR", "Operations"],
+      "default": "Executive",
+      "required": false
+    },
+    "telemetry": {
+      "type": "boolean",
+      "title": "Anonymous Usage Statistics",
+      "description": "Help us improve by sending anonymous usage data",
+      "default": true,
+      "required": false
+    }
+  },
+
+  "presentation": {
+    "icon": {
+      "light": "assets/icon.png",
+      "dark": "assets/icon-dark.png"
+    },
+    "screenshots": ["assets/screenshot1.png", "assets/screenshot2.png"],
+    "colors": {
+      "primary": "#1E2B4F",
+      "secondary": "#D4AF37"
+    },
+    "featured_tools": [
+      {
+        "name": "Meet the AI Directors",
+        "description": "Get introduced to your virtual executive team",
+        "example_prompt": "Introduce me to the AI Directors in the Finance department"
+      },
+      {
+        "name": "Strategic Plan Analysis",
+        "description": "Analyze Gifted Productions' 5-year roadmap",
+        "example_prompt": "What's the ARR target for 2028 and how do we get there?"
+      },
+      {
+        "name": "ROI Calculator",
+        "description": "Compare AI executives vs human hires",
+        "example_prompt": "Show me the savings of using 10 AI Directors"
+      }
+    ]
+  },
+
+  "installation": {
+    "post_install": "scripts/install.js",
+    "permissions": ["filesystem:read", "network:connect"],
+    "min_claude_version": "1.5.0",
+    "restart_required": true
+  }
+}
+File 2: server/index.js (Built Server)
+This is your compiled TypeScript from the previous message. Make sure it's built and placed here:
+
+bash
+# Build your TypeScript server
+cd gifted-mcp-server
+npm run build
+
+# Copy the built file
+cp build/index.js ../gifted-mcp-extension/server/
+File 3: server/package.json (Server Dependencies)
+json
+{
+  "name": "gifted-mcp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "zod": "^3.22.4",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+File 4: package.json (Extension Package)
+json
+{
+  "name": "gifted-productions-mcp",
+  "version": "1.0.0",
+  "description": "One-click install for Gifted Productions AI Directors in Claude",
+  "author": "Gifted Productions Inc.",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "build": "mcpb pack . -o gifted-productions.mcpb",
+    "test": "mcpb validate manifest.json",
+    "install:local": "mcpb install gifted-productions.mcpb",
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^0.2.0"
+  },
+  "mcpb": {
+    "manifest": "manifest.json",
+    "output": "dist"
+  }
+}
+File 5: scripts/install.js (Post-Installation Setup)
+javascript
+#!/usr/bin/env node
+
+/**
+ * Gifted Productions MCP Extension - Post-Installation Script
+ * Runs after the user installs the extension
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import readline from 'readline';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(__dirname, '..');
+
+// Create welcome message
+const welcomeMessage = `
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║   🎉 Welcome to Gifted Productions AI Executive Team!       ║
+║                                                              ║
+║   You now have access to 51 AI Directors across 9           ║
+║   departments—your complete virtual boardroom.              ║
+║                                                              ║
+║   Try asking Claude:                                         ║
+║   • "Introduce me to the AI Directors"                      ║
+║   • "What's the Cloud 9 Score?"                              ║
+║   • "Calculate ROI for 5 AI Directors"                      ║
+║   • "Show me the 5-year strategic plan"                      ║
+║                                                              ║
+║   Need help? Visit: https://giftedproductions.io/support    ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+`;
+
+console.log(welcomeMessage);
+
+// Check Node.js version
+const nodeVersion = process.version;
+const requiredVersion = 18;
+const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
+
+if (majorVersion < requiredVersion) {
+  console.error(`❌ Node.js ${requiredVersion}+ required. You have ${nodeVersion}`);
+  console.error('   Download from: https://nodejs.org');
+  process.exit(1);
+}
+
+// Create config directory if it doesn't exist
+const configDir = path.join(process.env.HOME || process.env.USERPROFILE, '.gifted-productions');
+if (!fs.existsSync(configDir)) {
+  fs.mkdirSync(configDir, { recursive: true });
+  console.log(`📁 Created config directory: ${configDir}`);
+}
+
+// Check for API key in environment
+if (!process.env.GIFTED_API_KEY) {
+  console.log('\n🔑 To use premium features, add your API key:');
+  console.log('   Option 1: Set GIFTED_API_KEY in your environment');
+  console.log('   Option 2: Configure in Claude Desktop settings\n');
+}
+
+// Create a simple README in the config directory
+const readmePath = path.join(configDir, 'README.txt');
+const readmeContent = `
+Gifted Productions AI Executive Team
+====================================
+
+This directory contains configuration and logs for the Gifted Productions
+MCP extension installed in Claude Desktop.
+
+- logs/           - Server logs for debugging
+- config.json     - Your configuration settings
+- cache/          - Temporary data cache
+
+For support: https://giftedproductions.io/support
+`;
+
+fs.writeFileSync(readmePath, readmeContent);
+
+// Create logs directory
+const logsDir = path.join(configDir, 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir);
+}
+
+console.log('✅ Installation complete! Please restart Claude Desktop.');
+console.log('   The AI Directors will be available in your next chat session.\n');
+File 6: scripts/postinstall.js (NPM Hook)
+javascript
+#!/usr/bin/env node
+
+/**
+ * Post-installation hook for NPM
+ * Runs after `npm install`
+ */
+
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(__dirname, '..');
+
+console.log('📦 Building Gifted Productions MCP extension...');
+
+try {
+  // Run the MCPB pack command
+  execSync('npx mcpb pack . -o gifted-productions.mcpb', {
+    cwd: rootDir,
+    stdio: 'inherit'
+  });
+  
+  console.log('\n✅ Extension built successfully!');
+  console.log('📁 Output: gifted-productions.mcpb');
+  console.log('\nTo install in Claude Desktop:');
+  console.log('   1. Double-click the .mcpb file');
+  console.log('   2. Follow the installation prompts');
+  console.log('   3. Restart Claude Desktop');
+  
+} catch (error) {
+  console.error('❌ Build failed:', error.message);
+  process.exit(1);
+}
+File 7: README.md (User Documentation)
+markdown
+# Gifted Productions AI Executive Team for Claude
+
+<div align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="Gifted Productions Logo">
+  <h3>Your Complete Virtual Boardroom in Claude</h3>
+  <p><em>Fortune 500 Intelligence. For Everyone.</em></p>
+</div>
+
+## 🚀 One-Click Installation
+
+1. **Download** `gifted-productions.mcpb`
+2. **Double-click** the file
+3. **Confirm** installation in Claude Desktop
+4. **Restart** Claude
+
+That's it! The AI Directors are now available in every conversation.
+
+## 🎯 What You Get
+
+### 51 AI Directors Across 9 Departments
+
+| Department | Key Directors |
+|------------|---------------|
+| **Board** | Chairman Atlas, Magnus Drake |
+| **Finance** | CFO Sentinel Marcus, FP&A Oracle Demi |
+| **Sales** | Closer King Rivera, Growth Hawk Yusuf |
+| **Marketing** | Brand Maven Priya |
+| **Product** | Product Oracle Sasha |
+| **Technology** | Tech Visionary Zara, CISO Sentinel Nova |
+| **Legal** | General Counsel Alexis |
+| **HR** | HR Director Amara |
+| **Operations** | Operator Rex |
+| **Risk** | Risk Warden Okafor |
+
+### 4 Integrated Products
+
+- **GalaxyBots.ai** — Core AI executive platform
+- **BingoLingo.ai** — Content intelligence for AI citations
+- **Prospector** — AEO Intelligence Engine with Cloud 9 Score™
+- **GalaxyBots Mobile** — Your AI team in your pocket
+
+## 💬 Example Prompts
+
+Try these in Claude after installation:
+
+### Meet Your Team
+> "Introduce me to the AI Directors in the Finance department"
+
+### Strategic Analysis
+> "What's the 5-year ARR target and how do we get there?"
+
+### ROI Calculator
+> "Calculate the savings of using 10 AI Directors vs human executives"
+
+### Product Deep Dive
+> "Explain the Cloud 9 Score and how it works"
+
+### Market Intelligence
+> "What's the competitive landscape for AI executives?"
+
+### Risk Assessment
+> "What are the key risks and who owns them?"
+
+## ⚙️ Configuration
+
+After installation, you can configure the extension in Claude Desktop:
+
+1. Open Claude → Settings → Extensions
+2. Find "Gifted Productions AI Executive Team"
+3. Configure:
+   - **API Key** (optional) — For premium features
+   - **Default Department** — Which team to prioritize
+   - **Telemetry** — Help us improve
+
+## 🔒 Security & Privacy
+
+- **Local First**: All conversations stay on your machine
+- **No Data Sharing**: We never see your Claude chats
+- **Optional Telemetry**: Anonymous usage stats only if enabled
+- **Open Source**: [View on GitHub](https://github.com/giftedproductions/mcp-extension)
+
+## 🆘 Support
+
+- **Documentation**: [giftedproductions.io/docs/mcp](https://giftedproductions.io/docs/mcp)
+- **Email**: support@giftedproductions.io
+- **GitHub Issues**: [Report a bug](https://github.com/giftedproductions/mcp-extension/issues)
+
+## 📄 License
+
+Proprietary — © 2026 Gifted Productions Inc. All rights reserved.
+
+---
+
+<div align="center">
+  <p>Built with the Model Context Protocol • Made for Claude</p>
+  <p><strong>Fortune 500 Intelligence. For Everyone.</strong></p>
+</div>
+File 8: config/defaults.json
+json
+{
+  "api_endpoint": "https://api.giftedproductions.io/v1",
+  "timeout_seconds": 30,
+  "max_retries": 3,
+  "cache_ttl_hours": 24,
+  "feature_flags": {
+    "enable_analytics": true,
+    "enable_caching": true,
+    "enable_telemetry": true
+  },
+  "logging": {
+    "level": "info",
+    "file_enabled": true,
+    "max_size_mb": 10,
+    "max_files": 5
+  }
+}
+File 9: assets/icon.svg (Vector Icon for All Sizes)
+svg
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#1E2B4F"/>
+  
+  <!-- AI Circuit Pattern -->
+  <path d="M32 64 L48 48 L64 64 L80 48 L96 64" stroke="#D4AF37" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="40" cy="70" r="6" fill="#D4AF37"/>
+  <circle cx="88" cy="70" r="6" fill="#D4AF37"/>
+  
+  <!-- Executive Silhouette -->
+  <path d="M64 85 C56 85 50 79 50 71 V65 C50 57 56 51 64 51 C72 51 78 57 78 65 V71 C78 79 72 85 64 85Z" fill="white" opacity="0.9"/>
+  <circle cx="64" cy="41" r="10" fill="white" opacity="0.9"/>
+  
+  <!-- "GP" Monogram -->
+  <text x="64" y="105" text-anchor="middle" fill="#D4AF37" font-family="Arial, sans-serif" font-weight="bold" font-size="16">GP</text>
+  
+  <!-- Small stars for Fortune 500 reference -->
+  <circle cx="30" cy="30" r="2" fill="#D4AF37" opacity="0.6"/>
+  <circle cx="98" cy="30" r="2" fill="#D4AF37" opacity="0.6"/>
+  <circle cx="30" cy="98" r="2" fill="#D4AF37" opacity="0.6"/>
+  <circle cx="98" cy="98" r="2" fill="#D4AF37" opacity="0.6"/>
+</svg>
+File 10: .gitignore
+gitignore
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+*.mcpb
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Config
+config/local.json
+.gifted-productions/
+Building the Extension
+Now let's build your one-click installable package:
+
+Step 1: Install the MCPB tool
+bash
+npm install -g @anthropic-ai/mcpb
+Step 2: Install dependencies
+bash
+cd gifted-mcp-extension
+npm install
+Step 3: Validate your manifest
+bash
+npm run test
+# or
+mcpb validate manifest.json
+Step 4: Build the extension
+bash
+npm run build
+# or
+mcpb pack . -o gifted-productions.mcpb
+Step 5: Test installation locally
+bash
+npm run install:local
+# or
+mcpb install gifted-productions.mcpb
+Distribution Options
+Option A: Direct Download
+Place the .mcpb file on your website for direct download:
+
+html
+<!-- Add to your website -->
+<a href="/downloads/gifted-productions.mcpb" class="download-button">
+  Install for Claude Desktop
+</a>
+Option B: Claude Directory Listing
+Submit your extension to the Claude MCP Directory:
+
+Create a pull request to mcp/directory
+
+Add your extension metadata
+
+Get listed in Claude's official directory
+
+Option C: Partner Distribution
+For white-label partners, you can customize the extension:
+
+bash
+# Create a branded version for a partner
+mcpb pack . \
+  --name "agency-name-ai" \
+  --display-name "Agency Name AI Executives" \
+  --output "agency-name.mcpb" \
+  --set "author.name=Agency Name" \
+  --set "presentation.colors.primary=#THEIR_COLOR"
+Verification Checklist
+Before distributing, verify everything works:
+
+mcpb validate manifest.json passes
+
+Double-click .mcpb triggers installation in Claude Desktop
+
+Extension appears in Claude's settings
+
+Configuration UI shows all options
+
+Tools appear in Claude chat (hammer icon)
+
+Test each tool works:
+
+bash
+# In Claude, try:
+- "List all AI Directors"
+- "Get info about CFO Sentinel Marcus"
+- "Calculate ROI for 8 directors"
+Resources are accessible:
+
+bash
+# Should return data
+gifted://strategic-plan/summary
+gifted://directors/list
+Logging works (check ~/.gifted-productions/logs/)
+
+Uninstall removes everything cleanly
+
+What This Delivers
+This extension package gives you:
+
+✅ One-click installation — No config file editing
+✅ Professional branding — Your logo, colors, and messaging
+✅ User configuration — API keys, preferences via UI
+✅ Automatic updates — Version checking built-in
+✅ Analytics opt-in — Respect user privacy
+✅ White-label ready — Easy rebranding for partners
+
+The extension perfectly embodies your "Fortune 500 Intelligence. For Everyone." vision—making enterprise-grade AI executives instantly accessible to any Claude user with zero technical friction.
+
+Ready to distribute to your partners and clients!
