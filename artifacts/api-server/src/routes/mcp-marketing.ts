@@ -5,21 +5,25 @@ import {
   mcpServersTable,
   mcpDirectorySubmissionsTable,
   mcpToolCallsTable,
+  mcpLeadsTable,
+  platformApiKeysTable,
   clientsTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, gte, count } from "drizzle-orm";
 import { requireRole } from "../middleware/auth";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import nodemailer from "nodemailer";
+import { MCP_LAUNCH_OUTREACH_HTML } from "../email-templates/mcp-launch-outreach";
 
 const router: IRouter = Router();
 
 const DIRECTORIES = [
-  { slug: "mcp-so", name: "mcp.so", url: "https://mcp.so", submitUrl: "https://mcp.so", description: "18,000+ servers — community-driven", category: "Community" },
-  { slug: "mcpmarket", name: "mcpmarket.com", url: "https://mcpmarket.com", submitUrl: "https://mcpmarket.com", description: "25k+ servers with categories", category: "Marketplace" },
-  { slug: "official-registry", name: "Official MCP Registry", url: "https://registry.modelcontextprotocol.io", submitUrl: "https://registry.modelcontextprotocol.io", description: "Anthropic-managed official registry", category: "Official" },
-  { slug: "aiagentslist", name: "aiagentslist.com", url: "https://aiagentslist.com/mcp-servers", submitUrl: "https://aiagentslist.com/mcp-servers", description: "593+ curated, category browsing", category: "Curated" },
-  { slug: "mcpservers", name: "mcpservers.com", url: "https://mcpservers.com", submitUrl: "https://mcpservers.com", description: "#1 claimed list, tag-based discovery", category: "Community" },
-  { slug: "github-mcp", name: "GitHub Reference Repo", url: "https://github.com/modelcontextprotocol/servers", submitUrl: "https://github.com/modelcontextprotocol/servers/pulls", description: "Official reference repo — PR to add", category: "GitHub" },
+  { slug: "mcp-so", name: "mcp.so", url: "https://mcp.so", submitUrl: "https://mcp.so/submit", description: "18,000+ servers — community-driven", category: "Community" },
+  { slug: "smithery", name: "Smithery (smithery.ai)", url: "https://smithery.ai", submitUrl: "https://smithery.ai/submit", description: "Developer-first MCP registry with search", category: "Marketplace" },
+  { slug: "mcpmarket", name: "mcpmarket.com", url: "https://mcpmarket.com", submitUrl: "https://mcpmarket.com/submit", description: "25k+ servers with categories", category: "Marketplace" },
+  { slug: "aiagentslist", name: "aiagentslist.com", url: "https://aiagentslist.com/mcp-servers", submitUrl: "https://aiagentslist.com/mcp-servers/submit", description: "593+ curated, category browsing", category: "Curated" },
+  { slug: "pulsemcp", name: "PulseMCP (pulsemcp.com)", url: "https://pulsemcp.com", submitUrl: "https://pulsemcp.com/submit", description: "Trending MCP pulse with weekly rankings", category: "Community" },
+  { slug: "official-registry", name: "Official MCP Registry", url: "https://registry.modelcontextprotocol.io", submitUrl: "https://registry.modelcontextprotocol.io/submit", description: "Anthropic-managed official registry", category: "Official" },
 ];
 
 router.get("/mcp-marketing/directories/config", requireRole("owner", "admin"), (_req, res) => {
@@ -140,7 +144,7 @@ router.patch("/mcp-marketing/servers/:id/directories/:slug", requireRole("owner"
   const slug = req.params.slug;
   if (isNaN(serverId)) { res.status(400).json({ error: "Invalid server id" }); return; }
   const schema = z.object({
-    status: z.enum(["not_started", "pending", "submitted", "live"]).optional(),
+    status: z.enum(["not_started", "draft", "pending", "submitted", "live"]).optional(),
     listingUrl: z.string().nullable().optional(),
     optimizedDescription: z.string().nullable().optional(),
     notes: z.string().nullable().optional(),
@@ -301,6 +305,163 @@ router.get("/mcp-marketing/analytics", requireRole("owner", "admin"), async (_re
   } catch (err) {
     console.error("mcp-marketing analytics error:", err);
     res.status(500).json({ error: "Failed to get analytics" });
+  }
+});
+
+router.get("/mcp-marketing/download-extension", (_req, res): void => {
+  const mcpbConfig = {
+    name: "galaxybots",
+    description: "GalaxyBots MCP Server — Enterprise AI Intelligence",
+    version: "1.0.0",
+    transport: "http-sse",
+    serverUrl: "https://galaxybots.ai/__mcp/sse",
+    authType: "api_key",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    tools: [
+      "crm_get_clients", "pipeline_snapshot", "prospecting_search",
+      "compliance_status", "knowledge_search", "analytics_summary",
+      "bot_roster", "create_brief", "task_session_create",
+    ],
+    resources: [
+      "galaxybots://pipeline",
+      "galaxybots://accounts",
+      "galaxybots://world-state",
+    ],
+    prompts: [
+      "weekly-revenue-review",
+      "compliance-audit",
+      "prospect-list-build",
+      "morning-brief",
+    ],
+    setupUrl: "https://galaxybots.ai/mcp-docs",
+  };
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", 'attachment; filename="galaxybots-mcp.mcpb"');
+  res.send(JSON.stringify(mcpbConfig, null, 2));
+});
+
+router.get("/mcp-marketing/social-proof", async (_req, res): Promise<void> => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [activeIntegrations, totalToolCalls, sessionsToday, directoriesListed] = await Promise.all([
+      db.select({ count: count() }).from(platformApiKeysTable)
+        .where(and(
+          eq(platformApiKeysTable.status, "active"),
+          eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+        )),
+      db.select({ count: count() }).from(mcpToolCallsTable),
+      db.select({ count: sql<number>`COUNT(DISTINCT ${mcpToolCallsTable.partnerKeyId})` })
+        .from(mcpToolCallsTable)
+        .where(gte(mcpToolCallsTable.calledAt, today)),
+      db.select({ count: count() }).from(mcpDirectorySubmissionsTable)
+        .where(eq(mcpDirectorySubmissionsTable.status, "submitted")),
+    ]);
+
+    res.json({
+      active_integrations: Number(activeIntegrations[0]?.count ?? 0),
+      total_tool_calls: Number(totalToolCalls[0]?.count ?? 0),
+      sessions_today: Number(sessionsToday[0]?.count ?? 0),
+      directories_listed: Number(directoriesListed[0]?.count ?? 0),
+    });
+  } catch (err) {
+    console.error("mcp-marketing social-proof error:", err);
+    res.status(500).json({ error: "Failed to get social proof" });
+  }
+});
+
+router.post("/mcp-marketing/launch-signup", async (req, res): Promise<void> => {
+  const schema = z.object({
+    email: z.email(),
+    name: z.string().optional(),
+    company: z.string().optional(),
+    source: z.string().default("launch_page"),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Valid email required" }); return; }
+  try {
+    await db.insert(mcpLeadsTable).values({
+      email: parsed.data.email,
+      name: parsed.data.name ?? null,
+      company: parsed.data.company ?? null,
+      source: parsed.data.source,
+    }).onConflictDoNothing();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("mcp-marketing launch-signup error:", err);
+    res.status(500).json({ error: "Failed to save signup" });
+  }
+});
+
+router.post("/mcp-marketing/send-launch-email", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const smtpFrom = process.env.SMTP_FROM ?? smtpUser;
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    res.status(503).json({ error: "SMTP not configured" });
+    return;
+  }
+
+  try {
+    const htmlTemplate = MCP_LAUNCH_OUTREACH_HTML;
+
+    const partners = await db.select({
+      id: platformApiKeysTable.id,
+      clientId: platformApiKeysTable.clientId,
+      label: platformApiKeysTable.label,
+      clientName: clientsTable.companyName,
+      contactName: clientsTable.contactName,
+      contactEmail: clientsTable.contactEmail,
+    })
+      .from(platformApiKeysTable)
+      .leftJoin(clientsTable, eq(platformApiKeysTable.clientId, clientsTable.id))
+      .where(and(
+        eq(platformApiKeysTable.status, "active"),
+        eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+      ));
+
+    if (partners.length === 0) {
+      res.json({ ok: true, sent: 0, message: "No active MCP partner key holders found" });
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: Number(smtpPort ?? 587),
+      secure: Number(smtpPort) === 465,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    let sent = 0;
+    for (const partner of partners) {
+      if (!partner.contactEmail) continue;
+      const recipientName = partner.contactName ?? partner.clientName ?? "Partner";
+      const personalized = htmlTemplate
+        .replace(/{{PARTNER_NAME}}/g, recipientName)
+        .replace(/{{LABEL}}/g, partner.label ?? "");
+
+      try {
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: partner.contactEmail,
+          subject: "New: GalaxyBots MCP Resources, Prompts & Knowledge Tools",
+          html: personalized,
+        });
+        sent++;
+      } catch (mailErr) {
+        console.error(`Failed to send to ${partner.contactEmail}:`, mailErr);
+      }
+    }
+
+    res.json({ ok: true, sent, total: partners.length });
+  } catch (err) {
+    console.error("mcp-marketing send-launch-email error:", err);
+    res.status(500).json({ error: "Failed to send launch emails" });
   }
 });
 

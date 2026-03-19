@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, unique, jsonb } from "drizzle-orm/pg-core";
 import { mcpServersTable } from "./mcp-servers";
 
 export const mcpDirectorySubmissionsTable = pgTable("mcp_directory_submissions", {
@@ -10,6 +10,7 @@ export const mcpDirectorySubmissionsTable = pgTable("mcp_directory_submissions",
   listingUrl: text("listing_url"),
   optimizedDescription: text("optimized_description"),
   notes: text("notes"),
+  submissionPayload: jsonb("submission_payload"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique().on(table.mcpServerId, table.directorySlug),

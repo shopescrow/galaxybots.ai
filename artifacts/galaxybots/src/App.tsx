@@ -72,6 +72,8 @@ import BriefsPage from "@/pages/briefs/BriefsPage";
 import ProcessStudio from "@/pages/process-studio/ProcessStudio";
 import ActivityStream from "@/pages/activity/ActivityStream";
 import McpGrowthHub from "@/pages/mcp-marketing/McpGrowthHub";
+import McpLaunch from "@/pages/mcp-marketing/McpLaunch";
+import McpDocs from "@/pages/mcp-marketing/McpDocs";
 import SlaWalkthrough from "@/pages/sla-walkthrough/SlaWalkthrough";
 
 const queryClient = new QueryClient({
@@ -202,6 +204,8 @@ function AppRouter() {
       <Route path="/partner-admin/:ref" component={PartnerAdminPortal} />
       <Route path="/partner-admin" component={PartnerAdminPortal} />
       <Route path="/developers" component={DeveloperPortal} />
+      <Route path="/mcp-launch" component={McpLaunch} />
+      <Route path="/mcp-docs" component={McpDocs} />
       <Route path="/partner/:ref" component={PartnerLanding} />
       <Route>
         <AuthenticatedRoutes />

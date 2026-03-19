@@ -1,0 +1,117 @@
+export const MCP_LAUNCH_OUTREACH_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New: GalaxyBots MCP Resources, Prompts &amp; Knowledge Tools</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .wrapper { max-width: 600px; margin: 0 auto; padding: 32px 16px; }
+    .card { background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); padding: 40px 40px 32px; }
+    .header-logo { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+    .header-title { font-size: 28px; font-weight: 800; color: #ffffff; line-height: 1.3; margin: 0 0 8px; }
+    .header-sub { font-size: 16px; color: rgba(255,255,255,0.85); margin: 0; line-height: 1.5; }
+    .body { padding: 40px; }
+    .greeting { font-size: 16px; color: #374151; margin: 0 0 20px; line-height: 1.6; }
+    .intro { font-size: 15px; color: #4b5563; line-height: 1.7; margin: 0 0 28px; }
+    .section-label { font-size: 11px; font-weight: 700; color: #7c3aed; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 12px; }
+    .prompt-block { background: #f9fafb; border: 1px solid #e5e7eb; border-left: 4px solid #7c3aed; border-radius: 8px; padding: 16px 20px; margin: 0 0 12px; }
+    .prompt-block p { margin: 0; font-size: 14px; color: #374151; font-style: italic; line-height: 1.6; }
+    .prompt-label { font-size: 11px; font-weight: 600; color: #7c3aed; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 6px; display: block; }
+    .features { margin: 28px 0; }
+    .feature-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .feature-icon { width: 36px; height: 36px; background: #f3f0ff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .feature-text h4 { margin: 0 0 2px; font-size: 14px; font-weight: 600; color: #111827; }
+    .feature-text p { margin: 0; font-size: 13px; color: #6b7280; line-height: 1.5; }
+    .cta-section { background: #f9fafb; border-radius: 10px; padding: 28px; text-align: center; margin: 28px 0; }
+    .cta-title { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 8px; }
+    .cta-sub { font-size: 14px; color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+    .cta-btn { display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 8px; letter-spacing: 0.3px; }
+    .divider { border: none; border-top: 1px solid #f3f4f6; margin: 24px 0; }
+    .footer { padding: 24px 40px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
+    .footer p { margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.6; }
+    .footer a { color: #7c3aed; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <div class="header-logo">GalaxyBots</div>
+        <h1 class="header-title">New MCP Capabilities Just Launched</h1>
+        <p class="header-sub">Resources, Prompts, and Knowledge Tools for your AI workflows</p>
+      </div>
+      <div class="body">
+        <p class="greeting">Hi {{PARTNER_NAME}},</p>
+        <p class="intro">
+          We've just shipped a major upgrade to the GalaxyBots MCP server. Your API key ({{LABEL}}) now has access to three new capability layers: <strong>Resources</strong> (live business context), <strong>Prompts</strong> (pre-built agent templates), and <strong>Knowledge Tools</strong> (deep enterprise data retrieval). These unlock a new tier of autonomous reasoning for Claude and any MCP-compatible agent.
+        </p>
+
+        <div class="section-label">Try These Prompts Today</div>
+
+        <div class="prompt-block">
+          <span class="prompt-label">Revenue Intelligence</span>
+          <p>"Using the GalaxyBots MCP server, pull a real-time pipeline snapshot for my top 10 accounts, identify any deals that have gone stale in the past 14 days, and draft a re-engagement email for each."</p>
+        </div>
+
+        <div class="prompt-block">
+          <span class="prompt-label">Compliance Monitoring</span>
+          <p>"Check the latest compliance status across all active client accounts via the GalaxyBots MCP and flag any that have open audit items older than 30 days. Summarize the risk exposure."</p>
+        </div>
+
+        <div class="prompt-block">
+          <span class="prompt-label">Market Research</span>
+          <p>"Using GalaxyBots MCP prospect research tools, find 20 companies in the healthcare SaaS space with 100-500 employees that are likely evaluating AI automation vendors this quarter. Return enriched contact data and a personalized outreach angle for each."</p>
+        </div>
+
+        <div class="features">
+          <hr class="divider" />
+          <div class="section-label" style="margin-top: 24px;">What's New</div>
+
+          <div class="feature-item">
+            <div class="feature-icon">&#128218;</div>
+            <div class="feature-text">
+              <h4>MCP Resources</h4>
+              <p>Live business context delivered as structured resources - pipeline data, org charts, account health, and world state - that Claude can read and reason over autonomously.</p>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon">&#9889;</div>
+            <div class="feature-text">
+              <h4>MCP Prompts</h4>
+              <p>Pre-built, parameterized prompt templates for revenue review, compliance audit, weekly briefing, and prospect research - callable from any MCP client with a single command.</p>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon">&#128269;</div>
+            <div class="feature-text">
+              <h4>Knowledge Tools</h4>
+              <p>Semantic search across your organization's entire knowledge base - documents, SOPs, meeting notes, and more - directly from the agent conversation loop.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="cta-section">
+          <p class="cta-title">See the Full Tool Reference</p>
+          <p class="cta-sub">Interactive documentation with schema explorer, copy-paste Claude Desktop configs, and a live test environment.</p>
+          <a class="cta-btn" href="https://galaxybots.ai/mcp-docs">View Developer Docs &rarr;</a>
+        </div>
+
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.6; margin: 0;">
+          Your existing API key works with all new tools - no changes needed. If you have questions or want a live walkthrough, reply to this email and we'll set up time.
+        </p>
+      </div>
+      <div class="footer">
+        <p>
+          GalaxyBots &bull; <a href="https://galaxybots.ai">galaxybots.ai</a><br />
+          You're receiving this because you hold an active GalaxyBots MCP API key.<br />
+          <a href="https://galaxybots.ai/mcp-docs">Developer Docs</a> &bull; <a href="https://galaxybots.ai/mcp-launch">Launch Page</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;

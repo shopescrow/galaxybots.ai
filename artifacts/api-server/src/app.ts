@@ -82,6 +82,9 @@ const PUBLIC_PATHS = [
   "/api/developer/changelog",
   "/api/developer/openapi",
   "/api/developer/webhook-events",
+  "/api/mcp-marketing/social-proof",
+  "/api/mcp-marketing/launch-signup",
+  "/api/mcp-marketing/download-extension",
 ];
 
 const PUBLIC_PATH_PREFIXES = [

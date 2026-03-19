@@ -62,6 +62,7 @@ interface Analytics {
 
 const STATUS_COLORS: Record<string, string> = {
   not_started: "bg-muted text-muted-foreground",
+  draft: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
   pending: "bg-yellow-500/15 text-yellow-600 border-yellow-500/30",
   submitted: "bg-blue-500/15 text-blue-500 border-blue-500/30",
   live: "bg-green-500/15 text-green-500 border-green-500/30",
@@ -69,6 +70,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: "Not Started",
+  draft: "Draft",
   pending: "In Progress",
   submitted: "Submitted",
   live: "Live",
@@ -377,11 +379,24 @@ export default function McpGrowthHub() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="not_started">Not Started</SelectItem>
+                                <SelectItem value="draft">Draft</SelectItem>
                                 <SelectItem value="pending">In Progress</SelectItem>
                                 <SelectItem value="submitted">Submitted</SelectItem>
                                 <SelectItem value="live">Live</SelectItem>
                               </SelectContent>
                             </Select>
+                            {status !== "submitted" && status !== "live" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1 h-7 text-xs border-blue-500/30 text-blue-500 hover:bg-blue-500/10"
+                                onClick={() => updateDirectory.mutate({ serverId: selectedServerId, slug: dir.slug, data: { status: "submitted" } })}
+                                disabled={updateDirectory.isPending}
+                              >
+                                <Check className="h-3 w-3" />
+                                Mark Submitted
+                              </Button>
+                            )}
                             <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs" onClick={() => generateListing(dir.slug)} disabled={generatingListingSlug === dir.slug}>
                               {generatingListingSlug === dir.slug ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                               Generate
