@@ -18,3 +18,9 @@ id = "k56BiFPjmrnlMYsVKUgzE"
 uri = "file://GalaxyBots-Narrator-Script.md"
 type = "text"
 title = "GalaxyBots Narrator Script — 13 Slides"
+
+[[outputs]]
+id = "XlzJcIKXR3b5naJiaLTzF"
+uri = "file://.local/outputs/GalaxyBots-ai-Corporate-AI-Suite.pdf"
+type = "pdf"
+title = "GalaxyBots.ai Corporate AI Suite.pdf"
