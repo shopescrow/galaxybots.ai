@@ -185,6 +185,9 @@ async function authenticateToken(token: string): Promise<AuthenticateResult> {
 
 const sessionAuthMap = new Map<string, AuthResult>();
 
+const TRIAL_MAX_CALLS = 3;
+const trialCallsMap = new Map<string, number>();
+
 function authenticate(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -206,10 +209,34 @@ function authenticate(req: AuthenticatedRequest, res: express.Response, next: ex
   });
 }
 
-app.get(`${BASE_PATH}/sse`, authenticate, async (req: AuthenticatedRequest, res) => {
+function authenticateOptional(req: AuthenticatedRequest, _res: express.Response, next: express.NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    next();
+    return;
+  }
+  const token = authHeader.slice(7);
+  authenticateToken(token).then((result) => {
+    if (result.ok) {
+      req.authResult = result.auth;
+    }
+    next();
+  }).catch(() => {
+    next();
+  });
+}
+
+app.get(`${BASE_PATH}/sse`, authenticateOptional, async (req: AuthenticatedRequest, res) => {
   console.log("[MCP] New SSE connection request");
 
-  const authResult = req.authResult!;
+  const isTrial = !req.authResult;
+  const authResult: AuthResult = req.authResult ?? {
+    callerType: "piratemonster",
+    partnerKeyId: null,
+    rateLimit: TRIAL_MAX_CALLS,
+    tokenHash: "",
+    allowedTools: ["request_demo", "calculate_roi", "get_pricing_recommendation", "generate_roi_report"],
+  };
 
   const sessionCtx = {
     partnerKeyId: authResult.partnerKeyId,
@@ -236,7 +263,14 @@ app.get(`${BASE_PATH}/sse`, authenticate, async (req: AuthenticatedRequest, res)
   transports.set(transport.sessionId, transport);
   sessionAuthMap.set(transport.sessionId, authResult);
 
-  const clientName = authResult.oauthClientId
+  if (isTrial) {
+    trialCallsMap.set(transport.sessionId, 0);
+    console.log(`[MCP] Trial session started: ${transport.sessionId} (max ${TRIAL_MAX_CALLS} calls)`);
+  }
+
+  const clientName = isTrial
+    ? "Trial (unauthenticated)"
+    : authResult.oauthClientId
     ? `OAuth:${authResult.oauthClientId}`
     : authResult.callerType === "galaxybots"
     ? "GalaxyBots Internal"
@@ -258,9 +292,10 @@ app.get(`${BASE_PATH}/sse`, authenticate, async (req: AuthenticatedRequest, res)
     transports.delete(transport.sessionId);
     sessionAuthMap.delete(transport.sessionId);
     activeSessions.delete(transport.sessionId);
+    trialCallsMap.delete(transport.sessionId);
   });
 
-  console.log(`[MCP] SSE connection established: ${transport.sessionId} (caller: ${authResult.callerType})`);
+  console.log(`[MCP] SSE connection established: ${transport.sessionId} (caller: ${isTrial ? "trial" : authResult.callerType})`);
   try {
     await server.connect(transport);
   } catch (err) {
@@ -268,13 +303,14 @@ app.get(`${BASE_PATH}/sse`, authenticate, async (req: AuthenticatedRequest, res)
     transports.delete(transport.sessionId);
     sessionAuthMap.delete(transport.sessionId);
     activeSessions.delete(transport.sessionId);
+    trialCallsMap.delete(transport.sessionId);
     if (!res.writableEnded) {
       res.end();
     }
   }
 });
 
-app.post(`${BASE_PATH}/messages`, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post(`${BASE_PATH}/messages`, authenticateOptional, async (req: AuthenticatedRequest, res) => {
   const sessionId = req.query.sessionId as string;
   const transport = transports.get(sessionId);
   if (!transport) {
@@ -282,11 +318,37 @@ app.post(`${BASE_PATH}/messages`, authenticate, async (req: AuthenticatedRequest
     return;
   }
 
-  const incomingAuth = req.authResult!;
   const sessionAuth = sessionAuthMap.get(sessionId);
-  if (sessionAuth && sessionAuth.tokenHash !== incomingAuth.tokenHash) {
-    res.status(403).json({ error: "Token mismatch: this session belongs to a different key" });
-    return;
+  const isTrial = trialCallsMap.has(sessionId);
+
+  if (isTrial) {
+    const trialCalls = trialCallsMap.get(sessionId) ?? 0;
+    if (trialCalls >= TRIAL_MAX_CALLS) {
+      res.status(402).json({
+        error: "trial_exhausted",
+        message: `You have used all ${TRIAL_MAX_CALLS} free trial calls. Sign up for API access to continue.`,
+        signup_url: "https://galaxybots.ai/api-access",
+        booking_link: "https://calendly.com/galaxybots/demo",
+        hint: "Use the `request_demo` tool to book a live demo and get full access.",
+      });
+      return;
+    }
+    trialCallsMap.set(sessionId, trialCalls + 1);
+  } else {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      res.status(401).json({ error: "Missing or invalid Authorization header. Expected: Bearer <API_KEY>" });
+      return;
+    }
+    if (req.authResult && sessionAuth && sessionAuth.tokenHash && sessionAuth.tokenHash !== req.authResult.tokenHash) {
+      res.status(403).json({ error: "Token mismatch: this session belongs to a different key" });
+      return;
+    }
+    if (!req.authResult) {
+      res.status(401).json({ error: "Invalid or expired API key" });
+      return;
+    }
   }
 
   const session = activeSessions.get(sessionId);
@@ -330,10 +392,70 @@ app.get(`/.well-known/mcp.json`, (_req, res) => {
       oauth_authorize: `${origin}${BASE_PATH}/oauth/authorize`,
       oauth_token: `${origin}${BASE_PATH}/oauth/token`,
     },
-    tools_preview: ["list_bots", "send_message_to_bot", "pm_get_score", "pm_request_scan"],
+    tools_preview: ["list_bots", "send_message_to_bot", "pm_get_score", "pm_request_scan", "request_demo", "calculate_roi", "get_pricing_recommendation", "generate_roi_report"],
+    resources: ["gifted://social-proof"],
     auth_methods: ["bearer", "oauth2_pkce"],
     scopes: ["bots:read", "bots:write", "clients:read", "aeo:read", "aeo:write"],
+    trial: {
+      enabled: true,
+      free_calls: 3,
+      signup_url: "https://galaxybots.ai/api-access",
+    },
   });
+});
+
+app.get(`${BASE_PATH}/reports/:slug`, async (req, res) => {
+  const { slug } = req.params;
+  if (!slug || !/^[0-9a-f-]{36}$/.test(slug)) {
+    res.status(400).json({ error: "Invalid report slug" });
+    return;
+  }
+
+  const reportBucketPath = process.env.REPORT_OBJECT_PATH || process.env.PRIVATE_OBJECT_DIR || "";
+  if (!reportBucketPath) {
+    res.status(503).json({ error: "Report storage not configured" });
+    return;
+  }
+
+  try {
+    const REPLIT_SIDECAR = "http://127.0.0.1:1106";
+    const parts = reportBucketPath.replace(/^\//, "").split("/");
+    const bucketName = parts[0];
+    const prefix = parts.slice(1).join("/");
+    const objectName = prefix ? `${prefix}/reports/${slug}.md` : `reports/${slug}.md`;
+
+    const signReq = await fetch(`${REPLIT_SIDECAR}/object-storage/signed-object-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bucket_name: bucketName,
+        object_name: objectName,
+        method: "GET",
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!signReq.ok) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const { signed_url: signedUrl } = await signReq.json() as { signed_url: string };
+    const objRes = await fetch(signedUrl, { signal: AbortSignal.timeout(15_000) });
+    if (!objRes.ok) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const content = await objRes.text();
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(content);
+  } catch (err) {
+    console.error(`[MCP] Error serving report ${slug}:`, err);
+    res.status(503).json({ error: "Report temporarily unavailable" });
+  }
 });
 
 app.get(`${BASE_PATH}/sessions`, (req, res) => {

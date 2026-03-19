@@ -15,6 +15,13 @@ import {
   registerPirateMonsterGalaxyBotsTools,
   type McpSessionContext,
 } from "./piratemonster.js";
+import {
+  registerRequestDemoTool,
+  registerCalculateRoiTool,
+  registerGetPricingRecommendationTool,
+  registerGenerateRoiReportTool,
+  registerSocialProofResource,
+} from "./gtm.js";
 
 function makeFilteredServer(server: McpServer, allowedTools: string[]): McpServer {
   const toolSet = new Set(allowedTools);
@@ -40,9 +47,15 @@ export function registerAllTools(
 ): void {
   console.log(`[MCP] Registering tools for caller type: ${callerType}`);
 
+  registerSocialProofResource(server);
+
   if (callerType === "piratemonster") {
     registerPirateMonsterAllTools(server, sessionCtx);
-    console.log("[MCP] PirateMonster tools registered successfully");
+    registerRequestDemoTool(server, sessionCtx);
+    registerCalculateRoiTool(server, sessionCtx);
+    registerGetPricingRecommendationTool(server, sessionCtx);
+    registerGenerateRoiReportTool(server, sessionCtx);
+    console.log("[MCP] PirateMonster + GTM tools registered successfully");
     return;
   }
 
@@ -62,20 +75,24 @@ export function registerAllTools(
   registerEmailTool(effectiveServer);
   registerMetricsTool(effectiveServer);
   registerAuditLogTool(effectiveServer);
+  registerRequestDemoTool(effectiveServer, sessionCtx);
+  registerCalculateRoiTool(effectiveServer, sessionCtx);
+  registerGetPricingRecommendationTool(effectiveServer, sessionCtx);
+  registerGenerateRoiReportTool(effectiveServer, sessionCtx);
 
   if (callerType === "oauth") {
     registerPirateMonsterAllTools(effectiveServer, sessionCtx);
     if (allowedTools !== null && allowedTools !== undefined) {
       console.log(`[MCP] OAuth tools registered with scope filter: [${allowedTools.join(", ")}] (${allowedTools.length} allowed)`);
     } else {
-      console.log("[MCP] OAuth tools registered (all GalaxyBots + all PirateMonster tools)");
+      console.log("[MCP] OAuth tools registered (all GalaxyBots + all PirateMonster + GTM tools)");
     }
   } else {
     registerPirateMonsterGalaxyBotsTools(effectiveServer, sessionCtx);
     if (allowedTools !== null && allowedTools !== undefined) {
       console.log(`[MCP] Tools registered with scope filter: [${allowedTools.join(", ")}] (${allowedTools.length} tools)`);
     } else {
-      console.log("[MCP] All tools registered successfully (GalaxyBots + pm_get_score + pm_get_recommendations)");
+      console.log("[MCP] All tools registered successfully (GalaxyBots + pm_get_score + pm_get_recommendations + GTM)");
     }
   }
 }
@@ -285,6 +302,61 @@ export function getToolManifest(): ToolManifestEntry[] {
           url: { type: "string", format: "uri", description: "The URL to get recommendations for" },
         },
         required: ["url"],
+      },
+    },
+    {
+      name: "request_demo",
+      description: "Book a live demo with the GalaxyBots team. Provide your name, email, company, and an optional message.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Your full name" },
+          email: { type: "string", format: "email", description: "Your work email address" },
+          company: { type: "string", description: "Your company name" },
+          message: { type: "string", description: "Optional: your use case or questions" },
+        },
+        required: ["name", "email", "company"],
+      },
+    },
+    {
+      name: "calculate_roi",
+      description: "Calculate ROI of GalaxyBots AI Directors vs. human executives. Returns annual savings, savings percentage, cost multiple, and recommended tier.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          num_directors: { type: "number", description: "Number of AI Directors needed (1-51)" },
+          human_salary_per_director: { type: "number", description: "Average annual salary per human executive (default: $250,000)" },
+        },
+        required: ["num_directors"],
+      },
+    },
+    {
+      name: "get_pricing_recommendation",
+      description: "Get a GalaxyBots subscription tier recommendation based on company revenue, headcount, and white-label needs.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          company_revenue: { type: "number", description: "Annual company revenue in USD" },
+          employee_count: { type: "number", description: "Total number of employees" },
+          need_white_label: { type: "boolean", description: "Whether you need white-label/reselling capabilities" },
+        },
+        required: ["company_revenue", "employee_count"],
+      },
+    },
+    {
+      name: "generate_roi_report",
+      description: "Generate a shareable one-page ROI summary report from calculate_roi output. Returns a public URL to share with your board.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          num_directors: { type: "number", description: "Number of AI Directors" },
+          human_cost: { type: "number", description: "Annual human executive cost" },
+          galaxybots_cost: { type: "number", description: "Annual GalaxyBots cost" },
+          savings: { type: "number", description: "Annual savings" },
+          tier: { type: "string", description: "Recommended GalaxyBots tier" },
+          company_name: { type: "string", description: "Optional company name to personalize the report" },
+        },
+        required: ["num_directors", "human_cost", "galaxybots_cost", "savings", "tier"],
       },
     },
   ];

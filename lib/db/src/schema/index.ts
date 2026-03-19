@@ -59,4 +59,5 @@ export * from "./workflows";
 export * from "./activation-emails";
 export * from "./mcp-servers";
 export * from "./mcp-directory-submissions";
+export * from "./mcp-leads";
 export * from "./sla";
