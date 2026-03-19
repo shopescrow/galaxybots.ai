@@ -24,3 +24,51 @@ id = "XlzJcIKXR3b5naJiaLTzF"
 uri = "file://.local/outputs/GalaxyBots-ai-Corporate-AI-Suite.pdf"
 type = "pdf"
 title = "GalaxyBots.ai Corporate AI Suite.pdf"
+
+[[outputs]]
+id = "dXbhr3PsfnKjkL9JPy-vG"
+uri = "file://.local/tasks/auth-tenant-security-foundation.md"
+type = "text"
+title = "Auth, Tenant Isolation & API Security Foundation"
+
+[[outputs]]
+id = "OLE5tgS6d0ifRg7WaBsft"
+uri = "file://.local/tasks/proof-of-value-engine.md"
+type = "text"
+title = "Proof-of-Value Engine & Client ROI Dashboard"
+
+[[outputs]]
+id = "hDn4PIpkAtvd7WFHyGCIc"
+uri = "file://.local/tasks/bingolingo-full-platform.md"
+type = "text"
+title = "BingoLingo.ai — Full Content Intelligence Platform"
+
+[[outputs]]
+id = "AEq_uT81f0HSbXfFJd8xx"
+uri = "file://.local/tasks/developer-api-portal.md"
+type = "text"
+title = "Public Developer API Portal & Ecosystem"
+
+[[outputs]]
+id = "F7TzmBogduBmdTT1wh5hm"
+uri = "file://.local/tasks/ai-proposal-studio.md"
+type = "text"
+title = "AI Proposal & Pitch Studio"
+
+[[outputs]]
+id = "cA9R_mPf0c5UX9mNp92D-"
+uri = "file://.local/tasks/client-health-intelligence.md"
+type = "text"
+title = "Client Health Intelligence & Retention Engine"
+
+[[outputs]]
+id = "Limt4cgi_-ruPvvMdhtY-"
+uri = "file://.local/tasks/ai-voice-intelligence.md"
+type = "text"
+title = "AI Voice Intelligence — Calls, Transcription & Follow-Up"
+
+[[outputs]]
+id = "49olLo4t_7LvjLoQZK9QC"
+uri = "file://.local/tasks/five-year-business-plan.md"
+type = "text"
+title = "GalaxyBots Holdings — 5-Year Strategic Business Plan (2026–2030)"
