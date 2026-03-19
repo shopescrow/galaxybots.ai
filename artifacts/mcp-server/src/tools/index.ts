@@ -10,6 +10,7 @@ import { registerHttpFetchTool } from "./http-fetch.js";
 import { registerEmailTool } from "./email.js";
 import { registerMetricsTool } from "./metrics.js";
 import { registerAuditLogTool } from "./audit-log.js";
+import { registerKnowledgeTools } from "./knowledge.js";
 import {
   registerPirateMonsterAllTools,
   registerPirateMonsterGalaxyBotsTools,
@@ -75,6 +76,7 @@ export function registerAllTools(
   registerEmailTool(effectiveServer);
   registerMetricsTool(effectiveServer);
   registerAuditLogTool(effectiveServer);
+  registerKnowledgeTools(effectiveServer);
   registerRequestDemoTool(effectiveServer, sessionCtx);
   registerCalculateRoiTool(effectiveServer, sessionCtx);
   registerGetPricingRecommendationTool(effectiveServer, sessionCtx);
@@ -305,6 +307,17 @@ export function getToolManifest(): ToolManifestEntry[] {
       },
     },
     {
+      name: "pm_get_scan_status",
+      description: "Check the status of a scan request by its request ID.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          requestId: { type: "number", description: "The scan request ID to check" },
+        },
+        required: ["requestId"],
+      },
+    },
+    {
       name: "request_demo",
       description: "Book a live demo with the GalaxyBots team. Provide your name, email, company, and an optional message.",
       inputSchema: {
@@ -357,6 +370,39 @@ export function getToolManifest(): ToolManifestEntry[] {
           company_name: { type: "string", description: "Optional company name to personalize the report" },
         },
         required: ["num_directors", "human_cost", "galaxybots_cost", "savings", "tier"],
+      },
+    },
+    {
+      name: "get_cloud9_score_explanation",
+      description: "Get a clear explanation of the Cloud 9 Score (AEO score) methodology, the 9 AI platforms scored, what good scores look like, and how to improve.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          detail_level: { type: "string", enum: ["basic", "advanced"], description: "'basic' for high-level overview, 'advanced' for full methodology and optimization tactics" },
+        },
+        required: ["detail_level"],
+      },
+    },
+    {
+      name: "get_risk_details",
+      description: "Get full details of a specific risk from the GalaxyBots strategic risk register, including category, likelihood, impact, mitigations, and status.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          risk_id: { type: "string", description: "Risk ID (e.g., 'R001', 'R002')" },
+        },
+        required: ["risk_id"],
+      },
+    },
+    {
+      name: "get_directors_by_department",
+      description: "Get all GalaxyBots AI Directors (bots) in a specific department. Uses live database data.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          department: { type: "string", description: "Department name to filter by (e.g., 'Marketing', 'Finance', 'Operations', 'Technology')" },
+        },
+        required: ["department"],
       },
     },
   ];
