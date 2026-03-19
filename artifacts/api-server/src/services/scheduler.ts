@@ -38,6 +38,8 @@ import { createNotification } from "./notifications";
 import { computeAllHealthScores, generateWeeklyPulse } from "./client-health";
 import nodemailer from "nodemailer";
 import { executeWorkflow, checkWorkflowTriggers, resumeWorkflowRunFromDelay } from "./workflow-engine";
+import { addSSEClient, broadcastSSE } from "./sse";
+export { addSSEClient, broadcastSSE };
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -50,8 +52,6 @@ const SCHEDULE_INTERVALS: Record<string, number> = {
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
 };
-
-export { addSSEClient, broadcastSSE } from "./sse";
 
 async function runPassiveAssignment(assignment: typeof botAssignmentsTable.$inferSelect, bot: typeof botsTable.$inferSelect) {
   const completion = await openai.chat.completions.create({
