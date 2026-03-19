@@ -9,6 +9,7 @@ import {
   Layout,
   Workflow,
   Activity,
+  Radio,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -94,6 +95,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/five-year-plan", label: "Strategic Plan", description: "5-Year business strategy" },
       { href: "/packs", label: "Industry Packs", description: "Vertical-specific packs" },
       { href: "/developers", label: "Developer Portal", description: "API and developer tools" },
+      { href: "/mcp-growth-hub", label: "MCP Growth Hub", description: "Market your MCP servers across agent discovery platforms" },
     ],
   },
   {

@@ -155,6 +155,8 @@ The project includes a standalone MCP (Model Context Protocol) server at `artifa
 
 **API Layer:** `lib/api.ts` — Platform-aware base URL (`EXPO_PUBLIC_DOMAIN`), `apiFetch`/`apiPost` helpers with JWT auth headers. SSE streaming via `expo/fetch`.
 
+**MCP Growth Hub:** A full-featured MCP server marketing and distribution platform at `/mcp-growth-hub` (Platform nav section). Tables: `mcp_servers` (client-scoped MCP server registry with SSE URL, auth type, tags, isOwn flag), `mcp_directory_submissions` (per-server submission tracking across 6 directories with status, listing URL, AI-generated descriptions, notes). 4-tab UI: (1) Servers — register/edit/delete MCP servers for GalaxyBots and clients; (2) Directory Campaign — manage submission status (Not Started / In Progress / Submitted / Live) across mcp.so, mcpmarket.com, Official Registry, aiagentslist.com, mcpservers.com, GitHub Reference Repo; one-click AI listing generation via GPT-4o-mini; (3) Content Engine — AI-generated ready-to-post content for Reddit, X/Twitter, Hacker News, Discord per server; (4) Analytics — 30-day MCP tool call stats (total calls, success rate, top tools bar chart, daily volume chart) from `mcp_tool_calls` data. API routes under `/api/mcp-marketing/*` (owner/admin only). Migration: `lib/db/migrations/0014_add_mcp_marketing.sql`.
+
 **Push Notifications:** `expo-notifications` for device token registration. DB table: `push_tokens` (userId, token, platform). API routes: `POST /api/push-tokens/register`, `DELETE /api/push-tokens/deregister`.
 
 **Shared Components:** `components/ui/` — StatusBadge, MetricCard, SectionHeader, EmptyState, LoadingSkeleton (shimmer animation).

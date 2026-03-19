@@ -71,6 +71,7 @@ import UsageDashboard from "@/pages/usage/UsageDashboard";
 import BriefsPage from "@/pages/briefs/BriefsPage";
 import ProcessStudio from "@/pages/process-studio/ProcessStudio";
 import ActivityStream from "@/pages/activity/ActivityStream";
+import McpGrowthHub from "@/pages/mcp-marketing/McpGrowthHub";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -169,6 +170,7 @@ function AuthenticatedRoutes() {
       <Route path="/briefs" component={BriefsPage} />
       <Route path="/process-studio" component={ProcessStudio} />
       <Route path="/activity" component={ActivityStream} />
+      <Route path="/mcp-growth-hub" component={McpGrowthHub} />
       <Route component={NotFound} />
     </Switch>
     </>

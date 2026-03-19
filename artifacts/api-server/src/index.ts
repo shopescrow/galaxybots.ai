@@ -94,6 +94,8 @@ const EXPECTED_TABLES = [
   "intelligence_briefs",
   "briefing_settings",
   "mission_templates",
+  "mcp_servers",
+  "mcp_directory_submissions",
 ];
 
 async function validateDatabaseTables() {

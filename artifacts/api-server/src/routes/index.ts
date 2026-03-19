@@ -53,6 +53,7 @@ import missionTemplatesRouter from "./mission-templates";
 import workflowsRouter from "./workflows";
 import activityRouter from "./activity";
 import oauthRouter from "./oauth";
+import mcpMarketingRouter from "./mcp-marketing";
 
 const router: IRouter = Router();
 
@@ -108,5 +109,6 @@ router.use(missionTemplatesRouter);
 router.use(workflowsRouter);
 router.use(activityRouter);
 router.use(oauthRouter);
+router.use(mcpMarketingRouter);
 
 export default router;

@@ -57,3 +57,5 @@ export * from "./intelligence-briefs";
 export * from "./mission-templates";
 export * from "./workflows";
 export * from "./activation-emails";
+export * from "./mcp-servers";
+export * from "./mcp-directory-submissions";
