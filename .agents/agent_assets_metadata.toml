@@ -120,3 +120,21 @@ id = "bIXNCjUCCTScj_n6ohh7X"
 uri = "file://exports/AI-Voice-Intelligence.pdf"
 type = "pdf"
 title = "AI Voice Intelligence — Calls, Transcription & Follow-Up"
+
+[[outputs]]
+id = "x6iF1z6ih17feq1fwI6q8"
+uri = "file://GalaxyBots_5Year_Plan_2026-2030.pdf"
+type = "pdf"
+title = "Gifted Productions Inc. — 5-Year Strategic Plan (PDF)"
+
+[[outputs]]
+id = "saNj5MQ373vLN6_IgPXsl"
+uri = "file://GalaxyBots_5Year_Plan_2026-2030.pptx"
+type = "slides"
+title = "Gifted Productions Inc. — 5-Year Strategic Plan (PowerPoint)"
+
+[[outputs]]
+id = "GlNOX5Ik9-kQwkbQo8pVp"
+uri = "file://GiftedProductions_Synthesia_Narration_Script.md"
+type = "text"
+title = "Gifted Productions — Synthesia Narration Script (All 22 Slides)"
