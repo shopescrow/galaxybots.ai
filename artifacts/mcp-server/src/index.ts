@@ -932,6 +932,33 @@ async function verifyDbConnection(): Promise<boolean> {
   }
 }
 
+function tryListenOnPort(portToTry: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = app.listen(portToTry, () => {
+      httpServer = server as unknown as http.Server;
+      console.log(`[MCP] GalaxyBots MCP Server listening on port ${portToTry}`);
+      console.log(`[MCP] SSE endpoint: ${BASE_PATH}/sse`);
+      console.log(`[MCP] Messages endpoint: ${BASE_PATH}/messages`);
+      console.log(`[MCP] OAuth authorize: ${BASE_PATH}/oauth/authorize`);
+      console.log(`[MCP] OAuth token: ${BASE_PATH}/oauth/token`);
+      console.log(`[MCP] Tool manifest: ${BASE_PATH}/tools`);
+      console.log(`[MCP] Well-known: /.well-known/mcp.json`);
+      resolve(true);
+    });
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        console.warn(`[MCP] Port ${portToTry} already in use, trying next port...`);
+        server.close();
+        resolve(false);
+      } else {
+        console.error("[MCP] Server error:", err);
+        server.close();
+        resolve(false);
+      }
+    });
+  });
+}
+
 async function startServer() {
   const dbOk = await verifyDbConnection();
   if (!dbOk) {
@@ -939,19 +966,17 @@ async function startServer() {
     process.exit(1);
   }
 
-  httpServer = app.listen(port, () => {
-    console.log(`[MCP] GalaxyBots MCP Server listening on port ${port}`);
-    console.log(`[MCP] SSE endpoint: ${BASE_PATH}/sse`);
-    console.log(`[MCP] Messages endpoint: ${BASE_PATH}/messages`);
-    console.log(`[MCP] OAuth authorize: ${BASE_PATH}/oauth/authorize`);
-    console.log(`[MCP] OAuth token: ${BASE_PATH}/oauth/token`);
-    console.log(`[MCP] Tool manifest: ${BASE_PATH}/tools`);
-    console.log(`[MCP] Well-known: /.well-known/mcp.json`);
-  });
+  const candidatePorts = [port, port + 1, port + 2];
+  let started = false;
+  for (const p of candidatePorts) {
+    started = await tryListenOnPort(p);
+    if (started) break;
+  }
 
-  httpServer.on("error", (err) => {
-    console.error("[MCP] Server error:", err);
-  });
+  if (!started) {
+    console.error(`[MCP] Could not bind to any port in [${candidatePorts.join(", ")}] — exiting`);
+    process.exit(1);
+  }
 }
 
 startServer().catch((err) => {
