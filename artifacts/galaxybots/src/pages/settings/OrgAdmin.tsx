@@ -446,7 +446,7 @@ export default function OrgAdmin() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 ml-4">
-                    {member.id !== user?.userId && (
+                    {member.id !== user?.id && (
                       <>
                         <Select
                           value={member.role}
@@ -471,7 +471,7 @@ export default function OrgAdmin() {
                         </Button>
                       </>
                     )}
-                    {member.id === user?.userId && (
+                    {member.id === user?.id && (
                       <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">You</Badge>
                     )}
                   </div>

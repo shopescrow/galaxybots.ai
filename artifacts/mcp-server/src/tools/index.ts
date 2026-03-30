@@ -28,7 +28,7 @@ function makeFilteredServer(server: McpServer, allowedTools: string[]): McpServe
   const toolSet = new Set(allowedTools);
   const proxy = new Proxy(server, {
     get(target, prop) {
-      if (prop !== "tool") return (target as Record<string | symbol, unknown>)[prop];
+      if (prop !== "tool") return (target as unknown as Record<string | symbol, unknown>)[prop];
       return function filteredTool(
         name: string,
         ...rest: unknown[]

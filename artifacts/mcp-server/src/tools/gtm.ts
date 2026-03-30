@@ -167,6 +167,7 @@ export function registerCalculateRoiTool(server: McpServer, ctx: McpSessionConte
         ].filter(Boolean).join("\n");
 
         await db.insert(mcpLeadsTable).values({
+          email: company ? `signal+roi@${company.toLowerCase().replace(/[^a-z0-9]/g, "")}.mcp` : "anonymous@mcp-signal",
           source: "roi_signal",
           queryContext: result,
           partnerKeyId: ctx.partnerKeyId,
@@ -238,6 +239,7 @@ export function registerGetPricingRecommendationTool(server: McpServer, ctx: Mcp
         ].filter(Boolean).join("\n");
 
         await db.insert(mcpLeadsTable).values({
+          email: company ? `signal+pricing@${company.toLowerCase().replace(/[^a-z0-9]/g, "")}.mcp` : "anonymous@mcp-signal",
           source: "pricing_signal",
           queryContext: { company_revenue, employee_count, need_white_label, recommended_tier: tier },
           partnerKeyId: ctx.partnerKeyId,

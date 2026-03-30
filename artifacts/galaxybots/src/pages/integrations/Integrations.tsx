@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, HelpCircle, ExternalLink as ExternalLinkIcon } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { format } from "date-fns";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
