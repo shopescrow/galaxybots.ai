@@ -1,3 +1,9 @@
 const { getDefaultConfig } = require("expo/metro-config");
 
-module.exports = getDefaultConfig(__dirname);
+const config = getDefaultConfig(__dirname);
+
+config.cacheVersion = "gb-mobile-v1";
+
+config.maxWorkers = 2;
+
+module.exports = config;
