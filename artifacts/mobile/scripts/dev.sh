@@ -8,14 +8,21 @@ echo "[prewarm] Waiting for Metro on port $PORT..."
 until curl -sf "http://localhost:$PORT/" > /dev/null 2>&1; do
   sleep 1
 done
-echo "[prewarm] Metro ready — building web bundle (blocking until done)..."
+echo "[prewarm] Metro ready — extracting real bundle URL from HTML..."
 
-# Synchronous: block here until the bundle is fully compiled.
-# Uses the real Expo Router entry point so Metro caches the right bundle.
-curl -s \
-  "http://localhost:$PORT/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&minify=false" \
-  -o /dev/null --max-time 180
+# Extract the exact bundle URL the browser will request (full pnpm path + all params)
+BUNDLE_URL=$(curl -s "http://localhost:$PORT/" \
+  | grep -o 'src="[^"]*\.bundle[^"]*"' \
+  | sed 's/src="//;s/"//')
 
-echo "[prewarm] Web bundle ready — first request will be instant."
+if [ -z "$BUNDLE_URL" ]; then
+  echo "[prewarm] Could not extract bundle URL — skipping pre-warm"
+else
+  echo "[prewarm] Building bundle (blocking until done): ${BUNDLE_URL:0:80}..."
+  # Synchronous: block here until Metro finishes compiling the real bundle
+  curl -s "http://localhost:$PORT${BUNDLE_URL}" \
+    -o /dev/null --max-time 180
+  echo "[prewarm] Web bundle ready — first request will be instant."
+fi
 
 wait "$METRO_PID"
