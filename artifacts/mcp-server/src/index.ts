@@ -807,6 +807,27 @@ app.post(`${BASE_PATH}/messages`, authenticateOptional, async (req: Authenticate
   }
 });
 
+app.get(`${BASE_PATH}`, (_req, res) => {
+  const origin = `${_req.protocol}://${_req.get("host")}`;
+  res.json({
+    service: "GalaxyBots MCP Server",
+    status: "online",
+    version: "2025-03",
+    description: "Model Context Protocol server providing AI executive bot tools for GalaxyBots.ai",
+    endpoints: {
+      sse:       `${origin}${BASE_PATH}/sse`,
+      messages:  `${origin}${BASE_PATH}/messages`,
+      tools:     `${origin}${BASE_PATH}/tools`,
+      health:    `${origin}${BASE_PATH}/health`,
+      oauth_authorize: `${origin}${BASE_PATH}/oauth/authorize`,
+      oauth_token:     `${origin}${BASE_PATH}/oauth/token`,
+      well_known:      `${origin}/.well-known/mcp.json`,
+    },
+    auth: ["bearer_token", "oauth2_pkce"],
+    docs: "https://galaxybots.ai/mcp-docs",
+  });
+});
+
 app.get(`${BASE_PATH}/health`, (_req, res) => {
   res.json({ status: "ok", service: "galaxybots-mcp" });
 });
