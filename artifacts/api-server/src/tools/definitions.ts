@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerTool, type ToolContext } from "./registry";
-import { db, worldStateTable, botsTable, taskSessionsTable, taskSessionBotsTable, taskSessionMessagesTable, conversations, messages } from "@workspace/db";
+import { db, worldStateTable, botsTable, taskSessionsTable, taskSessionBotsTable, taskSessionMessagesTable, conversations, messages, botMessagesTable, pendingApprovalsTable, clientsTable } from "@workspace/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
@@ -321,6 +321,188 @@ You have been asked by a teammate to handle a specific sub-task. Provide a focus
       botName: bot.name,
       botTitle: bot.title,
       response,
+    };
+  },
+});
+
+const RANK_ORDER: Record<string, number> = { director: 0, manager: 1, analyst: 2, specialist: 3 };
+
+registerTool({
+  name: "delegate_task",
+  description: "Delegate a structured task to a lower-rank bot in the hierarchy. Only director and manager rank bots can call this. The assigned bot will receive the task with a clear objective, required tools, deadline, output format, and who to report results to.",
+  inputSchema: z.object({
+    toBotId: z.number().describe("The ID of the bot to delegate to (must be lower rank than caller)"),
+    objective: z.string().describe("Clear objective for the delegated task"),
+    requiredTools: z.array(z.string()).optional().describe("Tool names the delegated bot should use"),
+    deadlineMinutes: z.number().optional().describe("Time limit in minutes for completion"),
+    outputFormat: z.string().optional().describe("Expected format for the output (e.g., 'bullet list', 'executive summary', 'JSON report')"),
+    reportTo: z.string().optional().describe("Bot name or role to report results back to"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    if (!context.botId || !context.sessionId) {
+      return { success: false, error: "No bot or session context" };
+    }
+
+    const [callerBot] = await db.select().from(botsTable).where(eq(botsTable.id, context.botId));
+    if (!callerBot) {
+      return { success: false, error: "Caller bot not found" };
+    }
+
+    const callerRank = callerBot.rank ?? "analyst";
+    if (callerRank !== "director" && callerRank !== "manager") {
+      return { success: false, error: `Bot rank '${callerRank}' cannot delegate tasks. Only director and manager rank bots can delegate.` };
+    }
+
+    const [targetBot] = await db.select().from(botsTable).where(eq(botsTable.id, input.toBotId));
+    if (!targetBot) {
+      return { success: false, error: `Target bot ${input.toBotId} not found` };
+    }
+
+    const targetRank = targetBot.rank ?? "analyst";
+    if ((RANK_ORDER[callerRank] ?? 99) >= (RANK_ORDER[targetRank] ?? 99)) {
+      return { success: false, error: `Cannot delegate to bot with rank '${targetRank}' — must be lower rank than caller ('${callerRank}')` };
+    }
+
+    const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    await db.insert(botMessagesTable).values({
+      sessionId: context.sessionId,
+      fromBotId: context.botId,
+      fromBotName: callerBot.name,
+      toBotId: input.toBotId,
+      toBotName: targetBot.name,
+      taskId,
+      messageType: "assignment",
+      payload: {
+        objective: input.objective,
+        requiredTools: input.requiredTools,
+        deadlineMinutes: input.deadlineMinutes,
+        outputFormat: input.outputFormat,
+        reportTo: input.reportTo ?? callerBot.name,
+      },
+    });
+
+    const systemPrompt = `You are ${targetBot.name}, ${targetBot.title} in the ${targetBot.department} department.
+Personality: ${targetBot.personality}
+Your responsibilities: ${targetBot.responsibilities.join("; ")}
+
+You have been delegated a task by ${callerBot.name} (${callerBot.title}).
+${input.requiredTools ? `Use these tools: ${input.requiredTools.join(", ")}` : ""}
+${input.outputFormat ? `Output format: ${input.outputFormat}` : ""}
+${input.deadlineMinutes ? `Complete within ${input.deadlineMinutes} minutes.` : ""}
+Report your results to: ${input.reportTo ?? callerBot.name}
+
+Provide a focused, expert response addressing the delegated objective.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 800,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: input.objective },
+      ],
+    });
+
+    const result = completion.choices[0]?.message?.content ?? "Task completed.";
+
+    await db.update(botMessagesTable)
+      .set({ outcome: "completed" })
+      .where(eq(botMessagesTable.taskId, taskId));
+
+    await db.insert(botMessagesTable).values({
+      sessionId: context.sessionId,
+      fromBotId: input.toBotId,
+      fromBotName: targetBot.name,
+      toBotId: context.botId,
+      toBotName: callerBot.name,
+      taskId,
+      messageType: "result",
+      payload: { result },
+      outcome: "completed",
+    });
+
+    return {
+      success: true,
+      taskId,
+      delegatedTo: targetBot.name,
+      delegatedToTitle: targetBot.title,
+      result,
+    };
+  },
+});
+
+registerTool({
+  name: "report_results",
+  description: "Report the results of a delegated task back to the assigning bot. Used when a bot completes work assigned via delegate_task. The results are automatically routed to the reportTo bot without surfacing to the human unless flagged.",
+  inputSchema: z.object({
+    taskId: z.string().describe("The task ID from the original delegation"),
+    results: z.string().describe("The structured results or output of the completed task"),
+    summary: z.string().optional().describe("Brief executive summary of the findings"),
+    flagForHuman: z.boolean().optional().describe("Set to true if this result needs human review"),
+    flagReason: z.string().optional().describe("Reason for flagging for human review"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    if (!context.botId || !context.sessionId) {
+      return { success: false, error: "No bot or session context" };
+    }
+
+    await db.insert(botMessagesTable).values({
+      sessionId: context.sessionId,
+      fromBotId: context.botId,
+      fromBotName: context.botName,
+      taskId: input.taskId,
+      messageType: "result",
+      payload: {
+        results: input.results,
+        summary: input.summary,
+        flagForHuman: input.flagForHuman,
+        flagReason: input.flagReason,
+      },
+      outcome: "reported",
+    });
+
+    return {
+      success: true,
+      taskId: input.taskId,
+      delivered: true,
+      flaggedForHuman: input.flagForHuman ?? false,
+    };
+  },
+});
+
+registerTool({
+  name: "request_human_judgment",
+  description: "Flag an action for human review when the bot is uncertain or the stakes are high. In exception_only governance mode, only these flagged items surface in the human approval queue. Routine actions run silently.",
+  inputSchema: z.object({
+    reason: z.string().describe("Why human judgment is needed — be specific about the uncertainty or risk"),
+    urgency: z.enum(["low", "medium", "high", "critical"]).describe("Urgency level for human review"),
+    proposedAction: z.string().optional().describe("The action the bot proposes to take if approved"),
+  }),
+  execute: async (input, context: ToolContext) => {
+    if (!context.botId || !context.clientId) {
+      return { success: false, error: "No bot or client context" };
+    }
+
+    await db.insert(pendingApprovalsTable).values({
+      clientId: context.clientId,
+      botId: context.botId,
+      botName: context.botName ?? null,
+      toolName: "request_human_judgment",
+      toolInput: {
+        reason: input.reason,
+        urgency: input.urgency,
+        proposedAction: input.proposedAction,
+      },
+      status: "pending",
+      sessionId: context.sessionId ?? null,
+      conversationId: context.conversationId ?? null,
+    });
+
+    return {
+      success: true,
+      queued: true,
+      urgency: input.urgency,
+      message: "Your request has been flagged for human review.",
     };
   },
 });

@@ -30,6 +30,9 @@ import {
   Settings,
   Save,
   BarChart3,
+  Shield,
+  Eye,
+  Lock,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Redirect, useSearch } from "wouter";
@@ -160,7 +163,26 @@ function useCommandCenterData() {
     refetchInterval: 60000,
   });
 
-  return { activity, approvals, alerts, companies, slaOverview };
+  const governanceMode = useQuery<{ governanceMode: string }>({
+    queryKey: ["governance", "mode"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/governance/mode`, { headers });
+      if (!res.ok) throw new Error("Failed to load governance mode");
+      return res.json();
+    },
+  });
+
+  const autonomyScore = useQuery<{ score: number; totalTasks: number; autonomousTasks: number }>({
+    queryKey: ["governance", "autonomy-score"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/governance/autonomy-score`, { headers });
+      if (!res.ok) return { score: 100, totalTasks: 0, autonomousTasks: 0 };
+      return res.json();
+    },
+    refetchInterval: 60000,
+  });
+
+  return { activity, approvals, alerts, companies, slaOverview, governanceMode, autonomyScore };
 }
 
 function formatTime(dateStr: string) {
@@ -734,9 +756,27 @@ function SlaSettingsPanel() {
   );
 }
 
+const GOVERNANCE_MODE_STYLES: Record<string, { label: string; className: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  approval_all: {
+    label: "APPROVAL ALL",
+    className: "text-amber-400 border-amber-500/30 bg-amber-500/10",
+    Icon: Lock,
+  },
+  exception_only: {
+    label: "EXCEPTION ONLY",
+    className: "text-blue-400 border-blue-500/30 bg-blue-500/10",
+    Icon: Shield,
+  },
+  observe_only: {
+    label: "OBSERVE ONLY",
+    className: "text-green-400 border-green-500/30 bg-green-500/10",
+    Icon: Eye,
+  },
+};
+
 export default function CommandCenter() {
   const { user } = useAuth();
-  const { activity, approvals, alerts, companies, slaOverview } = useCommandCenterData();
+  const { activity, approvals, alerts, companies, slaOverview, governanceMode, autonomyScore } = useCommandCenterData();
   const searchString = useSearch();
 
   useEffect(() => {
@@ -762,6 +802,9 @@ export default function CommandCenter() {
 
   const pendingCount = approvals.data?.length || 0;
   const alertCount = alerts.data?.length || 0;
+  const currentMode = governanceMode.data?.governanceMode ?? "approval_all";
+  const modeStyle = GOVERNANCE_MODE_STYLES[currentMode] ?? GOVERNANCE_MODE_STYLES.approval_all;
+  const ModeIcon = modeStyle.Icon;
 
   return (
     <AppLayout>
@@ -777,7 +820,22 @@ export default function CommandCenter() {
               Real-time operations view across all deployments.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Badge
+              variant="outline"
+              className={`font-tech text-xs gap-1.5 ${modeStyle.className}`}
+            >
+              <ModeIcon className="w-3 h-3" />
+              {modeStyle.label}
+            </Badge>
+            {autonomyScore.data && autonomyScore.data.totalTasks > 0 && (
+              <Badge
+                variant="outline"
+                className="font-tech text-xs text-primary border-primary/30 bg-primary/10"
+              >
+                {autonomyScore.data.score}% Autonomous (7d)
+              </Badge>
+            )}
             {pendingCount > 0 && (
               <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 font-tech">
                 {pendingCount} Pending
@@ -797,6 +855,8 @@ export default function CommandCenter() {
                 approvals.refetch();
                 alerts.refetch();
                 companies.refetch();
+                governanceMode.refetch();
+                autonomyScore.refetch();
               }}
             >
               <RefreshCw className="w-3 h-3" />

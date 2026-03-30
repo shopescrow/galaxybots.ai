@@ -24,9 +24,37 @@ import {
   Brain,
   ArrowRight,
   Library,
+  BookOpen,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { MissionTemplatesModal } from "@/components/MissionTemplates";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface MissionPlaybook {
+  id: number;
+  name: string;
+  description: string;
+  steps: Array<{ order: number; role: string; objective: string }>;
+  isBuiltIn: boolean;
+  category: string;
+}
+
+const CATEGORY_STYLES: Record<string, string> = {
+  strategy: "text-blue-400 border-blue-500/30 bg-blue-500/10",
+  growth: "text-green-400 border-green-500/30 bg-green-500/10",
+  finance: "text-gold border-gold/30 bg-gold/10",
+  operations: "text-orange-400 border-orange-500/30 bg-orange-500/10",
+  general: "text-primary border-primary/30 bg-primary/10",
+};
 
 interface ProposedBot {
   name: string;
@@ -47,7 +75,7 @@ interface MatchedBot {
 
 export default function DeployTeam() {
   const { toast } = useToast();
-  const { user, updateOnboarding } = useAuth();
+  const { user, updateOnboarding, token } = useAuth();
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const [objective, setObjective] = useState("");
@@ -64,10 +92,43 @@ export default function DeployTeam() {
   const [lastPrefillScenarioId, setLastPrefillScenarioId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateHintBots, setTemplateHintBots] = useState<string[]>([]);
+  const [showPlaybooks, setShowPlaybooks] = useState(false);
 
   const analyzeMutation = useAnalyzeTaskMutation();
   const createSessionMutation = useCreateTaskSessionMutation();
   const fabricateMutation = useFabricateBotMutation();
+
+  const { data: playbooks = [] } = useQuery<MissionPlaybook[]>({
+    queryKey: ["playbooks"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/playbooks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const handleSelectPlaybook = (playbook: MissionPlaybook) => {
+    const objective = playbook.steps.map((s, i) => `Step ${i + 1}: ${s.role} — ${s.objective}`).join("; ");
+    setObjective(playbook.name + ": " + playbook.description);
+    setProposal(null);
+    setApprovedNewBots(new Map());
+    setShowPlaybooks(false);
+    analyzeMutation
+      .mutateAsync({ data: { objective: playbook.name + ": " + playbook.description } })
+      .then((result) => {
+        setProposal(result as typeof proposal);
+      })
+      .catch(() => {
+        toast({
+          title: "Analysis Failed",
+          description: "Could not analyze the playbook. Please try manually.",
+          variant: "destructive",
+        });
+      });
+    void objective;
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(searchString);
@@ -290,8 +351,8 @@ export default function DeployTeam() {
           </Card>
 
           <Card className="p-6 bg-black/40 border-primary/20 backdrop-blur-md mb-6">
-            <form onSubmit={handleAnalyze} className="flex gap-4">
-              <div className="flex-1">
+            <form onSubmit={handleAnalyze} className="flex gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex-1 min-w-0">
                 <Input
                   value={objective}
                   onChange={(e) => setObjective(e.target.value)}
@@ -300,24 +361,36 @@ export default function DeployTeam() {
                   disabled={analyzeMutation.isPending}
                 />
               </div>
-              <Button
-                type="submit"
-                disabled={!objective.trim() || analyzeMutation.isPending}
-                variant="glow"
-                className="font-tech tracking-wider"
-              >
-                {analyzeMutation.isPending ? (
-                  <>
-                    <Brain className="w-4 h-4 animate-pulse mr-2" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Analyze Task
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowPlaybooks(true)}
+                  className="font-tech tracking-wider border-primary/30 text-primary/70 hover:text-primary hover:border-primary/60"
+                  disabled={analyzeMutation.isPending}
+                >
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Use Playbook
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!objective.trim() || analyzeMutation.isPending}
+                  variant="glow"
+                  className="font-tech tracking-wider"
+                >
+                  {analyzeMutation.isPending ? (
+                    <>
+                      <Brain className="w-4 h-4 animate-pulse mr-2" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Analyze Task
+                    </>
+                  )}
+                </Button>
+              </div>
             </form>
           </Card>
 
@@ -344,6 +417,63 @@ export default function DeployTeam() {
               </Card>
             </motion.div>
           )}
+
+          <Dialog open={showPlaybooks} onOpenChange={setShowPlaybooks}>
+            <DialogContent className="max-w-2xl bg-background border-primary/30">
+              <DialogHeader>
+                <DialogTitle className="font-display text-primary flex items-center gap-2">
+                  <BookOpen className="w-5 h-5" />
+                  Mission Playbooks
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {playbooks.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground font-tech text-sm">
+                    No playbooks available.
+                  </div>
+                ) : (
+                  playbooks.map((playbook) => {
+                    const catStyle = CATEGORY_STYLES[playbook.category] ?? CATEGORY_STYLES.general;
+                    return (
+                      <Card
+                        key={playbook.id}
+                        className="p-4 bg-black/40 border-primary/20 hover:border-primary/40 transition-colors cursor-pointer"
+                        onClick={() => handleSelectPlaybook(playbook)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <h3 className="font-tech font-bold text-sm text-foreground">{playbook.name}</h3>
+                              <Badge variant="outline" className={`text-[10px] ${catStyle}`}>
+                                {playbook.category.toUpperCase()}
+                              </Badge>
+                              {playbook.isBuiltIn && (
+                                <Badge variant="outline" className="text-[10px] text-primary/60 border-primary/20">
+                                  BUILT-IN
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">{playbook.description}</p>
+                            <div className="flex flex-wrap gap-1">
+                              {playbook.steps.map((step, i) => (
+                                <div key={i} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <span className="font-tech text-primary/60">{step.role}</span>
+                                  {i < playbook.steps.length - 1 && <ChevronRight className="w-2.5 h-2.5" />}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Button size="sm" variant="outline" className="font-tech text-xs flex-shrink-0 border-primary/30 text-primary hover:bg-primary/10">
+                            Use <ArrowRight className="w-3 h-3 ml-1" />
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {analyzeMutation.isPending && (
             <motion.div

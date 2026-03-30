@@ -28,6 +28,7 @@ export const clientsTable = pgTable("clients", {
   businessContext: text("business_context"),
   webhookSecret: text("webhook_secret"),
   websiteIntel: jsonb("website_intel").$type<WebsiteIntel>(),
+  governanceMode: text("governance_mode").notNull().default("approval_all"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

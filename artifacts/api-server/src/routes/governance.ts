@@ -8,8 +8,9 @@ import {
   botsTable,
   messages,
   taskSessionMessagesTable,
+  clientsTable,
 } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { requireRole } from "../middleware/auth";
 import { getAllTools, getTool, type ToolContext } from "../tools";
 import { SENSITIVE_TOOLS, SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS, READ_ONLY_ANALYST_TOOLS, applyBrandVoiceGuardrails } from "../services/governance";
@@ -712,6 +713,40 @@ router.get("/governance/department-defaults", requireRole("owner", "admin"), asy
     readOnlyAnalystTools: READ_ONLY_ANALYST_TOOLS,
     sensitiveTools: SENSITIVE_TOOLS,
   });
+});
+
+router.get("/governance/autonomy-score", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [totalResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(
+      and(
+        eq(pendingApprovalsTable.clientId, clientId),
+        gte(pendingApprovalsTable.createdAt, sevenDaysAgo)
+      )
+    );
+
+  const totalTasks = totalResult?.count ?? 0;
+
+  const [resolvedResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(
+      and(
+        eq(pendingApprovalsTable.clientId, clientId),
+        eq(pendingApprovalsTable.status, "pending"),
+        gte(pendingApprovalsTable.createdAt, sevenDaysAgo)
+      )
+    );
+
+  const humanInterventions = resolvedResult?.count ?? 0;
+  const autonomousTasks = Math.max(0, totalTasks - humanInterventions);
+  const score = totalTasks === 0 ? 100 : Math.round((autonomousTasks / totalTasks) * 100);
+
+  res.json({ score, totalTasks, autonomousTasks });
 });
 
 export default router;

@@ -14,6 +14,7 @@ export const botsTable = pgTable("bots", {
   avatar: text("avatar"),
   declaration: text("declaration"),
   addonType: text("addon_type"),
+  rank: text("rank").notNull().default("analyst"),
   isAvailable: boolean("is_available").notNull().default(true),
   isAiGenerated: boolean("is_ai_generated").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

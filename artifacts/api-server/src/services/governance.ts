@@ -6,6 +6,7 @@ import {
   clientBotsTable,
   botsTable,
   approvalSlaConfigsTable,
+  clientsTable,
 } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -366,3 +367,26 @@ export const READ_ONLY_ANALYST_TOOLS = [
   "read_document",
   "delegate_to_bot",
 ];
+
+export const ROUTINE_TOOLS = [
+  "web_search",
+  "scrape_url",
+  "read_platform_data",
+  "read_world_state",
+  "write_world_state",
+  "read_email",
+  "read_slack_channel",
+  "list_calendar_events",
+  "read_document",
+  "delegate_to_bot",
+  "delegate_task",
+  "report_results",
+];
+
+export async function getClientGovernanceMode(clientId: number): Promise<string> {
+  const [client] = await db
+    .select({ governanceMode: clientsTable.governanceMode })
+    .from(clientsTable)
+    .where(eq(clientsTable.id, clientId));
+  return (client as { governanceMode?: string } | undefined)?.governanceMode ?? "approval_all";
+}

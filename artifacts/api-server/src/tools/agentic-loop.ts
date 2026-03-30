@@ -5,7 +5,7 @@ import { getTool, getOpenAIToolDefinitions, type ToolContext } from "./registry"
 import { db, platformAuditLogTable } from "@workspace/db";
 import pLimit from "p-limit";
 import pRetry from "p-retry";
-import { checkToolPermission, createPendingApproval, getResolvedApprovals } from "../services/governance";
+import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/governance";
 import { logLlmUsage } from "../services/llm-usage";
 import { isToolSandboxed, getSandboxedToolResponse } from "../services/demo-sandbox";
 
@@ -236,6 +236,8 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
     }
 
     if (context.clientId && context.botId) {
+      const governanceMode = await getClientGovernanceMode(context.clientId);
+
       for (const toolCall of assistantMessage.tool_calls) {
         const toolName = toolCall.function.name;
         let parsedArgs: unknown;
@@ -247,7 +249,13 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
 
         const permCheck = await checkToolPermission(context.clientId, context.botId, toolName);
 
-        if (permCheck.requiresApproval) {
+        const isRoutine = ROUTINE_TOOLS.includes(toolName);
+        const needsHumanApproval =
+          permCheck.requiresApproval &&
+          !(governanceMode === "exception_only" && isRoutine) &&
+          !(governanceMode === "observe_only");
+
+        if (needsHumanApproval) {
           loopMessages.push({
             role: "assistant",
             content: assistantMessage.content,

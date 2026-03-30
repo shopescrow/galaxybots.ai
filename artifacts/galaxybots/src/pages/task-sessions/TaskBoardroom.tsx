@@ -19,8 +19,9 @@ import { useParams } from "wouter";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { getGetTaskSessionMessagesQueryKey, getGetTaskSessionAlertsQueryKey } from "@workspace/api-client-react";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Loader2,
   Terminal,
@@ -33,7 +34,104 @@ import {
   Target,
   Save,
   BookmarkPlus,
+  Network,
+  ArrowRight,
 } from "lucide-react";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface BotMessage {
+  id: number;
+  sessionId: number;
+  fromBotId: number | null;
+  fromBotName: string | null;
+  toBotId: number | null;
+  toBotName: string | null;
+  taskId: string | null;
+  messageType: string;
+  payload: unknown;
+  outcome: string | null;
+  createdAt: string;
+}
+
+const MESSAGE_TYPE_STYLES: Record<string, { label: string; className: string }> = {
+  assignment: { label: "ASSIGN", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  result: { label: "RESULT", className: "bg-green-500/20 text-green-400 border-green-500/30" },
+  question: { label: "QUERY", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+  escalation: { label: "ESCALATE", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+};
+
+function BotCommunicationsPanel({ sessionId }: { sessionId: number }) {
+  const { token } = useAuth();
+
+  const { data: botMessages = [], isLoading } = useQuery<BotMessage[]>({
+    queryKey: ["bot-messages", sessionId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/task-sessions/${sessionId}/bot-messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-primary/50" />
+      </div>
+    );
+  }
+
+  if (botMessages.length === 0) {
+    return (
+      <div className="text-center py-6 text-muted-foreground/50 text-xs font-tech">
+        No bot-to-bot communications yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 overflow-y-auto max-h-64">
+      {botMessages.map((msg) => {
+        const typeStyle = MESSAGE_TYPE_STYLES[msg.messageType] ?? { label: msg.messageType.toUpperCase(), className: "bg-secondary/50 text-muted-foreground" };
+        return (
+          <motion.div
+            key={msg.id}
+            initial={{ opacity: 0, x: -5 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-2 p-2 rounded bg-secondary/20 border border-primary/10"
+          >
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <span className="text-xs font-tech text-primary font-bold truncate max-w-[80px]">
+                {msg.fromBotName ?? "System"}
+              </span>
+              <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+              <Badge variant="outline" className={`text-[9px] flex-shrink-0 ${typeStyle.className}`}>
+                {typeStyle.label}
+              </Badge>
+              <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs font-tech text-primary/80 truncate max-w-[80px]">
+                {msg.toBotName ?? "All"}
+              </span>
+            </div>
+            <div className="flex-shrink-0 flex items-center gap-1.5">
+              {msg.outcome && (
+                <Badge variant="outline" className="text-[9px] text-green-400 border-green-500/30">
+                  {msg.outcome}
+                </Badge>
+              )}
+              <span className="text-[10px] text-muted-foreground/50">
+                {format(new Date(msg.createdAt), "HH:mm:ss")}
+              </span>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function TaskBoardroom() {
   const params = useParams<{ id: string }>();
@@ -200,7 +298,7 @@ export default function TaskBoardroom() {
             </Badge>
           </div>
 
-          <div className="p-4">
+          <div className="p-4 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-primary" />
@@ -218,7 +316,7 @@ export default function TaskBoardroom() {
                 Save as Template
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 mb-5">
               {teamBots.map((bot) => (
                 <div
                   key={bot.id}
@@ -241,6 +339,16 @@ export default function TaskBoardroom() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="border-t border-primary/10 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Network className="w-4 h-4 text-primary" />
+                <span className="font-tech font-bold text-xs text-primary uppercase tracking-wider">
+                  Bot Communications
+                </span>
+              </div>
+              <BotCommunicationsPanel sessionId={sessionId} />
             </div>
           </div>
         </div>

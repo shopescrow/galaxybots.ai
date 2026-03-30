@@ -116,6 +116,24 @@ export default function BotDetail() {
                   </div>
                   <CardTitle className="text-2xl mb-1">{bot.name}</CardTitle>
                   <p className="text-cyan font-tech font-medium">{bot.title}</p>
+                  {(bot as { rank?: string }).rank && (
+                    <div className="flex justify-center mt-1">
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-tech uppercase ${
+                          (bot as { rank?: string }).rank === "director"
+                            ? "text-gold border-gold/30 bg-gold/10"
+                            : (bot as { rank?: string }).rank === "manager"
+                              ? "text-blue-400 border-blue-500/30 bg-blue-500/10"
+                              : (bot as { rank?: string }).rank === "specialist"
+                                ? "text-purple-400 border-purple-500/30 bg-purple-500/10"
+                                : "text-muted-foreground border-muted/30"
+                        }`}
+                      >
+                        {(bot as { rank?: string }).rank}
+                      </Badge>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="pt-4 flex flex-col gap-4">
                   <div>
