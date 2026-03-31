@@ -809,23 +809,241 @@ app.post(`${BASE_PATH}/messages`, authenticateOptional, async (req: Authenticate
 
 app.get(`${BASE_PATH}`, (_req, res) => {
   const origin = `${_req.protocol}://${_req.get("host")}`;
-  res.json({
-    service: "GalaxyBots MCP Server",
-    status: "online",
-    version: "2025-03",
-    description: "Model Context Protocol server providing AI executive bot tools for GalaxyBots.ai",
-    endpoints: {
-      sse:       `${origin}${BASE_PATH}/sse`,
-      messages:  `${origin}${BASE_PATH}/messages`,
-      tools:     `${origin}${BASE_PATH}/tools`,
-      health:    `${origin}${BASE_PATH}/health`,
-      oauth_authorize: `${origin}${BASE_PATH}/oauth/authorize`,
-      oauth_token:     `${origin}${BASE_PATH}/oauth/token`,
-      well_known:      `${origin}/.well-known/mcp.json`,
-    },
-    auth: ["bearer_token", "oauth2_pkce"],
-    docs: "https://galaxybots.ai/mcp-docs",
-  });
+  const endpoints = [
+    { label: "SSE Stream",       path: `${BASE_PATH}/sse`,              method: "GET",  desc: "Connect a persistent MCP session via Server-Sent Events" },
+    { label: "Messages",         path: `${BASE_PATH}/messages`,         method: "POST", desc: "Post tool calls to an active SSE session" },
+    { label: "Tool Manifest",    path: `${BASE_PATH}/tools`,            method: "GET",  desc: "Browse all available MCP tools (no auth required)" },
+    { label: "Health",           path: `${BASE_PATH}/health`,           method: "GET",  desc: "Server health check and uptime status" },
+    { label: "OAuth Authorize",  path: `${BASE_PATH}/oauth/authorize`,  method: "GET",  desc: "Begin OAuth 2.0 PKCE authorization flow" },
+    { label: "OAuth Token",      path: `${BASE_PATH}/oauth/token`,      method: "POST", desc: "Exchange authorization code for bearer token" },
+    { label: "Well-Known",       path: `/.well-known/mcp.json`,         method: "GET",  desc: "MCP discovery document for AI clients" },
+  ];
+
+  const endpointRows = endpoints.map(e => `
+    <a href="${origin}${e.path}" class="endpoint-card" target="_blank" rel="noopener">
+      <span class="method method-${e.method.toLowerCase()}">${e.method}</span>
+      <span class="endpoint-path">${e.path}</span>
+      <span class="endpoint-desc">${e.desc}</span>
+    </a>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GalaxyBots MCP Server</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #070A14;
+      --surface:  #0D1126;
+      --surface2: #121930;
+      --border:   #1D2B4A;
+      --text:     #EEF2FF;
+      --muted:    #8FA3C0;
+      --faint:    #5A7490;
+      --purple:   #9B5CF6;
+      --cyan:     #06D4EF;
+      --green:    #10B981;
+      --amber:    #F5B800;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(circle at 15% 50%, rgba(155, 92, 246, 0.06), transparent 30%),
+        radial-gradient(circle at 85% 20%, rgba(6, 212, 239, 0.06), transparent 30%);
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Header ── */
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding: 28px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .logo-row { display: flex; align-items: center; gap: 16px; }
+    .logo-img { width: 52px; height: 52px; object-fit: contain; }
+    .brand { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    .brand span { background: linear-gradient(90deg, var(--purple), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .version-badge {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); padding: 3px 10px; border-radius: 20px;
+    }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--green); font-size: 12px; font-weight: 600;
+      padding: 5px 14px; border-radius: 20px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Main ── */
+    .main { max-width: 860px; margin: 0 auto; padding: 48px 24px; }
+
+    .hero { text-align: center; margin-bottom: 52px; }
+    .hero-logo { width: 100px; height: 100px; object-fit: contain; margin-bottom: 20px; }
+    .hero h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 10px; }
+    .hero h1 span { background: linear-gradient(90deg, var(--purple), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 560px; margin: 0 auto 28px; }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 10px 22px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      transition: opacity .15s, transform .15s;
+    }
+    .btn:hover { opacity: .85; transform: translateY(-1px); }
+    .btn-primary { background: linear-gradient(135deg, var(--purple), #7C3AED); color: #fff; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-outline:hover { border-color: var(--purple); color: var(--text); }
+
+    /* ── Section ── */
+    .section { margin-bottom: 44px; }
+    .section-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 14px;
+    }
+
+    /* ── Endpoints ── */
+    .endpoint-card {
+      display: grid; grid-template-columns: 62px 1fr;
+      grid-template-rows: auto auto; gap: 2px 12px;
+      align-items: start;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 18px; margin-bottom: 8px;
+      transition: border-color .15s, background .15s;
+    }
+    .endpoint-card:hover { border-color: var(--purple); background: var(--surface2); }
+    .method {
+      grid-row: 1 / 3; align-self: center;
+      font-size: 10px; font-weight: 700; letter-spacing: .6px;
+      padding: 4px 0; border-radius: 6px; text-align: center;
+    }
+    .method-get  { color: var(--cyan);   background: rgba(6,212,239,.12);  border: 1px solid rgba(6,212,239,.25); }
+    .method-post { color: var(--amber);  background: rgba(245,184,0,.12);  border: 1px solid rgba(245,184,0,.25); }
+    .endpoint-path { font-size: 13px; font-family: 'Cascadia Code','Fira Code',monospace; color: var(--text); }
+    .endpoint-desc { font-size: 12px; color: var(--muted); }
+
+    /* ── Auth ── */
+    .auth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .auth-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px;
+    }
+    .auth-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--purple); }
+    .auth-card p  { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+    /* ── Quick-start ── */
+    .code-block {
+      background: #06090F; border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+      font-family: 'Cascadia Code','Fira Code',monospace;
+      font-size: 12px; line-height: 1.7; overflow-x: auto;
+    }
+    .c-comment { color: #5A7490; }
+    .c-key     { color: #9B5CF6; }
+    .c-str     { color: #06D4EF; }
+    .c-val     { color: #F5B800; }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid var(--border); padding: 20px 40px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: var(--faint); flex-wrap: wrap; gap: 10px;
+    }
+    .footer a { color: var(--muted); }
+    .footer a:hover { color: var(--purple); }
+    .footer-links { display: flex; gap: 18px; }
+
+    @media (max-width: 600px) {
+      .header { padding: 16px 20px; }
+      .main   { padding: 32px 16px; }
+      .auth-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="logo-row">
+      <img src="https://galaxybots.ai/favicon.png" alt="GalaxyBots" class="logo-img" onerror="this.style.display='none'" />
+      <span class="brand"><span>GalaxyBots</span> MCP</span>
+      <span class="version-badge">v2025-03</span>
+    </div>
+    <div class="status-pill"><span class="dot"></span> Online</div>
+  </header>
+
+  <main class="main">
+
+    <div class="hero">
+      <img src="https://galaxybots.ai/favicon.png" alt="GalaxyBots" class="hero-logo" onerror="this.style.display='none'" />
+      <h1>Your AI Executive Team,<br /><span>via MCP</span></h1>
+      <p>The GalaxyBots Model Context Protocol server gives Claude, Claude Desktop, and any MCP-compatible client direct access to 51 AI executive directors — from CEO to CISO.</p>
+      <div class="hero-actions">
+        <a href="https://galaxybots.ai" class="btn btn-primary" target="_blank">Get API Access</a>
+        <a href="${origin}${BASE_PATH}/tools" class="btn btn-outline" target="_blank">Browse Tools</a>
+        <a href="${origin}${BASE_PATH}/health" class="btn btn-outline" target="_blank">Health Check</a>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Endpoints</p>
+      ${endpointRows}
+    </div>
+
+    <div class="section">
+      <p class="section-title">Authentication</p>
+      <div class="auth-grid">
+        <div class="auth-card">
+          <h3>Bearer Token</h3>
+          <p>Pass your API key in the <code>Authorization</code> header.<br /><code>Authorization: Bearer &lt;YOUR_KEY&gt;</code></p>
+        </div>
+        <div class="auth-card">
+          <h3>OAuth 2.0 PKCE</h3>
+          <p>Full OAuth flow for partner integrations. Begin at <code>${BASE_PATH}/oauth/authorize</code> with your client credentials.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Claude Desktop Quick-Start</p>
+      <div class="code-block">
+<span class="c-comment">// Add to your claude_desktop_config.json</span>
+{
+  <span class="c-key">"mcpServers"</span>: {
+    <span class="c-key">"galaxybots"</span>: {
+      <span class="c-key">"url"</span>: <span class="c-str">"${origin}${BASE_PATH}/sse"</span>,
+      <span class="c-key">"apiKey"</span>: <span class="c-str">"YOUR_GALAXYBOTS_API_KEY"</span>
+    }
+  }
+}
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <span>© ${new Date().getFullYear()} GalaxyBots.ai — AI Executive Intelligence</span>
+    <div class="footer-links">
+      <a href="https://galaxybots.ai" target="_blank">Website</a>
+      <a href="https://galaxybots.ai/mcp-docs" target="_blank">Docs</a>
+      <a href="${origin}/.well-known/mcp.json" target="_blank">Discovery JSON</a>
+    </div>
+  </footer>
+
+</body>
+</html>`;
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
 });
 
 app.get(`${BASE_PATH}/health`, (_req, res) => {
