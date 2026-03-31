@@ -1,26 +1,42 @@
+// Dark space theme — matches GalaxyBots.ai website palette
 const colors = {
   light: {
-    text: "#0F172A",
-    textSecondary: "#64748B",
-    textTertiary: "#94A3B8",
-    background: "#F8FAFC",
-    surface: "#FFFFFF",
-    surfaceElevated: "#F1F5F9",
-    border: "#E2E8F0",
-    borderLight: "#F1F5F9",
-    tint: "#6366F1",
-    tintLight: "#EEF2FF",
-    tintDark: "#4F46E5",
-    accent: "#10B981",
-    accentLight: "#ECFDF5",
-    warning: "#F59E0B",
-    warningLight: "#FFFBEB",
+    // Text
+    text: "#EEF2FF",
+    textSecondary: "#8FA3C0",
+    textTertiary: "#5A7490",
+
+    // Backgrounds
+    background: "#070A14",
+    surface: "#0D1126",
+    surfaceElevated: "#121930",
+
+    // Borders
+    border: "#1D2B4A",
+    borderLight: "#162040",
+
+    // Primary — violet/purple (website --primary: hsl(270 80% 60%))
+    tint: "#9B5CF6",
+    tintLight: "#1A0B3E",
+    tintDark: "#7C3AED",
+
+    // Accent — cyan (website --accent: hsl(190 90% 50%))
+    accent: "#06D4EF",
+    accentLight: "#042535",
+
+    // States
+    warning: "#F5B800",
+    warningLight: "#2A1E00",
     danger: "#EF4444",
-    dangerLight: "#FEF2F2",
-    tabIconDefault: "#94A3B8",
-    tabIconSelected: "#6366F1",
-    skeleton: "#E2E8F0",
-    overlay: "rgba(15, 23, 42, 0.4)",
+    dangerLight: "#2D0D0D",
+
+    // Tabs
+    tabIconDefault: "#5A7490",
+    tabIconSelected: "#9B5CF6",
+
+    // Misc
+    skeleton: "#1D2B4A",
+    overlay: "rgba(7, 10, 20, 0.7)",
   },
 };
 

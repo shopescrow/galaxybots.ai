@@ -7,8 +7,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/lib/auth-context";
@@ -16,6 +18,7 @@ import colors from "@/constants/colors";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const {
     login,
     loginWithBiometric,
@@ -77,10 +80,11 @@ export default function LoginScreen() {
       bottomOffset={20}
     >
       <View style={styles.header}>
-        <View style={styles.logoWrap}>
-          <Feather name="cpu" size={28} color="#FFFFFF" />
-        </View>
-        <Text style={styles.brand}>GalaxyBots</Text>
+        <Image
+          source={require("../assets/images/logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.subtitle}>Mobile Command Center</Text>
       </View>
 
@@ -170,6 +174,16 @@ export default function LoginScreen() {
             <Text style={styles.loginButtonText}>Sign In</Text>
           )}
         </Pressable>
+
+        <View style={styles.recoveryLinks}>
+          <Pressable onPress={() => router.push("/forgot-password")} hitSlop={8}>
+            <Text style={styles.recoveryLink}>Forgot password?</Text>
+          </Pressable>
+          <Text style={styles.recoverySep}>·</Text>
+          <Pressable onPress={() => router.push("/forgot-username")} hitSlop={8}>
+            <Text style={styles.recoveryLink}>Find my account</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={{ flex: 1 }} />
@@ -188,20 +202,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 48,
   },
-  logoWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.light.tint,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  brand: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    color: colors.light.text,
-    marginBottom: 4,
+  logo: {
+    width: 160,
+    height: 160,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
@@ -277,6 +281,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
     color: "#FFFFFF",
+  },
+  recoveryLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  recoveryLink: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: colors.light.tint,
+  },
+  recoverySep: {
+    fontSize: 13,
+    color: colors.light.textTertiary,
   },
   footer: {
     fontSize: 12,
