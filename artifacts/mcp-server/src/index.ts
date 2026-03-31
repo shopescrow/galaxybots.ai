@@ -828,37 +828,171 @@ app.get(`${BASE_PATH}`, (_req, res) => {
     label: string;
     path: string;
     method: string;
-    desc: string;
-    auth?: string;
+    purpose: string;
+    params: string[];
+    returns: string;
+    access: string;
+    useWhen: string;
     noLink?: boolean;
+    group: string;
   }
   const endpoints: EndpointDef[] = [
-    { label: "SSE Stream",        path: `${BASE_PATH}/sse`,               method: "GET",    desc: "Open a persistent MCP session via Server-Sent Events" },
-    { label: "Messages",          path: `${BASE_PATH}/messages`,          method: "POST",   desc: "Post tool calls to an active SSE session", noLink: true },
-    { label: "Tool Manifest",     path: `${BASE_PATH}/tools`,             method: "GET",    desc: "Browse tools — supports ?q= search and ?department= filter" },
-    { label: "Capabilities",      path: `${BASE_PATH}/capabilities`,      method: "GET",    desc: "Inspect exactly what your token can access", auth: "Bearer token required" },
-    { label: "Health",            path: `${BASE_PATH}/health`,            method: "GET",    desc: "Live health: uptime, active sessions, tool calls served, DB status" },
-    { label: "Sessions",          path: `${BASE_PATH}/sessions`,          method: "GET",    desc: "List all active SSE sessions", auth: "Admin key required" },
-    { label: "Terminate Session", path: `${BASE_PATH}/sessions/{id}`,     method: "DELETE", desc: "Force-close a session by ID", auth: "Admin key required", noLink: true },
-    { label: "OpenAPI Spec",      path: `${BASE_PATH}/openapi.json`,      method: "GET",    desc: "Full OpenAPI 3.1 spec — import into Postman, Insomnia, or any SDK generator" },
-    { label: "OAuth Authorize",   path: `${BASE_PATH}/oauth/authorize`,   method: "GET",    desc: "Begin OAuth 2.0 PKCE authorization flow" },
-    { label: "OAuth Token",       path: `${BASE_PATH}/oauth/token`,       method: "POST",   desc: "Exchange authorization code for bearer token", noLink: true },
-    { label: "OAuth Revoke",      path: `${BASE_PATH}/oauth/revoke`,      method: "POST",   desc: "Revoke an access or refresh token (RFC 7009)", noLink: true },
-    { label: "OAuth JWKS",        path: `${BASE_PATH}/oauth/jwks`,        method: "GET",    desc: "JSON Web Key Set for RS256 token signature verification" },
-    { label: "Well-Known",        path: `/.well-known/mcp.json`,          method: "GET",    desc: "MCP discovery document for AI clients" },
+    {
+      label: "SSE Stream", method: "GET", path: `${BASE_PATH}/sse`, group: "Core MCP",
+      purpose: "Opens a persistent Server-Sent Events connection that establishes a live MCP session. The server pushes protocol messages, tool results, and streaming progress over this connection.",
+      params: ["Authorization: Bearer <key> (optional — omit for trial mode, 3 free calls)", "No query parameters required; session ID is assigned automatically on connect"],
+      returns: "text/event-stream — continuous MCP protocol event frames including endpoint announcements, tool responses, and streaming tokens",
+      access: "Public (trial) or Bearer token / OAuth 2.0",
+      useWhen: "Connecting Claude Desktop, Cursor, or any MCP-compatible AI client to GalaxyBots directors",
+    },
+    {
+      label: "Messages", method: "POST", path: `${BASE_PATH}/messages`, group: "Core MCP",
+      purpose: "Delivers a JSON-RPC tool-call message to an active SSE session. The AI client sends tool invocations here; responses flow back over the SSE stream. Must be paired with an open /sse connection.",
+      params: ["?sessionId=<uuid> (required) — the session ID received from the SSE endpoint announcement", "Body: JSON-RPC 2.0 object with method, params, and id fields", "Authorization: Bearer <key> (must match the key used to open the SSE session)"],
+      returns: "HTTP 202 Accepted — the actual tool result arrives asynchronously over the SSE stream",
+      access: "Same token as the SSE session (token mismatch returns 403)",
+      useWhen: "Used automatically by MCP clients (Claude, Cursor) — not called directly by humans",
+      noLink: true,
+    },
+    {
+      label: "Tool Manifest", method: "GET", path: `${BASE_PATH}/tools`, group: "Discovery",
+      purpose: "Returns the full list of MCP tools available on this server, with name, description, and JSON Schema for each tool's input parameters. Supports keyword search and department filtering. Paginated.",
+      params: ["?q=<string> — full-text search across tool names and descriptions (e.g. ?q=memory)", "?department=<name> — filter by department: bots, aeo, finance, knowledge, gtm, admin, search", "?page=<n> — page number (default 1)", "?limit=<n> — results per page (default 100, max 100)"],
+      returns: "JSON with tools[], total count, page info, available departments, and auth metadata",
+      access: "Public — no authentication required",
+      useWhen: "Building integrations, generating SDKs, building a tool picker UI, or discovering what's available before connecting",
+    },
+    {
+      label: "Capabilities", method: "GET", path: `${BASE_PATH}/capabilities`, group: "Discovery",
+      purpose: "Returns exactly what the calling token is permitted to do — which tools are accessible, what OAuth scopes are active, the rate limit, caller type, and partner key ID. Use this to validate a key before making tool calls.",
+      params: ["Authorization: Bearer <key> (required)"],
+      returns: "JSON with caller_type, access_level, rate_limit, allowed_tools[], allowed_tool_count, total_tools, scopes, partner_key_id, oauth_client_id",
+      access: "Any valid Bearer token or OAuth 2.0 access token",
+      useWhen: "Onboarding a new API key, debugging a 403 error, or building a capabilities display in a partner dashboard",
+      noLink: true,
+    },
+    {
+      label: "Health Check", method: "GET", path: `${BASE_PATH}/health`, group: "Observability",
+      purpose: "Live server health check. Performs a real database round-trip (SELECT 1) and returns runtime telemetry. Returns status 'ok' when all systems are healthy, 'degraded' if the database is unreachable.",
+      params: ["No parameters required"],
+      returns: "JSON with status, service, version, uptime (formatted + ms), active_sessions, tool_calls_served (this boot), database status, and ISO timestamp",
+      access: "Public — no authentication required",
+      useWhen: "Monitoring integrations, uptime checks, CI/CD readiness gates, or load balancer health probes",
+    },
+    {
+      label: "Active Sessions", method: "GET", path: `${BASE_PATH}/sessions`, group: "Observability",
+      purpose: "Returns a real-time list of all currently connected SSE sessions — who is connected, when they connected, how many tool calls they have made, and whether they authenticated via bearer token or OAuth.",
+      params: ["Authorization: Bearer <admin-key> (required — MCP_API_KEY environment variable)"],
+      returns: "JSON with sessions[] (sessionId, clientName, connectedAt, toolCallCount, callerType, partnerKeyId) and total count",
+      access: "Admin only — requires the internal MCP_API_KEY",
+      useWhen: "Auditing active connections, diagnosing stuck sessions, or monitoring concurrent partner usage",
+      noLink: true,
+    },
+    {
+      label: "Terminate Session", method: "DELETE", path: `${BASE_PATH}/sessions/{sessionId}`, group: "Observability",
+      purpose: "Forcibly closes an active SSE session by ID. Removes the session from all internal maps, terminates the SSE transport, and logs the admin action. The client will receive a connection close event.",
+      params: ["Path: {sessionId} — the UUID of the session to terminate (from GET /sessions)", "Authorization: Bearer <admin-key> (required)"],
+      returns: "JSON with terminated: true and the sessionId that was closed",
+      access: "Admin only — requires the internal MCP_API_KEY",
+      useWhen: "Removing a misbehaving or unauthorized client, releasing a hung session, or enforcing a key revocation immediately",
+      noLink: true,
+    },
+    {
+      label: "OpenAPI 3.1 Spec", method: "GET", path: `${BASE_PATH}/openapi.json`, group: "Discovery",
+      purpose: "Returns the complete OpenAPI 3.1 specification for this server — all endpoints, every MCP tool as a POST operation, full security scheme definitions (Bearer + OAuth2 PKCE), request/response schemas, and tagged groupings.",
+      params: ["No parameters required"],
+      returns: "JSON — OpenAPI 3.1.0 document with info, servers, security, components, and paths for all endpoints plus one path per tool",
+      access: "Public — no authentication required",
+      useWhen: "Importing into Postman or Insomnia, generating a typed SDK, feeding a developer portal, or building API documentation",
+    },
+    {
+      label: "OAuth Authorize", method: "GET", path: `${BASE_PATH}/oauth/authorize`, group: "OAuth 2.0",
+      purpose: "Step 1 of the OAuth 2.0 PKCE flow. Presents an authorization UI where the developer authenticates with their GalaxyBots Developer API key, reviews the requested scopes, and approves or denies the client application's access request.",
+      params: ["?client_id=<string> (required) — registered OAuth client ID", "?redirect_uri=<url> (required) — must match the registered redirect URI", "?response_type=code (required)", "?code_challenge=<base64url> (required) — S256 PKCE challenge", "?code_challenge_method=S256 (recommended)", "?scope=<space-delimited> — e.g. bots:read bots:write aeo:read", "?state=<string> (recommended) — CSRF protection token"],
+      returns: "HTML authorization page, then HTTP 302 redirect to redirect_uri with ?code= and ?state=",
+      access: "Public — no authentication header required (developer authenticates via the UI)",
+      useWhen: "Building a third-party integration that needs user-authorized access to GalaxyBots on behalf of a client",
+    },
+    {
+      label: "OAuth Token", method: "POST", path: `${BASE_PATH}/oauth/token`, group: "OAuth 2.0",
+      purpose: "Step 2 of the OAuth 2.0 PKCE flow. Exchanges an authorization code for an access token and refresh token. Also handles grant_type=refresh_token to issue new tokens when the access token expires (1 hour TTL).",
+      params: ["Body (JSON or form-encoded): grant_type (authorization_code or refresh_token), code, redirect_uri, code_verifier, client_id, refresh_token (for refresh grant)"],
+      returns: "JSON with access_token (RS256 JWT), token_type, expires_in (3600s), refresh_token, scope",
+      access: "Public — no Authorization header (PKCE code_verifier serves as proof of possession)",
+      useWhen: "After the user approves access in /oauth/authorize, exchange the code for tokens that can be used as Bearer tokens on /sse and /messages",
+      noLink: true,
+    },
+    {
+      label: "OAuth Revoke", method: "POST", path: `${BASE_PATH}/oauth/revoke`, group: "OAuth 2.0",
+      purpose: "Immediately invalidates an access token or refresh token (RFC 7009). The token is marked revoked in the database; subsequent uses are rejected even if the JWT signature is still cryptographically valid.",
+      params: ["Body (JSON or form-encoded): token (required) — the access or refresh token to revoke", "token_type_hint: access_token or refresh_token (optional, helps route the lookup)"],
+      returns: "JSON with revoked: true (always returns 200 even if token was not found — per RFC 7009)",
+      access: "Public — no Authorization header required",
+      useWhen: "Logging a user out, responding to a key compromise, rotating tokens, or cleaning up after a session ends",
+      noLink: true,
+    },
+    {
+      label: "OAuth JWKS", method: "GET", path: `${BASE_PATH}/oauth/jwks`, group: "OAuth 2.0",
+      purpose: "Returns the JSON Web Key Set containing the server's RSA public key used to sign all access tokens. Partners can fetch this to verify token signatures locally without contacting GalaxyBots — standard RS256 verification.",
+      params: ["No parameters required"],
+      returns: "JSON with keys[] — each key includes the RSA public key in JWK format (kty, n, e), kid (key ID), use: sig, alg: RS256",
+      access: "Public — no authentication required",
+      useWhen: "Setting up a resource server that validates GalaxyBots access tokens independently, or configuring a JWT middleware library",
+    },
+    {
+      label: "MCP Discovery", method: "GET", path: `/.well-known/mcp.json`, group: "Discovery",
+      purpose: "Standard MCP well-known discovery document. AI clients and MCP hosts query this URL to auto-discover the server's endpoint URLs, available tools, supported auth methods, trial configuration, and protocol version — without any prior configuration.",
+      params: ["No parameters required — must be accessible at the domain root (not under /__mcp/)"],
+      returns: "JSON with name, description, mcp_version, endpoints (sse, messages, health, oauth), tools_preview[], auth_methods[], scopes[], trial config",
+      access: "Public — no authentication required",
+      useWhen: "Auto-configuring an MCP client, building an MCP registry listing, or setting up Claude Desktop with just the domain URL",
+    },
   ];
 
-  const endpointRows = endpoints.map(e => {
-    const tag = e.noLink ? "div" : "a";
-    const href = e.noLink ? "" : `href="${origin}${e.path}" target="_blank" rel="noopener"`;
-    const cursor = e.noLink ? "cursor:default;" : "";
-    const authBadge = e.auth ? `<span class="auth-badge-sm">🔒 ${e.auth}</span>` : "";
-    return `
-    <${tag} ${href} class="endpoint-card" style="${cursor}">
-      <span class="method method-${e.method.toLowerCase()}">${e.method}</span>
-      <span class="endpoint-path">${e.path}${authBadge}</span>
-      <span class="endpoint-desc">${e.desc}</span>
-    </${tag}>`;
+  const groups = [...new Set(endpoints.map(e => e.group))];
+  const endpointRows = groups.map(group => {
+    const groupEndpoints = endpoints.filter(e => e.group === group);
+    const cards = groupEndpoints.map(e => {
+      const tag = e.noLink ? "div" : "a";
+      const href = e.noLink ? "" : `href="${origin}${e.path}" target="_blank" rel="noopener"`;
+      const paramRows = e.params.map(p => {
+        const colonIdx = p.indexOf(" — ");
+        if (colonIdx > -1) {
+          return `<li><code>${p.substring(0, colonIdx)}</code><span> — ${p.substring(colonIdx + 3)}</span></li>`;
+        }
+        return `<li>${p}</li>`;
+      }).join("");
+      return `
+      <${tag} ${href} class="ep-card${e.noLink ? " ep-no-link" : ""}">
+        <div class="ep-header">
+          <span class="method method-${e.method.toLowerCase()}">${e.method}</span>
+          <code class="ep-path">${e.path}</code>
+          <span class="ep-label">${e.label}</span>
+          ${e.noLink ? '<span class="ep-no-browser">Browser n/a</span>' : ""}
+        </div>
+        <p class="ep-purpose">${e.purpose}</p>
+        <div class="ep-meta">
+          <div class="ep-meta-row">
+            <div class="ep-meta-block">
+              <span class="ep-meta-label">Parameters</span>
+              <ul class="ep-params">${paramRows}</ul>
+            </div>
+            <div class="ep-meta-block">
+              <span class="ep-meta-label">Returns</span>
+              <p class="ep-returns">${e.returns}</p>
+              <span class="ep-meta-label" style="margin-top:10px">Access</span>
+              <p class="ep-access">${e.access}</p>
+              <span class="ep-meta-label" style="margin-top:10px">Use when</span>
+              <p class="ep-use-when">${e.useWhen}</p>
+            </div>
+          </div>
+        </div>
+      </${tag}>`;
+    }).join("");
+    return `<div class="ep-group">
+      <p class="ep-group-label">${group}</p>
+      ${cards}
+    </div>`;
   }).join("");
 
   const html = `<!DOCTYPE html>
@@ -921,7 +1055,7 @@ app.get(`${BASE_PATH}`, (_req, res) => {
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
     /* ── Main ── */
-    .main { max-width: 860px; margin: 0 auto; padding: 48px 24px; }
+    .main { max-width: 1020px; margin: 0 auto; padding: 48px 24px; }
 
     .hero { text-align: center; margin-bottom: 52px; }
     .hero-logo { width: 100px; height: 100px; object-fit: contain; margin-bottom: 20px; }
@@ -946,32 +1080,87 @@ app.get(`${BASE_PATH}`, (_req, res) => {
       color: var(--faint); margin-bottom: 14px;
     }
 
-    /* ── Endpoints ── */
-    .endpoint-card {
-      display: grid; grid-template-columns: 62px 1fr;
-      grid-template-rows: auto auto; gap: 2px 12px;
-      align-items: start;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 14px 18px; margin-bottom: 8px;
-      transition: border-color .15s, background .15s;
-    }
-    .endpoint-card:hover { border-color: var(--purple); background: var(--surface2); }
+    /* ── Method badges ── */
     .method {
-      grid-row: 1 / 3; align-self: center;
       font-size: 10px; font-weight: 700; letter-spacing: .6px;
-      padding: 4px 0; border-radius: 6px; text-align: center;
+      padding: 3px 8px; border-radius: 5px; text-align: center; white-space: nowrap; flex-shrink: 0;
     }
-    .method-get    { color: var(--cyan);   background: rgba(6,212,239,.12);  border: 1px solid rgba(6,212,239,.25); }
-    .method-post   { color: var(--amber);  background: rgba(245,184,0,.12);  border: 1px solid rgba(245,184,0,.25); }
-    .method-delete { color: #F87171;       background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.25); }
-    .endpoint-path { font-size: 13px; font-family: 'Cascadia Code','Fira Code',monospace; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .endpoint-desc { font-size: 12px; color: var(--muted); }
-    .auth-badge-sm {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 10px; font-weight: 600;
-      background: rgba(155,92,246,.12); border: 1px solid rgba(155,92,246,.3);
-      color: var(--purple); padding: 2px 8px; border-radius: 20px;
-      white-space: nowrap;
+    .method-get    { color: var(--cyan);  background: rgba(6,212,239,.12);  border: 1px solid rgba(6,212,239,.25); }
+    .method-post   { color: var(--amber); background: rgba(245,184,0,.12);  border: 1px solid rgba(245,184,0,.25); }
+    .method-delete { color: #F87171;      background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.25); }
+
+    /* ── Endpoint groups ── */
+    .ep-group { margin-bottom: 36px; }
+    .ep-group-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 12px; padding-left: 2px;
+    }
+
+    /* ── Endpoint cards ── */
+    .ep-card {
+      display: block;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px 22px; margin-bottom: 10px;
+      transition: border-color .18s, background .18s;
+      text-decoration: none; color: inherit;
+    }
+    a.ep-card:hover { border-color: var(--purple); background: var(--surface2); cursor: pointer; }
+    .ep-no-link { cursor: default; opacity: .95; }
+
+    .ep-header {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .ep-path {
+      font-family: 'Cascadia Code','Fira Code',monospace;
+      font-size: 13px; color: var(--text); background: none; border: none;
+    }
+    .ep-label {
+      font-size: 13px; font-weight: 600; color: var(--muted);
+    }
+    .ep-no-browser {
+      font-size: 10px; font-weight: 600; color: var(--faint);
+      background: var(--surface2); border: 1px solid var(--border);
+      padding: 2px 8px; border-radius: 20px; margin-left: auto;
+    }
+
+    .ep-purpose {
+      font-size: 13px; color: var(--muted); line-height: 1.65;
+      margin-bottom: 14px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ep-meta-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .ep-meta-block {}
+    .ep-meta-label {
+      display: block;
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 6px;
+    }
+    .ep-params {
+      list-style: none; margin-bottom: 0;
+    }
+    .ep-params li {
+      font-size: 12px; color: var(--muted); line-height: 1.55;
+      padding: 3px 0; border-bottom: 1px solid rgba(29,43,74,.5);
+    }
+    .ep-params li:last-child { border-bottom: none; }
+    .ep-params code {
+      font-family: 'Cascadia Code','Fira Code',monospace;
+      font-size: 11px; color: var(--cyan); background: rgba(6,212,239,.08);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .ep-params span { color: var(--faint); }
+    .ep-returns, .ep-access, .ep-use-when {
+      font-size: 12px; color: var(--muted); line-height: 1.55;
+    }
+    .ep-use-when { color: var(--text); font-style: italic; }
+
+    @media (max-width: 640px) {
+      .ep-meta-row { grid-template-columns: 1fr; }
+      .ep-no-browser { display: none; }
     }
 
     /* ── Auth ── */
@@ -1038,7 +1227,7 @@ app.get(`${BASE_PATH}`, (_req, res) => {
     </div>
 
     <div class="section">
-      <p class="section-title">Endpoints</p>
+      <p class="section-title">API Reference — 13 Endpoints across 4 groups</p>
       ${endpointRows}
     </div>
 
