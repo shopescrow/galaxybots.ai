@@ -174,7 +174,7 @@ Keep responses focused and actionable (3-5 sentences per point).`;
 
     try {
       const { finalContent } = await runAgenticLoop({
-        model: "gpt-4o-mini",
+        model: "gpt-4o-mini", // high-volume lead ingestion, cost-efficient
         maxIterations: 5,
         maxTokens: 500,
         systemPrompt,

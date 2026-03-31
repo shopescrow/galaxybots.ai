@@ -94,7 +94,7 @@ router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimi
   const clientContext = await buildClientContext(req.user!.clientId);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5.4",
     max_completion_tokens: 2000,
     messages: [
       {
@@ -402,7 +402,7 @@ IMPORTANT: If you identify that this task requires expertise not currently repre
 Only flag a missing role if it is genuinely critical and not covered by any current team member.`;
 
       const { finalContent, events } = await runAgenticLoop({
-        model: "gpt-4o-mini",
+        model: "gpt-5.4",
         maxIterations: 10,
         maxTokens: 500,
         systemPrompt,
@@ -612,7 +612,7 @@ IMPORTANT: If you identify that this task requires expertise not currently repre
 Only flag a missing role if it is genuinely critical and not covered by any current team member.`;
 
           const { finalContent, events } = await runAgenticLoop({
-            model: "gpt-4o-mini",
+            model: "gpt-5.4",
             maxIterations: 10,
             maxTokens: 500,
             systemPrompt,

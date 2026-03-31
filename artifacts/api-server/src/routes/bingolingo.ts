@@ -263,7 +263,7 @@ Generate the content now.`;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // high-volume BingoLingo content generation, cost-efficient
       max_completion_tokens: 3000,
       messages: [
         { role: "system", content: systemPrompt },
@@ -354,7 +354,7 @@ Generate the content now.`;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // high-volume BingoLingo content generation, cost-efficient
       max_completion_tokens: 3000,
       messages: [
         { role: "system", content: systemPrompt },
@@ -847,7 +847,7 @@ router.post("/bingolingo/ext/generate", authenticateApiKey, async (req, res): Pr
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // high-volume BingoLingo content generation, cost-efficient
       max_completion_tokens: 3000,
       messages: [
         { role: "system", content: systemPrompt },

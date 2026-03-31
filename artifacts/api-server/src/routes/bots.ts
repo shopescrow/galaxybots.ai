@@ -108,7 +108,7 @@ Format: "I am [Name]. I own [domain]. In this world, I will [specific autonomous
 Be bold, specific, and speak in your unique voice and personality. No quotation marks around your response.`;
 
         const response = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-4o", // medium-complexity: bot identity and personality fabrication
           messages: [{ role: "user", content: prompt }],
           max_tokens: 300,
           temperature: 0.9,

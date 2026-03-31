@@ -134,7 +134,7 @@ isNewProspect should be true if the caller appears to be a new potential custome
 
     const startMs = Date.now();
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // medium-complexity: structured call analysis
       messages: [{ role: "user", content: debriefPrompt }],
       max_tokens: 1000,
       temperature: 0.3,
@@ -147,7 +147,7 @@ isNewProspect should be true if the caller appears to be a new potential custome
       logLlmUsage({
         clientId,
         botId: salesBot?.id ?? null,
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         promptTokens: usage.prompt_tokens ?? 0,
         completionTokens: usage.completion_tokens ?? 0,
         latencyMs,
@@ -394,7 +394,7 @@ Return JSON:
 
     const scriptStartMs = Date.now();
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // medium-complexity: structured script generation
       messages: [{ role: "user", content: prompt }],
       max_tokens: 1500,
       temperature: 0.7,
@@ -409,7 +409,7 @@ Return JSON:
       logLlmUsage({
         clientId,
         botId: bot?.id ?? null,
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         promptTokens: scriptUsage.prompt_tokens ?? 0,
         completionTokens: scriptUsage.completion_tokens ?? 0,
         latencyMs: scriptLatencyMs,
@@ -592,7 +592,7 @@ Return JSON:
 
     const meetingStartMs = Date.now();
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // medium-complexity: meeting transcript summarization
       messages: [{ role: "user", content: summaryPrompt }],
       max_tokens: 1500,
       temperature: 0.3,
@@ -604,7 +604,7 @@ Return JSON:
     if (meetingUsage) {
       logLlmUsage({
         clientId,
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         promptTokens: meetingUsage.prompt_tokens ?? 0,
         completionTokens: meetingUsage.completion_tokens ?? 0,
         latencyMs: meetingLatencyMs,

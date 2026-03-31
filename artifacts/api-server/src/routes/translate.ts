@@ -44,7 +44,7 @@ router.post("/translate", async (req, res) => {
     const numbered = arr.map((t, i) => `${i + 1}. ${t}`).join("\n");
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // high-volume translation, cost-efficient
       messages: [
         {
           role: "system",

@@ -164,7 +164,7 @@ You have access to tools that allow you to search the web, read/write shared sta
     }));
 
   const { finalContent, events } = await runAgenticLoop({
-    model: "gpt-4o",
+    model: "gpt-5.4",
     maxIterations: 10,
     maxTokens: 8192,
     systemPrompt,
@@ -365,7 +365,7 @@ You have access to tools that allow you to search the web, read/write shared sta
         temperatures.map(async (temp, i) => {
           const moaStart = Date.now();
           const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-5.4",
             temperature: temp,
             messages: [
               { role: "system", content: systemPrompt },
@@ -380,7 +380,7 @@ You have access to tools that allow you to search the web, read/write shared sta
               clientId: req.user!.clientId,
               botId: bot.id,
               conversationId: params.data.id,
-              model: "gpt-4o",
+              model: "gpt-5.4",
               promptTokens: moaUsage.prompt_tokens ?? 0,
               completionTokens: moaUsage.completion_tokens ?? 0,
               latencyMs: Date.now() - moaStart,
@@ -415,7 +415,7 @@ Now write the single definitive synthesized response:`;
 
       const synthStart = Date.now();
       const synthesis = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5.4",
         messages: [
           { role: "system", content: synthesisPrompt },
           { role: "user", content: body.data.content },
@@ -427,7 +427,7 @@ Now write the single definitive synthesized response:`;
           clientId: req.user!.clientId,
           botId: bot.id,
           conversationId: params.data.id,
-          model: "gpt-4o",
+          model: "gpt-5.4",
           promptTokens: synthUsage.prompt_tokens ?? 0,
           completionTokens: synthUsage.completion_tokens ?? 0,
           latencyMs: Date.now() - synthStart,
@@ -438,7 +438,7 @@ Now write the single definitive synthesized response:`;
         ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";
     } else {
       const { finalContent, events } = await runAgenticLoop({
-        model: "gpt-4o",
+        model: "gpt-5.4",
         maxIterations: 10,
         maxTokens: 8192,
         systemPrompt,

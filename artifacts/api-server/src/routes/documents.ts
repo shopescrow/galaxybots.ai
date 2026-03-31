@@ -196,7 +196,7 @@ router.post("/documents/:id/revise", async (req, res): Promise<void> => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // medium-complexity: document revision and generation
       max_completion_tokens: 4000,
       messages: [
         {

@@ -365,7 +365,7 @@ router.post("/proposals/generate", requireRole("owner", "admin"), llmRateLimit, 
       );
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5.4",
         max_completion_tokens: 800,
         messages: [
           { role: "system", content: systemPrompt },
@@ -428,7 +428,7 @@ router.post("/proposals/analyze-rfp", requireRole("owner", "admin"), llmRateLimi
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5.4",
       max_completion_tokens: 4000,
       messages: [
         {

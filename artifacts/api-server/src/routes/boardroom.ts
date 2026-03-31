@@ -67,7 +67,7 @@ Department: ${bot.department}
 The CEO has raised a topic. Respond with a brief, professional boardroom perspective (2-3 sentences max). Be concise, strategic, and speak from your domain expertise. Address the room, not just the CEO.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5.4",
       max_completion_tokens: 300,
       messages: [
         { role: "system", content: boardSystemPrompt },
