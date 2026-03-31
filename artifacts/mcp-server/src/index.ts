@@ -10,6 +10,8 @@ import { buildOAuthRouter, verifyOAuthToken } from "./oauth.js";
 import { RISK_REGISTER, CLOUD9_PLATFORMS, GALAXYBOTS_TIERS } from "./tools/knowledge.js";
 
 let httpServer: http.Server | null = null;
+const SERVER_START_TIME = Date.now();
+let totalToolCallsServed = 0;
 
 process.on("uncaughtException", (err) => {
   console.error("[MCP] Uncaught exception — initiating graceful shutdown:", err);
@@ -628,6 +630,17 @@ By 2030, GalaxyBots AI Directors will manage 10,000+ companies worldwide, collec
   console.log("[MCP] Resources and prompts registered successfully");
 }
 
+function attachRateLimitHeaders(res: express.Response, auth: AuthResult): void {
+  if (auth.rateLimit === Infinity) {
+    res.setHeader("X-RateLimit-Limit", "unlimited");
+    res.setHeader("X-RateLimit-Remaining", "unlimited");
+  } else {
+    res.setHeader("X-RateLimit-Limit", String(auth.rateLimit));
+    res.setHeader("X-RateLimit-Policy", "1h");
+  }
+  res.setHeader("X-RateLimit-Reset", String(Math.ceil((Date.now() + 3_600_000) / 1000)));
+}
+
 function authenticate(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -642,6 +655,7 @@ function authenticate(req: AuthenticatedRequest, res: express.Response, next: ex
       return;
     }
     req.authResult = result.auth;
+    attachRateLimitHeaders(res, result.auth);
     next();
   }).catch((err) => {
     console.error("[MCP] Auth error:", err);
@@ -795,6 +809,7 @@ app.post(`${BASE_PATH}/messages`, authenticateOptional, async (req: Authenticate
   const session = activeSessions.get(sessionId);
   if (session) {
     session.toolCallCount++;
+    totalToolCallsServed++;
   }
 
   try {
@@ -810,13 +825,19 @@ app.post(`${BASE_PATH}/messages`, authenticateOptional, async (req: Authenticate
 app.get(`${BASE_PATH}`, (_req, res) => {
   const origin = `${_req.protocol}://${_req.get("host")}`;
   const endpoints = [
-    { label: "SSE Stream",       path: `${BASE_PATH}/sse`,              method: "GET",  desc: "Connect a persistent MCP session via Server-Sent Events" },
-    { label: "Messages",         path: `${BASE_PATH}/messages`,         method: "POST", desc: "Post tool calls to an active SSE session" },
-    { label: "Tool Manifest",    path: `${BASE_PATH}/tools`,            method: "GET",  desc: "Browse all available MCP tools (no auth required)" },
-    { label: "Health",           path: `${BASE_PATH}/health`,           method: "GET",  desc: "Server health check and uptime status" },
-    { label: "OAuth Authorize",  path: `${BASE_PATH}/oauth/authorize`,  method: "GET",  desc: "Begin OAuth 2.0 PKCE authorization flow" },
-    { label: "OAuth Token",      path: `${BASE_PATH}/oauth/token`,      method: "POST", desc: "Exchange authorization code for bearer token" },
-    { label: "Well-Known",       path: `/.well-known/mcp.json`,         method: "GET",  desc: "MCP discovery document for AI clients" },
+    { label: "SSE Stream",        path: `${BASE_PATH}/sse`,               method: "GET",    desc: "Open a persistent MCP session via Server-Sent Events" },
+    { label: "Messages",          path: `${BASE_PATH}/messages`,          method: "POST",   desc: "Post tool calls to an active SSE session" },
+    { label: "Tool Manifest",     path: `${BASE_PATH}/tools`,             method: "GET",    desc: "Browse tools — supports ?q= search and ?department= filter" },
+    { label: "Capabilities",      path: `${BASE_PATH}/capabilities`,      method: "GET",    desc: "Inspect what your token can access (auth required)" },
+    { label: "Health",            path: `${BASE_PATH}/health`,            method: "GET",    desc: "Live health: uptime, active sessions, tool calls, DB status" },
+    { label: "Sessions",          path: `${BASE_PATH}/sessions`,          method: "GET",    desc: "List active SSE sessions (admin only)" },
+    { label: "Terminate Session", path: `${BASE_PATH}/sessions/:id`,      method: "DELETE", desc: "Force-close a session by ID (admin only)" },
+    { label: "OpenAPI Spec",      path: `${BASE_PATH}/openapi.json`,      method: "GET",    desc: "OpenAPI 3.1 spec — import into Postman, Insomnia, or any SDK generator" },
+    { label: "OAuth Authorize",   path: `${BASE_PATH}/oauth/authorize`,   method: "GET",    desc: "Begin OAuth 2.0 PKCE authorization flow" },
+    { label: "OAuth Token",       path: `${BASE_PATH}/oauth/token`,       method: "POST",   desc: "Exchange authorization code for bearer token" },
+    { label: "OAuth Revoke",      path: `${BASE_PATH}/oauth/revoke`,      method: "POST",   desc: "Revoke an access or refresh token (RFC 7009)" },
+    { label: "OAuth JWKS",        path: `${BASE_PATH}/oauth/jwks`,        method: "GET",    desc: "JSON Web Key Set for token signature verification" },
+    { label: "Well-Known",        path: `/.well-known/mcp.json`,          method: "GET",    desc: "MCP discovery document for AI clients" },
   ];
 
   const endpointRows = endpoints.map(e => `
@@ -926,8 +947,9 @@ app.get(`${BASE_PATH}`, (_req, res) => {
       font-size: 10px; font-weight: 700; letter-spacing: .6px;
       padding: 4px 0; border-radius: 6px; text-align: center;
     }
-    .method-get  { color: var(--cyan);   background: rgba(6,212,239,.12);  border: 1px solid rgba(6,212,239,.25); }
-    .method-post { color: var(--amber);  background: rgba(245,184,0,.12);  border: 1px solid rgba(245,184,0,.25); }
+    .method-get    { color: var(--cyan);   background: rgba(6,212,239,.12);  border: 1px solid rgba(6,212,239,.25); }
+    .method-post   { color: var(--amber);  background: rgba(245,184,0,.12);  border: 1px solid rgba(245,184,0,.25); }
+    .method-delete { color: #F87171;       background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.25); }
     .endpoint-path { font-size: 13px; font-family: 'Cascadia Code','Fira Code',monospace; color: var(--text); }
     .endpoint-desc { font-size: 12px; color: var(--muted); }
 
@@ -1046,16 +1068,324 @@ app.get(`${BASE_PATH}`, (_req, res) => {
   res.send(html);
 });
 
-app.get(`${BASE_PATH}/health`, (_req, res) => {
-  res.json({ status: "ok", service: "galaxybots-mcp" });
+app.get(`${BASE_PATH}/health`, async (_req, res) => {
+  const uptimeMs = Date.now() - SERVER_START_TIME;
+  const uptimeSeconds = Math.floor(uptimeMs / 1000);
+  const hours = Math.floor(uptimeSeconds / 3600);
+  const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+  const seconds = uptimeSeconds % 60;
+  const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
+
+  let dbStatus: "ok" | "degraded" = "ok";
+  try {
+    await db.execute(sql`SELECT 1`);
+  } catch {
+    dbStatus = "degraded";
+  }
+
+  res.json({
+    status: dbStatus === "ok" ? "ok" : "degraded",
+    service: "galaxybots-mcp",
+    version: "2025-03",
+    uptime: uptimeFormatted,
+    uptime_ms: uptimeMs,
+    active_sessions: activeSessions.size,
+    tool_calls_served: totalToolCallsServed,
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.get(`${BASE_PATH}/tools`, (_req, res) => {
+  const q = ((_req.query.q as string) || "").toLowerCase().trim();
+  const dept = ((_req.query.department as string) || "").toLowerCase().trim();
+  const page = Math.max(1, parseInt((_req.query.page as string) || "1", 10));
+  const limit = Math.min(100, Math.max(1, parseInt((_req.query.limit as string) || "100", 10)));
+
+  let tools = getToolManifest();
+  if (q) {
+    tools = tools.filter((t: { name: string; description?: string }) =>
+      t.name.toLowerCase().includes(q) || (t.description ?? "").toLowerCase().includes(q)
+    );
+  }
+  if (dept) {
+    const deptKeywords: Record<string, string[]> = {
+      bots: ["bot", "director", "message", "memory", "task", "session"],
+      aeo: ["pm_", "cloud9", "aeo", "score", "scan", "piratemonster"],
+      finance: ["roi", "pricing", "metrics", "revenue"],
+      knowledge: ["risk", "cloud9", "pricing", "roi", "department"],
+      gtm: ["demo", "roi_report", "lead"],
+      admin: ["client", "log_decision", "audit"],
+      search: ["web_search", "http_fetch"],
+    };
+    const keywords = deptKeywords[dept] ?? [dept];
+    tools = tools.filter((t: { name: string }) =>
+      keywords.some(k => t.name.toLowerCase().includes(k))
+    );
+  }
+
+  const total = tools.length;
+  const offset = (page - 1) * limit;
+  const paginated = tools.slice(offset, offset + limit);
+
   res.json({
-    tools: getToolManifest(),
+    tools: paginated,
+    total,
+    page,
+    limit,
+    pages: Math.ceil(total / limit),
+    filters: { q: q || null, department: dept || null },
     mcp_version: "2025-03",
     auth_methods: ["bearer", "oauth2_pkce"],
     scopes: ["bots:read", "bots:write", "clients:read", "aeo:read", "aeo:write"],
+    departments: ["bots", "aeo", "finance", "knowledge", "gtm", "admin", "search"],
+  });
+});
+
+app.get(`${BASE_PATH}/capabilities`, authenticate, (req: AuthenticatedRequest, res) => {
+  const auth = req.authResult!;
+  const allTools = getToolManifest().map((t: { name: string }) => t.name) as string[];
+  const allowed = auth.allowedTools === null ? allTools : allTools.filter(t => auth.allowedTools!.includes(t));
+
+  const scopeMap: Record<string, string> = {
+    galaxybots: "Full access (internal key)",
+    piratemonster: "Partner key — tool whitelist applies",
+    oauth: `OAuth 2.0 — scopes: ${auth.oauthScopes?.join(", ") ?? "none"}`,
+  };
+
+  res.json({
+    caller_type: auth.callerType,
+    access_level: scopeMap[auth.callerType] ?? auth.callerType,
+    rate_limit: auth.rateLimit === Infinity ? "unlimited" : auth.rateLimit,
+    allowed_tools: allowed,
+    allowed_tool_count: allowed.length,
+    total_tools: allTools.length,
+    scopes: auth.oauthScopes ?? null,
+    partner_key_id: auth.partnerKeyId,
+    oauth_client_id: auth.oauthClientId ?? null,
+  });
+});
+
+app.delete(`${BASE_PATH}/sessions/:sessionId`, (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token || !MCP_API_KEY || token !== MCP_API_KEY) {
+    res.status(401).json({ error: "Unauthorized — admin key required" });
+    return;
+  }
+  const { sessionId } = req.params;
+  const session = activeSessions.get(sessionId);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  const transport = transports.get(sessionId);
+  if (transport) {
+    try { (transport as unknown as { close?: () => void }).close?.(); } catch { }
+    transports.delete(sessionId);
+  }
+  sessionAuthMap.delete(sessionId);
+  activeSessions.delete(sessionId);
+  trialCallsMap.delete(sessionId);
+  console.log(`[MCP] Session ${sessionId} forcibly terminated by admin`);
+  res.json({ terminated: true, sessionId });
+});
+
+app.get(`${BASE_PATH}/openapi.json`, (_req, res) => {
+  const origin = `${_req.protocol}://${_req.get("host")}`;
+  const tools = getToolManifest();
+  const toolPaths: Record<string, unknown> = {};
+  for (const tool of tools as Array<{ name: string; description?: string; inputSchema?: unknown }>) {
+    toolPaths[`/tools/${tool.name}`] = {
+      post: {
+        summary: tool.description ?? tool.name,
+        operationId: tool.name,
+        tags: ["tools"],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          content: {
+            "application/json": { schema: tool.inputSchema ?? { type: "object" } },
+          },
+        },
+        responses: {
+          "200": { description: "Tool result", content: { "application/json": { schema: { type: "object" } } } },
+          "401": { description: "Unauthorized" },
+          "429": { description: "Rate limit exceeded" },
+        },
+      },
+    };
+  }
+
+  res.json({
+    openapi: "3.1.0",
+    info: {
+      title: "GalaxyBots MCP Server",
+      version: "2025-03",
+      description: "Model Context Protocol server providing 51 AI executive directors for GalaxyBots.ai. Supports SSE streaming, OAuth 2.0 PKCE, and bearer token authentication.",
+      contact: { name: "GalaxyBots Support", url: "https://galaxybots.ai", email: "support@galaxybots.ai" },
+      license: { name: "Proprietary", url: "https://galaxybots.ai/terms" },
+    },
+    servers: [{ url: `${origin}${BASE_PATH}`, description: "GalaxyBots MCP Server" }],
+    security: [{ bearerAuth: [] }],
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API Key or JWT" },
+        oauth2: {
+          type: "oauth2",
+          flows: {
+            authorizationCode: {
+              authorizationUrl: `${origin}${BASE_PATH}/oauth/authorize`,
+              tokenUrl: `${origin}${BASE_PATH}/oauth/token`,
+              scopes: {
+                "bots:read": "Read bots and directors",
+                "bots:write": "Interact with bots, create sessions, search memory",
+                "clients:read": "Read client profiles (admin)",
+                "aeo:read": "Read AEO/Cloud 9 scores",
+                "aeo:write": "Request new AEO scans",
+              },
+            },
+          },
+        },
+      },
+      schemas: {
+        HealthResponse: {
+          type: "object",
+          properties: {
+            status: { type: "string", enum: ["ok", "degraded"] },
+            service: { type: "string" },
+            version: { type: "string" },
+            uptime: { type: "string" },
+            active_sessions: { type: "integer" },
+            tool_calls_served: { type: "integer" },
+            database: { type: "string", enum: ["ok", "degraded"] },
+            timestamp: { type: "string", format: "date-time" },
+          },
+        },
+        Session: {
+          type: "object",
+          properties: {
+            sessionId: { type: "string" },
+            clientName: { type: "string" },
+            connectedAt: { type: "string", format: "date-time" },
+            toolCallCount: { type: "integer" },
+            callerType: { type: "string", enum: ["galaxybots", "piratemonster", "oauth"] },
+            partnerKeyId: { type: ["integer", "null"] },
+          },
+        },
+      },
+    },
+    paths: {
+      "/health": {
+        get: {
+          summary: "Server health check",
+          operationId: "getHealth",
+          tags: ["system"],
+          security: [],
+          responses: {
+            "200": { description: "Health status", content: { "application/json": { schema: { $ref: "#/components/schemas/HealthResponse" } } } },
+          },
+        },
+      },
+      "/tools": {
+        get: {
+          summary: "List available MCP tools",
+          operationId: "listTools",
+          tags: ["tools"],
+          security: [],
+          parameters: [
+            { name: "q", in: "query", schema: { type: "string" }, description: "Search query (name or description)" },
+            { name: "department", in: "query", schema: { type: "string", enum: ["bots", "aeo", "finance", "knowledge", "gtm", "admin", "search"] }, description: "Filter by department" },
+            { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+            { name: "limit", in: "query", schema: { type: "integer", default: 100, maximum: 100 } },
+          ],
+          responses: {
+            "200": { description: "Tool list", content: { "application/json": { schema: { type: "object" } } } },
+          },
+        },
+      },
+      "/capabilities": {
+        get: {
+          summary: "Get caller capabilities scoped to auth token",
+          operationId: "getCapabilities",
+          tags: ["auth"],
+          responses: {
+            "200": { description: "Caller capabilities" },
+            "401": { description: "Unauthorized" },
+          },
+        },
+      },
+      "/sessions": {
+        get: {
+          summary: "List active SSE sessions (admin only)",
+          operationId: "listSessions",
+          tags: ["admin"],
+          responses: {
+            "200": { description: "Active sessions", content: { "application/json": { schema: { type: "object", properties: { sessions: { type: "array", items: { $ref: "#/components/schemas/Session" } }, count: { type: "integer" } } } } } },
+            "401": { description: "Unauthorized" },
+          },
+        },
+      },
+      "/sessions/{sessionId}": {
+        delete: {
+          summary: "Terminate an active SSE session (admin only)",
+          operationId: "deleteSession",
+          tags: ["admin"],
+          parameters: [{ name: "sessionId", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            "200": { description: "Session terminated" },
+            "401": { description: "Unauthorized" },
+            "404": { description: "Session not found" },
+          },
+        },
+      },
+      "/sse": {
+        get: {
+          summary: "Open MCP SSE stream",
+          operationId: "openSSE",
+          tags: ["mcp"],
+          description: "Opens a persistent Server-Sent Events connection for an MCP session. Auth via Bearer token (optional for trial).",
+          responses: {
+            "200": { description: "SSE stream opened", content: { "text/event-stream": { schema: { type: "string" } } } },
+          },
+        },
+      },
+      "/messages": {
+        post: {
+          summary: "Send MCP tool call to active session",
+          operationId: "postMessage",
+          tags: ["mcp"],
+          parameters: [{ name: "sessionId", in: "query", required: true, schema: { type: "string" } }],
+          responses: {
+            "200": { description: "Tool result" },
+            "401": { description: "Unauthorized" },
+            "402": { description: "Trial exhausted" },
+            "404": { description: "Session not found" },
+            "429": { description: "Rate limit exceeded" },
+          },
+        },
+      },
+      "/oauth/authorize": {
+        get: { summary: "Begin OAuth 2.0 PKCE authorization", operationId: "oauthAuthorize", tags: ["oauth"], security: [], responses: { "200": { description: "Authorization UI" } } },
+      },
+      "/oauth/token": {
+        post: { summary: "Exchange code for tokens", operationId: "oauthToken", tags: ["oauth"], security: [], responses: { "200": { description: "Token response" } } },
+      },
+      "/oauth/revoke": {
+        post: { summary: "Revoke an access or refresh token (RFC 7009)", operationId: "oauthRevoke", tags: ["oauth"], security: [], responses: { "200": { description: "Token revoked" } } },
+      },
+      "/oauth/jwks": {
+        get: { summary: "JSON Web Key Set for token verification", operationId: "oauthJwks", tags: ["oauth"], security: [], responses: { "200": { description: "JWKS" } } },
+      },
+      ...toolPaths,
+    },
+    tags: [
+      { name: "mcp", description: "Core MCP protocol endpoints" },
+      { name: "tools", description: "MCP tool manifest and discovery" },
+      { name: "auth", description: "Authentication and capability inspection" },
+      { name: "oauth", description: "OAuth 2.0 PKCE flow" },
+      { name: "admin", description: "Admin-only session management" },
+      { name: "system", description: "Health and observability" },
+    ],
   });
 });
 
