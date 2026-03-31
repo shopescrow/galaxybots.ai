@@ -824,28 +824,42 @@ app.post(`${BASE_PATH}/messages`, authenticateOptional, async (req: Authenticate
 
 app.get(`${BASE_PATH}`, (_req, res) => {
   const origin = `${_req.protocol}://${_req.get("host")}`;
-  const endpoints = [
+  interface EndpointDef {
+    label: string;
+    path: string;
+    method: string;
+    desc: string;
+    auth?: string;
+    noLink?: boolean;
+  }
+  const endpoints: EndpointDef[] = [
     { label: "SSE Stream",        path: `${BASE_PATH}/sse`,               method: "GET",    desc: "Open a persistent MCP session via Server-Sent Events" },
-    { label: "Messages",          path: `${BASE_PATH}/messages`,          method: "POST",   desc: "Post tool calls to an active SSE session" },
+    { label: "Messages",          path: `${BASE_PATH}/messages`,          method: "POST",   desc: "Post tool calls to an active SSE session", noLink: true },
     { label: "Tool Manifest",     path: `${BASE_PATH}/tools`,             method: "GET",    desc: "Browse tools — supports ?q= search and ?department= filter" },
-    { label: "Capabilities",      path: `${BASE_PATH}/capabilities`,      method: "GET",    desc: "Inspect what your token can access (auth required)" },
-    { label: "Health",            path: `${BASE_PATH}/health`,            method: "GET",    desc: "Live health: uptime, active sessions, tool calls, DB status" },
-    { label: "Sessions",          path: `${BASE_PATH}/sessions`,          method: "GET",    desc: "List active SSE sessions (admin only)" },
-    { label: "Terminate Session", path: `${BASE_PATH}/sessions/:id`,      method: "DELETE", desc: "Force-close a session by ID (admin only)" },
-    { label: "OpenAPI Spec",      path: `${BASE_PATH}/openapi.json`,      method: "GET",    desc: "OpenAPI 3.1 spec — import into Postman, Insomnia, or any SDK generator" },
+    { label: "Capabilities",      path: `${BASE_PATH}/capabilities`,      method: "GET",    desc: "Inspect exactly what your token can access", auth: "Bearer token required" },
+    { label: "Health",            path: `${BASE_PATH}/health`,            method: "GET",    desc: "Live health: uptime, active sessions, tool calls served, DB status" },
+    { label: "Sessions",          path: `${BASE_PATH}/sessions`,          method: "GET",    desc: "List all active SSE sessions", auth: "Admin key required" },
+    { label: "Terminate Session", path: `${BASE_PATH}/sessions/{id}`,     method: "DELETE", desc: "Force-close a session by ID", auth: "Admin key required", noLink: true },
+    { label: "OpenAPI Spec",      path: `${BASE_PATH}/openapi.json`,      method: "GET",    desc: "Full OpenAPI 3.1 spec — import into Postman, Insomnia, or any SDK generator" },
     { label: "OAuth Authorize",   path: `${BASE_PATH}/oauth/authorize`,   method: "GET",    desc: "Begin OAuth 2.0 PKCE authorization flow" },
-    { label: "OAuth Token",       path: `${BASE_PATH}/oauth/token`,       method: "POST",   desc: "Exchange authorization code for bearer token" },
-    { label: "OAuth Revoke",      path: `${BASE_PATH}/oauth/revoke`,      method: "POST",   desc: "Revoke an access or refresh token (RFC 7009)" },
-    { label: "OAuth JWKS",        path: `${BASE_PATH}/oauth/jwks`,        method: "GET",    desc: "JSON Web Key Set for token signature verification" },
+    { label: "OAuth Token",       path: `${BASE_PATH}/oauth/token`,       method: "POST",   desc: "Exchange authorization code for bearer token", noLink: true },
+    { label: "OAuth Revoke",      path: `${BASE_PATH}/oauth/revoke`,      method: "POST",   desc: "Revoke an access or refresh token (RFC 7009)", noLink: true },
+    { label: "OAuth JWKS",        path: `${BASE_PATH}/oauth/jwks`,        method: "GET",    desc: "JSON Web Key Set for RS256 token signature verification" },
     { label: "Well-Known",        path: `/.well-known/mcp.json`,          method: "GET",    desc: "MCP discovery document for AI clients" },
   ];
 
-  const endpointRows = endpoints.map(e => `
-    <a href="${origin}${e.path}" class="endpoint-card" target="_blank" rel="noopener">
+  const endpointRows = endpoints.map(e => {
+    const tag = e.noLink ? "div" : "a";
+    const href = e.noLink ? "" : `href="${origin}${e.path}" target="_blank" rel="noopener"`;
+    const cursor = e.noLink ? "cursor:default;" : "";
+    const authBadge = e.auth ? `<span class="auth-badge-sm">🔒 ${e.auth}</span>` : "";
+    return `
+    <${tag} ${href} class="endpoint-card" style="${cursor}">
       <span class="method method-${e.method.toLowerCase()}">${e.method}</span>
-      <span class="endpoint-path">${e.path}</span>
+      <span class="endpoint-path">${e.path}${authBadge}</span>
       <span class="endpoint-desc">${e.desc}</span>
-    </a>`).join("");
+    </${tag}>`;
+  }).join("");
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -950,8 +964,15 @@ app.get(`${BASE_PATH}`, (_req, res) => {
     .method-get    { color: var(--cyan);   background: rgba(6,212,239,.12);  border: 1px solid rgba(6,212,239,.25); }
     .method-post   { color: var(--amber);  background: rgba(245,184,0,.12);  border: 1px solid rgba(245,184,0,.25); }
     .method-delete { color: #F87171;       background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.25); }
-    .endpoint-path { font-size: 13px; font-family: 'Cascadia Code','Fira Code',monospace; color: var(--text); }
+    .endpoint-path { font-size: 13px; font-family: 'Cascadia Code','Fira Code',monospace; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .endpoint-desc { font-size: 12px; color: var(--muted); }
+    .auth-badge-sm {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 10px; font-weight: 600;
+      background: rgba(155,92,246,.12); border: 1px solid rgba(155,92,246,.3);
+      color: var(--purple); padding: 2px 8px; border-radius: 20px;
+      white-space: nowrap;
+    }
 
     /* ── Auth ── */
     .auth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
