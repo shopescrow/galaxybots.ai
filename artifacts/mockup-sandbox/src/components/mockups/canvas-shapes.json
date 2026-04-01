@@ -1,0 +1,15 @@
+[
+  {
+    "shapeId": "krXqkcSQGeTorC9vYrN3f",
+    "shapeType": "iframe",
+    "componentName": "Competitor Comparison Infographic",
+    "componentPath": "CompetitorComparison",
+    "x": 4800,
+    "y": -540,
+    "w": 1300,
+    "h": 900,
+    "previewPath": "/__mockup/preview/CompetitorComparison",
+    "placedAt": "2026-04-01",
+    "note": "Canvas iframe shape placed to the right of GalaxyBots Mobile (x=4228). Created via applyCanvasActions({ type: 'create', shape: { type: 'iframe', url: '.../__replco/workspace_iframe.html?initialPath=%2F__mockup%2Fpreview%2FCompetitorComparison&id=artifacts%2Fmockup-sandbox', x: 4800, y: -540, w: 1300, h: 900 } })"
+  }
+]
