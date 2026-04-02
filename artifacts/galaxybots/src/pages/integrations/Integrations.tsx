@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, Facebook, Instagram, Youtube, Music2, HelpCircle, ExternalLink as ExternalLinkIcon, Brain } from "lucide-react";
+import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, Facebook, Instagram, Youtube, Music2, Share2, HelpCircle, ExternalLink as ExternalLinkIcon, Brain } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
@@ -168,6 +168,17 @@ const SERVICES = [
     credentialPlaceholder: "act.xxxxxxxxxxxx...",
     helpUrl: "https://developers.tiktok.com/doc/overview",
     helpText: "TikTok for Developers → Manage Apps → Your App → Keys & Access → generate an access token with video.publish and video.list scopes",
+  },
+  {
+    key: "social365",
+    name: "Social365.ai",
+    description: "Schedule and publish AI-generated content across all your social channels via Social365.ai.",
+    icon: Share2,
+    oauthSupported: false,
+    credentialLabel: "Social365.ai API Key",
+    credentialPlaceholder: "s365_xxxxxxxxxxxx...",
+    helpUrl: "https://social365.ai",
+    helpText: "Social365.ai → Account Settings → API → Generate API Key",
   },
 ];
 
