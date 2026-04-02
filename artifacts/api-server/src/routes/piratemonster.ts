@@ -721,11 +721,6 @@ router.get("/integrations/piratemonster/competitors/:clientId", requireRole("own
     return;
   }
 
-  if (req.user!.role !== "owner" && req.user!.clientId !== clientId) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-
   try {
     const competitors = await db
       .select()
@@ -793,11 +788,6 @@ router.post("/integrations/piratemonster/competitors/:clientId", requireRole("ow
     return;
   }
 
-  if (req.user!.role !== "owner" && req.user!.clientId !== clientId) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-
   const { url, companyName } = req.body || {};
   if (!url || !companyName) {
     res.status(400).json({ error: "url and companyName are required" });
@@ -859,11 +849,6 @@ router.post("/integrations/piratemonster/competitors/:clientId/:competitorId/unt
 
   if (isNaN(clientId) || isNaN(competitorId)) {
     res.status(400).json({ error: "Invalid IDs" });
-    return;
-  }
-
-  if (req.user!.role !== "owner" && req.user!.clientId !== clientId) {
-    res.status(403).json({ error: "Forbidden" });
     return;
   }
 
