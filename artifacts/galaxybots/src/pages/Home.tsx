@@ -25,7 +25,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/60 to-background" />
         </div>
 
-        <div className="relative z-10 container mx-auto px-4 pt-32 pb-24 sm:pt-40 sm:pb-32">
+        <div className="relative z-10 container mx-auto px-4 pt-16 pb-12 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-32">
           <div className="max-w-4xl mx-auto text-center">
             <motion.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
@@ -45,7 +45,7 @@ export default function Home() {
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 SYSTEM ONLINE. WAITING FOR DIRECTIVES.
               </div>
-              <h1 className="text-2xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-8">
+              <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 sm:mb-8">
                 Fortune 500 Intelligence.<br/>
                 <span className="text-gradient">Deployed for You.</span>
               </h1>
@@ -54,31 +54,31 @@ export default function Home() {
                 They operate 24/7 in the background, architecting your success.
               </p>
               
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/assembly">
-                  <Button variant="glow" size="lg" className="w-full sm:w-auto min-h-[44px] gap-2">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-3">
+                <Link href="/assembly" className="w-full sm:w-auto">
+                  <Button variant="glow" size="lg" className="w-full min-h-[44px] gap-2">
                     <Radio className="w-4 h-4" />
                     Watch the Assembly
                   </Button>
                 </Link>
-                <Link href="/hire">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px]">
+                <Link href="/hire" className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full min-h-[44px]">
                     Hire the Full Company
                   </Button>
                 </Link>
-                <Link href="/scenarios">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px] gap-2">
+                <Link href="/scenarios" className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full min-h-[44px] gap-2">
                     <Crosshair className="w-4 h-4" />
                     Mission Library
                   </Button>
                 </Link>
-                <Link href="/bots">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px]">
+                <Link href="/bots" className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full min-h-[44px]">
                     Explore Roster
                   </Button>
                 </Link>
-                <Link href="/demo">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto min-h-[44px] gap-2 border-cyan/30 text-cyan hover:bg-cyan/10">
+                <Link href="/demo" className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full min-h-[44px] gap-2 border-cyan/30 text-cyan hover:bg-cyan/10">
                     <CalendarCheck className="w-4 h-4" />
                     Book a Demo
                   </Button>
@@ -89,7 +89,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="py-24 bg-background relative z-10">
+      <div className="py-12 sm:py-24 bg-background relative z-10">
         <div className="container mx-auto px-4">
           <OnboardingChecklist />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

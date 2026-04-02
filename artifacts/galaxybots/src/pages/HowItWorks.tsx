@@ -232,7 +232,7 @@ export default function HowItWorks() {
 
   return (
     <AppLayout>
-      <div className="container mx-auto px-4 py-16 sm:py-24 space-y-32">
+      <div className="container mx-auto px-4 py-12 sm:py-16 lg:py-24 space-y-16 sm:space-y-24 lg:space-y-32">
         
         {/* Hero Section */}
         <motion.div
