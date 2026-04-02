@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, HelpCircle, ExternalLink as ExternalLinkIcon, Brain } from "lucide-react";
+import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, Facebook, Instagram, Youtube, Music2, HelpCircle, ExternalLink as ExternalLinkIcon, Brain } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
@@ -124,6 +124,50 @@ const SERVICES = [
     credentialPlaceholder: "AAAA...",
     helpUrl: "https://developer.twitter.com/en/portal/dashboard",
     helpText: "Twitter Developer Portal → Projects & Apps → Your App → Keys and tokens → Bearer Token",
+  },
+  {
+    key: "facebook",
+    name: "Facebook",
+    description: "Post content and manage your Facebook Page using the Graph API.",
+    icon: Facebook,
+    oauthSupported: false,
+    credentialLabel: "Facebook Page Access Token",
+    credentialPlaceholder: "EAAxxxxxxxxxxxx...",
+    helpUrl: "https://developers.facebook.com/tools/explorer/",
+    helpText: "Facebook Graph API Explorer → select your app → Generate Access Token → grant pages_manage_posts and pages_read_engagement permissions",
+  },
+  {
+    key: "instagram",
+    name: "Instagram",
+    description: "Publish posts and manage content on your Instagram Business account via the Graph API.",
+    icon: Instagram,
+    oauthSupported: false,
+    credentialLabel: "Instagram Access Token",
+    credentialPlaceholder: "EAAxxxxxxxxxxxx...",
+    helpUrl: "https://developers.facebook.com/docs/instagram-api/getting-started",
+    helpText: "Facebook Developer Console → Your App → Instagram Graph API → generate a long-lived token with instagram_basic and instagram_content_publish permissions",
+  },
+  {
+    key: "youtube",
+    name: "YouTube",
+    description: "Upload videos, manage your channel, and schedule content using the YouTube Data API.",
+    icon: Youtube,
+    oauthSupported: false,
+    credentialLabel: "YouTube OAuth Refresh Token (JSON)",
+    credentialPlaceholder: '{"client_id":"...","client_secret":"...","refresh_token":"..."}',
+    helpUrl: "https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps",
+    helpText: "Google Cloud Console → APIs → YouTube Data API v3 → Credentials → OAuth 2.0 → Download JSON, then exchange for a refresh token",
+  },
+  {
+    key: "tiktok",
+    name: "TikTok",
+    description: "Publish videos and manage content on your TikTok Business account using the TikTok API.",
+    icon: Music2,
+    oauthSupported: false,
+    credentialLabel: "TikTok Access Token",
+    credentialPlaceholder: "act.xxxxxxxxxxxx...",
+    helpUrl: "https://developers.tiktok.com/doc/overview",
+    helpText: "TikTok for Developers → Manage Apps → Your App → Keys & Access → generate an access token with video.publish and video.list scopes",
   },
 ];
 
