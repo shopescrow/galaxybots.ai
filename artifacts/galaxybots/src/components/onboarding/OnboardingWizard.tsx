@@ -148,6 +148,22 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
     completedAt: null,
   };
 
+  // Auto-complete firstClient step if the user already has clients
+  useEffect(() => {
+    if (open && token && !onboarding.firstClient) {
+      fetch(`${BASE}/api/clients`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.ok ? r.json() : [])
+        .then((clients: { id: number }[]) => {
+          if (Array.isArray(clients) && clients.length > 0) {
+            updateOnboarding({ firstClient: true }).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, token]);
+
   const completedCount = STEPS.filter((s) => onboarding[s.key]).length;
   const allComplete = completedCount === STEPS.length;
   const progressPercent = (completedCount / STEPS.length) * 100;
