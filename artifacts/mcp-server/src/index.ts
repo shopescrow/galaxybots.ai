@@ -947,6 +947,42 @@ app.get(`${BASE_PATH}`, (_req, res) => {
       access: "Public — no authentication required",
       useWhen: "Auto-configuring an MCP client, building an MCP registry listing, or setting up Claude Desktop with just the domain URL",
     },
+    {
+      label: "Analyze PDF", method: "TOOL", path: `${BASE_PATH}/messages`, group: "PDF Intelligence",
+      noLink: true,
+      purpose: "Analyze a PDF document from a public URL using GalaxyBots AI intelligence. Returns document type classification, a 2-4 sentence summary, key insights, action items, extracted entities (people, organizations, dates, amounts, locations), compliance risk flags, sentiment, and a recommended GalaxyBots director to own the document.",
+      params: ["url (string, required) — Public HTTPS URL of the PDF to analyze", "depth ('standard' | 'deep', optional, default: 'standard') — standard uses gpt-4o-mini for speed; deep uses gpt-4o for thorough analysis of complex documents"],
+      returns: "JSON with documentType, title, summary, keyInsights[], actionItems[], entities{people,organizations,dates,amounts,locations}, riskFlags[], sentiment, confidenceScore, metadata{numPages,characterCount}, directorRouting{director,department,reason}, analyzedAt",
+      access: "Bearer token or OAuth 2.0 — any authenticated GalaxyBots user",
+      useWhen: "A client shares a document that needs intelligent review — contract, invoice, report, or any file requiring executive attention",
+    },
+    {
+      label: "Extract PDF Data", method: "TOOL", path: `${BASE_PATH}/messages`, group: "PDF Intelligence",
+      noLink: true,
+      purpose: "Extract specific structured fields from any PDF document using AI. You define the schema — field names and type hints — and the tool returns extracted values with per-field confidence scores. Eliminates manual data entry for invoices, contracts, purchase orders, and forms.",
+      params: ["url (string, required) — Public HTTPS URL of the PDF", "schema (object, required) — Fields to extract as key-value pairs where the key is the field name and the value is the type hint. Example: {\"invoice_number\":\"string\",\"total_amount\":\"number\",\"due_date\":\"date\",\"vendor_name\":\"string\"}"],
+      returns: "JSON with extracted{fieldName:value|null}, confidence{fieldName:0-1}, fieldsRequested (count), fieldsFound (count)",
+      access: "Bearer token or OAuth 2.0 — any authenticated GalaxyBots user",
+      useWhen: "Automating data extraction from invoices, contracts, forms, or any structured document to populate a CRM, ERP, or database without manual re-entry",
+    },
+    {
+      label: "Classify PDF Document", method: "TOOL", path: `${BASE_PATH}/messages`, group: "PDF Intelligence",
+      noLink: true,
+      purpose: "Quickly classify a PDF by document type and receive a director routing recommendation. Lighter than full analysis — use when you only need to know what kind of document it is and which GalaxyBots director should handle it. 12 classification categories supported.",
+      params: ["url (string, required) — Public HTTPS URL of the PDF to classify"],
+      returns: "JSON with documentType (invoice|contract|resume|report|proposal|policy|financial|technical|marketing|research|compliance|hr|other), confidence (0-1), alternativeTypes[], reasoning, numPages, directorRouting{director,department,reason}",
+      access: "Bearer token or OAuth 2.0 — any authenticated GalaxyBots user",
+      useWhen: "Sorting incoming documents into categories before routing, or as a fast pre-filter before running the heavier analyze_pdf tool",
+    },
+    {
+      label: "Batch Analyze PDFs", method: "TOOL", path: `${BASE_PATH}/messages`, group: "PDF Intelligence",
+      noLink: true,
+      purpose: "Analyze up to 20 PDF documents in a single call. Each document is classified, summarized, and intelligence-extracted in parallel. Returns a structured results array with success/error status per document — ideal for due diligence packages, compliance bundles, or document collections.",
+      params: ["urls (string[], required) — Array of public HTTPS PDF URLs to analyze (maximum 20)", "depth ('standard' | 'deep', optional, default: 'standard') — Analysis depth applied to every document in the batch"],
+      returns: "JSON with total, succeeded, failed counts and results[] — each result contains status, full analysis (same as analyze_pdf), or error message",
+      access: "Bearer token or OAuth 2.0 — any authenticated GalaxyBots user",
+      useWhen: "Processing a bundle of documents at once — M&A due diligence, regulatory audit, onboarding packet review, or any workflow with multiple PDFs to process",
+    },
   ];
 
   const groups = [...new Set(endpoints.map(e => e.group))];
@@ -1227,7 +1263,7 @@ app.get(`${BASE_PATH}`, (_req, res) => {
     </div>
 
     <div class="section">
-      <p class="section-title">API Reference — 13 Endpoints across 4 groups</p>
+      <p class="section-title">API Reference — 17 Endpoints across 5 groups</p>
       ${endpointRows}
     </div>
 

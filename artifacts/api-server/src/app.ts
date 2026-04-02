@@ -85,6 +85,7 @@ const PUBLIC_PATHS = [
   "/api/mcp-marketing/social-proof",
   "/api/mcp-marketing/launch-signup",
   "/api/mcp-marketing/download-extension",
+  "/api/pdf/health",
 ];
 
 const PUBLIC_PATH_PREFIXES = [

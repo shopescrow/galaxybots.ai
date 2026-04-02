@@ -56,6 +56,7 @@ import oauthRouter from "./oauth";
 import mcpMarketingRouter from "./mcp-marketing";
 import ttsRouter from "./tts";
 import playbooksRouter from "./playbooks";
+import pdfRouter from "./pdf";
 
 const router: IRouter = Router();
 
@@ -114,5 +115,6 @@ router.use(oauthRouter);
 router.use(mcpMarketingRouter);
 router.use(ttsRouter);
 router.use(playbooksRouter);
+router.use(pdfRouter);
 
 export default router;

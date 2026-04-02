@@ -23,6 +23,7 @@ import {
   registerGenerateRoiReportTool,
   registerSocialProofResource,
 } from "./gtm.js";
+import { registerPdfTools } from "./pdf.js";
 
 function makeFilteredServer(server: McpServer, allowedTools: string[]): McpServer {
   const toolSet = new Set(allowedTools);
@@ -77,6 +78,7 @@ export function registerAllTools(
   registerMetricsTool(effectiveServer);
   registerAuditLogTool(effectiveServer);
   registerKnowledgeTools(effectiveServer);
+  registerPdfTools(effectiveServer);
   registerRequestDemoTool(effectiveServer, sessionCtx);
   registerCalculateRoiTool(effectiveServer, sessionCtx);
   registerGetPricingRecommendationTool(effectiveServer, sessionCtx);
@@ -403,6 +405,53 @@ export function getToolManifest(): ToolManifestEntry[] {
           department: { type: "string", description: "Department name to filter by (e.g., 'Marketing', 'Finance', 'Operations', 'Technology')" },
         },
         required: ["department"],
+      },
+    },
+    {
+      name: "analyze_pdf",
+      description: "Analyze a PDF document from a public URL using GalaxyBots AI intelligence. Returns document type, summary, key insights, action items, extracted entities, risk flags, sentiment, and a recommended GalaxyBots director to handle the document.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public HTTPS URL of the PDF document to analyze" },
+          depth: { type: "string", enum: ["standard", "deep"], description: "Analysis depth: standard (faster) or deep (thorough)" },
+        },
+        required: ["url"],
+      },
+    },
+    {
+      name: "extract_pdf_data",
+      description: "Extract specific structured fields from a PDF document. Provide a schema of fields to extract. Returns extracted values as structured JSON with confidence scores.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public HTTPS URL of the PDF document" },
+          schema: { type: "object", description: 'Fields to extract. Key = field name, value = type hint. E.g. {"invoice_number":"string","total_amount":"number"}', additionalProperties: { type: "string" } },
+        },
+        required: ["url", "schema"],
+      },
+    },
+    {
+      name: "classify_pdf_document",
+      description: "Quickly classify a PDF document by type and get a director routing recommendation. Faster than full analysis — use when you only need document type and routing.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public HTTPS URL of the PDF document" },
+        },
+        required: ["url"],
+      },
+    },
+    {
+      name: "batch_analyze_pdfs",
+      description: "Analyze multiple PDF documents at once (up to 20). Each PDF is classified, summarized, and intelligence-extracted in parallel. Returns results array with success/error per document.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          urls: { type: "array", items: { type: "string" }, description: "Array of public HTTPS PDF URLs to analyze (max 20)" },
+          depth: { type: "string", enum: ["standard", "deep"], description: "Analysis depth for all documents" },
+        },
+        required: ["urls"],
       },
     },
   ];
