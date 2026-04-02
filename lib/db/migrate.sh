@@ -21,7 +21,7 @@ for f in "$MIGRATIONS_DIR"/*.sql; do
     if [ "$ALREADY_APPLIED" = "0" ]; then
       echo "Applying migration: $MIGRATION_NAME"
       psql "$DATABASE_URL" -f "$f"
-      psql "$DATABASE_URL" -c "INSERT INTO _migrations (name) VALUES ('$MIGRATION_NAME');"
+      psql "$DATABASE_URL" -c "INSERT INTO _migrations (name) VALUES ('$MIGRATION_NAME') ON CONFLICT DO NOTHING;"
     else
       echo "Skipping (already applied): $MIGRATION_NAME"
     fi
