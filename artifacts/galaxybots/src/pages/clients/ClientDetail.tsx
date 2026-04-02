@@ -92,6 +92,9 @@ export default function ClientDetail() {
     enabled: !isNaN(clientId) && !!token,
   });
 
+  const [editCompanyName, setEditCompanyName] = useState("");
+  const [editContactName, setEditContactName] = useState("");
+  const [editContactEmail, setEditContactEmail] = useState("");
   const [editContext, setEditContext] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editIndustry, setEditIndustry] = useState("");
@@ -100,6 +103,9 @@ export default function ClientDetail() {
 
   useEffect(() => {
     if (client) {
+      setEditCompanyName(client.companyName || "");
+      setEditContactName(client.contactName || "");
+      setEditContactEmail(client.contactEmail || "");
       setEditContext(client.businessContext || "");
       setEditWebsite(client.websiteUrl || "");
       setEditIndustry(client.industry || "");
@@ -128,6 +134,9 @@ export default function ClientDetail() {
 
   const handleSaveProfile = () => {
     updateMutation.mutate({
+      companyName: editCompanyName || undefined,
+      contactName: editContactName || undefined,
+      contactEmail: editContactEmail || undefined,
       websiteUrl: editWebsite || null,
       industry: editIndustry || null,
       targetMarket: editMarket || null,
@@ -403,36 +412,65 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-tech uppercase text-muted-foreground">Website URL</label>
+                  <label className="text-xs font-tech uppercase text-muted-foreground">Company Name</label>
                   <Input
-                    value={editWebsite}
-                    onChange={(e) => setEditWebsite(e.target.value)}
-                    placeholder="https://example.com"
+                    value={editCompanyName}
+                    onChange={(e) => setEditCompanyName(e.target.value)}
+                    placeholder="Company name"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-tech uppercase text-muted-foreground">Industry</label>
-                  <Input
-                    value={editIndustry}
-                    onChange={(e) => setEditIndustry(e.target.value)}
-                    placeholder="e.g. Landscaping & Snow Removal"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-tech uppercase text-muted-foreground">Contact Name</label>
+                    <Input
+                      value={editContactName}
+                      onChange={(e) => setEditContactName(e.target.value)}
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-tech uppercase text-muted-foreground">Contact Email</label>
+                    <Input
+                      type="email"
+                      value={editContactEmail}
+                      onChange={(e) => setEditContactEmail(e.target.value)}
+                      placeholder="email@example.com"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-tech uppercase text-muted-foreground">Target Market</label>
-                  <Input
-                    value={editMarket}
-                    onChange={(e) => setEditMarket(e.target.value)}
-                    placeholder="e.g. London, Ontario, Canada"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-tech uppercase text-muted-foreground">Services (comma-separated)</label>
-                  <Input
-                    value={editServices}
-                    onChange={(e) => setEditServices(e.target.value)}
-                    placeholder="e.g. Lawn Care, Snow Removal, Hardscaping"
-                  />
+                <div className="border-t border-border/30 pt-4 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-tech uppercase text-muted-foreground">Website URL</label>
+                    <Input
+                      value={editWebsite}
+                      onChange={(e) => setEditWebsite(e.target.value)}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-tech uppercase text-muted-foreground">Industry</label>
+                    <Input
+                      value={editIndustry}
+                      onChange={(e) => setEditIndustry(e.target.value)}
+                      placeholder="e.g. Landscaping & Snow Removal"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-tech uppercase text-muted-foreground">Target Market</label>
+                    <Input
+                      value={editMarket}
+                      onChange={(e) => setEditMarket(e.target.value)}
+                      placeholder="e.g. London, Ontario, Canada"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-tech uppercase text-muted-foreground">Services (comma-separated)</label>
+                    <Input
+                      value={editServices}
+                      onChange={(e) => setEditServices(e.target.value)}
+                      placeholder="e.g. Lawn Care, Snow Removal, Hardscaping"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
