@@ -3,9 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus, FileText, ExternalLink } from "lucide-react";
+import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus, FileText, ExternalLink, ArrowRight, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -72,6 +73,8 @@ function getScoreBgColor(score: number): string {
 }
 
 export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { data: scores, isLoading } = useQuery<AeoScore[]>({
     queryKey: ["aeo-scores", clientId],
     queryFn: async () => {
@@ -93,16 +96,52 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
     return (
       <div className="space-y-6">
         <Card className="border-dashed border-border/50 bg-transparent shadow-none">
-          <CardContent className="p-12 text-center">
+          <CardContent className="p-10 text-center">
             <Zap className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-lg font-tech font-bold mb-2">No AEO Data Yet</h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
               Connect PirateMonster to start receiving AEO (Answer Engine Optimization) intelligence for this client.
             </p>
-            <div className="text-xs text-muted-foreground font-tech space-y-1">
-              <p>1. Go to the Integrations page and configure the PirateMonster webhook</p>
-              <p>2. PirateMonster will push scan results automatically</p>
-              <p>3. Results will appear here with per-engine breakdowns</p>
+            <div className="max-w-sm mx-auto space-y-3 text-left">
+              <div className="flex items-start gap-4 rounded-lg border border-border/40 bg-muted/20 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium leading-snug">Configure the PirateMonster webhook</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Go to Integrations and set up your webhook connection.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-7 text-xs"
+                    onClick={() => setLocation("/integrations")}
+                  >
+                    Go to Integrations
+                    <ArrowRight className="ml-1.5 w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-start gap-4 rounded-lg border border-border/40 bg-muted/20 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">2</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium leading-snug">PirateMonster pushes scan results</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Once connected, scans will be delivered automatically.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4 rounded-lg border border-border/40 bg-muted/20 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">3</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium leading-snug">Results appear here with per-engine breakdowns</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Already sent a scan? Check if results have arrived.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-7 text-xs"
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ["aeo-scores", clientId] })}
+                  >
+                    <RefreshCw className="mr-1.5 w-3 h-3" />
+                    Check for Results
+                  </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
