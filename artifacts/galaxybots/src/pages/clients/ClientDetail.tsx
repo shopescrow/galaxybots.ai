@@ -16,6 +16,7 @@ import { IntelligenceBriefingsTab } from "./IntelligenceBriefingsTab";
 import { SCENARIOS, SCENARIO_CLIENTS } from "@/data/scenarios";
 import { useState, useEffect } from "react";
 import { BookOpen } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -70,6 +71,7 @@ export default function ClientDetail() {
   const clientId = Number(params.id);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<ClientTab>(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tab = urlParams.get("tab");
@@ -79,11 +81,15 @@ export default function ClientDetail() {
   const { data: client, isLoading } = useQuery<Client>({
     queryKey: ["client", clientId],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/clients/${clientId}`);
-      if (!res.ok) throw new Error("Client not found");
+      const res = await fetch(`${BASE}/api/clients/${clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 403) throw new Error("Access denied");
+      if (res.status === 404) throw new Error("Client not found");
+      if (!res.ok) throw new Error("Failed to load client");
       return res.json();
     },
-    enabled: !isNaN(clientId),
+    enabled: !isNaN(clientId) && !!token,
   });
 
   const [editContext, setEditContext] = useState("");
@@ -106,7 +112,10 @@ export default function ClientDetail() {
     mutationFn: async (data: Partial<Client> & { servicesList?: string[] }) => {
       const res = await fetch(`${BASE}/api/clients/${clientId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Update failed");
@@ -612,13 +621,17 @@ export default function ClientDetail() {
 }
 
 function ClientBingoLingoBadge({ clientId }: { clientId: number }) {
+  const { token } = useAuth();
   const { data } = useQuery<{ linked: boolean; bingolingoClients?: Array<{ id: number; name: string; slug: string }> }>({
     queryKey: ["bingolingo-link", clientId],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/integrations/piratemonster/bingolingo-link/${clientId}`);
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/bingolingo-link/${clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) return { linked: false };
       return res.json();
     },
+    enabled: !!token,
     staleTime: 120000,
   });
 

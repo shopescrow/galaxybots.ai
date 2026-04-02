@@ -5,12 +5,14 @@ import {
   aeoScoresTable,
   bingolingoContentTable,
   mcpToolCallsTable,
+  platformApiKeysTable,
   notificationsTable,
   workflowRunsTable,
   workflowsTable,
   clientsTable,
   pendingApprovalsTable,
   callLogsTable,
+  receptionistConfigsTable,
   sessionOutcomesTable,
   prospectsTable,
   prospectOutreachLogTable,
@@ -147,26 +149,33 @@ router.get("/activity", requireRole("owner", "admin"), async (req, res): Promise
   }
 
   if (shouldInclude("mcp") && (!eventType || eventType === "mcp_call")) {
-    const conds = [inArray(mcpToolCallsTable.clientId, clientIds)];
-    if (since) conds.push(gte(mcpToolCallsTable.createdAt, since));
+    const conds = [inArray(platformApiKeysTable.clientId, clientIds)];
+    if (since) conds.push(gte(mcpToolCallsTable.calledAt, since));
     const rows = await db
-      .select()
+      .select({
+        id: mcpToolCallsTable.id,
+        toolName: mcpToolCallsTable.toolName,
+        responseStatus: mcpToolCallsTable.responseStatus,
+        calledAt: mcpToolCallsTable.calledAt,
+        clientId: platformApiKeysTable.clientId,
+      })
       .from(mcpToolCallsTable)
+      .innerJoin(platformApiKeysTable, eq(mcpToolCallsTable.partnerKeyId, platformApiKeysTable.id))
       .where(and(...conds))
-      .orderBy(desc(mcpToolCallsTable.createdAt))
+      .orderBy(desc(mcpToolCallsTable.calledAt))
       .limit(limit);
     for (const row of rows) {
       events.push({
         id: `mcp-${row.id}`,
-        timestamp: row.createdAt.toISOString(),
+        timestamp: row.calledAt.toISOString(),
         source: "mcp",
         eventType: "mcp_call",
         description: `MCP tool call: ${row.toolName}`,
-        clientId: row.clientId,
+        clientId: row.clientId ?? null,
         clientName: row.clientId ? clientNameMap[row.clientId] : undefined,
-        severity: row.status === "error" ? "warning" : "info",
+        severity: row.responseStatus === "error" ? "warning" : "info",
         link: "/developers",
-        metadata: { toolName: row.toolName, status: row.status },
+        metadata: { toolName: row.toolName, status: row.responseStatus },
       });
     }
   }
@@ -251,11 +260,19 @@ router.get("/activity", requireRole("owner", "admin"), async (req, res): Promise
   }
 
   if (shouldInclude("galaxybots") && (!eventType || eventType === "call")) {
-    const conds = [inArray(callLogsTable.clientId, clientIds)];
+    const conds = [inArray(receptionistConfigsTable.clientId, clientIds)];
     if (since) conds.push(gte(callLogsTable.createdAt, since));
     const rows = await db
-      .select()
+      .select({
+        id: callLogsTable.id,
+        status: callLogsTable.status,
+        durationSeconds: callLogsTable.durationSeconds,
+        twilioCallSid: callLogsTable.twilioCallSid,
+        createdAt: callLogsTable.createdAt,
+        clientId: receptionistConfigsTable.clientId,
+      })
       .from(callLogsTable)
+      .innerJoin(receptionistConfigsTable, eq(callLogsTable.configId, receptionistConfigsTable.id))
       .where(and(...conds))
       .orderBy(desc(callLogsTable.createdAt))
       .limit(limit);
