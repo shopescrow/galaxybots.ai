@@ -7,6 +7,8 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  Image,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
@@ -15,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { fetch } from "expo/fetch";
 import * as Haptics from "expo-haptics";
+import { Audio } from "expo-av";
 
 import { apiFetch, apiPost, getToken, API_BASE } from "@/lib/api";
 import colors from "@/constants/colors";
@@ -24,6 +27,42 @@ let msgCounter = 0;
 function uid(): string {
   msgCounter++;
   return `m-${Date.now()}-${msgCounter}-${Math.random().toString(36).substr(2, 6)}`;
+}
+
+async function playTTS(text: string, botId: string | number, token: string | null): Promise<{ upgrade?: boolean; error?: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE}api/tts/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ text, botId: Number(botId) }),
+    });
+
+    if (res.status === 402) {
+      return { upgrade: true };
+    }
+
+    if (!res.ok) {
+      return { error: true };
+    }
+
+    const data = await res.json() as { audio: string; contentType: string };
+    const audioUri = `data:${data.contentType};base64,${data.audio}`;
+
+    const { sound } = await Audio.Sound.createAsync({ uri: audioUri }, { shouldPlay: true });
+
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if ("didJustFinish" in status && status.didJustFinish) {
+        sound.unloadAsync();
+      }
+    });
+
+    return {};
+  } catch {
+    return { error: true };
+  }
 }
 
 export default function ChatScreen() {
@@ -36,6 +75,8 @@ export default function ChatScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const botQuery = useQuery({
     queryKey: ["bot", botId],
@@ -168,26 +209,69 @@ export default function ChatScreen() {
     }
   }, [input, isStreaming, conversationId, botId]);
 
+  const handleSpeak = useCallback(async (msgId: string, text: string) => {
+    if (playingId === msgId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPlayingId(msgId);
+    try {
+      const token = await getToken();
+      const result = await playTTS(text, botId!, token);
+      if (result.upgrade) {
+        setShowUpgradeModal(true);
+      }
+    } finally {
+      setPlayingId(null);
+    }
+  }, [playingId, botId]);
+
   const renderMessage = useCallback(({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const isSpeaking = playingId === item.id;
     return (
-      <View style={[styles.bubble, isUser ? styles.userBubble : styles.botBubble]}>
-        {!isUser && !!item.toolCalls?.length && (
-          <View style={styles.toolCallsWrap}>
-            {item.toolCalls.map((tc, i) => (
-              <View key={i} style={styles.toolCallChip}>
-                <Feather name="tool" size={11} color={colors.light.tint} />
-                <Text style={styles.toolCallText}>{tc.name}</Text>
+      <View style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowBot]}>
+        {!isUser && (
+          <View style={styles.botAvatarWrap}>
+            {bot?.avatar ? (
+              <Image source={{ uri: bot.avatar }} style={styles.botAvatar} />
+            ) : (
+              <View style={styles.botAvatarPlaceholder}>
+                <Feather name="cpu" size={12} color={colors.light.tint} />
               </View>
-            ))}
+            )}
           </View>
         )}
-        <Text style={[styles.bubbleText, isUser ? styles.userText : styles.botText]}>
-          {item.content}
-        </Text>
+        <View style={[styles.bubble, isUser ? styles.userBubble : styles.botBubble]}>
+          {!isUser && !!item.toolCalls?.length && (
+            <View style={styles.toolCallsWrap}>
+              {item.toolCalls.map((tc, i) => (
+                <View key={i} style={styles.toolCallChip}>
+                  <Feather name="tool" size={11} color={colors.light.tint} />
+                  <Text style={styles.toolCallText}>{tc.name}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          <Text style={[styles.bubbleText, isUser ? styles.userText : styles.botText]}>
+            {item.content}
+          </Text>
+          {!isUser && (
+            <Pressable
+              style={styles.speakerButton}
+              onPress={() => handleSpeak(item.id, item.content)}
+              disabled={isSpeaking}
+              hitSlop={8}
+            >
+              {isSpeaking ? (
+                <ActivityIndicator size="small" color={colors.light.tint} />
+              ) : (
+                <Feather name="volume-2" size={14} color={colors.light.textTertiary} />
+              )}
+            </Pressable>
+          )}
+        </View>
       </View>
     );
-  }, []);
+  }, [playingId, handleSpeak, bot]);
 
   const reversedMessages = [...messages].reverse();
 
@@ -205,6 +289,13 @@ export default function ChatScreen() {
           <Feather name="arrow-left" size={22} color={colors.light.text} />
         </Pressable>
         <View style={styles.headerCenter}>
+          {bot?.avatar ? (
+            <Image source={{ uri: bot.avatar }} style={styles.headerAvatar} />
+          ) : (
+            <View style={styles.headerAvatarPlaceholder}>
+              <Feather name="user" size={16} color={colors.light.tint} />
+            </View>
+          )}
           <Text style={styles.headerTitle} numberOfLines={1}>
             {bot?.name || "Loading..."}
           </Text>
@@ -281,6 +372,26 @@ export default function ChatScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={showUpgradeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUpgradeModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowUpgradeModal(false)}>
+          <View style={styles.upgradeModal}>
+            <Feather name="lock" size={28} color={colors.light.tint} style={{ marginBottom: 12 }} />
+            <Text style={styles.upgradeTitle}>Upgrade to hear your executive team</Text>
+            <Text style={styles.upgradeMsg}>
+              Voice playback is available on paid plans. Upgrade to bring your AI directors to life.
+            </Text>
+            <Pressable style={styles.upgradeButton} onPress={() => setShowUpgradeModal(false)}>
+              <Text style={styles.upgradeButtonText}>Got it</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -330,8 +441,56 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
   },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    marginVertical: 2,
+  },
+  messageRowUser: {
+    justifyContent: "flex-end",
+  },
+  messageRowBot: {
+    justifyContent: "flex-start",
+  },
+  botAvatarWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: "hidden",
+    flexShrink: 0,
+    alignSelf: "flex-end",
+    marginBottom: 2,
+  },
+  botAvatar: {
+    width: 28,
+    height: 28,
+  },
+  botAvatarPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.light.tintLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginBottom: 2,
+  },
+  headerAvatarPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.light.tintLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
   bubble: {
-    maxWidth: "82%",
+    maxWidth: "75%",
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -358,6 +517,11 @@ const styles = StyleSheet.create({
   },
   botText: {
     color: colors.light.text,
+  },
+  speakerButton: {
+    alignSelf: "flex-end",
+    marginTop: 6,
+    padding: 4,
   },
   toolCallsWrap: {
     flexDirection: "row",
@@ -452,5 +616,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  upgradeModal: {
+    backgroundColor: colors.light.surface,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: colors.light.border,
+  },
+  upgradeTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    color: colors.light.text,
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  upgradeMsg: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: colors.light.textSecondary,
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  upgradeButton: {
+    backgroundColor: colors.light.tint,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  upgradeButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FFFFFF",
   },
 });

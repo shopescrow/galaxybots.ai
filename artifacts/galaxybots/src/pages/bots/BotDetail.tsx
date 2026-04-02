@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store, BarChart3 } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store, BarChart3, Volume2 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -274,7 +274,7 @@ export default function BotDetail() {
                         </Button>
                       </div>
                     ) : (
-                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} canUseMoA={canUseMoA} inputRef={chatInputRef} />
+                      <ChatInterface conversationId={activeConvo.id} botName={bot.name} botId={bot.id} botAvatar={bot.avatar} canUseMoA={canUseMoA} inputRef={chatInputRef} />
                     )}
                   </CardContent>
                 </Card>
@@ -344,15 +344,53 @@ function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botN
   return <WorkingIndicator botName={botName} />;
 }
 
-function ChatInterface({ conversationId, botName, canUseMoA, inputRef }: { conversationId: number, botName: string, canUseMoA: boolean, inputRef?: React.RefObject<HTMLInputElement | null> }) {
+function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, inputRef }: { conversationId: number, botName: string, botId: number, botAvatar?: string | null, canUseMoA: boolean, inputRef?: React.RefObject<HTMLInputElement | null> }) {
   const { data: messages, isLoading } = useChatMessages(conversationId);
+  const { user } = useAuth();
   const [input, setInput] = useState("");
   const [moaEnabled, setMoaEnabled] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [playingMsgId, setPlayingMsgId] = useState<number | null>(null);
+  const [showVoiceUpgrade, setShowVoiceUpgrade] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const localInputRef = useRef<HTMLInputElement>(null);
   const resolvedInputRef = (inputRef ?? localInputRef) as React.RefObject<HTMLInputElement>;
   const queryClient = useQueryClient();
+
+  const PAID_PLANS = ["starter", "pro", "scale", "team", "enterprise"];
+  const canUseVoice = !!(user?.bypassPayment || (user?.plan && PAID_PLANS.includes(user.plan)));
+
+  const handleSpeak = useCallback(async (msgId: number, text: string) => {
+    if (playingMsgId === msgId) return;
+    if (!canUseVoice) {
+      setShowVoiceUpgrade(true);
+      return;
+    }
+    setPlayingMsgId(msgId);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/tts/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ text, botId }),
+      });
+      if (res.status === 402) {
+        setShowVoiceUpgrade(true);
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json() as { audio: string; contentType: string };
+      const audioSrc = `data:${data.contentType};base64,${data.audio}`;
+      const audio = new window.Audio(audioSrc);
+      audio.play();
+    } catch {
+    } finally {
+      setPlayingMsgId(null);
+    }
+  }, [playingMsgId, botId, canUseVoice]);
 
   const onStreamComplete = useCallback(() => {
     queryClient.invalidateQueries({
@@ -431,10 +469,18 @@ function ChatInterface({ conversationId, botName, canUseMoA, inputRef }: { conve
                   
                   <div className="shrink-0 mt-1">
                     <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center border",
+                      "w-8 h-8 rounded-full flex items-center justify-center border overflow-hidden",
                       isUser ? "bg-cyan/20 border-cyan/50" : isMoaResponse ? "bg-purple-500/20 border-purple-500/50" : "bg-primary/20 border-primary/50"
                     )}>
-                      {isUser ? <User className="w-4 h-4 text-cyan" /> : isMoaResponse ? <Sparkles className="w-4 h-4 text-purple-400" /> : <BotIcon className="w-4 h-4 text-primary" />}
+                      {isUser ? (
+                        <User className="w-4 h-4 text-cyan" />
+                      ) : isMoaResponse ? (
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                      ) : botAvatar ? (
+                        <img src={botAvatar} alt={botName} className="w-full h-full object-cover" />
+                      ) : (
+                        <BotIcon className="w-4 h-4 text-primary" />
+                      )}
                     </div>
                   </div>
 
@@ -460,6 +506,21 @@ function ChatInterface({ conversationId, botName, canUseMoA, inputRef }: { conve
                     )}>
                       {msg.content}
                     </div>
+                    {!isUser && (
+                      <button
+                        type="button"
+                        onClick={() => handleSpeak(msg.id, msg.content)}
+                        disabled={playingMsgId === msg.id}
+                        title={canUseVoice ? "Play voice" : "Upgrade to hear your executive team"}
+                        className="mt-1.5 ml-1 flex items-center gap-1 text-muted-foreground/40 hover:text-primary transition-colors disabled:opacity-50"
+                      >
+                        {playingMsgId === msg.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Volume2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -500,6 +561,18 @@ function ChatInterface({ conversationId, botName, canUseMoA, inputRef }: { conve
               </Link>
             </div>
             <button type="button" onClick={() => setShowUpgrade(false)} className="text-muted-foreground hover:text-foreground text-xs shrink-0">✕</button>
+          </div>
+        )}
+        {showVoiceUpgrade && (
+          <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-1">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/30 flex-1">
+              <Volume2 className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-xs font-tech text-primary/80">Upgrade to hear your executive team</span>
+              <Link href="/billing" className="ml-auto text-xs font-tech text-primary underline hover:text-primary/80 shrink-0">
+                Upgrade →
+              </Link>
+            </div>
+            <button type="button" onClick={() => setShowVoiceUpgrade(false)} className="text-muted-foreground hover:text-foreground text-xs shrink-0">✕</button>
           </div>
         )}
         <div className="p-4 pt-3">

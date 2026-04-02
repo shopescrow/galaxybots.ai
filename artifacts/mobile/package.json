@@ -57,10 +57,10 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "expo-av": "^16.0.8",
     "expo-clipboard": "^8.0.8",
     "expo-local-authentication": "^17.0.8",
     "expo-notifications": "^0.32.16",
     "expo-secure-store": "^15.0.8"
   }
-
 }

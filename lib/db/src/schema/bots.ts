@@ -12,6 +12,7 @@ export const botsTable = pgTable("bots", {
   responsibilities: text("responsibilities").array().notNull().default([]),
   personality: text("personality").notNull(),
   avatar: text("avatar"),
+  voiceId: text("voice_id"),
   declaration: text("declaration"),
   addonType: text("addon_type"),
   rank: text("rank").notNull().default("analyst"),
