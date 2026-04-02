@@ -29,8 +29,11 @@ registerTool({
       return { success: false, error: "No client ID provided or available in context." };
     }
 
+    const rawUrl = input.url.trim();
+    const normalizedUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+
     try {
-      new URL(input.url);
+      new URL(normalizedUrl);
     } catch {
       return { success: false, error: "Invalid URL format. Please provide a valid URL (e.g., https://example.com)." };
     }
@@ -47,14 +50,14 @@ registerTool({
       return { success: false, error: "Maximum of 10 active competitors per client. Please remove one before adding another." };
     }
 
-    const existing = activeCompetitors.find(c => c.url === input.url);
+    const existing = activeCompetitors.find(c => c.url === normalizedUrl);
     if (existing) {
       return { success: false, error: `This URL is already being tracked as competitor "${existing.companyName}".` };
     }
 
     const [record] = await db.insert(competitorUrlsTable).values({
       clientId,
-      url: input.url,
+      url: normalizedUrl,
       companyName: input.companyName,
       addedBy: context.botName ?? "system",
     }).returning();

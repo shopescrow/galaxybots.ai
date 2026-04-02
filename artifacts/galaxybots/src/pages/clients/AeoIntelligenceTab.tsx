@@ -301,8 +301,11 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
   });
 
   const handleTrack = () => {
-    if (!newUrl || !newName) return;
-    trackMutation.mutate({ url: newUrl, companyName: newName });
+    const trimmedUrl = newUrl.trim();
+    const trimmedName = newName.trim();
+    if (!trimmedUrl || !trimmedName) return;
+    const normalized = /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`;
+    trackMutation.mutate({ url: normalized, companyName: trimmedName });
   };
 
   const competitors = data?.competitors ?? [];
@@ -342,7 +345,7 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
               className="text-sm"
             />
             <Input
-              placeholder="Website URL (e.g., https://acme.com)"
+              placeholder="e.g., acme.com"
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
               className="text-sm"

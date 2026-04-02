@@ -788,11 +788,14 @@ router.post("/integrations/piratemonster/competitors/:clientId", requireRole("ow
     return;
   }
 
-  const { url, companyName } = req.body || {};
-  if (!url || !companyName) {
+  const { url: rawUrl, companyName } = req.body || {};
+  if (!rawUrl || !companyName) {
     res.status(400).json({ error: "url and companyName are required" });
     return;
   }
+
+  const trimmed = String(rawUrl).trim();
+  const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 
   try {
     new URL(url);
