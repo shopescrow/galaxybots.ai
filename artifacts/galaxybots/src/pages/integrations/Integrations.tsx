@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, Facebook, Instagram, Youtube, Music2, Share2, HelpCircle, ExternalLink as ExternalLinkIcon, Brain } from "lucide-react";
+import { Mail, Calendar, FileText, BarChart3, CheckCircle2, XCircle, Loader2, Zap, Copy, Link2, ExternalLink, Key, Shield, Activity, Webhook, RefreshCw, Trash2, Sparkles, ArrowRight, Table2, MessageSquare, Github, Twitter, Facebook, Instagram, Youtube, Music2, Share2, Truck, HelpCircle, ExternalLink as ExternalLinkIcon, Brain } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
@@ -179,6 +179,17 @@ const SERVICES = [
     credentialPlaceholder: "s365_xxxxxxxxxxxx...",
     helpUrl: "https://social365.ai",
     helpText: "Social365.ai → Account Settings → API → Generate API Key",
+  },
+  {
+    key: "family_movers_crm",
+    name: "Family Movers CRM",
+    description: "Connect to the Family Movers proprietary CRM to sync leads, bookings, and customer records.",
+    icon: Truck,
+    oauthSupported: false,
+    credentialLabel: "Family Movers CRM API Key",
+    credentialPlaceholder: "fm_xxxxxxxxxxxx...",
+    helpUrl: "https://familymovers.ca",
+    helpText: "Family Movers CRM → Settings → API Access → Generate API Key",
   },
 ];
 
