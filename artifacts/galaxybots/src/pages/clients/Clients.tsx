@@ -77,7 +77,10 @@ export default function Clients() {
 
   const { user, updateOnboarding } = useAuth();
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const onSubmit = async (data: FormData) => {
+    setSubmitError(null);
     try {
       await createClient.mutateAsync({ data });
       setOpen(false);
@@ -85,8 +88,10 @@ export default function Clients() {
       if (user?.onboarding && !user.onboarding.firstClient) {
         updateOnboarding({ firstClient: true }).catch(() => {});
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Failed to provision access. Please try again.";
+      setSubmitError(msg);
     }
   };
 
@@ -106,7 +111,7 @@ export default function Clients() {
             <p className="text-muted-foreground font-tech mt-1">Manage active deployments, licenses, and partner referrals.</p>
           </div>
 
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setSubmitError(null); reset(); } }}>
             <DialogTrigger asChild>
               <Button variant="glow" className="font-tech tracking-wide shrink-0">
                 <Plus className="w-4 h-4 mr-2" /> NEW DEPLOYMENT
@@ -143,6 +148,9 @@ export default function Clients() {
                     <option value="enterprise">Full Board (Enterprise)</option>
                   </select>
                 </div>
+                {submitError && (
+                  <p className="text-destructive text-sm text-center">{submitError}</p>
+                )}
                 <DialogFooter className="pt-4">
                   <Button type="submit" variant="glow" disabled={createClient.isPending} className="w-full">
                     {createClient.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "PROVISION ACCESS"}

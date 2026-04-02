@@ -7,6 +7,7 @@ import {
   HireBotBody,
   GetClientResponse,
   GetClientBotsResponse,
+  CreateClientBody,
 } from "@workspace/api-zod";
 import { requireRole } from "../middleware/auth";
 import { getAllTools } from "../tools";
@@ -131,7 +132,27 @@ router.get("/clients", async (req, res): Promise<void> => {
 });
 
 router.post("/clients", requireRole("owner"), async (req, res): Promise<void> => {
-  res.status(403).json({ error: "Clients are created during registration" });
+  if (!isPlatformAdmin(req)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const parsed = CreateClientBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body", details: parsed.error.errors });
+    return;
+  }
+
+  const { companyName, contactName, contactEmail, plan } = parsed.data;
+
+  const [client] = await db.insert(clientsTable).values({
+    companyName,
+    contactName,
+    contactEmail,
+    plan,
+  }).returning();
+
+  res.status(201).json(sanitizeClient(client));
 });
 
 router.get("/clients/:id", async (req, res): Promise<void> => {
