@@ -76,7 +76,43 @@ function UserAvatar() {
   );
 }
 
-const ONBOARDING_STEP_KEYS = ["companyProfile", "firstClient", "industry", "integrations", "firstMission"] as const;
+export const ONBOARDING_STEP_KEYS = ["companyProfile", "firstClient", "industry", "integrations", "firstMission"] as const;
+
+export function ResumeSetupPrompt() {
+  const { user } = useAuth();
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const onboarding = user?.onboarding;
+
+  if (!onboarding || onboarding.dismissed || onboarding.completedAt) return null;
+
+  const completed = ONBOARDING_STEP_KEYS.filter((k) => onboarding[k]).length;
+  const total = ONBOARDING_STEP_KEYS.length;
+
+  if (completed === total) return null;
+
+  const remaining = total - completed;
+
+  return (
+    <>
+      <div className="fixed top-14 left-0 right-0 z-40 flex items-center justify-between gap-3 px-4 py-2 bg-primary/10 border-b border-primary/20 text-sm">
+        <div className="flex items-center gap-2 text-primary text-xs font-medium min-w-0">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          <span className="truncate">
+            <span className="hidden sm:inline">Setup in progress — </span>
+            {remaining} step{remaining !== 1 ? "s" : ""} remaining
+          </span>
+        </div>
+        <button
+          onClick={() => setWizardOpen(true)}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+        >
+          Continue Setup
+        </button>
+      </div>
+      <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
+    </>
+  );
+}
 
 function OnboardingProgressBadge() {
   const { user } = useAuth();

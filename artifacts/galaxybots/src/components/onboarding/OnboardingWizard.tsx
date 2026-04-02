@@ -152,6 +152,15 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
   const allComplete = completedCount === STEPS.length;
   const progressPercent = (completedCount / STEPS.length) * 100;
 
+  useEffect(() => {
+    if (open) {
+      const firstIncomplete = STEPS.findIndex((s) => !onboarding[s.key]);
+      if (firstIncomplete !== -1) {
+        setCurrentStep(firstIncomplete);
+      }
+    }
+  }, [open]);
+
   const handleDismiss = async () => {
     await updateOnboarding({ dismissed: true });
     onOpenChange(false);

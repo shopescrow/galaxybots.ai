@@ -21,7 +21,7 @@ const STEPS = [
   { key: "companyProfile" as const, label: "Set up company profile", icon: Building2, path: null, estimate: "30 sec" },
   { key: "firstClient" as const, label: "Add your first client", icon: Users, path: "/clients", estimate: "1 min" },
   { key: "industry" as const, label: "Select your industry", icon: Factory, path: null, estimate: "10 sec" },
-  { key: "integrations" as const, label: "Connect Gmail", icon: Plug, path: "/integrations", estimate: "1 click" },
+  { key: "integrations" as const, label: "Connect an integration", icon: Plug, path: "/integrations", estimate: "1 click" },
   { key: "firstMission" as const, label: "Launch your first mission", icon: Rocket, path: "/deploy-team", estimate: "2 min" },
 ];
 

@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
-import { TopBar } from "./TopBar";
+import { TopBar, ResumeSetupPrompt, ONBOARDING_STEP_KEYS } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
@@ -12,6 +12,7 @@ import { AeoScanModal } from "@/components/AeoScanModal";
 import { useClients } from "@/hooks/use-clients";
 import { useActiveClient } from "@/contexts/ActiveClientContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const PATH_LABELS: Record<string, string> = {
   "/command-center": "Command Center",
@@ -59,6 +60,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { data: clients } = useClients();
   const { setActiveClient } = useActiveClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  const ob = user?.onboarding;
+  const showResumeBanner = !!ob && !ob.dismissed && !ob.completedAt &&
+    ONBOARDING_STEP_KEYS.filter((k) => ob[k]).length < ONBOARDING_STEP_KEYS.length;
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -133,6 +139,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col w-full overflow-x-hidden">
       <TopBar onSidebarToggle={toggle} onMobileToggle={toggleMobile} onOpenPalette={() => setPaletteOpen(true)} />
+      <ResumeSetupPrompt />
 
       <Sidebar
         collapsed={collapsed}
@@ -142,7 +149,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <div
         className={cn(
-          "flex flex-col flex-1 transition-all duration-300 pt-14",
+          "flex flex-col flex-1 transition-all duration-300",
+          showResumeBanner ? "pt-[88px]" : "pt-14",
           "lg:ml-60",
           collapsed && "lg:ml-16"
         )}
