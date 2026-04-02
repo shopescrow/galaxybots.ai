@@ -1136,7 +1136,7 @@ export default function Integrations() {
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium">Client:</label>
             <select
-              className="rounded border px-3 py-1.5 text-sm"
+              className="rounded border px-3 py-1.5 text-sm bg-background text-foreground border-border min-w-[200px]"
               value={clientId}
               onChange={(e) => setClientId(Number(e.target.value))}
             >
