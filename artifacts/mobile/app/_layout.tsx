@@ -84,7 +84,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const inAuthGroup = segments[0] === "login";
+  const AUTH_SCREENS = ["login", "forgot-password", "forgot-username"];
+  const inAuthGroup = AUTH_SCREENS.includes(segments[0] as string);
 
   if (!isAuthenticated && !inAuthGroup) {
     return <Redirect href="/login" />;
@@ -145,6 +146,8 @@ function RootLayoutNav() {
       <NotificationHandler />
       <Stack screenOptions={{ headerBackTitle: "Back", headerShown: false }}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="forgot-password" options={{ headerShown: false, presentation: "card" }} />
+        <Stack.Screen name="forgot-username" options={{ headerShown: false, presentation: "card" }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
           name="chat/[botId]"
