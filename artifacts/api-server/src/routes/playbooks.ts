@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, missionPlaybooksTable, clientsTable, botMessagesTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, ne } from "drizzle-orm";
 import { requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
@@ -32,6 +32,105 @@ router.get("/playbooks/:id", requireRole("owner", "admin"), async (req, res): Pr
   }
 
   res.json(playbook);
+});
+
+router.post("/playbooks", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { name, description, category, steps } = req.body as {
+    name?: string;
+    description?: string;
+    category?: string;
+    steps?: Array<{ order: number; role: string; objective: string }>;
+  };
+
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: "Playbook name is required" });
+    return;
+  }
+
+  const stepsValue = Array.isArray(steps) ? steps : [];
+
+  const [created] = await db
+    .insert(missionPlaybooksTable)
+    .values({
+      name: name.trim(),
+      description: description?.trim() ?? "",
+      category: category?.trim() || "custom",
+      isBuiltIn: false,
+      steps: stepsValue,
+    })
+    .returning();
+
+  res.status(201).json(created);
+});
+
+router.put("/playbooks/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid playbook ID" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(missionPlaybooksTable)
+    .where(eq(missionPlaybooksTable.id, id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Playbook not found" });
+    return;
+  }
+
+  if (existing.isBuiltIn) {
+    res.status(403).json({ error: "Built-in playbooks cannot be modified" });
+    return;
+  }
+
+  const { name, description, category, steps } = req.body as {
+    name?: string;
+    description?: string;
+    category?: string;
+    steps?: Array<{ order: number; role: string; objective: string }>;
+  };
+
+  const [updated] = await db
+    .update(missionPlaybooksTable)
+    .set({
+      ...(name !== undefined && { name: name.trim() }),
+      ...(description !== undefined && { description: description.trim() }),
+      ...(category !== undefined && { category: category.trim() }),
+      ...(steps !== undefined && { steps }),
+    })
+    .where(eq(missionPlaybooksTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
+router.delete("/playbooks/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid playbook ID" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(missionPlaybooksTable)
+    .where(eq(missionPlaybooksTable.id, id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Playbook not found" });
+    return;
+  }
+
+  if (existing.isBuiltIn) {
+    res.status(403).json({ error: "Built-in playbooks cannot be deleted" });
+    return;
+  }
+
+  await db.delete(missionPlaybooksTable).where(eq(missionPlaybooksTable.id, id));
+
+  res.json({ success: true });
 });
 
 router.get("/governance/mode", requireRole("owner", "admin"), async (req, res): Promise<void> => {

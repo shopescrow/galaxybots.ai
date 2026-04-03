@@ -7,6 +7,7 @@ import { getAllTools } from "./tools";
 import { seedDefaultOutreachTemplates } from "./services/seed-outreach-templates";
 import { seedDefaultPartners } from "./services/seed-partners";
 import { seedMissionTemplates } from "./services/seed-mission-templates";
+import { seedPlaybooks } from "./services/seed-playbooks";
 import { pool } from "@workspace/db";
 
 const EXPECTED_TABLES = [
@@ -150,6 +151,9 @@ app.listen(port, async () => {
   });
   seedMissionTemplates().catch((err) => {
     console.error("[seed] Mission template seeding failed:", err);
+  });
+  seedPlaybooks().catch((err) => {
+    console.error("[seed] Playbook seeding failed:", err);
   });
   backfillExistingBotPermissions(getAllTools).catch((err) => {
     console.error("[governance] Permission backfill failed:", err);

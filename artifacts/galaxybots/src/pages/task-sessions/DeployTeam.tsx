@@ -26,9 +26,14 @@ import {
   Library,
   BookOpen,
   ChevronRight,
+  Plus,
+  Trash2,
+  Search,
+  PenLine,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -49,12 +54,39 @@ interface MissionPlaybook {
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
-  strategy: "text-blue-400 border-blue-500/30 bg-blue-500/10",
-  growth: "text-green-400 border-green-500/30 bg-green-500/10",
-  finance: "text-gold border-gold/30 bg-gold/10",
+  strategy:   "text-blue-400 border-blue-500/30 bg-blue-500/10",
+  growth:     "text-green-400 border-green-500/30 bg-green-500/10",
+  finance:    "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
   operations: "text-orange-400 border-orange-500/30 bg-orange-500/10",
-  general: "text-primary border-primary/30 bg-primary/10",
+  general:    "text-primary border-primary/30 bg-primary/10",
+  fortune50:  "text-amber-400 border-amber-500/30 bg-amber-500/10",
+  ceo:        "text-violet-400 border-violet-500/30 bg-violet-500/10",
+  cfo:        "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
+  cio_cto:    "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
+  coo:        "text-orange-400 border-orange-500/30 bg-orange-500/10",
+  chro:       "text-pink-400 border-pink-500/30 bg-pink-500/10",
+  cmo:        "text-green-400 border-green-500/30 bg-green-500/10",
+  cpo:        "text-indigo-400 border-indigo-500/30 bg-indigo-500/10",
+  ciso:       "text-red-400 border-red-500/30 bg-red-500/10",
+  custom:     "text-primary border-primary/30 bg-primary/10",
 };
+
+const CATEGORY_LABELS: Record<string, string> = {
+  fortune50: "Fortune 50",
+  ceo:       "CEO",
+  cfo:       "CFO",
+  cio_cto:   "CIO / CTO",
+  coo:       "COO",
+  chro:      "CHRO",
+  cmo:       "CMO",
+  cpo:       "CPO",
+  ciso:      "CISO",
+  custom:    "Custom",
+};
+
+const ORDERED_CATEGORIES = [
+  "fortune50", "ceo", "cfo", "cio_cto", "coo", "chro", "cmo", "cpo", "ciso", "custom",
+];
 
 interface ProposedBot {
   name: string;
@@ -93,6 +125,16 @@ export default function DeployTeam() {
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateHintBots, setTemplateHintBots] = useState<string[]>([]);
   const [showPlaybooks, setShowPlaybooks] = useState(false);
+  const [playbookSearch, setPlaybookSearch] = useState("");
+  const [playbookCategory, setPlaybookCategory] = useState("all");
+  const [showCreatePlaybook, setShowCreatePlaybook] = useState(false);
+  const [newPlaybookName, setNewPlaybookName] = useState("");
+  const [newPlaybookDesc, setNewPlaybookDesc] = useState("");
+  const [newPlaybookCategory, setNewPlaybookCategory] = useState("custom");
+  const [newPlaybookSteps, setNewPlaybookSteps] = useState<Array<{ role: string; objective: string }>>([
+    { role: "", objective: "" },
+  ]);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const analyzeMutation = useAnalyzeTaskMutation();
   const createSessionMutation = useCreateTaskSessionMutation();
@@ -107,6 +149,72 @@ export default function DeployTeam() {
       if (!res.ok) return [];
       return res.json();
     },
+  });
+
+  const queryClient = useQueryClient();
+
+  const createPlaybookMutation = useMutation({
+    mutationFn: async (data: { name: string; description: string; category: string; steps: Array<{ order: number; role: string; objective: string }> }) => {
+      const res = await fetch(`${BASE}/api/playbooks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? "Failed to create playbook");
+      }
+      return res.json() as Promise<MissionPlaybook>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["playbooks"] });
+      setShowCreatePlaybook(false);
+      setNewPlaybookName("");
+      setNewPlaybookDesc("");
+      setNewPlaybookCategory("custom");
+      setNewPlaybookSteps([{ role: "", objective: "" }]);
+      toast({ title: "Playbook created", description: "Your custom playbook has been saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deletePlaybookMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${BASE}/api/playbooks/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete playbook");
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["playbooks"] });
+      setDeletingId(null);
+      toast({ title: "Playbook deleted" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not delete playbook.", variant: "destructive" });
+    },
+  });
+
+  const handleSubmitCustomPlaybook = () => {
+    if (!newPlaybookName.trim()) return;
+    const validSteps = newPlaybookSteps.filter((s) => s.role.trim() && s.objective.trim());
+    createPlaybookMutation.mutate({
+      name: newPlaybookName.trim(),
+      description: newPlaybookDesc.trim(),
+      category: newPlaybookCategory,
+      steps: validSteps.map((s, i) => ({ order: i + 1, role: s.role.trim(), objective: s.objective.trim() })),
+    });
+  };
+
+  const filteredPlaybooks = playbooks.filter((p) => {
+    const matchesCategory = playbookCategory === "all" || p.category === playbookCategory;
+    const q = playbookSearch.toLowerCase();
+    const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.steps.some((s) => s.role.toLowerCase().includes(q));
+    return matchesCategory && matchesSearch;
   });
 
   const handleSelectPlaybook = (playbook: MissionPlaybook) => {
@@ -418,60 +526,248 @@ export default function DeployTeam() {
             </motion.div>
           )}
 
-          <Dialog open={showPlaybooks} onOpenChange={setShowPlaybooks}>
-            <DialogContent className="max-w-2xl bg-background border-primary/30">
-              <DialogHeader>
+          <Dialog open={showPlaybooks} onOpenChange={(open) => { setShowPlaybooks(open); if (!open) { setShowCreatePlaybook(false); setPlaybookSearch(""); setPlaybookCategory("all"); } }}>
+            <DialogContent className="max-w-3xl bg-background border-primary/30 max-h-[90vh] flex flex-col">
+              <DialogHeader className="shrink-0">
                 <DialogTitle className="font-display text-primary flex items-center gap-2">
                   <BookOpen className="w-5 h-5" />
                   Mission Playbooks
+                  <span className="ml-auto text-xs text-muted-foreground font-tech font-normal">
+                    {playbooks.length} total
+                  </span>
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                {playbooks.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground font-tech text-sm">
-                    No playbooks available.
+
+              {!showCreatePlaybook ? (
+                <>
+                  {/* Search + Create */}
+                  <div className="flex gap-2 shrink-0">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        value={playbookSearch}
+                        onChange={(e) => setPlaybookSearch(e.target.value)}
+                        placeholder="Search playbooks by name, role, or keyword…"
+                        className="pl-8 text-sm font-tech bg-black/30 border-primary/20 text-white placeholder:text-white/30"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="font-tech text-xs border-primary/30 text-primary hover:bg-primary/10 shrink-0"
+                      onClick={() => setShowCreatePlaybook(true)}
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      New Playbook
+                    </Button>
                   </div>
-                ) : (
-                  playbooks.map((playbook) => {
-                    const catStyle = CATEGORY_STYLES[playbook.category] ?? CATEGORY_STYLES.general;
-                    return (
-                      <Card
-                        key={playbook.id}
-                        className="p-4 bg-black/40 border-primary/20 hover:border-primary/40 transition-colors cursor-pointer"
-                        onClick={() => handleSelectPlaybook(playbook)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <h3 className="font-tech font-bold text-sm text-foreground">{playbook.name}</h3>
-                              <Badge variant="outline" className={`text-[10px] ${catStyle}`}>
-                                {playbook.category.toUpperCase()}
-                              </Badge>
-                              {playbook.isBuiltIn && (
-                                <Badge variant="outline" className="text-[10px] text-primary/60 border-primary/20">
-                                  BUILT-IN
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mb-2">{playbook.description}</p>
-                            <div className="flex flex-wrap gap-1">
-                              {playbook.steps.map((step, i) => (
-                                <div key={i} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                  <span className="font-tech text-primary/60">{step.role}</span>
-                                  {i < playbook.steps.length - 1 && <ChevronRight className="w-2.5 h-2.5" />}
+
+                  {/* Category filter tabs */}
+                  <div className="flex gap-1.5 flex-wrap shrink-0">
+                    <button
+                      onClick={() => setPlaybookCategory("all")}
+                      className={`text-[10px] font-tech px-2.5 py-1 rounded-full border transition-colors ${playbookCategory === "all" ? "bg-primary/20 border-primary/40 text-primary" : "border-white/10 text-muted-foreground hover:border-primary/20 hover:text-foreground"}`}
+                    >
+                      All ({playbooks.length})
+                    </button>
+                    {ORDERED_CATEGORIES.filter((cat) => playbooks.some((p) => p.category === cat)).map((cat) => {
+                      const count = playbooks.filter((p) => p.category === cat).length;
+                      const style = CATEGORY_STYLES[cat] ?? CATEGORY_STYLES.general;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => setPlaybookCategory(cat)}
+                          className={`text-[10px] font-tech px-2.5 py-1 rounded-full border transition-colors ${playbookCategory === cat ? `${style} opacity-100` : "border-white/10 text-muted-foreground hover:border-primary/20 hover:text-foreground"}`}
+                        >
+                          {CATEGORY_LABELS[cat] ?? cat} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Playbook list */}
+                  <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+                    {filteredPlaybooks.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground font-tech text-sm">
+                        {playbookSearch ? `No playbooks match "${playbookSearch}"` : "No playbooks in this category."}
+                      </div>
+                    ) : (
+                      filteredPlaybooks.map((playbook) => {
+                        const catStyle = CATEGORY_STYLES[playbook.category] ?? CATEGORY_STYLES.general;
+                        const catLabel = CATEGORY_LABELS[playbook.category] ?? playbook.category.toUpperCase();
+                        return (
+                          <Card
+                            key={playbook.id}
+                            className="p-4 bg-black/40 border-primary/20 hover:border-primary/40 transition-colors cursor-pointer"
+                            onClick={() => handleSelectPlaybook(playbook)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                  <h3 className="font-tech font-bold text-sm text-foreground">{playbook.name}</h3>
+                                  <Badge variant="outline" className={`text-[10px] ${catStyle}`}>
+                                    {catLabel}
+                                  </Badge>
+                                  {!playbook.isBuiltIn && (
+                                    <Badge variant="outline" className="text-[10px] text-primary/60 border-primary/30 bg-primary/5">
+                                      <PenLine className="w-2.5 h-2.5 mr-0.5" />
+                                      CUSTOM
+                                    </Badge>
+                                  )}
                                 </div>
-                              ))}
+                                <p className="text-xs text-muted-foreground mb-2 leading-relaxed">{playbook.description}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {playbook.steps.map((step, i) => (
+                                    <div key={i} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                      <span className="font-tech text-primary/60">{step.role}</span>
+                                      {i < playbook.steps.length - 1 && <ChevronRight className="w-2.5 h-2.5" />}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {!playbook.isBuiltIn && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="font-tech text-xs border-red-500/30 text-red-400 hover:bg-red-500/10 px-2"
+                                    onClick={(e) => { e.stopPropagation(); setDeletingId(playbook.id); }}
+                                    disabled={deletePlaybookMutation.isPending && deletingId === playbook.id}
+                                  >
+                                    {deletePlaybookMutation.isPending && deletingId === playbook.id
+                                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                                      : <Trash2 className="w-3 h-3" />
+                                    }
+                                  </Button>
+                                )}
+                                <Button size="sm" variant="outline" className="font-tech text-xs border-primary/30 text-primary hover:bg-primary/10">
+                                  Use <ArrowRight className="w-3 h-3 ml-1" />
+                                </Button>
+                              </div>
                             </div>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Delete confirmation */}
+                  {deletingId !== null && (
+                    <div className="shrink-0 p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-between gap-3">
+                      <p className="text-xs font-tech text-red-300">Permanently delete this custom playbook?</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="text-xs font-tech border-white/20" onClick={() => setDeletingId(null)}>Cancel</Button>
+                        <Button size="sm" className="text-xs font-tech bg-red-600 hover:bg-red-700 text-white border-0" onClick={() => deletePlaybookMutation.mutate(deletingId!)}>
+                          {deletePlaybookMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Delete"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ── Create Custom Playbook Form ── */
+                <div className="flex flex-col gap-4 overflow-y-auto flex-1">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowCreatePlaybook(false)} className="text-xs font-tech text-muted-foreground hover:text-foreground transition-colors">
+                      ← Back to Playbooks
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-tech text-muted-foreground uppercase tracking-widest block mb-1.5">Playbook Name *</label>
+                      <Input
+                        value={newPlaybookName}
+                        onChange={(e) => setNewPlaybookName(e.target.value)}
+                        placeholder="e.g. Q4 Customer Recovery Drive"
+                        className="font-tech text-sm bg-black/30 border-primary/20 text-white placeholder:text-white/30"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-tech text-muted-foreground uppercase tracking-widest block mb-1.5">Objective / Description</label>
+                      <Textarea
+                        value={newPlaybookDesc}
+                        onChange={(e) => setNewPlaybookDesc(e.target.value)}
+                        placeholder="What problem does this playbook solve? What outcome should it achieve?"
+                        className="font-tech text-sm bg-black/30 border-primary/20 text-white placeholder:text-white/30 min-h-[80px] resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-tech text-muted-foreground uppercase tracking-widest block mb-1.5">Category</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["custom", ...ORDERED_CATEGORIES.filter((c) => c !== "custom")].map((cat) => {
+                          const style = CATEGORY_STYLES[cat] ?? CATEGORY_STYLES.general;
+                          return (
+                            <button
+                              key={cat}
+                              onClick={() => setNewPlaybookCategory(cat)}
+                              className={`text-[10px] font-tech px-2.5 py-1 rounded-full border transition-colors ${newPlaybookCategory === cat ? `${style}` : "border-white/10 text-muted-foreground hover:border-primary/20"}`}
+                            >
+                              {CATEGORY_LABELS[cat] ?? cat}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-tech text-muted-foreground uppercase tracking-widest">AI Directors / Steps</label>
+                        <button
+                          className="text-[10px] font-tech text-primary hover:text-primary/80 transition-colors"
+                          onClick={() => setNewPlaybookSteps((prev) => [...prev, { role: "", objective: "" }])}
+                        >
+                          + Add Step
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {newPlaybookSteps.map((step, i) => (
+                          <div key={i} className="flex gap-2 items-start">
+                            <div className="w-5 h-5 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-2.5">
+                              <span className="text-[10px] font-tech text-primary">{i + 1}</span>
+                            </div>
+                            <Input
+                              value={step.role}
+                              onChange={(e) => setNewPlaybookSteps((prev) => prev.map((s, j) => j === i ? { ...s, role: e.target.value } : s))}
+                              placeholder="Director / Role name"
+                              className="flex-1 font-tech text-xs bg-black/30 border-primary/20 text-white placeholder:text-white/30 h-9"
+                            />
+                            <Input
+                              value={step.objective}
+                              onChange={(e) => setNewPlaybookSteps((prev) => prev.map((s, j) => j === i ? { ...s, objective: e.target.value } : s))}
+                              placeholder="What they do in this playbook"
+                              className="flex-[2] font-tech text-xs bg-black/30 border-primary/20 text-white placeholder:text-white/30 h-9"
+                            />
+                            {newPlaybookSteps.length > 1 && (
+                              <button
+                                className="mt-2 text-muted-foreground hover:text-red-400 transition-colors"
+                                onClick={() => setNewPlaybookSteps((prev) => prev.filter((_, j) => j !== i))}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
-                          <Button size="sm" variant="outline" className="font-tech text-xs flex-shrink-0 border-primary/30 text-primary hover:bg-primary/10">
-                            Use <ArrowRight className="w-3 h-3 ml-1" />
-                          </Button>
-                        </div>
-                      </Card>
-                    );
-                  })
-                )}
-              </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-2 shrink-0">
+                    <Button variant="outline" className="font-tech text-xs border-white/20" onClick={() => setShowCreatePlaybook(false)}>Cancel</Button>
+                    <Button
+                      variant="glow"
+                      className="font-tech text-xs"
+                      disabled={!newPlaybookName.trim() || createPlaybookMutation.isPending}
+                      onClick={handleSubmitCustomPlaybook}
+                    >
+                      {createPlaybookMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+                      Save Playbook
+                    </Button>
+                  </div>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
 
