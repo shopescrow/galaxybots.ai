@@ -560,6 +560,15 @@ export default function DeployTeam() {
                       <Plus className="w-3.5 h-3.5 mr-1" />
                       New Playbook
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="font-tech text-xs border-violet-500/40 text-violet-400 hover:bg-violet-500/10 shrink-0"
+                      onClick={() => setTemplatesOpen(true)}
+                    >
+                      <Library className="w-3.5 h-3.5 mr-1" />
+                      Browse Templates
+                    </Button>
                   </div>
 
                   {/* Category filter tabs */}
