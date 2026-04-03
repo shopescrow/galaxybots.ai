@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Building, Plus, Users, Link2, ExternalLink, FileText } from "lucide-react";
+import { Loader2, Building, Plus, Users, Link2, ExternalLink, FileText, Minus, AlertTriangle, Zap, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatDistanceToNow } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -59,7 +60,7 @@ export default function Clients() {
   const { data: clients, isLoading } = useClients();
   const createClient = useCreateNewClient();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"clients" | "partners">("clients");
+  const [tab, setTab] = useState<"clients" | "aeo-health" | "partners">("clients");
 
   const { data: referrals = [], isLoading: referralsLoading } = useQuery<PartnerReferral[]>({
     queryKey: ["partner-referrals"],
@@ -76,6 +77,7 @@ export default function Clients() {
   });
 
   const { user, updateOnboarding } = useAuth();
+  const isAdmin = user?.role === "owner" || user?.role === "admin";
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -165,6 +167,7 @@ export default function Clients() {
         <div className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit max-w-full overflow-x-auto">
           {[
             { key: "clients", label: "All Clients", count: clients?.length || 0 },
+            ...(isAdmin ? [{ key: "aeo-health", label: "AEO Health", count: null }] : []),
             { key: "partners", label: "Partner Referrals", count: referrals.length },
           ].map((t) => (
             <button
@@ -177,9 +180,11 @@ export default function Clients() {
               }`}
             >
               {t.label}
-              <span className={`text-xs px-2 py-0.5 rounded-full ${tab === t.key ? "bg-primary/20" : "bg-secondary"}`}>
-                {t.count}
-              </span>
+              {t.count !== null && (
+                <span className={`text-xs px-2 py-0.5 rounded-full ${tab === t.key ? "bg-primary/20" : "bg-secondary"}`}>
+                  {t.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -257,6 +262,9 @@ export default function Clients() {
             </div>
           )
         )}
+
+        {/* AEO Health Tab */}
+        {tab === "aeo-health" && isAdmin && <AeoHealthPanel />}
 
         {/* Partners Tab */}
         {tab === "partners" && (
@@ -374,6 +382,172 @@ export default function Clients() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+interface AeoHealthEntry {
+  clientId: number;
+  companyName: string;
+  latestScore: number | null;
+  citationCount: number | null;
+  scannedAt: string | null;
+  delta: number | null;
+  trend: "improving" | "declining" | "stable" | "no_data";
+  isStale: boolean;
+  noData: boolean;
+}
+
+function getScoreColor(score: number | null): string {
+  if (score === null) return "text-muted-foreground";
+  if (score >= 70) return "text-emerald-400";
+  if (score >= 40) return "text-yellow-400";
+  return "text-destructive";
+}
+
+function AeoHealthPanel() {
+  const { data: health, isLoading } = useQuery<AeoHealthEntry[]>({
+    queryKey: ["aeo-health"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/aeo-health`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const needsAttention = health?.filter(h => h.isStale || h.noData) ?? [];
+
+  return (
+    <div className="space-y-6">
+      {needsAttention.length > 0 && (
+        <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-6">
+          <h3 className="font-display font-bold text-base flex items-center gap-2 mb-4 text-yellow-400">
+            <AlertTriangle className="w-5 h-5" />
+            Needs Attention ({needsAttention.length})
+          </h3>
+          <div className="space-y-2">
+            {needsAttention.map((entry) => (
+              <div key={entry.clientId} className="flex items-center justify-between p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Link href={`/clients/${entry.clientId}`}>
+                    <span className="font-tech font-bold text-sm hover:underline cursor-pointer">{entry.companyName}</span>
+                  </Link>
+                  {entry.noData ? (
+                    <Badge variant="outline" className="text-[10px] text-yellow-400 border-yellow-500/30">No scan data</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-orange-400 border-orange-500/30">
+                      Stale {entry.scannedAt ? `· ${formatDistanceToNow(new Date(entry.scannedAt))} ago` : ""}
+                    </Badge>
+                  )}
+                </div>
+                {entry.latestScore !== null && (
+                  <span className={`text-lg font-display font-bold ${getScoreColor(entry.latestScore)}`}>
+                    {entry.latestScore}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border/40 bg-card overflow-hidden">
+        <div className="flex items-center gap-3 p-6 border-b border-border/40">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Zap className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-lg">AEO Health Overview</h3>
+            <p className="text-xs text-muted-foreground font-tech">Sorted by Cloud 9 score — lowest performers first</p>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          </div>
+        ) : !health || health.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Users className="w-8 h-8 mx-auto mb-3 opacity-20" />
+            <p className="text-sm font-tech">No active clients found.</p>
+          </div>
+        ) : (
+          <div className="p-6">
+            <div className="grid grid-cols-5 text-xs font-tech text-muted-foreground uppercase tracking-wider pb-3 border-b border-border/30 px-2">
+              <span className="col-span-2">Client</span>
+              <span className="text-center">Score</span>
+              <span className="text-center">Citations</span>
+              <span className="text-center">Trend</span>
+            </div>
+            <div className="space-y-1 mt-2">
+              {health.map((entry) => (
+                <div key={entry.clientId} className={`grid grid-cols-5 text-sm py-3 px-2 rounded-xl transition-colors items-center ${entry.isStale || entry.noData ? "bg-yellow-500/5 hover:bg-yellow-500/10" : "hover:bg-secondary/30"}`}>
+                  <div className="col-span-2 flex items-center gap-2 min-w-0">
+                    <Link href={`/clients/${entry.clientId}`}>
+                      <span className="font-medium truncate cursor-pointer hover:underline">{entry.companyName}</span>
+                    </Link>
+                    {(entry.isStale || entry.noData) && (
+                      <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
+                    )}
+                  </div>
+                  <div className="text-center">
+                    {entry.latestScore !== null ? (
+                      <span className={`font-display font-bold ${getScoreColor(entry.latestScore)}`}>
+                        {entry.latestScore}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
+                  <div className="text-center text-muted-foreground">
+                    {entry.citationCount !== null ? entry.citationCount : "—"}
+                  </div>
+                  <div className="flex items-center justify-center gap-1">
+                    {entry.trend === "improving" ? (
+                      <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10 gap-0.5">
+                        <ArrowUpRight className="w-3 h-3" />
+                        {entry.delta !== null ? `+${entry.delta}` : "↑"}
+                      </Badge>
+                    ) : entry.trend === "declining" ? (
+                      <Badge variant="outline" className="text-[10px] text-red-400 border-red-500/30 bg-red-500/10 gap-0.5">
+                        <ArrowDownRight className="w-3 h-3" />
+                        {entry.delta !== null ? entry.delta : "↓"}
+                      </Badge>
+                    ) : entry.trend === "stable" ? (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/30 gap-0.5">
+                        <Minus className="w-3 h-3" />
+                        Stable
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground font-tech">No data</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {health.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-border/30 flex items-center gap-4 text-xs text-muted-foreground font-tech">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  {health.filter(h => h.trend === "improving").length} improving
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                  {health.filter(h => h.trend === "declining").length} declining
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground inline-block" />
+                  {health.filter(h => h.trend === "stable").length} stable
+                </span>
+                <span className="flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                  {needsAttention.length} need attention
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

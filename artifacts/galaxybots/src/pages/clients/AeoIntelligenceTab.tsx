@@ -7,6 +7,7 @@ import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, 
 import { format } from "date-fns";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -309,22 +310,114 @@ export function AeoIntelligenceTab({ clientId, websiteUrl }: { clientId: number;
       {scores.length > 1 && (
         <Card className="border-border/40">
           <CardContent className="p-6">
-            <h3 className="text-lg font-display font-bold mb-4">Scan History</h3>
-            <div className="space-y-2">
-              {scores.slice(1, 6).map((score) => (
-                <div key={score.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/30">
-                  <div className="flex items-center gap-3">
-                    <span className={`text-lg font-display font-bold ${getScoreColor(score.overallScore)}`}>
-                      {score.overallScore}
-                    </span>
-                    <span className="text-sm text-muted-foreground font-tech">{score.sourceUrl}</span>
+            <h3 className="text-lg font-display font-bold flex items-center gap-2 mb-4">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Score Trend
+            </h3>
+            {(() => {
+              const chartData = [...scores].reverse().map((s, i, arr) => {
+                const prev = i > 0 ? arr[i - 1] : null;
+                const prevEngines = prev ? Object.entries(prev.engineScores).filter(([, e]) => e.cited).map(([k]) => k) : [];
+                const curEngines = Object.entries(s.engineScores).filter(([, e]) => e.cited).map(([k]) => k);
+                const gained = curEngines.filter(k => !prevEngines.includes(k));
+                const lost = prevEngines.filter(k => !curEngines.includes(k));
+                return {
+                  date: format(new Date(s.scannedAt), "MMM d"),
+                  score: s.overallScore,
+                  gained,
+                  lost,
+                  id: s.id,
+                };
+              });
+
+              const hasEngineChanges = chartData.some(d => d.gained.length > 0 || d.lost.length > 0);
+
+              return (
+                <div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "var(--font-tech)" }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "var(--font-tech)" }} />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+                        formatter={(value: number) => [value, "Score"]}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                      {hasEngineChanges && chartData.map((d) => {
+                        if (d.gained.length > 0) {
+                          return <ReferenceDot key={`g-${d.id}`} x={d.date} y={d.score} r={6} fill="hsl(var(--emerald, 16 185 129))" stroke="none" />;
+                        }
+                        if (d.lost.length > 0) {
+                          return <ReferenceDot key={`l-${d.id}`} x={d.date} y={d.score} r={6} fill="hsl(var(--destructive))" stroke="none" />;
+                        }
+                        return null;
+                      })}
+                    </LineChart>
+                  </ResponsiveContainer>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="text-xs text-muted-foreground font-tech uppercase tracking-wider mb-2">History</div>
+                    {[...scores].map((score, i) => {
+                      const prevScore = scores[i + 1];
+                      const delta = prevScore ? score.overallScore - prevScore.overallScore : null;
+                      const prevEngineKeys = prevScore ? Object.entries(prevScore.engineScores).filter(([, e]) => e.cited).map(([k]) => k) : [];
+                      const curEngineKeys = Object.entries(score.engineScores).filter(([, e]) => e.cited).map(([k]) => k);
+                      const gained = curEngineKeys.filter(k => !prevEngineKeys.includes(k));
+                      const lost = prevEngineKeys.filter(k => !curEngineKeys.includes(k));
+
+                      return (
+                        <div key={score.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`text-lg font-display font-bold flex-shrink-0 ${getScoreColor(score.overallScore)}`}>
+                              {score.overallScore}
+                            </span>
+                            {delta !== null && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-tech flex-shrink-0 ${
+                                  delta > 0
+                                    ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                                    : delta < 0
+                                      ? "text-red-400 border-red-500/30 bg-red-500/10"
+                                      : "text-muted-foreground border-border/30"
+                                }`}
+                              >
+                                {delta > 0 ? (
+                                  <><ArrowUpRight className="w-3 h-3 mr-0.5" />+{delta}</>
+                                ) : delta < 0 ? (
+                                  <><ArrowDownRight className="w-3 h-3 mr-0.5" />{delta}</>
+                                ) : (
+                                  <><Minus className="w-3 h-3 mr-0.5" />0</>
+                                )}
+                              </Badge>
+                            )}
+                            <div className="flex gap-1 flex-wrap min-w-0">
+                              {gained.map(k => (
+                                <Badge key={k} className="text-[10px] bg-emerald-600/80 border-0">+{ENGINE_LABELS[k] || k}</Badge>
+                              ))}
+                              {lost.map(k => (
+                                <Badge key={k} variant="destructive" className="text-[10px]">-{ENGINE_LABELS[k] || k}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-tech flex-shrink-0">
+                            {format(new Date(score.scannedAt), "MMM d, yyyy")}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <span className="text-xs text-muted-foreground font-tech">
-                    {format(new Date(score.scannedAt), "MMM d, yyyy")}
-                  </span>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
