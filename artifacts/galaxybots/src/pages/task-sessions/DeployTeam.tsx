@@ -122,6 +122,7 @@ export default function DeployTeam() {
   >(new Map());
   const [fabricatingIdx, setFabricatingIdx] = useState<number | null>(null);
   const [lastPrefillScenarioId, setLastPrefillScenarioId] = useState<string | null>(null);
+  const [subClientId, setSubClientId] = useState<number | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateHintBots, setTemplateHintBots] = useState<string[]>([]);
   const [showPlaybooks, setShowPlaybooks] = useState(false);
@@ -224,7 +225,8 @@ export default function DeployTeam() {
     setApprovedNewBots(new Map());
     setShowPlaybooks(false);
     analyzeMutation
-      .mutateAsync({ data: { objective: playbook.name + ": " + playbook.description } })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mutateAsync({ data: { objective: playbook.name + ": " + playbook.description, ...(subClientId ? { subClientId } : {}) } as any })
       .then((result) => {
         setProposal(result as typeof proposal);
       })
@@ -242,6 +244,11 @@ export default function DeployTeam() {
     const params = new URLSearchParams(searchString);
     const scenarioId = params.get("scenario");
     const showTemplates = params.get("templates");
+    const clientIdParam = params.get("clientId");
+    if (clientIdParam) {
+      const parsed = Number(clientIdParam);
+      if (!isNaN(parsed) && parsed > 0) setSubClientId(parsed);
+    }
 
     if (showTemplates === "true") {
       setTemplatesOpen(true);
@@ -255,7 +262,8 @@ export default function DeployTeam() {
         setApprovedNewBots(new Map());
         setLastPrefillScenarioId(scenarioId);
         analyzeMutation
-          .mutateAsync({ data: { objective: scenario.missionObjective } })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .mutateAsync({ data: { objective: scenario.missionObjective, ...(subClientId ? { subClientId } : {}) } as any })
           .then((result) => {
             setProposal(result as typeof proposal);
           })
@@ -278,7 +286,8 @@ export default function DeployTeam() {
     setApprovedNewBots(new Map());
 
     const result = await analyzeMutation.mutateAsync({
-      data: { objective: objective.trim() },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { objective: objective.trim(), ...(subClientId ? { subClientId } : {}) } as any,
     });
     const analysisResult = result as typeof proposal;
     setProposal(analysisResult);
@@ -381,7 +390,8 @@ export default function DeployTeam() {
     }
 
     const session = await createSessionMutation.mutateAsync({
-      data: { objective: proposal.objective, botIds },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { objective: proposal.objective, botIds, ...(subClientId ? { subClientId } : {}) } as any,
     });
 
     toast({

@@ -643,7 +643,7 @@ export default function ClientDetail() {
                   variant="glow"
                   className="w-full font-tech tracking-wider"
                   onClick={() =>
-                    navigate(`/deploy-team?scenario=${encodeURIComponent(scenario.id)}`)
+                    navigate(`/deploy-team?scenario=${encodeURIComponent(scenario.id)}&clientId=${clientId}`)
                   }
                 >
                   <Rocket className="w-4 h-4 mr-2" />

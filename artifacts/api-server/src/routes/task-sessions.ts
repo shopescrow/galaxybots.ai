@@ -91,7 +91,9 @@ router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimi
     )
     .join("\n");
 
-  const clientContext = await buildClientContext(req.user!.clientId);
+  const analyzeSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
+  const analyzeContextClientId = (analyzeSubClientId && !isNaN(analyzeSubClientId)) ? analyzeSubClientId : req.user!.clientId;
+  const clientContext = await buildClientContext(analyzeContextClientId);
 
   const completion = await openai.chat.completions.create({
     model: "gpt-5.4",
@@ -234,9 +236,12 @@ router.post("/task-sessions", requireRole("owner", "admin"), llmRateLimit, async
     }
   }
 
+  const createSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
+  const sessionClientId = (createSubClientId && !isNaN(createSubClientId)) ? createSubClientId : req.user!.clientId;
+
   const [session] = await db
     .insert(taskSessionsTable)
-    .values({ objective: body.data.objective, clientId: req.user!.clientId })
+    .values({ objective: body.data.objective, clientId: sessionClientId })
     .returning();
 
   if (body.data.botIds.length > 0) {
@@ -368,22 +373,23 @@ router.post(
       .map((b) => `${b.name} (${b.title})`)
       .join(", ");
 
-    const clientContext = await buildClientContext(req.user!.clientId);
+    const msgContextClientId = session.clientId ?? req.user!.clientId;
+    const clientContext = await buildClientContext(msgContextClientId);
 
     let taskKbContext = "";
     try {
-      taskKbContext = await buildKnowledgeBaseContext(req.user!.clientId, `${session.objective} ${body.data.content}`);
+      taskKbContext = await buildKnowledgeBaseContext(msgContextClientId, `${session.objective} ${body.data.content}`);
     } catch (_e) {}
 
     for (const bot of teamBots) {
       let memoryContext = "";
       try {
-        memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`, req.user!.clientId);
+        memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`, msgContextClientId);
       } catch (_e) {}
 
       let packOverlay = "";
       try {
-        packOverlay = await getPackOverlayForBot(req.user!.clientId, bot.title);
+        packOverlay = await getPackOverlayForBot(msgContextClientId, bot.title);
       } catch (_e) {}
 
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
@@ -416,7 +422,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           sessionId: session.id,
           botId: bot.id,
           botName: bot.name,
-          clientId: req.user!.clientId,
+          clientId: msgContextClientId,
           userId: req.user!.userId,
           isGuest: req.user!.role === "guest",
         },
@@ -466,8 +472,8 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
         "",
       ).trim();
 
-      if (req.user!.clientId) {
-        cleanContent = await applyBrandVoiceGuardrails(req.user!.clientId, cleanContent);
+      if (msgContextClientId) {
+        cleanContent = await applyBrandVoiceGuardrails(msgContextClientId, cleanContent);
       }
 
       const [botMsg] = await db
@@ -487,8 +493,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
       responses.push(botMsg);
     }
 
-    const cId = req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined);
-    captureSessionOutcome(session.id, session.objective, cId).catch((err) =>
+    captureSessionOutcome(session.id, session.objective, msgContextClientId).catch((err) =>
       console.error("Outcome capture error:", err)
     );
 
@@ -581,11 +586,12 @@ router.post(
         .map((b) => `${b.name} (${b.title})`)
         .join(", ");
 
-      const clientContext = await buildClientContext(req.user!.clientId);
+      const streamContextClientId = session.clientId ?? req.user!.clientId;
+      const clientContext = await buildClientContext(streamContextClientId);
 
       let streamTaskKbContext = "";
       try {
-        streamTaskKbContext = await buildKnowledgeBaseContext(req.user!.clientId, `${session.objective} ${body.data.content}`);
+        streamTaskKbContext = await buildKnowledgeBaseContext(streamContextClientId, `${session.objective} ${body.data.content}`);
       } catch (_e) {}
 
       await batchProcessWithSSE(
@@ -593,7 +599,7 @@ router.post(
         async (bot) => {
           let packOverlay = "";
           try {
-            packOverlay = await getPackOverlayForBot(req.user!.clientId, bot.title);
+            packOverlay = await getPackOverlayForBot(streamContextClientId, bot.title);
           } catch (_e) {}
 
           const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
@@ -626,7 +632,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
               sessionId: session.id,
               botId: bot.id,
               botName: bot.name,
-              clientId: req.user!.clientId,
+              clientId: streamContextClientId,
               userId: req.user!.userId,
               isGuest: req.user!.role === "guest",
             },
@@ -676,8 +682,8 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
 
           let cleanContent = content.replace(/\[NEED_ROLE:\s*.+?\]/g, "").trim();
 
-          if (req.user!.clientId) {
-            cleanContent = await applyBrandVoiceGuardrails(req.user!.clientId, cleanContent);
+          if (streamContextClientId) {
+            cleanContent = await applyBrandVoiceGuardrails(streamContextClientId, cleanContent);
           }
 
           await db
@@ -700,8 +706,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
 
       sendSSE({ type: "done", content: "All bots have responded" });
 
-      const clientId = req.body.clientId ? Number(req.body.clientId) : (req.query.clientId ? Number(req.query.clientId) : undefined);
-      captureSessionOutcome(session.id, session.objective, clientId).catch((err) =>
+      captureSessionOutcome(session.id, session.objective, streamContextClientId).catch((err) =>
         console.error("Outcome capture error:", err)
       );
     } catch (err) {
