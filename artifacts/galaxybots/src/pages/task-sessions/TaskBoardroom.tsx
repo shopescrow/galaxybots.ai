@@ -15,7 +15,7 @@ import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
 import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
 import { SaveAsTemplateModal } from "@/components/SaveAsTemplate";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,6 +36,11 @@ import {
   BookmarkPlus,
   Network,
   ArrowRight,
+  ArrowLeft,
+  Printer,
+  Search,
+  Calendar,
+  Download,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -137,8 +142,12 @@ export default function TaskBoardroom() {
   const params = useParams<{ id: string }>();
   const sessionId = Number(params.id) || 0;
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(
     new Set(),
   );
@@ -187,6 +196,10 @@ export default function TaskBoardroom() {
       content: messageContent,
       senderName: "Architect",
     });
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const activeAlerts =
@@ -260,10 +273,14 @@ export default function TaskBoardroom() {
   if (!session) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
+        <div className="flex flex-col items-center justify-center h-[calc(100vh-5rem)] gap-4">
           <p className="text-muted-foreground font-tech">
             Task session not found.
           </p>
+          <Button variant="outline" onClick={() => navigate("/task-rooms")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Task Rooms
+          </Button>
         </div>
       </AppLayout>
     );
@@ -271,10 +288,85 @@ export default function TaskBoardroom() {
 
   const teamBots = (session as { teamBots?: Array<{ id: number; name: string; title: string; department: string }> }).teamBots ?? [];
 
+  const filteredMessages = searchQuery.trim()
+    ? (messages ?? []).filter((msg) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          (msg.content ?? "").toLowerCase().includes(q) ||
+          (msg.botName ?? "").toLowerCase().includes(q) ||
+          (msg.botTitle ?? "").toLowerCase().includes(q)
+        );
+      })
+    : (messages ?? []);
+
+  const textMessages = filteredMessages.filter(
+    (m) => {
+      const t = (m as { messageType?: string }).messageType || "text";
+      return t !== "tool_call" && t !== "tool_result";
+    }
+  );
+
   return (
     <AppLayout>
-      <div className="relative w-full h-[calc(100vh-5rem)] flex overflow-hidden bg-background">
+      {/* Print-only styles */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #print-content, #print-content * { visibility: visible; }
+          #print-content { position: absolute; left: 0; top: 0; width: 100%; }
+          .print-message { page-break-inside: avoid; margin-bottom: 12px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+          .print-header { margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+          .print-meta { color: #555; font-size: 0.85em; margin-top: 4px; }
+        }
+      `}</style>
+
+      {/* Hidden print layout */}
+      <div id="print-content" className="hidden print:block p-8 font-mono text-sm text-black bg-white">
+        <div className="print-header">
+          <h1 className="text-2xl font-bold">Task Room — GalaxyBots.ai</h1>
+          <div className="print-meta">
+            <div><strong>Mission:</strong> {session.objective}</div>
+            <div><strong>Status:</strong> {session.status?.toUpperCase()}</div>
+            <div><strong>Date:</strong> {format(new Date(session.createdAt), "MMMM d, yyyy HH:mm")}</div>
+            <div><strong>Team:</strong> {teamBots.map((b) => `${b.name} (${b.title})`).join(", ")}</div>
+            <div><strong>Printed:</strong> {format(new Date(), "MMMM d, yyyy HH:mm")}</div>
+          </div>
+        </div>
+        <div>
+          {(messages ?? []).filter((m) => {
+            const t = (m as { messageType?: string }).messageType || "text";
+            return t !== "tool_call" && t !== "tool_result";
+          }).map((msg) => {
+            const isUser = msg.role === "user";
+            return (
+              <div key={msg.id} className="print-message">
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <strong>{isUser ? "ARCHITECT" : `${msg.botName}${msg.botTitle ? ` — ${msg.botTitle}` : ""}`}</strong>
+                  <span style={{ color: "#888", fontSize: "0.8em" }}>{format(new Date(msg.createdAt), "MMM d, yyyy HH:mm:ss")}</span>
+                </div>
+                <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="relative w-full h-[calc(100vh-5rem)] flex overflow-hidden bg-background print:hidden">
+        {/* Sidebar */}
         <div className="hidden lg:flex flex-col w-72 border-r border-primary/20 bg-black/30">
+          {/* Back nav */}
+          <div className="px-4 pt-3 pb-2 border-b border-primary/10">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs font-tech text-muted-foreground hover:text-foreground w-full justify-start"
+              onClick={() => navigate("/task-rooms")}
+            >
+              <ArrowLeft className="w-3 h-3 mr-2" />
+              All Task Rooms
+            </Button>
+          </div>
+
           <div className="p-4 border-b border-primary/20">
             <div className="flex items-center gap-2 mb-2">
               <Target className="w-4 h-4 text-primary" />
@@ -285,17 +377,23 @@ export default function TaskBoardroom() {
             <p className="text-sm text-foreground/80 line-clamp-3">
               {session.objective}
             </p>
-            <Badge
-              variant="outline"
-              className={cn(
-                "mt-2 text-[10px]",
-                session.status === "active"
-                  ? "text-green-400 border-green-500/30"
-                  : "text-muted-foreground",
-              )}
-            >
-              {session.status?.toUpperCase()}
-            </Badge>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px]",
+                  session.status === "active"
+                    ? "text-green-400 border-green-500/30"
+                    : "text-muted-foreground",
+                )}
+              >
+                {session.status?.toUpperCase()}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                {format(new Date(session.createdAt), "MMM d, yyyy")}
+              </span>
+            </div>
           </div>
 
           <div className="p-4 flex-1 overflow-y-auto">
@@ -353,7 +451,103 @@ export default function TaskBoardroom() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col">
+        {/* Main area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top bar */}
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-primary/20 bg-black/30">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs font-tech text-muted-foreground hover:text-foreground lg:hidden"
+              onClick={() => navigate("/task-rooms")}
+            >
+              <ArrowLeft className="w-3 h-3" />
+            </Button>
+            <Target className="w-4 h-4 text-primary flex-shrink-0 hidden lg:block" />
+            <p className="text-sm text-foreground/80 truncate font-tech flex-1 hidden lg:block">
+              {session.objective}
+            </p>
+            <Badge
+              variant="outline"
+              className="text-[10px] flex-shrink-0 text-green-400 border-green-500/30 hidden lg:block"
+            >
+              {teamBots.length} BOTS
+            </Badge>
+            {/* Mobile objective line */}
+            <p className="text-sm text-foreground/80 truncate font-tech flex-1 lg:hidden">
+              {session.objective}
+            </p>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <Button
+                size="sm"
+                variant={showSearch ? "default" : "outline"}
+                className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2"
+                onClick={() => { setShowSearch(!showSearch); setSearchQuery(""); }}
+              >
+                <Search className="w-3 h-3" />
+                <span className="hidden sm:inline ml-1">Search</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2"
+                onClick={handlePrint}
+              >
+                <Printer className="w-3 h-3" />
+                <span className="hidden sm:inline ml-1">Print / PDF</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2 lg:hidden"
+                onClick={() => setSaveTemplateOpen(true)}
+              >
+                <BookmarkPlus className="w-3 h-3 mr-1" />
+                <span className="hidden sm:inline">Save</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <AnimatePresence>
+            {showSearch && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden border-b border-primary/20"
+              >
+                <div className="px-4 py-2 bg-black/20 flex items-center gap-2">
+                  <Search className="w-4 h-4 text-primary/50 flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search messages by keyword, bot name..."
+                    autoFocus
+                    className="flex-1 bg-transparent text-sm font-tech text-foreground placeholder:text-muted-foreground/50 outline-none"
+                  />
+                  {searchQuery && (
+                    <span className="text-[10px] text-muted-foreground font-tech">
+                      {textMessages.length} result{textMessages.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={() => { setShowSearch(false); setSearchQuery(""); }}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Alerts */}
           <AnimatePresence>
             {activeAlerts.length > 0 && (
               <motion.div
@@ -412,38 +606,21 @@ export default function TaskBoardroom() {
             )}
           </AnimatePresence>
 
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-primary/20 bg-black/30 lg:hidden">
-            <Target className="w-4 h-4 text-primary flex-shrink-0" />
-            <p className="text-sm text-foreground/80 truncate font-tech flex-1">
-              {session.objective}
-            </p>
-            <Badge
-              variant="outline"
-              className="text-[10px] flex-shrink-0 text-green-400 border-green-500/30"
-            >
-              {teamBots.length} BOTS
-            </Badge>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2 flex-shrink-0"
-              onClick={() => setSaveTemplateOpen(true)}
-            >
-              <BookmarkPlus className="w-3 h-3 mr-1" />
-              Save Template
-            </Button>
-          </div>
-
+          {/* Messages */}
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-2 font-tech"
           >
-            {messages?.length === 0 && !isStreaming ? (
+            {searchQuery && textMessages.length === 0 ? (
+              <div className="text-primary/50 italic text-sm text-center py-8">
+                No messages match "{searchQuery}"
+              </div>
+            ) : filteredMessages.length === 0 && !isStreaming ? (
               <div className="text-primary/50 italic text-sm text-center py-8">
                 Start the discussion — your team is ready.
               </div>
             ) : (
-              messages?.map((msg) => {
+              filteredMessages.map((msg) => {
                 const isUser = msg.role === "user";
                 const msgType = (msg as { messageType?: string }).messageType || "text";
                 const toolData = (msg as { toolData?: unknown }).toolData;
@@ -466,6 +643,10 @@ export default function TaskBoardroom() {
                       isUser
                         ? "bg-cyan/5 border-cyan"
                         : "bg-secondary/40 border-primary/50 hover:bg-secondary/60 transition-colors",
+                      searchQuery && (
+                        (msg.content ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        (msg.botName ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+                      ) ? "ring-1 ring-primary/40" : ""
                     )}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -484,13 +665,14 @@ export default function TaskBoardroom() {
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground opacity-50">
-                        {format(new Date(msg.createdAt), "HH:mm:ss")}
+                      <span className="text-xs text-muted-foreground opacity-50 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {format(new Date(msg.createdAt), "MMM d, HH:mm:ss")}
                       </span>
                     </div>
                     <div
                       className={cn(
-                        "text-sm",
+                        "text-sm whitespace-pre-wrap",
                         isUser ? "text-cyan/90" : "text-foreground/90",
                       )}
                     >
@@ -508,6 +690,17 @@ export default function TaskBoardroom() {
               </div>
             )}
           </div>
+
+          {/* Message count footer when searching */}
+          {searchQuery && (
+            <div className="px-4 py-1.5 bg-primary/5 border-t border-primary/10 text-[10px] font-tech text-muted-foreground flex items-center gap-2">
+              <Search className="w-3 h-3" />
+              Showing {textMessages.length} of {(messages ?? []).filter(m => {
+                const t = (m as { messageType?: string }).messageType || "text";
+                return t !== "tool_call" && t !== "tool_result";
+              }).length} messages matching "{searchQuery}"
+            </div>
+          )}
 
           <div className="p-4 border-t border-primary/20 bg-background/50">
             <form onSubmit={handleSend} className="flex gap-4">

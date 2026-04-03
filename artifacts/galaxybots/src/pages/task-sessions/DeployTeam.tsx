@@ -8,6 +8,7 @@ import {
   useAnalyzeTaskMutation,
   useCreateTaskSessionMutation,
   useFabricateBotMutation,
+  useTaskSessions,
 } from "@/hooks/use-task-sessions";
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
@@ -30,6 +31,9 @@ import {
   Trash2,
   Search,
   PenLine,
+  ExternalLink,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
@@ -140,6 +144,7 @@ export default function DeployTeam() {
   const analyzeMutation = useAnalyzeTaskMutation();
   const createSessionMutation = useCreateTaskSessionMutation();
   const fabricateMutation = useFabricateBotMutation();
+  const { data: recentSessions } = useTaskSessions();
 
   const { data: playbooks = [] } = useQuery<MissionPlaybook[]>({
     queryKey: ["playbooks"],
@@ -433,6 +438,74 @@ export default function DeployTeam() {
               Browse Templates
             </Button>
           </div>
+
+          {/* Recent Task Rooms quick-access */}
+          {recentSessions && recentSessions.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-tech font-bold text-primary/70 uppercase tracking-widest flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  Recent Task Rooms
+                </span>
+                <a href="/task-rooms" className="text-xs font-tech text-primary/50 hover:text-primary transition-colors">
+                  View all →
+                </a>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {recentSessions.slice(0, 6).map((session) => {
+                  const bots = (session as { teamBots?: Array<{ id: number; name: string }> }).teamBots ?? [];
+                  return (
+                    <a
+                      key={session.id}
+                      href={`/task-rooms/${session.id}`}
+                      className="group block"
+                    >
+                      <Card className="p-3 bg-black/30 border-primary/15 hover:border-primary/50 hover:bg-black/50 transition-all cursor-pointer">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <Badge
+                            variant="outline"
+                            className={`text-[9px] flex-shrink-0 ${
+                              session.status === "active"
+                                ? "text-green-400 border-green-500/30"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {session.status?.toUpperCase()}
+                          </Badge>
+                          <ExternalLink className="w-3 h-3 text-primary/30 group-hover:text-primary transition-colors flex-shrink-0 mt-0.5" />
+                        </div>
+                        <p className="text-xs font-tech text-foreground/80 group-hover:text-foreground transition-colors line-clamp-2 mb-2">
+                          {session.objective}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex -space-x-1.5">
+                            {bots.slice(0, 3).map((bot) => (
+                              <div
+                                key={bot.id}
+                                className="w-5 h-5 rounded-full bg-primary/20 border border-background flex items-center justify-center text-[8px] font-bold text-primary"
+                                title={bot.name}
+                              >
+                                {bot.name.split(" ").map((w: string) => w[0]).join("").substring(0, 2)}
+                              </div>
+                            ))}
+                            {bots.length > 3 && (
+                              <div className="w-5 h-5 rounded-full bg-secondary border border-background flex items-center justify-center text-[8px] font-bold text-muted-foreground">
+                                +{bots.length - 3}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[9px] text-muted-foreground/50 font-tech flex items-center gap-1">
+                            <Calendar className="w-2.5 h-2.5" />
+                            {new Date(session.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </span>
+                        </div>
+                      </Card>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <Card className="p-6 bg-black/40 border-primary/30 backdrop-blur-md mb-6">
             <div className="flex items-start gap-4">
