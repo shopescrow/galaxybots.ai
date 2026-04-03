@@ -357,7 +357,7 @@ export default function DeployTeam() {
                   value={objective}
                   onChange={(e) => setObjective(e.target.value)}
                   placeholder="Describe your task... e.g. 'Implement and manage our cookie compliance program'"
-                  className="bg-black/50 border-primary/30 text-primary placeholder:text-primary/30 font-tech"
+                  className="bg-black/50 border-primary/30 text-white placeholder:text-white/50 font-tech"
                   disabled={analyzeMutation.isPending}
                 />
               </div>
