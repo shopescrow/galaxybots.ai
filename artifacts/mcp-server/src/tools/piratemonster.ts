@@ -13,6 +13,39 @@ import crypto from "node:crypto";
 import { apiPost } from "../api-client.js";
 import { validateUrl } from "./http-fetch.js";
 
+async function dispatchScanOutbound(scanRequestId: number, url: string): Promise<void> {
+  const apiKey = process.env["PIRATEMONSTER_API_KEY"] || "";
+  const apiBase = process.env["PIRATEMONSTER_API_BASE_URL"] || "";
+  if (!apiKey || !apiBase) return;
+  try {
+    const response = await fetch(`${apiBase}/v1/scans`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "X-GalaxyBots-Scan-Id": String(scanRequestId),
+      },
+      body: JSON.stringify({ url }),
+    });
+    if (response.ok) {
+      await db
+        .update(aeoScanRequestsTable)
+        .set({ status: "processing" })
+        .where(
+          and(
+            eq(aeoScanRequestsTable.id, scanRequestId),
+            eq(aeoScanRequestsTable.status, "queued")
+          )
+        );
+      console.log(`[MCP] Scan request ${scanRequestId} dispatched to PirateMonster`);
+    } else {
+      console.warn(`[MCP] PirateMonster scan dispatch failed for request ${scanRequestId}: HTTP ${response.status}`);
+    }
+  } catch (err) {
+    console.warn(`[MCP] PirateMonster scan dispatch error for request ${scanRequestId}:`, err);
+  }
+}
+
 export interface McpSessionContext {
   partnerKeyId: number | null;
   rateLimit: number;
@@ -466,6 +499,10 @@ export function registerPirateMonsterScanTools(server: McpServer, ctx: McpSessio
           url,
           status: "queued",
         }).returning();
+
+        dispatchScanOutbound(request.id, url).catch(() => {
+          console.warn(`[MCP] Background dispatch of scan ${request.id} will be retried by queue processor`);
+        });
 
         for (let i = 0; i < AEO_ENGINES.length; i++) {
           await sendEngineProgress(AEO_ENGINES[i], i + 1, "queued");

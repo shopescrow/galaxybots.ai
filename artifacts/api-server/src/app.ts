@@ -43,7 +43,11 @@ app.post(
 );
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    (req as Record<string, unknown>)["rawBody"] = buf;
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(generalRateLimit);
 app.use(auditLogger);
@@ -61,6 +65,7 @@ const PUBLIC_PATHS = [
   "/api/compliance/platform/config",
   "/api/integrations/piratemonster/webhook",
   "/api/integrations/piratemonster/register-partner",
+  "/api/prospecting/webhook/piratemonster",
   "/api/partner/link",
   "/api/partner/register",
   "/api/partner/admin/login",

@@ -14,6 +14,7 @@ const router: IRouter = Router();
 
 const PIRATEMONSTER_INBOUND_SECRET = process.env["PIRATEMONSTER_INBOUND_SECRET"] || "";
 const PIRATEMONSTER_API_KEY = process.env["PIRATEMONSTER_API_KEY"] || "";
+const PIRATEMONSTER_API_BASE_URL = process.env["PIRATEMONSTER_API_BASE_URL"] || "";
 
 const EngineScoreSchema = z.object({
   score: z.number().min(0).max(100),
@@ -66,11 +67,34 @@ function requireInboundSecret(req: Request, res: Response, next: NextFunction) {
     res.status(503).json({ error: "PirateMonster inbound secret not configured" });
     return;
   }
-  const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== PIRATEMONSTER_INBOUND_SECRET) {
-    res.status(401).json({ error: "Invalid or missing API key" });
+
+  const signature = req.headers["x-piratemonster-signature"] as string | undefined;
+  if (!signature) {
+    res.status(401).json({ error: "Missing x-piratemonster-signature header" });
     return;
   }
+
+  const rawBody: Buffer | undefined = (req as Record<string, unknown>)["rawBody"] as Buffer | undefined;
+  const bodyBytes = rawBody ?? Buffer.from(JSON.stringify(req.body));
+
+  const expected = `sha256=${crypto
+    .createHmac("sha256", PIRATEMONSTER_INBOUND_SECRET)
+    .update(bodyBytes)
+    .digest("hex")}`;
+
+  try {
+    if (
+      signature.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    ) {
+      res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
+      return;
+    }
+  } catch {
+    res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
+    return;
+  }
+
   next();
 }
 
@@ -129,6 +153,39 @@ async function queueWebhookDeliveries(scoreId: number, sourceUrl: string, eventT
     console.log(`[PM] Queued ${matchingWebhooks.length} webhook deliveries for event ${eventType} (url: ${sourceUrl})`);
   } catch (err) {
     console.error("[PM] Error queuing webhook deliveries:", err);
+  }
+}
+
+export async function dispatchScanToPirateMonster(scanRequestId: number, url: string): Promise<{ success: boolean; pmScanId?: string; error?: string }> {
+  const apiKey = process.env["PIRATEMONSTER_API_KEY"] || "";
+  const apiBase = process.env["PIRATEMONSTER_API_BASE_URL"] || "";
+  if (!apiKey || !apiBase) {
+    return { success: false, error: "PirateMonster API credentials not configured" };
+  }
+  try {
+    const response = await fetch(`${apiBase}/v1/scans`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "X-GalaxyBots-Scan-Id": String(scanRequestId),
+      },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[PM] Scan dispatch failed for request ${scanRequestId}: HTTP ${response.status} — ${errorText}`);
+      return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+    }
+
+    const data = await response.json() as { id?: string; scan_id?: string };
+    const pmScanId = data.id ?? data.scan_id ?? undefined;
+    return { success: true, pmScanId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[PM] Scan dispatch error for request ${scanRequestId}: ${msg}`);
+    return { success: false, error: msg };
   }
 }
 
@@ -268,7 +325,57 @@ router.post("/prospecting/jobs/dispatch", async (req: Request, res: Response): P
       }
     });
 
-    res.json(job);
+    if (!PIRATEMONSTER_API_BASE_URL) {
+      await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+      res.status(503).json({ error: "PirateMonster API base URL not configured. Set PIRATEMONSTER_API_BASE_URL to enable prospecting dispatch." });
+      return;
+    }
+
+    try {
+      const pmResponse = await fetch(`${PIRATEMONSTER_API_BASE_URL}/v1/enterprise/prospecting/jobs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${PIRATEMONSTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          query: req.body.query,
+          location: req.body.location,
+          limit: req.body.limit || 50,
+          webhook_callback: process.env["GALAXYBOTS_API_URL"]
+            ? `${process.env["GALAXYBOTS_API_URL"]}/api/prospecting/webhook/piratemonster`
+            : process.env["REPLIT_DEV_DOMAIN"]
+            ? `https://${process.env["REPLIT_DEV_DOMAIN"]}/api/prospecting/webhook/piratemonster`
+            : `/api/prospecting/webhook/piratemonster`,
+          client_id: clientId,
+          idempotency_key: idempotencyKey,
+        }),
+      });
+
+      if (pmResponse.ok) {
+        const pmData = await pmResponse.json() as { id?: number | string; job_id?: number | string };
+        const pmJobId = pmData.id != null ? String(pmData.id) : pmData.job_id != null ? String(pmData.job_id) : null;
+        await db
+          .update(prospectingJobsTable)
+          .set({ status: "submitted" as const, pmJobId })
+          .where(eq(prospectingJobsTable.id, job.id));
+        console.log(`[PM] Prospecting job ${job.id} submitted to PirateMonster (pmJobId: ${pmJobId ?? "unknown"})`);
+      } else {
+        const errText = await pmResponse.text();
+        console.error(`[PM] Prospecting job dispatch failed: HTTP ${pmResponse.status} — ${errText}`);
+        await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+        res.status(502).json({ error: `PirateMonster returned HTTP ${pmResponse.status}. Job recorded locally.` });
+        return;
+      }
+    } catch (pmErr) {
+      console.error("[PM] Prospecting job dispatch error:", pmErr);
+      await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+      res.status(502).json({ error: "Failed to reach PirateMonster API. Job recorded locally." });
+      return;
+    }
+
+    const [updatedJob] = await db.select().from(prospectingJobsTable).where(eq(prospectingJobsTable.id, job.id));
+    res.json(updatedJob ?? job);
   } catch (err) {
     console.error("Dispatch error:", err);
     res.status(500).json({ error: "Failed to dispatch job to PirateMonster" });
@@ -546,15 +653,21 @@ router.get("/integrations/piratemonster/config", async (_req, res): Promise<void
   const inboundSecretMasked = PIRATEMONSTER_INBOUND_SECRET
     ? "••••••••" + PIRATEMONSTER_INBOUND_SECRET.slice(-4)
     : null;
+  const apiBaseUrlMasked = PIRATEMONSTER_API_BASE_URL
+    ? PIRATEMONSTER_API_BASE_URL.replace(/^(https?:\/\/[^/]{4}).*/, "$1••••")
+    : null;
 
   res.json({
     webhookUrl: "/api/integrations/piratemonster/webhook",
     recommendUrl: "/api/integrations/piratemonster/recommend",
     method: "POST",
-    apiKeyHeader: "x-api-key",
+    apiKeyHeader: "x-piratemonster-signature",
     inboundSecretConfigured: !!PIRATEMONSTER_INBOUND_SECRET,
     inboundSecretMasked,
     outboundKeyConfigured: !!PIRATEMONSTER_API_KEY,
+    apiBaseUrlConfigured: !!PIRATEMONSTER_API_BASE_URL,
+    apiBaseUrlMasked,
+    allCredentialsConfigured: !!PIRATEMONSTER_INBOUND_SECRET && !!PIRATEMONSTER_API_KEY && !!PIRATEMONSTER_API_BASE_URL,
     engines: ["chatgpt", "gemini", "perplexity", "bing_copilot", "meta_ai", "deepseek", "grok", "claude", "google_ai"],
   });
 });
@@ -1014,13 +1127,23 @@ router.post("/aeo/scan/request", requireRole("owner", "admin"), async (req, res)
     return;
   }
 
-  await db.insert(aeoScanRequestsTable).values({
+  const [scanRequest] = await db.insert(aeoScanRequestsTable).values({
     partnerKeyId: partnerKey.id,
     url: url.trim(),
     status: "queued",
-  });
+  }).returning();
 
-  res.json({ success: true, message: "AEO scan queued. Results will appear in the AEO Intelligence tab once processing completes." });
+  const dispatch = await dispatchScanToPirateMonster(scanRequest.id, url.trim());
+  if (dispatch.success) {
+    await db
+      .update(aeoScanRequestsTable)
+      .set({ status: "processing" })
+      .where(eq(aeoScanRequestsTable.id, scanRequest.id));
+  } else {
+    console.warn(`[PM] Immediate scan dispatch failed for request ${scanRequest.id}: ${dispatch.error} — will retry via background queue`);
+  }
+
+  res.json({ success: true, message: "AEO scan queued. Results will appear in the AEO Intelligence tab once processing completes.", requestId: scanRequest.id });
 });
 
 router.get("/integrations/piratemonster/bingolingo-link/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {

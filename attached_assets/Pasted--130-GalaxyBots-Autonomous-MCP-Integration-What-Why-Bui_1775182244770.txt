@@ -1,0 +1,70 @@
+#130 - GalaxyBots Autonomous MCP Integration
+What & Why
+Build a dedicated MCP server endpoint at /api/mcp/galaxybots that gives GalaxyBots.ai full autonomous CRUD control over PirateMonster.com. Unlike the general-purpose MCP server (read-heavy, tier-gated, API-key auth), this is a full-proxy MCP that lets GalaxyBots observe platform state, decide on actions, execute write operations, and verify results — all through the MCP protocol. Authentication uses the existing GalaxyBots HMAC-SHA256 system (not API keys), with elevated admin-level privileges. Safety guardrails integrate with the existing Guardian sentinel and Approval Queue systems.
+
+Done looks like
+A new MCP endpoint at POST /api/mcp/galaxybots accepts standard MCP JSON-RPC requests authenticated via existing GB HMAC headers (X-GB-Signature, X-GB-Timestamp) or Token Bridge (GB-Auth-Token)
+GalaxyBots.ai can call ListTools to discover all available actions, organized into these categories:
+Read/Observe tools — all existing MCP v1+v2 AI tools (grade_website, optimize_content, simulate_ai_query, etc.) without tier restrictions or Doubloon costs, plus platform health, revenue, user summaries, dispatch metrics, and unified readiness scores
+Write/Act tools — full CRUD operations including:
+Content & campaigns: create/update/delete AEO content, start/pause/resume missions, create social posts, schedule publishing
+User management: change user tiers, change roles, reset credits, invite team members
+Settings & configuration: update user preferences, toggle autopilot features, start/pause/reset bot status, update engine priority maps, modify compliance rules
+Data operations: bulk import leads/sites/keywords/competitors, run custom data exports
+Social engagement: create posts, schedule content, reply to comments
+Verify tools — pull performance metrics, dispatch status, webhook queue health, customer risk lists to confirm action outcomes
+Destructive operations (delete, bulk changes, permission escalation) require a confirm_destructive: true flag in the tool arguments; without it the tool returns a preview of what would happen and asks for confirmation
+High-impact write operations (publish content, start campaigns, send outreach) route through the existing Approval Queue system — GalaxyBots can queue the action and then approve/reject it via approve_queued_action / reject_queued_action tools, creating a clear audit trail
+Rate limiting via token bucket (configurable, default 60 requests/minute) prevents API flooding
+Every tool call is logged to integration_access_log with auth method "mcp-hmac", the tool name, arguments hash, result status, and latency — providing a complete audit trail of every autonomous action
+The Guardian circuit breaker is respected: if the circuit breaker is active, write tools return an error explaining the platform is in protection mode
+Tools registry and health endpoints reflect the GalaxyBots MCP server status and available tools
+The existing Token Bridge auth also works, enabling GalaxyBots Manager users to invoke tools from their browser session
+Out of scope
+Modifying the existing general-purpose MCP v1/v2 servers — those remain as-is for external developers
+Building the GalaxyBots-side MCP client (that lives in the GalaxyBots.ai codebase)
+New database tables — reuse existing integration_access_log, api_call_log, approval_queue
+Direct database mutation tools — all writes go through existing service functions and route handlers, never raw SQL
+Financial/billing operations (Stripe mutations) — too sensitive for autonomous control
+Tasks
+GalaxyBots MCP server module — Create a new MCP server using the existing @modelcontextprotocol/sdk with StreamableHTTPServerTransport. Wire GB HMAC and Token Bridge auth as the authentication layer. Register tool handlers that delegate to existing service functions. Skip tier checks and Doubloon deductions for GB-authenticated requests. Respect the Guardian circuit breaker state for all write operations.
+
+Read/Observe tools — Register all existing v1+v2 AI tools (reuse handler logic from mcp-server.ts and mcp-v2-server.ts) plus management read tools: pm_platform_health, pm_revenue, pm_users_summary, pm_dispatch_status, pm_webhook_queue, pm_unified_readiness, pm_customer_risk, pm_intelligence_summary, pm_trust_scores. These wrap the data currently served by the REST internal API endpoints in galaxybots-integration-routes.ts and enterprise-api-dispatch.ts.
+
+Write/Act tools — Implement CRUD tools that proxy to existing route handlers and service functions:
+
+Content: pm_create_content, pm_update_content, pm_delete_content, pm_optimize_content
+Campaigns: pm_start_mission, pm_pause_mission, pm_resume_mission, pm_delete_mission
+Social: pm_create_social_post, pm_schedule_post, pm_reply_to_comment
+Users: pm_change_user_tier, pm_change_user_role, pm_reset_credits
+Settings: pm_update_preferences, pm_toggle_autopilot, pm_update_engine_priorities, pm_update_compliance_rules
+Import: pm_import_leads, pm_import_sites, pm_import_keywords, pm_import_competitors
+Approval queue: pm_approve_queued_action, pm_reject_queued_action, pm_list_pending_approvals
+Safety guardrails — Implement the confirm_destructive flag pattern for delete/bulk operations (returns a dry-run preview without the flag). Add token-bucket rate limiting (60 req/min default, configurable via env var). Check Guardian circuit breaker state before executing any write tool. Route high-impact actions through the existing Approval Queue. Log every call to integration_access_log with tool name, argument hash, auth method, result status, and latency.
+
+Route registration, tools manifest, and docs — Mount the handler at POST /api/mcp/galaxybots in routes.ts with CORS. Add all GB-exclusive tools to the tools manifest with a new galaxybots category. Update the tools-registry and health endpoints. Add a "GalaxyBots MCP" section to the developer portal docs page with endpoint URL, HMAC auth headers, available tool list by category, example JSON-RPC payloads for observe/act/verify workflows, and the autonomy loop pattern.
+
+Relevant files
+server/mcp-v2-server.ts
+server/mcp-server.ts
+server/mcp-tools-manifest.ts
+server/mcp-channels.ts
+server/mcp-admin-routes.ts
+server/galaxybots-integration-routes.ts
+server/galaxybots-webhook-service.ts
+server/enterprise-api-dispatch.ts
+server/gb-manager-intelligence-routes.ts
+server/api-key-middleware.ts
+server/guardian-service.ts
+server/guardian-routes.ts
+server/approval-service.ts
+server/approval-routes.ts
+server/admin-support-routes.ts
+server/admin-gb-manager-routes.ts
+server/settings-routes.ts
+server/aeo-routes.ts
+server/social-routes.ts
+server/import-routes.ts
+server/mission-service.ts
+server/ai-usage-tracker.ts
+server/routes.ts:519,649-680,729-760,1004-1025

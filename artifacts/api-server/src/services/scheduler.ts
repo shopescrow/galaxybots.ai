@@ -39,6 +39,7 @@ import { computeAllHealthScores, generateWeeklyPulse } from "./client-health";
 import nodemailer from "nodemailer";
 import { executeWorkflow, checkWorkflowTriggers, resumeWorkflowRunFromDelay } from "./workflow-engine";
 import { addSSEClient, broadcastSSE } from "./sse";
+import { dispatchScanToPirateMonster } from "../routes/piratemonster";
 export { addSSEClient, broadcastSSE };
 
 function errMsg(err: unknown): string {
@@ -1326,6 +1327,58 @@ export async function checkActivationNurture() {
   }
 }
 
+const SCAN_QUEUE_BATCH = 10;
+
+async function checkAeoScanQueue() {
+  const apiKey = process.env["PIRATEMONSTER_API_KEY"] || "";
+  const apiBase = process.env["PIRATEMONSTER_API_BASE_URL"] || "";
+  if (!apiKey || !apiBase) return;
+
+  const queued = await db
+    .select()
+    .from(aeoScanRequestsTable)
+    .where(eq(aeoScanRequestsTable.status, "queued"))
+    .limit(SCAN_QUEUE_BATCH);
+
+  if (queued.length === 0) return;
+
+  console.log(`[PM] Scan queue processor: dispatching ${queued.length} queued scan(s)`);
+
+  for (const request of queued) {
+    try {
+      await db
+        .update(aeoScanRequestsTable)
+        .set({ status: "processing" })
+        .where(
+          and(
+            eq(aeoScanRequestsTable.id, request.id),
+            eq(aeoScanRequestsTable.status, "queued")
+          )
+        );
+
+      const result = await dispatchScanToPirateMonster(request.id, request.url);
+
+      if (!result.success) {
+        console.error(`[PM] Scan queue: failed to dispatch request ${request.id} (${request.url}): ${result.error}`);
+        await db
+          .update(aeoScanRequestsTable)
+          .set({ status: "failed" })
+          .where(eq(aeoScanRequestsTable.id, request.id));
+      } else {
+        console.log(`[PM] Scan queue: dispatched request ${request.id} (${request.url}) — pmScanId: ${result.pmScanId ?? "unknown"}`);
+      }
+    } catch (err: unknown) {
+      console.error(`[PM] Scan queue processor error for request ${request.id}: ${errMsg(err)}`);
+      try {
+        await db
+          .update(aeoScanRequestsTable)
+          .set({ status: "failed" })
+          .where(eq(aeoScanRequestsTable.id, request.id));
+      } catch { }
+    }
+  }
+}
+
 let slaBreachInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function startScheduler() {
@@ -1419,6 +1472,7 @@ export async function startScheduler() {
     checkScheduledWorkflows().catch(handleTickError("scheduled workflows"));
     resumePausedWorkflows().catch(handleTickError("resume paused workflows"));
     checkActivationNurture().catch(handleTickError("activation nurture"));
+    checkAeoScanQueue().catch(handleTickError("AEO scan queue"));
   }, 5 * 60 * 1000);
 }
 

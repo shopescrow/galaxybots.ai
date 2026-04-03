@@ -8,7 +8,8 @@ import { seedDefaultOutreachTemplates } from "./services/seed-outreach-templates
 import { seedDefaultPartners } from "./services/seed-partners";
 import { seedMissionTemplates } from "./services/seed-mission-templates";
 import { seedPlaybooks } from "./services/seed-playbooks";
-import { pool } from "@workspace/db";
+import { pool, db, partnerRegistrationsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const EXPECTED_TABLES = [
   "aeo_recommendation_cache",
@@ -137,9 +138,56 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+async function ensurePirateMonsterPartnerRegistered() {
+  const apiKey = process.env["PIRATEMONSTER_API_KEY"] || "";
+  const inboundSecret = process.env["PIRATEMONSTER_INBOUND_SECRET"] || "";
+  const apiBaseUrl = process.env["PIRATEMONSTER_API_BASE_URL"] || "";
+
+  if (!apiKey || !inboundSecret || !apiBaseUrl) {
+    console.log("[startup] PirateMonster credentials incomplete — skipping partner auto-registration");
+    return;
+  }
+
+  try {
+    const [existing] = await db
+      .select()
+      .from(partnerRegistrationsTable)
+      .where(eq(partnerRegistrationsTable.partnerRef, "piratemonster"))
+      .limit(1);
+
+    if (existing) {
+      if (existing.plan !== "enterprise" || existing.status !== "active") {
+        await db
+          .update(partnerRegistrationsTable)
+          .set({ plan: "enterprise", status: "active" })
+          .where(eq(partnerRegistrationsTable.partnerRef, "piratemonster"));
+        console.log("[startup] PirateMonster partner registration updated to enterprise/active");
+      } else {
+        console.log("[startup] PirateMonster partner registration already confirmed (enterprise/active)");
+      }
+      return;
+    }
+
+    await db.insert(partnerRegistrationsTable).values({
+      partnerRef: "piratemonster",
+      clientId: 0,
+      companyName: "PirateMonster.com",
+      contactName: "PirateMonster Platform",
+      contactEmail: "platform@piratemonster.com",
+      plan: "enterprise",
+      source: "platform_integration",
+      status: "active",
+    });
+    console.log("[startup] PirateMonster partner auto-registered as enterprise partner");
+  } catch (err) {
+    console.error("[startup] PirateMonster partner auto-registration failed:", err);
+  }
+}
+
 app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
   await validateDatabaseTables();
+  await ensurePirateMonsterPartnerRegistered();
   await startScheduler();
   startWebhookDeliveryWorker();
   ProspectingWorker.start();
