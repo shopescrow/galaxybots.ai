@@ -13,11 +13,7 @@ import { eq, and, desc, sql, gte, count } from "drizzle-orm";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import dns from "dns/promises";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const router: IRouter = Router();
 
@@ -565,10 +561,9 @@ router.get("/developer/mcp/sessions", async (req, res): Promise<void> => {
 router.get("/developer/openapi", async (_req, res): Promise<void> => {
   try {
     const possiblePaths = [
+      path.resolve(process.cwd(), "lib/api-spec/openapi.yaml"),
       path.resolve(process.cwd(), "../../lib/api-spec/openapi.yaml"),
       path.resolve(process.cwd(), "../lib/api-spec/openapi.yaml"),
-      path.resolve(__dirname, "../../../../lib/api-spec/openapi.yaml"),
-      path.resolve(__dirname, "../../../lib/api-spec/openapi.yaml"),
       "/home/runner/workspace/lib/api-spec/openapi.yaml",
     ];
 

@@ -23,9 +23,7 @@ BASE_PATH = "/__mcp/"
 
 [services.production]
 build = ["pnpm", "--filter", "@workspace/mcp-server", "run", "build"]
-publicDir = "artifacts/mcp-server/dist/public"
-serve = "static"
+run = "pnpm --filter @workspace/mcp-server run start"
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.health.startup]
+path = "/__mcp/health"
