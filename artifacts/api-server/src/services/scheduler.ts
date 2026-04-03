@@ -160,6 +160,11 @@ async function runAssignment(assignmentId: number) {
 
   if (!assignment || assignment.isActive !== "true") return null;
 
+  if (!assignment.clientId) {
+    console.warn(`[scheduler] Skipping assignment #${assignmentId}: no clientId — cannot stamp notifications or SSE events without tenant scope`);
+    return null;
+  }
+
   if (assignment.clientId) {
     const paused = await shouldPauseAutonomous(assignment.clientId);
     if (paused) {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect } from "react";
+import React, { lazy, Suspense, useState, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -114,13 +114,24 @@ const queryClient = new QueryClient({
   },
 });
 
+// ─── Admin-only route guard ────────────────────────────────────────────────────
+function AdminOnly({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <PageLoader />;
+  if (!user) return <Redirect to="/login" />;
+  if (user.role !== "owner" && user.role !== "admin") return <Redirect to="/boardroom" />;
+  return <Component />;
+}
+
 // ─── Route groups ─────────────────────────────────────────────────────────────
 function SmartHome() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <PageLoader />;
-  if (!user) return <Home />;
-  if (user.role === "owner" || user.role === "admin") {
-    return <Redirect to="/command-center" />;
+  if (user) {
+    if (user.role === "owner" || user.role === "admin") {
+      return <Redirect to="/command-center" />;
+    }
+    return <Redirect to="/boardroom" />;
   }
   return <Home />;
 }
@@ -148,7 +159,7 @@ function AuthenticatedRoutes() {
     <>
       <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
       <Switch>
-        <Route path="/command-center"         component={CommandCenter} />
+        <Route path="/command-center"         component={() => <AdminOnly component={CommandCenter} />} />
         <Route path="/bots"                   component={BotRoster} />
         <Route path="/bots/ai-receptionist"   component={AIReceptionist} />
         <Route path="/bots/:id/cfo-dashboard" component={CFODashboard} />
@@ -182,8 +193,8 @@ function AuthenticatedRoutes() {
         <Route path="/pipelines"              component={Pipelines} />
         <Route path="/analytics"              component={AnalyticsDashboard} />
         <Route path="/five-year-plan"         component={PitchDeck} />
-        <Route path="/admin/marketplace"      component={AdminModeration} />
-        <Route path="/settings/org"           component={OrgAdmin} />
+        <Route path="/admin/marketplace"      component={() => <AdminOnly component={AdminModeration} />} />
+        <Route path="/settings/org"           component={() => <AdminOnly component={OrgAdmin} />} />
         <Route path="/notifications"          component={NotificationsPage} />
         <Route path="/usage"                  component={UsageDashboard} />
         <Route path="/briefs"                 component={BriefsPage} />

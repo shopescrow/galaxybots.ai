@@ -25,6 +25,11 @@ function clamp(value: number, min: number, max: number): number {
 
 router.get("/notifications", async (req, res): Promise<void> => {
   const clientId = req.user!.clientId;
+  if (!clientId) {
+    res.json([]);
+    return;
+  }
+
   const category = req.query.category as string | undefined;
   const severity = req.query.severity as string | undefined;
   const includeRead = req.query.includeRead === "true";
@@ -78,6 +83,10 @@ router.get("/notifications", async (req, res): Promise<void> => {
 
 router.get("/notifications/count", async (req, res): Promise<void> => {
   const clientId = req.user!.clientId;
+  if (!clientId) {
+    res.json({ unread: 0 });
+    return;
+  }
 
   const result = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -94,6 +103,12 @@ router.get("/notifications/count", async (req, res): Promise<void> => {
 });
 
 router.patch("/notifications/:id/read", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) {
+    res.status(403).json({ error: "No client scope on authenticated user" });
+    return;
+  }
+
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid notification ID" });
@@ -121,6 +136,10 @@ router.patch("/notifications/:id/read", async (req, res): Promise<void> => {
 
 router.post("/notifications/read-all", async (req, res): Promise<void> => {
   const clientId = req.user!.clientId;
+  if (!clientId) {
+    res.status(403).json({ error: "No client scope on authenticated user" });
+    return;
+  }
 
   await db
     .update(notificationsTable)
@@ -136,6 +155,12 @@ router.post("/notifications/read-all", async (req, res): Promise<void> => {
 });
 
 router.delete("/notifications/:id", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) {
+    res.status(403).json({ error: "No client scope on authenticated user" });
+    return;
+  }
+
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid notification ID" });
@@ -148,7 +173,7 @@ router.delete("/notifications/:id", async (req, res): Promise<void> => {
     .where(
       and(
         eq(notificationsTable.id, id),
-        eq(notificationsTable.clientId, req.user!.clientId),
+        eq(notificationsTable.clientId, clientId),
       )
     )
     .returning();

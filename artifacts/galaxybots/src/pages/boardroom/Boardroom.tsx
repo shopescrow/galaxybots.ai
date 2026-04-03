@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
+import { DashboardNotificationFeed } from "@/components/DashboardNotificationFeed";
 
 export default function Boardroom() {
   const { data: messages, isLoading } = useBoardroom(50);
@@ -61,6 +62,12 @@ export default function Boardroom() {
               <span className="sm:hidden">CLASSIFIED</span>
             </div>
           </div>
+
+          <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0 overflow-hidden">
+
+          <Card className="xl:w-72 shrink-0 bg-black/60 border-primary/20 supports-[backdrop-filter]:backdrop-blur-md p-4 overflow-y-auto">
+            <DashboardNotificationFeed limit={6} />
+          </Card>
 
           <Card className="flex-1 overflow-hidden bg-black/60 border-primary/20 supports-[backdrop-filter]:backdrop-blur-md flex flex-col relative min-h-0">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
@@ -162,6 +169,8 @@ export default function Boardroom() {
               </form>
             </div>
           </Card>
+
+          </div>
 
         </div>
       </div>

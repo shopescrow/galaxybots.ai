@@ -37,6 +37,7 @@ import {
 import { useState, useEffect } from "react";
 import { Redirect, useSearch } from "wouter";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
+import { DashboardNotificationFeed } from "@/components/DashboardNotificationFeed";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -933,22 +934,30 @@ export default function CommandCenter() {
               </Card>
             </div>
 
-            <Card>
-              <CardHeader className="pb-3 border-b border-border/30">
-                <CardTitle className="text-lg flex items-center gap-2 font-tech">
-                  <AlertTriangle className="w-5 h-5 text-red-400" />
-                  Alerts
-                  {alertCount > 0 && (
-                    <Badge className="ml-2 bg-red-500/20 text-red-400 text-xs">
-                      {alertCount}
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <AlertsSection alerts={alerts.data || []} />
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader className="pb-3 border-b border-border/30">
+                  <CardTitle className="text-lg flex items-center gap-2 font-tech">
+                    <AlertTriangle className="w-5 h-5 text-red-400" />
+                    Alerts
+                    {alertCount > 0 && (
+                      <Badge className="ml-2 bg-red-500/20 text-red-400 text-xs">
+                        {alertCount}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <AlertsSection alerts={alerts.data || []} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-4">
+                  <DashboardNotificationFeed limit={8} />
+                </CardContent>
+              </Card>
+            </div>
 
             <SlaSettingsPanel />
 

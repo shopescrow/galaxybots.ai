@@ -145,6 +145,7 @@ function OnboardingProgressBadge() {
 export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBarProps) {
   const { preferences } = useUserPreferences();
   const { partner } = usePartner();
+  const { user } = useAuth();
 
   const displayLogo = partner?.partnerLogo || preferences?.logoUrl || logoImg;
   const displayName = partner?.partnerName || null;
@@ -204,7 +205,7 @@ export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBa
           <Search className="w-4 h-4" />
         </button>
 
-        <NotificationBell />
+        {user && <NotificationBell />}
         <LanguageSelector />
         <Link href="/settings">
           <Button

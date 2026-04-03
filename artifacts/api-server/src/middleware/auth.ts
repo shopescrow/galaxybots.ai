@@ -86,6 +86,10 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       res.status(401).json({ error: "Account has been deactivated" });
       return;
     }
+    if (!decoded.clientId) {
+      res.status(403).json({ error: "Session has no tenant scope — please log in again" });
+      return;
+    }
     req.user = decoded;
     next();
   } catch {
