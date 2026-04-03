@@ -31,6 +31,10 @@ export default function OnboardingChecklist() {
   const [collapsed, setCollapsed] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
 
+  if (!user) {
+    return null;
+  }
+
   const onboarding: OnboardingState = user?.onboarding ?? {
     companyProfile: false,
     firstClient: false,

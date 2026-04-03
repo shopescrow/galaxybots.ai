@@ -92,6 +92,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (!isInput && (e.key === "?" || (e.shiftKey && e.key === "/")) && !meta) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+        return;
+      }
+
+      if (!user) return;
+
       if (meta && e.key === "b") {
         e.preventDefault();
         navigate("/boardroom");
@@ -101,12 +109,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       if (meta && e.key === "d") {
         e.preventDefault();
         navigate("/deploy-team");
-        return;
-      }
-
-      if (!isInput && (e.key === "?" || (e.shiftKey && e.key === "/")) && !meta) {
-        e.preventDefault();
-        setShortcutsOpen((prev) => !prev);
         return;
       }
 
@@ -128,7 +130,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         return;
       }
     },
-    [navigate, clients, setActiveClient, toast]
+    [user, navigate, clients, setActiveClient, toast]
   );
 
   useEffect(() => {

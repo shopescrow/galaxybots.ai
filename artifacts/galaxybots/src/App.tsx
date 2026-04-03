@@ -118,7 +118,8 @@ const queryClient = new QueryClient({
 function SmartHome() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <PageLoader />;
-  if (user && (user.role === "owner" || user.role === "admin")) {
+  if (!user) return <Home />;
+  if (user.role === "owner" || user.role === "admin") {
     return <Redirect to="/command-center" />;
   }
   return <Home />;
