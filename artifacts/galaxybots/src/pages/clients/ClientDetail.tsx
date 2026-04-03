@@ -402,7 +402,7 @@ export default function ClientDetail() {
 
         {activeTab === "health" && <ClientHealthTab clientId={clientId} />}
 
-        {activeTab === "intelligence" && <AeoIntelligenceTab clientId={clientId} />}
+        {activeTab === "intelligence" && <AeoIntelligenceTab clientId={clientId} websiteUrl={client?.websiteUrl ?? null} />}
 
         {activeTab === "profile" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

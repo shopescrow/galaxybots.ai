@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus, FileText, ExternalLink, ArrowRight, RefreshCw } from "lucide-react";
+import { Loader2, Zap, CheckCircle2, XCircle, TrendingUp, AlertTriangle, Link2, Shield, Plus, X, ArrowUpRight, ArrowDownRight, Minus, FileText, ExternalLink, ArrowRight, RefreshCw, Star, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -72,7 +72,50 @@ function getScoreBgColor(score: number): string {
   return "border-destructive/20 bg-destructive/5";
 }
 
-export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
+function useScanMutation(clientId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (url: string) => {
+      const res = await fetch(`${BASE}/api/aeo/scan/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to queue scan");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["aeo-pending-scans", clientId] });
+    },
+  });
+}
+
+function PendingScansBadge({ clientId }: { clientId: number }) {
+  const { data } = useQuery<{ pendingCount: number }>({
+    queryKey: ["aeo-pending-scans", clientId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/pending-scans/${clientId}`);
+      if (!res.ok) return { pendingCount: 0 };
+      return res.json();
+    },
+    refetchInterval: 15000,
+  });
+
+  const count = data?.pendingCount ?? 0;
+  if (count === 0) return null;
+
+  return (
+    <Badge variant="outline" className="font-tech text-[10px] text-yellow-400 border-yellow-500/30 bg-yellow-500/10 animate-pulse">
+      <Clock className="w-2.5 h-2.5 mr-1" />
+      {count} scan{count !== 1 ? "s" : ""} pending…
+    </Badge>
+  );
+}
+
+export function AeoIntelligenceTab({ clientId, websiteUrl }: { clientId: number; websiteUrl?: string | null }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: scores, isLoading } = useQuery<AeoScore[]>({
@@ -95,6 +138,7 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
   if (!scores || scores.length === 0) {
     return (
       <div className="space-y-6">
+        <PendingScansBadge clientId={clientId} />
         <Card className="border-dashed border-border/50 bg-transparent shadow-none">
           <CardContent className="p-10 text-center">
             <Zap className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
@@ -146,7 +190,7 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
           </CardContent>
         </Card>
         <ContentAttributionSection clientId={clientId} />
-        <CompetitorsSection clientId={clientId} />
+        <CompetitorsSection clientId={clientId} websiteUrl={websiteUrl} />
       </div>
     );
   }
@@ -158,6 +202,8 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
 
   return (
     <div className="space-y-6">
+      <PendingScansBadge clientId={clientId} />
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className={getScoreBgColor(latest.overallScore)}>
           <CardContent className="p-6 text-center">
@@ -285,16 +331,88 @@ export function AeoIntelligenceTab({ clientId }: { clientId: number }) {
 
       <ContentAttributionSection clientId={clientId} />
 
-      <CompetitorsSection clientId={clientId} />
+      <CompetitorsSection clientId={clientId} websiteUrl={websiteUrl} />
     </div>
   );
 }
 
-function CompetitorsSection({ clientId }: { clientId: number }) {
+function GradeAeoModal({
+  clientId,
+  initialUrl,
+  onClose,
+}: {
+  clientId: number;
+  initialUrl: string;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState(initialUrl);
+  const [queued, setQueued] = useState(false);
+  const scanMutation = useScanMutation(clientId);
+
+  const handleSubmit = async () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    await scanMutation.mutateAsync(normalized);
+    setQueued(true);
+  };
+
+  return (
+    <div className="mb-4 p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-tech font-bold flex items-center gap-1.5">
+          <Star className="w-3.5 h-3.5 text-primary" />
+          Grade AEO
+        </span>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {queued ? (
+        <div className="flex items-center gap-2 py-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-tech text-emerald-400">Scan queued successfully</p>
+            <p className="text-xs text-muted-foreground">Results will appear in the AEO Intelligence tab once processing completes.</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <Input
+            placeholder={initialUrl ? initialUrl : "e.g., https://yoursite.com"}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="text-sm"
+          />
+          {!initialUrl && !url && (
+            <p className="text-xs text-muted-foreground">No website URL configured for this client. Enter a URL to scan.</p>
+          )}
+          {scanMutation.isError && (
+            <p className="text-destructive text-xs">{(scanMutation.error as Error).message}</p>
+          )}
+          <Button
+            onClick={handleSubmit}
+            disabled={scanMutation.isPending || !url.trim()}
+            variant="glow"
+            size="sm"
+            className="w-full font-tech"
+          >
+            {scanMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Star className="w-3 h-3 mr-1" />}
+            Queue AEO Scan
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CompetitorsSection({ clientId, websiteUrl }: { clientId: number; websiteUrl?: string | null }) {
   const queryClient = useQueryClient();
-  const [showModal, setShowModal] = useState(false);
+  const [showTrackModal, setShowTrackModal] = useState(false);
+  const [showGradeModal, setShowGradeModal] = useState(false);
   const [newUrl, setNewUrl] = useState("");
   const [newName, setNewName] = useState("");
+  const [gradingCompetitorId, setGradingCompetitorId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<CompetitorsResponse>({
     queryKey: ["competitors", clientId],
@@ -320,7 +438,8 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["competitors", clientId] });
-      setShowModal(false);
+      queryClient.invalidateQueries({ queryKey: ["aeo-pending-scans", clientId] });
+      setShowTrackModal(false);
       setNewUrl("");
       setNewName("");
     },
@@ -339,12 +458,29 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
     },
   });
 
+  const scanMutation = useScanMutation(clientId);
+  const [competitorScanQueued, setCompetitorScanQueued] = useState<Record<number, boolean>>({});
+  const [competitorScanError, setCompetitorScanError] = useState<Record<number, string>>({});
+
   const handleTrack = () => {
     const trimmedUrl = newUrl.trim();
     const trimmedName = newName.trim();
     if (!trimmedUrl || !trimmedName) return;
     const normalized = /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`;
     trackMutation.mutate({ url: normalized, companyName: trimmedName });
+  };
+
+  const handleGradeCompetitor = async (comp: CompetitorData) => {
+    setGradingCompetitorId(comp.id);
+    setCompetitorScanError(prev => ({ ...prev, [comp.id]: "" }));
+    try {
+      await scanMutation.mutateAsync(comp.url);
+      setCompetitorScanQueued(prev => ({ ...prev, [comp.id]: true }));
+    } catch (err) {
+      setCompetitorScanError(prev => ({ ...prev, [comp.id]: (err as Error).message || "Failed to queue scan" }));
+    } finally {
+      setGradingCompetitorId(null);
+    }
   };
 
   const competitors = data?.competitors ?? [];
@@ -357,23 +493,42 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
             <Shield className="w-5 h-5 text-primary" />
             Competitors
           </h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowModal(true)}
-            className="font-tech text-xs"
-            disabled={competitors.length >= 10}
-          >
-            <Plus className="w-3 h-3 mr-1" />
-            Track Competitor
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setShowGradeModal(!showGradeModal); setShowTrackModal(false); }}
+              className="font-tech text-xs"
+            >
+              <Star className="w-3 h-3 mr-1" />
+              Grade AEO
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setShowTrackModal(true); setShowGradeModal(false); }}
+              className="font-tech text-xs"
+              disabled={competitors.length >= 10}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Track Competitor
+            </Button>
+          </div>
         </div>
 
-        {showModal && (
+        {showGradeModal && (
+          <GradeAeoModal
+            clientId={clientId}
+            initialUrl={websiteUrl || ""}
+            onClose={() => setShowGradeModal(false)}
+          />
+        )}
+
+        {showTrackModal && (
           <div className="mb-4 p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-tech font-bold">Track New Competitor</span>
-              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => setShowTrackModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -466,6 +621,29 @@ function CompetitorsSection({ clientId }: { clientId: number }) {
                   ) : (
                     <span className="text-xs text-muted-foreground font-tech">No scan data</span>
                   )}
+                  {competitorScanQueued[comp.id] ? (
+                    <span className="text-[10px] text-emerald-400 font-tech flex items-center gap-0.5">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Queued
+                    </span>
+                  ) : competitorScanError[comp.id] ? (
+                    <span className="text-[10px] text-destructive font-tech" title={competitorScanError[comp.id]}>
+                      Scan failed
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleGradeCompetitor(comp)}
+                      disabled={gradingCompetitorId === comp.id}
+                      className="text-muted-foreground hover:text-primary transition-colors p-1"
+                      title="Grade AEO for this competitor"
+                    >
+                      {gradingCompetitorId === comp.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Star className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => untrackMutation.mutate(comp.id)}
                     disabled={untrackMutation.isPending}
@@ -514,6 +692,25 @@ function ContentAttributionSection({ clientId }: { clientId: number }) {
     },
   });
 
+  const scanMutation = useScanMutation(clientId);
+  const [articleScanQueued, setArticleScanQueued] = useState<Record<number, boolean>>({});
+  const [articleScanError, setArticleScanError] = useState<Record<number, string>>({});
+  const [gradingArticleId, setGradingArticleId] = useState<number | null>(null);
+
+  const handleGradeArticle = async (item: ContentAttribution) => {
+    if (!item.publishedUrl) return;
+    setGradingArticleId(item.contentId);
+    setArticleScanError(prev => ({ ...prev, [item.contentId]: "" }));
+    try {
+      await scanMutation.mutateAsync(item.publishedUrl);
+      setArticleScanQueued(prev => ({ ...prev, [item.contentId]: true }));
+    } catch (err) {
+      setArticleScanError(prev => ({ ...prev, [item.contentId]: (err as Error).message || "Failed to queue scan" }));
+    } finally {
+      setGradingArticleId(null);
+    }
+  };
+
   if (isLoading) return null;
   if (!data?.linked) return null;
   if (data.content.length === 0) return null;
@@ -552,7 +749,36 @@ function ContentAttributionSection({ clientId }: { clientId: number }) {
               </div>
               <div className="flex items-center gap-3 flex-shrink-0 ml-3">
                 {item.status === "awaiting_scan" ? (
-                  <span className="text-xs text-muted-foreground font-tech">Awaiting scan</span>
+                  <>
+                    {item.publishedUrl && (
+                      articleScanQueued[item.contentId] ? (
+                        <span className="text-[10px] text-emerald-400 font-tech flex items-center gap-0.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Queued
+                        </span>
+                      ) : articleScanError[item.contentId] ? (
+                        <span className="text-[10px] text-destructive font-tech" title={articleScanError[item.contentId]}>
+                          Scan failed
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] font-tech px-2"
+                          onClick={() => handleGradeArticle(item)}
+                          disabled={gradingArticleId === item.contentId}
+                        >
+                          {gradingArticleId === item.contentId ? (
+                            <Loader2 className="w-2.5 h-2.5 animate-spin mr-1" />
+                          ) : (
+                            <Star className="w-2.5 h-2.5 mr-1" />
+                          )}
+                          Grade AEO
+                        </Button>
+                      )
+                    )}
+                    <span className="text-xs text-muted-foreground font-tech">Awaiting scan</span>
+                  </>
                 ) : (
                   <>
                     <div className="text-right">

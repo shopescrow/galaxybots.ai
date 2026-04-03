@@ -952,6 +952,26 @@ router.post("/integrations/piratemonster/competitors/:clientId", requireRole("ow
       addedBy: "dashboard",
     }).returning();
 
+    const [partnerKey] = await db
+      .select({ id: platformApiKeysTable.id })
+      .from(platformApiKeysTable)
+      .where(
+        and(
+          eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+          eq(platformApiKeysTable.status, "active"),
+          eq(platformApiKeysTable.clientId, clientId)
+        )
+      )
+      .limit(1);
+
+    if (partnerKey) {
+      await db.insert(aeoScanRequestsTable).values({
+        partnerKeyId: partnerKey.id,
+        url,
+        status: "queued",
+      });
+    }
+
     res.status(201).json(record);
   } catch (err) {
     console.error("Error tracking competitor:", err);
@@ -1144,6 +1164,51 @@ router.post("/aeo/scan/request", requireRole("owner", "admin"), async (req, res)
   }
 
   res.json({ success: true, message: "AEO scan queued. Results will appear in the AEO Intelligence tab once processing completes.", requestId: scanRequest.id });
+});
+
+router.get("/integrations/piratemonster/pending-scans/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  if (isNaN(clientId)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+
+  try {
+    const partnerKeys = await db
+      .select({ id: platformApiKeysTable.id })
+      .from(platformApiKeysTable)
+      .where(
+        and(
+          eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+          eq(platformApiKeysTable.status, "active"),
+          eq(platformApiKeysTable.clientId, clientId)
+        )
+      );
+
+    if (partnerKeys.length === 0) {
+      res.json({ pendingCount: 0 });
+      return;
+    }
+
+    const keyIds = partnerKeys.map(k => k.id);
+    const pending = await db
+      .select({ id: aeoScanRequestsTable.id })
+      .from(aeoScanRequestsTable)
+      .where(
+        and(
+          inArray(aeoScanRequestsTable.partnerKeyId, keyIds),
+          or(
+            eq(aeoScanRequestsTable.status, "queued"),
+            eq(aeoScanRequestsTable.status, "processing")
+          )
+        )
+      );
+
+    res.json({ pendingCount: pending.length });
+  } catch (err) {
+    console.error("Error fetching pending scans:", err);
+    res.status(500).json({ error: "Failed to fetch pending scans" });
+  }
 });
 
 router.get("/integrations/piratemonster/bingolingo-link/:clientId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
