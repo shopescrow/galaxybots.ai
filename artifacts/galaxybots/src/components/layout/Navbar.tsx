@@ -193,7 +193,7 @@ export function Navbar() {
 
           {/* Right actions — always fixed */}
           <div className="hidden md:flex items-center gap-2 shrink-0 ml-auto">
-            <NotificationBell />
+            {user && <NotificationBell />}
             <LanguageSelector />
             <Link href="/settings">
               <Button variant="ghost" size="sm" className="font-tech text-xs min-h-[44px] gap-1">
@@ -210,7 +210,7 @@ export function Navbar() {
 
           {/* Mobile: notification + hamburger */}
           <div className="md:hidden flex items-center gap-1 ml-auto shrink-0">
-            <NotificationBell />
+            {user && <NotificationBell />}
             <button
               className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-colors"
               onClick={() => setIsOpen(!isOpen)}
