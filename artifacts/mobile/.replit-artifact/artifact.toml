@@ -21,7 +21,3 @@ run = "pnpm --filter @workspace/mobile run dev"
 [services.env]
 PORT = "18115"
 BASE_PATH = "/mobile/"
-
-[services.production]
-build = ["pnpm", "--filter", "@workspace/mobile", "run", "build"]
-run = ["pnpm", "--filter", "@workspace/mobile", "run", "serve"]
