@@ -17,6 +17,27 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/five-year-plan: web"
+
+[[workflows.workflow]]
+name = "artifacts/five-year-plan: web"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=18667 BASE_PATH=/five-year-plan/ pnpm --filter @workspace/five-year-plan run dev"
+waitForPort = 18667
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true

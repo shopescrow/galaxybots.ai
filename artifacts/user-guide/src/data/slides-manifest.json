@@ -1,186 +1,106 @@
 [
 	{
-		"id": "fyp-001-cover",
+		"id": "ug-001-title",
 		"position": 1,
-		"filepath": "src/pages/slides/Slide01Cover.tsx",
-		"title": "Cover — Gifted Productions Inc.: 5-Year Strategic Plan 2026–2030",
-		"description": "Full-bleed star-field galaxy cover with GalaxyBots logo, plan title, tagline, and confidentiality notice.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide01Title.tsx",
+		"title": "Your AI Executive Team Starts Here",
+		"description": "Welcome slide introducing GalaxyBots.ai and what the guide covers — log in, connect with bots, deploy a team, and stay in control through the Command Center.",
+		"speakerNotes": "Welcome to GalaxyBots dot A-I — Fortune 500 intelligence, at your command."
 	},
 	{
-		"id": "fyp-002-chairman",
+		"id": "ug-002-login",
 		"position": 2,
-		"filepath": "src/pages/slides/Slide02Chairman.tsx",
-		"title": "Chairman's Opening — Chairman Atlas",
-		"description": "Chairman Atlas opening statement: declaration of ambition, category-creation framing, board endorsement.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide02Login.tsx",
+		"title": "Step 1: Log In",
+		"description": "Navigate to your GalaxyBots URL. Enter email and password. SSO auto-detection for company domains.",
+		"speakerNotes": "Start by navigating to your GalaxyBots URL. Enter your email and password, then click Sign In. SSO is automatic."
 	},
 	{
-		"id": "fyp-003-problem",
+		"id": "ug-003-command-center",
 		"position": 3,
-		"filepath": "src/pages/slides/Slide03Problem.tsx",
-		"title": "The Problem — Magnus Drake",
-		"description": "76% of SMEs have no C-Suite. $1M–$5M exec team cost. Generic AI fails. Magnus Drake's call to action.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide03CommandCenter.tsx",
+		"title": "Step 2: Your Command Center",
+		"description": "Activity Feed — live bot action log. Pending Approvals — actions awaiting sign-off. Company Status — real-time fleet health. Mission control for your AI team.",
+		"speakerNotes": "The Command Center is your operations hub. Activity Feed, Pending Approvals, Company Status — everything in one place."
 	},
 	{
-		"id": "fyp-004-vision",
+		"id": "ug-004-bot-team",
 		"position": 4,
-		"filepath": "src/pages/slides/Slide04Vision.tsx",
-		"title": "The Vision — $90M ARR by 2030",
-		"description": "51 AI Directors. 4 platform pillars. North Star metric: $90M ARR, 3,000 companies, 700 white-label partners.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide04BotTeam.tsx",
+		"title": "Step 3: Meet Your Bot Team",
+		"description": "CFO Bot: financial analysis, P&L, budgeting. Marketing Director: campaign strategy, brand, competitive intel. CMO Bot: GTM strategy, lead gen, Prospector pipeline. Full corporate roster of AI executives.",
+		"speakerNotes": "GalaxyBots comes pre-loaded with a full corporate roster — explore the full Bots section to see your entire team."
 	},
 	{
-		"id": "fyp-005-market",
+		"id": "ug-005-open-channel",
 		"position": 5,
-		"filepath": "src/pages/slides/Slide05Market.tsx",
-		"title": "Market Opportunity — FP&A Oracle Demi",
-		"description": "TAM $500B. SAM 32M SMEs + 500K agencies. SOM 50,000 U.S. growth-stage companies. Demi's validation.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide05OpenChannel.tsx",
+		"title": "Step 4: Open a Channel",
+		"description": "Navigate to Bots in left sidebar. Browse roster, select specialist (e.g., CMO Bot). Click Open Channel. Private, dedicated line to that executive.",
+		"speakerNotes": "In the left sidebar, navigate to Bots. Select your specialist and click Open Channel — your direct line is live."
 	},
 	{
-		"id": "fyp-006-competitive",
+		"id": "ug-006-directive",
 		"position": 6,
-		"filepath": "src/pages/slides/Slide06Competitive.tsx",
-		"title": "Competitive Landscape — Growth Hawk Yusuf",
-		"description": "Positioning above generic AI, below $500K enterprise builds. Cloud 9 Score wedge. Memory + Boardroom moat.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide06Directive.tsx",
+		"title": "Step 5: Send Your Directive",
+		"description": "Plain language instructions — no special commands. Example: Analyze our Q2 revenue and flag areas of concern. CFO Bot pulls data, identifies margin compression, flags cost centers.",
+		"speakerNotes": "Your bots understand plain language. Be specific, be direct, and your bots will deliver."
 	},
 	{
-		"id": "fyp-007-galaxybots",
+		"id": "ug-007-deep-thinking",
 		"position": 7,
-		"filepath": "src/pages/slides/Slide07ProductGalaxyBots.tsx",
-		"title": "Product: GalaxyBots.ai Platform — Product Oracle Sasha",
-		"description": "51 directors across 9 departments. Virtual Boardroom. Mission Library. Institutional Memory. ROI Dashboard.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide07DeepThinking.tsx",
+		"title": "Pro Tip: Enable Deep Thinking Mode",
+		"description": "10 parallel AI perspectives synthesized before response. Use for: market entry analysis, risk assessment, competitive strategy. Enable when stakes are high.",
+		"speakerNotes": "Deep Thinking Mode synthesizes 10 independent AI perspectives in parallel — designed for decisions that demand depth."
 	},
 	{
-		"id": "fyp-008-bingolingo",
+		"id": "ug-008-deploy-team",
 		"position": 8,
-		"filepath": "src/pages/slides/Slide08BingoLingo.tsx",
-		"title": "Product: BingoLingo.ai — Brand Maven Priya",
-		"description": "Content Intelligence Platform. AEO scoring. Content Hub. Attribution loop. BingoLingo-Prospector cross-sell.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide08DeployTeam.tsx",
+		"title": "Step 6: Deploy a Team",
+		"description": "4 stages: Define objective → Optima Prime analyzes → Specialists selected → Task Room launched. Multi-department coordination for complex goals.",
+		"speakerNotes": "Deploy Team assembles a coordinated group of specialists around a single goal — four stages from objective to execution."
 	},
 	{
-		"id": "fyp-009-prospector",
+		"id": "ug-009-optima-prime",
 		"position": 9,
-		"filepath": "src/pages/slides/Slide09Prospector.tsx",
-		"title": "Product: Prospector (AEO Intelligence Engine) — Digital Dominic + Rivera",
-		"description": "Cloud 9 Score across 9 engines. Discover → Enrich → Qualify → Contact → Convert pipeline. Competitive AEO.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide09OptimaPrime.tsx",
+		"title": "Optima Prime: Your AI Commander",
+		"description": "Analyzes objective across all departments. Proposes the right specialists for the specific task. Suggests new bots if capability gaps exist. Every team precisely matched to the mission.",
+		"speakerNotes": "Optima Prime doesn't just pick bots — it analyzes your goal to understand which expertise is actually required."
 	},
 	{
-		"id": "fyp-010-mobile",
-		"position": 11,
-		"filepath": "src/pages/slides/Slide10Mobile.tsx",
-		"title": "Product: GalaxyBots Mobile — Operator Rex",
-		"description": "Command Center. Governance & Approvals. ROI Reports. Daily Journal. Executive command from anywhere.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-011-business-model",
-		"position": 12,
-		"filepath": "src/pages/slides/Slide11BusinessModel.tsx",
-		"title": "Business Model & Revenue Streams — CFO Sentinel Marcus",
-		"description": "Four revenue levers: Subscription tiers ($999/$4,999/$9,999), credit overages, premium add-ons, white-label wholesale.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-012-unit-economics",
-		"position": 13,
-		"filepath": "src/pages/slides/Slide12UnitEconomics.tsx",
-		"title": "Unit Economics — Marcus + FP&A Oracle Demi",
-		"description": "$36K ACV. 82% gross margin. 8:1 LTV:CAC. >110% NRR. <9-month payback. The self-growing business model.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-013-financials",
-		"position": 14,
-		"filepath": "src/pages/slides/Slide13Financials.tsx",
-		"title": "5-Year Financial Projections — Chairman Atlas + CFO Marcus",
-		"description": "Full ARR table: $1.2M → $4.8M → $14M → $38M → $90M. Client and partner milestones. Conservative assumptions.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-014-growth-levers",
-		"position": 15,
-		"filepath": "src/pages/slides/Slide14GrowthLevers.tsx",
-		"title": "Growth Levers — Growth Hawk Yusuf + Partner Pro Felix",
-		"description": "Partner-led channel. AEO category ownership. Credit expansion flywheel. BingoLingo-Prospector cross-sell.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-015-gtm",
-		"position": 16,
-		"filepath": "src/pages/slides/Slide15GTM.tsx",
-		"title": "Go-To-Market Strategy — Brand Maven Priya + Closer King Rivera",
-		"description": "Content-led, Partner-led, Community-led motions. Year 1 priorities: 10 partners, Prospector Phases 1–4, 90-day NRR.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-016-legal",
-		"position": 17,
-		"filepath": "src/pages/slides/Slide16Legal.tsx",
-		"title": "Legal & IP Strategy — General Counsel Alexis",
-		"description": "Cloud 9 Score™ and GalaxyBots™ trademarks. Trade secrets. Partner contracts. SOC 2 and GDPR roadmap.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-017-tech-roadmap",
-		"position": 18,
-		"filepath": "src/pages/slides/Slide17TechRoadmap.tsx",
-		"title": "Technology Roadmap — Tech Visionary Zara + Build Master Leon",
-		"description": "Four-track swimlane: Platform, Content, Intelligence, Mobile across 2026–2030. Multi-LLM routing strategy.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-018-talent",
-		"position": 19,
-		"filepath": "src/pages/slides/Slide18Talent.tsx",
-		"title": "Talent & Culture — HR Director Amara + Talent Hunter Jade",
-		"description": "Commanders not managers. Year 1 critical hires. Engineering 5→20. Culture pillars: autonomy, proof-of-value.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-019-risk",
-		"position": 20,
-		"filepath": "src/pages/slides/Slide19Risk.tsx",
-		"title": "Risk Register — Risk Warden Okafor + CISO Sentinel Nova",
-		"description": "Four risks: LLM commoditization, regulatory shifts, partner concentration, data breaches — each with named owner.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-020-roadmap",
-		"position": 21,
-		"filepath": "src/pages/slides/Slide20Roadmap.tsx",
-		"title": "5-Year Roadmap Timeline (Visual)",
-		"description": "Visual milestone chart: Q1 2026 Prospector launch → Q4 2030 $90M ARR / Series B exit readiness.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-021-closing",
-		"position": 22,
-		"filepath": "src/pages/slides/Slide21Closing.tsx",
-		"title": "The Closing Vision — Magnus Drake + Chairman Atlas",
-		"description": "Magnus Drake and Chairman Atlas closing declarations. The full board team displayed as unified endorsers.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-022-contact",
-		"position": 23,
-		"filepath": "src/pages/slides/Slide22Contact.tsx",
-		"title": "Contact & Next Steps",
-		"description": "GalaxyBots.ai and BingoLingo.ai platforms. Three CTA options. Confidentiality notice footer.",
-		"speakerNotes": ""
-	},
-	{
-		"id": "fyp-023-credits",
+		"id": "ug-010-boardroom",
 		"position": 10,
-		"filepath": "src/pages/slides/Slide23Credits.tsx",
-		"title": "Credits Infographic — How Credits Work",
-		"description": "Platform currency explainer: 1 credit = $0.025. Action costs per operation. Tier allocations (100/500/2,000). Credit expansion flywheel.",
-		"speakerNotes": ""
+		"filepath": "src/pages/slides/Slide10Boardroom.tsx",
+		"title": "Step 7: Lead Your Task Boardroom",
+		"description": "Shared workspace for the full deployed team. Assign tasks, set priorities, redirect focus. Add specialists mid-session without interruption. Real-time tracking of every bot action.",
+		"speakerNotes": "The Boardroom is where strategy becomes execution — assign, redirect, add specialists, track everything in real time."
+	},
+	{
+		"id": "ug-011-approvals",
+		"position": 11,
+		"filepath": "src/pages/slides/Slide11Approvals.tsx",
+		"title": "Step 8: Managing Approvals",
+		"description": "Bot surfaces action request → Review in Pending Approvals → Approve (bot proceeds) or Reject (action stopped). Full audit trail of every decision.",
+		"speakerNotes": "For consequential actions, bots request your approval. You stay in full control with a complete audit trail."
+	},
+	{
+		"id": "ug-012-closing",
+		"position": 12,
+		"filepath": "src/pages/slides/Slide12Closing.tsx",
+		"title": "You're Ready to Lead",
+		"description": "3 core tools: Bots (direct conversations), Deploy Team (coordinated missions), Command Center (oversight). GalaxyBots.ai: Fortune 500 intelligence, at your command.",
+		"speakerNotes": "You now know how to connect with bots, deploy teams, collaborate in the Boardroom, and govern through the Command Center."
+	},
+	{
+		"id": "ug-013-quickstart",
+		"position": 13,
+		"filepath": "src/pages/slides/Slide13QuickStart.tsx",
+		"title": "Quick Start Reference Card",
+		"description": "8 steps: Log in → Command Center → Explore Bots → Open Channel → Send Directive → Deploy Team → Lead Boardroom → Manage Approvals. Key locations: Command Center, Bots, Deploy Team, Boardroom, Approvals.",
+		"speakerNotes": "Your go-to reference for all 8 steps and key navigation locations."
 	}
 ]
