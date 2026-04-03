@@ -76,8 +76,9 @@ export default function Clients() {
     defaultValues: { plan: "single" }
   });
 
-  const { user, updateOnboarding } = useAuth();
+  const { user, token, updateOnboarding } = useAuth();
   const isAdmin = user?.role === "owner" || user?.role === "admin";
+  const isPlatformAdmin = user?.bypassPayment === true;
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -167,7 +168,7 @@ export default function Clients() {
         <div className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit max-w-full overflow-x-auto">
           {[
             { key: "clients", label: "All Clients", count: clients?.length || 0 },
-            ...(isAdmin ? [{ key: "aeo-health", label: "AEO Health", count: null }] : []),
+            ...(isPlatformAdmin ? [{ key: "aeo-health", label: "AEO Health", count: null }] : []),
             { key: "partners", label: "Partner Referrals", count: referrals.length },
           ].map((t) => (
             <button
@@ -263,8 +264,8 @@ export default function Clients() {
           )
         )}
 
-        {/* AEO Health Tab */}
-        {tab === "aeo-health" && isAdmin && <AeoHealthPanel />}
+        {/* AEO Health Tab — platform admins only */}
+        {tab === "aeo-health" && isPlatformAdmin && <AeoHealthPanel />}
 
         {/* Partners Tab */}
         {tab === "partners" && (
@@ -405,10 +406,13 @@ function getScoreColor(score: number | null): string {
 }
 
 function AeoHealthPanel() {
+  const { token } = useAuth();
   const { data: health, isLoading } = useQuery<AeoHealthEntry[]>({
     queryKey: ["aeo-health"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/integrations/piratemonster/aeo-health`);
+      const res = await fetch(`${BASE}/api/integrations/piratemonster/aeo-health`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) return [];
       return res.json();
     },

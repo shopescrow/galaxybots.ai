@@ -786,7 +786,11 @@ router.post("/integrations/piratemonster/mcp-keys/:id/revoke", requireRole("owne
   }
 });
 
-router.get("/integrations/piratemonster/aeo-health", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+router.get("/integrations/piratemonster/aeo-health", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  if (!req.user?.bypassPayment) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -859,7 +863,11 @@ router.get("/integrations/piratemonster/aeo-health", requireRole("owner", "admin
   }
 });
 
-router.get("/integrations/piratemonster/mcp-stats", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+router.get("/integrations/piratemonster/mcp-stats", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  if (!req.user?.bypassPayment) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -904,6 +912,10 @@ router.get("/integrations/piratemonster/competitors/:clientId", requireRole("own
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
     res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+  if (!req.user?.bypassPayment && clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
@@ -971,6 +983,10 @@ router.post("/integrations/piratemonster/competitors/:clientId", requireRole("ow
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
     res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+  if (!req.user?.bypassPayment && clientId !== req.user!.clientId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
