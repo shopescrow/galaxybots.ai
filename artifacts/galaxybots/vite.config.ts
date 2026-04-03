@@ -57,6 +57,40 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Core React framework — always cached first
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+            return "vendor-react";
+          }
+          // Routing & state
+          if (id.includes("node_modules/wouter") || id.includes("node_modules/@tanstack/react-query")) {
+            return "vendor-router";
+          }
+          // Animations
+          if (id.includes("node_modules/framer-motion")) {
+            return "vendor-motion";
+          }
+          // Charts
+          if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) {
+            return "vendor-charts";
+          }
+          // Radix UI components
+          if (id.includes("node_modules/@radix-ui")) {
+            return "vendor-radix";
+          }
+          // Icons
+          if (id.includes("node_modules/lucide-react")) {
+            return "vendor-icons";
+          }
+          // All other node_modules
+          if (id.includes("node_modules/")) {
+            return "vendor-misc";
+          }
+        },
+      },
+    },
   },
   server: {
     port,
