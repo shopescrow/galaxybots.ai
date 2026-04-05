@@ -40,7 +40,7 @@ export default function Boardroom() {
         
         <div className="absolute inset-0 z-0">
           <img 
-            src={`${import.meta.env.BASE_URL}images/boardroom-bg.png`} 
+            src={`${import.meta.env.BASE_URL}images/boardroom-bg.jpg`} 
             alt="Boardroom" 
             className="w-full h-full object-cover opacity-10"
           />

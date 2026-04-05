@@ -18,7 +18,7 @@ export default function Home() {
       <div className="relative w-full overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img 
-            src={`${import.meta.env.BASE_URL}images/hero-bg.png`} 
+            src={`${import.meta.env.BASE_URL}images/hero-bg.jpg`} 
             alt="Deep space corporate background" 
             className="w-full h-full object-cover opacity-40"
           />
