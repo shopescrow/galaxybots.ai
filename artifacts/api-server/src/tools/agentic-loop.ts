@@ -8,6 +8,23 @@ import pRetry from "p-retry";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/platform/governance";
 import { logLlmUsage } from "../services/analytics/llm-usage";
 import { isToolSandboxed, getSandboxedToolResponse } from "../services/platform/demo-sandbox";
+import { checkCostCapAlerts } from "../services/analytics/cost-caps";
+import {
+  hashToolCall,
+  isDuplicateToolCall,
+  isStuckOutput,
+  checkSessionDepth,
+} from "../services/ai-safety/loop-detection";
+import {
+  estimateMessagesTokens,
+  trimToFitContextWindow,
+} from "../services/ai-safety/context-window";
+import { callWithFallback } from "../services/ai-safety/model-fallback";
+
+const DEFAULT_TOKEN_BUDGET = 50_000;
+const DEFAULT_GUEST_CALL_LIMIT = 20;
+
+const guestCallCounts = new Map<string, number>();
 
 function auditToolExecution(
   context: ToolContext,
@@ -37,7 +54,7 @@ function auditToolExecution(
 }
 
 export interface AgenticEvent {
-  type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done" | "tool_blocked" | "tool_pending_approval";
+  type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done" | "tool_blocked" | "tool_pending_approval" | "moa_progress" | "moa_synthesizing";
   botId?: number;
   botName?: string;
   toolName?: string;
@@ -54,6 +71,7 @@ export interface AgenticLoopOptions {
   model?: string;
   maxIterations?: number;
   maxTokens?: number;
+  tokenBudget?: number;
   systemPrompt: string;
   messages: ChatCompletionMessageParam[];
   context: ToolContext;
@@ -113,6 +131,7 @@ export interface AgenticLoopResult {
   paused?: boolean;
   pendingApprovalId?: number;
   pausedToolName?: string;
+  totalTokensConsumed?: number;
 }
 
 export async function runAgenticLoop(options: AgenticLoopOptions): Promise<AgenticLoopResult> {
@@ -120,11 +139,50 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
     model = "gpt-4o-mini",
     maxIterations = 10,
     maxTokens = 1000,
+    tokenBudget = DEFAULT_TOKEN_BUDGET,
     systemPrompt,
     messages: initialMessages,
     context,
     onEvent,
   } = options;
+
+  if (context.depth !== undefined) {
+    const depthCheck = checkSessionDepth(context.depth);
+    if (!depthCheck.allowed) {
+      const errorEvent: AgenticEvent = {
+        type: "error",
+        content: depthCheck.message,
+      };
+      return { finalContent: depthCheck.message!, events: [errorEvent] };
+    }
+  }
+
+  if (context.clientId) {
+    try {
+      const costCheck = await checkCostCapAlerts(context.clientId);
+      if (!costCheck.withinBudget) {
+        const msg = `Your monthly AI usage cap has been reached ($${costCheck.spend.toFixed(2)} / $${costCheck.cap.toFixed(2)}). Please contact your administrator to increase the limit or wait until the next billing cycle.`;
+        const errorEvent: AgenticEvent = { type: "error", content: msg };
+        return { finalContent: msg, events: [errorEvent] };
+      }
+    } catch (err) {
+      console.error("[AgenticLoop] Cost cap check failed, blocking request (fail-closed):", err);
+      const msg = "Unable to verify usage limits. Please try again shortly.";
+      const errorEvent: AgenticEvent = { type: "error", content: msg };
+      return { finalContent: msg, events: [errorEvent] };
+    }
+  }
+
+  if (context.isGuest) {
+    const guestKey = context.guestSessionToken || `guest-bot-${context.botId ?? "unknown"}`;
+    const currentCount = guestCallCounts.get(guestKey) ?? 0;
+    if (currentCount >= DEFAULT_GUEST_CALL_LIMIT) {
+      const msg = "You've reached the maximum number of AI interactions for this demo session. Please sign up for a full account to continue.";
+      const errorEvent: AgenticEvent = { type: "error", content: msg };
+      return { finalContent: msg, events: [errorEvent] };
+    }
+    guestCallCounts.set(guestKey, currentCount + 1);
+  }
 
   const events: AgenticEvent[] = [];
   const loopMessages: ChatCompletionMessageParam[] = [
@@ -155,55 +213,55 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
 
   const tools = getOpenAIToolDefinitions();
 
+  let cumulativeTokens = 0;
+  const recentToolHashes: string[] = [];
+  const recentResponses: string[] = [];
+
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    if (cumulativeTokens >= tokenBudget) {
+      console.log(`[AgenticLoop] Token budget exhausted: ${cumulativeTokens}/${tokenBudget}`);
+      const budgetMsg = "I've reached the token budget for this conversation turn. Here's what I've gathered so far.";
+      const budgetEvent: AgenticEvent = { type: "message", content: budgetMsg, botId: context.botId, botName: context.botName, iteration };
+      events.push(budgetEvent);
+      onEvent?.(budgetEvent);
+      return { finalContent: budgetMsg, events, totalTokensConsumed: cumulativeTokens };
+    }
+
+    const trimmedMessages = trimToFitContextWindow(loopMessages, model);
+
     let completion;
     const callStart = Date.now();
     try {
-      completion = await pRetry(
-        () =>
-          openai.chat.completions.create({
-            model,
-            max_completion_tokens: maxTokens,
-            messages: loopMessages,
-            ...(tools.length > 0 ? { tools } : {}),
-          }),
-        {
-          retries: 5,
-          minTimeout: 1000,
-          maxTimeout: 15000,
-          factor: 2,
-          onFailedAttempt: (error) => {
-            if (!isRateLimitError(error)) {
-              throw new pRetry.AbortError(
-                error instanceof Error ? error : new Error(String(error))
-              );
-            }
-          },
-        }
-      );
-      const latencyMs = Date.now() - callStart;
+      const fallbackResult = await callWithFallback({
+        model,
+        messages: trimmedMessages,
+        maxCompletionTokens: maxTokens,
+        tools: tools.length > 0 ? tools : undefined,
+        clientId: context.clientId,
+        botId: context.botId,
+        sessionId: context.sessionId ? Number(context.sessionId) : undefined,
+        conversationId: context.conversationId ? Number(context.conversationId) : undefined,
+      });
+      completion = fallbackResult.completion;
+
       const usage = completion.usage;
       if (usage) {
-        logLlmUsage({
-          clientId: context.clientId,
-          botId: context.botId,
-          sessionId: context.sessionId ? Number(context.sessionId) : null,
-          conversationId: context.conversationId ? Number(context.conversationId) : null,
-          model,
-          promptTokens: usage.prompt_tokens ?? 0,
-          completionTokens: usage.completion_tokens ?? 0,
-          latencyMs,
-        });
+        cumulativeTokens += (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0);
       }
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Model call failed after retries";
+      const isProviderOutage = errMsg.includes("All models in fallback chain failed") || errMsg.includes("temporarily");
+      const degradedContent = isProviderOutage
+        ? "I'm currently experiencing difficulty connecting to AI services. Your request has been received, but I cannot process it fully at this time. Please try again in a few moments."
+        : errMsg;
       const errorEvent: AgenticEvent = {
         type: "error",
-        content: err instanceof Error ? err.message : "Model call failed after retries",
+        content: degradedContent,
         iteration,
       };
       events.push(errorEvent);
       onEvent?.(errorEvent);
-      break;
+      return { finalContent: degradedContent, events, totalTokensConsumed: cumulativeTokens };
     }
 
     const choice = completion.choices[0];
@@ -215,12 +273,29 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
     }
 
     const assistantMessage = choice.message;
+    const assistantContent = assistantMessage.content ?? "";
+
+    if (assistantContent.length > 0) {
+      if (isStuckOutput(assistantContent, recentResponses)) {
+        console.log(`[AgenticLoop] Stuck output detected at iteration ${iteration}, breaking early`);
+        const bestResponse = recentResponses[0] || assistantContent;
+        const msgEvent: AgenticEvent = { type: "message", content: bestResponse, botId: context.botId, botName: context.botName, iteration };
+        events.push(msgEvent);
+        onEvent?.(msgEvent);
+        const completeEvent: AgenticEvent = { type: "bot_complete", botId: context.botId, botName: context.botName, iteration };
+        events.push(completeEvent);
+        onEvent?.(completeEvent);
+        return { finalContent: bestResponse, events, totalTokensConsumed: cumulativeTokens };
+      }
+
+      recentResponses.push(assistantContent);
+      if (recentResponses.length > 3) recentResponses.shift();
+    }
 
     if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
-      const finalContent = assistantMessage.content ?? "";
       const msgEvent: AgenticEvent = {
         type: "message",
-        content: finalContent,
+        content: assistantContent,
         botId: context.botId,
         botName: context.botName,
         iteration,
@@ -232,7 +307,7 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
       events.push(completeEvent);
       onEvent?.(completeEvent);
 
-      return { finalContent, events };
+      return { finalContent: assistantContent, events, totalTokensConsumed: cumulativeTokens };
     }
 
     if (context.clientId && context.botId) {
@@ -312,6 +387,7 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
             paused: true,
             pendingApprovalId: approvalId,
             pausedToolName: toolName,
+            totalTokensConsumed: cumulativeTokens,
           };
         }
       }
@@ -333,6 +409,27 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
           } catch {
             parsedArgs = {};
           }
+
+          const callHash = hashToolCall(toolName, parsedArgs);
+          if (isDuplicateToolCall(callHash, recentToolHashes)) {
+            console.log(`[AgenticLoop] Duplicate tool call detected: ${toolName}, skipping`);
+            const skipResult = { skipped: true, message: `Tool "${toolName}" was already called with identical parameters. Use the existing result instead of calling again.` };
+            const skipEvent: AgenticEvent = {
+              type: "tool_result",
+              toolName,
+              toolCallId: toolCall.id,
+              input: parsedArgs,
+              output: skipResult,
+              botId: context.botId,
+              botName: context.botName,
+              iteration,
+            };
+            events.push(skipEvent);
+            onEvent?.(skipEvent);
+            return { toolCallId: toolCall.id, result: skipResult };
+          }
+          recentToolHashes.push(callHash);
+          if (recentToolHashes.length > 3) recentToolHashes.shift();
 
           const callEvent: AgenticEvent = {
             type: "tool_call",
@@ -436,7 +533,7 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
   events.push(completeEvent);
   onEvent?.(completeEvent);
 
-  return { finalContent: fallbackContent, events };
+  return { finalContent: fallbackContent, events, totalTokensConsumed: cumulativeTokens };
 }
 
 function addToolResponses(

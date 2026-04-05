@@ -425,6 +425,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           clientId: msgContextClientId,
           userId: req.user!.userId,
           isGuest: req.user!.role === "guest",
+          depth: 0,
         },
       });
 
@@ -635,6 +636,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
               clientId: streamContextClientId,
               userId: req.user!.userId,
               isGuest: req.user!.role === "guest",
+              depth: 0,
             },
             onEvent: (event) => {
               sendSSE({ ...event, botId: bot.id, botName: bot.name, botTitle: bot.title });

@@ -138,7 +138,10 @@ async function queueWebhookDeliveries(scoreId: number, sourceUrl: string, eventT
 
     if (matchingWebhooks.length === 0) return;
 
-    const enrichedPayload = { ...(payload as Record<string, unknown>), sourceUrl };
+    const currentDepth = typeof (payload as Record<string, unknown>)?.webhookDepth === "number"
+      ? (payload as Record<string, unknown>).webhookDepth as number
+      : 0;
+    const enrichedPayload = { ...(payload as Record<string, unknown>), sourceUrl, webhookDepth: currentDepth + 1 };
 
     await db.insert(webhookDeliveriesTable).values(
       matchingWebhooks.map((wh) => ({
@@ -627,6 +630,7 @@ Please provide a strategic AEO recommendation with specific, actionable steps to
         botId: marketingBot?.id,
         botName,
         clientId: latestScore?.clientId ?? undefined,
+        depth: 0,
       },
       maxIterations: 5,
       maxTokens: 800,

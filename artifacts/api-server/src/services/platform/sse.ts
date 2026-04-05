@@ -44,6 +44,15 @@ export function broadcastSSE(event: string, data: Record<string, unknown>) {
   }
 }
 
+export function broadcastSSEToAll(event: string, data: Record<string, unknown>) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.res.write(payload);
+    } catch (_e) {}
+  }
+}
+
 function startHeartbeat() {
   heartbeatTimer = setInterval(() => {
     const deadClients: string[] = [];

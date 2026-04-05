@@ -77,3 +77,27 @@ export async function createNotification(payload: {
 
   return notification;
 }
+
+export async function createSystemNotification(payload: {
+  category: "system" | "cost";
+  severity: "info" | "warning" | "critical";
+  title: string;
+  body: string;
+  link?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const row: InsertNotification = {
+    clientId: null,
+    userId: null,
+    category: payload.category,
+    severity: payload.severity,
+    title: payload.title,
+    body: payload.body,
+    link: payload.link ?? null,
+    metadata: payload.metadata ?? null,
+  };
+
+  const [notification] = await db.insert(notificationsTable).values(row).returning();
+
+  return notification;
+}

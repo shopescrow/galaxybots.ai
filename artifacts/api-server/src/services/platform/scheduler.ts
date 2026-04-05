@@ -24,9 +24,13 @@ import {
   usersTable,
   clientIntegrationsTable,
   activationEmailsTable,
+  conversations,
+  toolActivityLogTable,
+  llmUsageLogTable,
+  notificationsTable,
 } from "@workspace/db";
 import { checkSlaBreaches } from "../analytics/sla";
-import { eq, and, lte, isNull, or, ne, desc, gt, isNotNull, count, inArray } from "drizzle-orm";
+import { eq, and, lte, isNull, or, ne, desc, gt, gte, isNotNull, count, inArray, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateWeeklyBriefing } from "../analytics/roi";
 import { generateMorningBriefs, generateWeeklyBriefs } from "../bots/briefing";
@@ -40,6 +44,53 @@ import nodemailer from "nodemailer";
 import { executeWorkflow, checkWorkflowTriggers, resumeWorkflowRunFromDelay } from "../missions/workflow-engine";
 import { addSSEClient, broadcastSSE } from "./sse";
 import { dispatchScanToPirateMonster } from "../../routes/partner/piratemonster";
+
+const DAILY_ASSIGNMENT_TOKEN_CAP = parseInt(process.env.DAILY_ASSIGNMENT_TOKEN_CAP || "100000", 10);
+
+interface DailyTokenEntry {
+  tokens: number;
+  date: string;
+  paused: boolean;
+}
+
+const assignmentDailyTokenLedger = new Map<number, DailyTokenEntry>();
+
+function getTodayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getAssignmentTokensToday(assignmentId: number): DailyTokenEntry {
+  const today = getTodayKey();
+  const entry = assignmentDailyTokenLedger.get(assignmentId);
+  if (!entry || entry.date !== today) {
+    const fresh: DailyTokenEntry = { tokens: 0, date: today, paused: false };
+    assignmentDailyTokenLedger.set(assignmentId, fresh);
+    return fresh;
+  }
+  return entry;
+}
+
+function recordAssignmentTokens(assignmentId: number, tokens: number, clientId: number): boolean {
+  const entry = getAssignmentTokensToday(assignmentId);
+  entry.tokens += tokens;
+  if (entry.tokens >= DAILY_ASSIGNMENT_TOKEN_CAP && !entry.paused) {
+    entry.paused = true;
+    console.warn(`[scheduler] Assignment #${assignmentId} paused: daily token cap exceeded (${entry.tokens}/${DAILY_ASSIGNMENT_TOKEN_CAP})`);
+    createNotification({
+      clientId,
+      category: "cost",
+      severity: "warning",
+      title: "Assignment paused — daily token limit reached",
+      body: `Assignment #${assignmentId} consumed ${entry.tokens.toLocaleString()} tokens today, exceeding the ${DAILY_ASSIGNMENT_TOKEN_CAP.toLocaleString()} daily limit. It will resume tomorrow.`,
+    }).catch(() => {});
+    return true;
+  }
+  return entry.paused;
+}
+
+function isAssignmentPausedToday(assignmentId: number): boolean {
+  return getAssignmentTokensToday(assignmentId).paused;
+}
 export { addSSEClient, broadcastSSE };
 
 function errMsg(err: unknown): string {
@@ -53,6 +104,44 @@ const SCHEDULE_INTERVALS: Record<string, number> = {
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
 };
+
+async function hasRecentActivity(clientId: number, since: Date): Promise<boolean> {
+  try {
+    const [convActivity] = await db
+      .select({ cnt: sql<number>`count(*)` })
+      .from(conversations)
+      .where(and(
+        eq(conversations.clientId, clientId),
+        gte(conversations.updatedAt, since),
+      ));
+
+    if (convActivity && Number(convActivity.cnt) > 0) return true;
+
+    const [toolActivity] = await db
+      .select({ cnt: sql<number>`count(*)` })
+      .from(toolActivityLogTable)
+      .where(and(
+        eq(toolActivityLogTable.clientId, clientId),
+        gte(toolActivityLogTable.createdAt, since),
+      ));
+
+    if (toolActivity && Number(toolActivity.cnt) > 0) return true;
+
+    const [notifActivity] = await db
+      .select({ cnt: sql<number>`count(*)` })
+      .from(notificationsTable)
+      .where(and(
+        eq(notificationsTable.clientId, clientId),
+        gte(notificationsTable.createdAt, since),
+      ));
+
+    if (notifActivity && Number(notifActivity.cnt) > 0) return true;
+
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 async function runPassiveAssignment(assignment: typeof botAssignmentsTable.$inferSelect, bot: typeof botsTable.$inferSelect) {
   const completion = await openai.chat.completions.create({
@@ -117,8 +206,16 @@ You are executing a standing order autonomously. Use your available tools to com
       clientId: assignment.clientId ?? undefined,
       botId: bot.id,
       botName: bot.name,
+      depth: 0,
     },
   });
+
+  if (result.totalTokensConsumed) {
+    console.log(`[scheduler] Assignment #${assignment.id} consumed ${result.totalTokensConsumed} tokens`);
+    if (assignment.clientId) {
+      recordAssignmentTokens(assignment.id, result.totalTokensConsumed, assignment.clientId);
+    }
+  }
 
   const hasError = result.events.some((e) => e.type === "error");
   const hasToolBlocked = result.events.some((e) => e.type === "tool_blocked");
@@ -162,6 +259,24 @@ async function runAssignment(assignmentId: number) {
 
   if (!assignment.clientId) {
     console.warn(`[scheduler] Skipping assignment #${assignmentId}: no clientId — cannot stamp notifications or SSE events without tenant scope`);
+    return null;
+  }
+
+  if (assignment.clientId && assignment.lastRunAt) {
+    const lastRun = new Date(assignment.lastRunAt);
+    const activity = await hasRecentActivity(assignment.clientId, lastRun);
+    if (!activity) {
+      console.log(`[scheduler] Skipping assignment #${assignmentId}: no activity since ${lastRun.toISOString()}`);
+      await db
+        .update(botAssignmentsTable)
+        .set({ lastRunAt: new Date() })
+        .where(eq(botAssignmentsTable.id, assignmentId));
+      return null;
+    }
+  }
+
+  if (isAssignmentPausedToday(assignmentId)) {
+    console.log(`[scheduler] Skipping assignment #${assignmentId}: daily token cap already exceeded`);
     return null;
   }
 

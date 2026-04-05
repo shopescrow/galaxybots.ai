@@ -337,10 +337,25 @@ function generateSlackBlocks(bodyText: string, client: { companyName: string }, 
   return blocks;
 }
 
-export async function generateBriefForClient(clientId: number, briefType: "morning" | "weekly" = "morning"): Promise<typeof intelligenceBriefsTable.$inferSelect> {
+function hasActivityInContext(ctx: BriefContext): boolean {
+  if (ctx.botActivity.length > 0) return true;
+  if (ctx.pendingApprovals > 0) return true;
+  if (ctx.recentAeoScores.length > 0) return true;
+  if (ctx.recentContent.length > 0) return true;
+  if (ctx.newProspects > 0) return true;
+  if (ctx.recentConversions > 0) return true;
+  return false;
+}
+
+export async function generateBriefForClient(clientId: number, briefType: "morning" | "weekly" = "morning"): Promise<typeof intelligenceBriefsTable.$inferSelect | null> {
   const periodHours = briefType === "morning" ? 24 : 168;
   const ctx = await gatherBriefContext(clientId, periodHours);
   if (!ctx) throw new Error(`Client ${clientId} not found`);
+
+  if (!hasActivityInContext(ctx)) {
+    console.log(`[briefing] Skipping ${briefType} brief for client ${clientId}: no activity`);
+    return null;
+  }
 
   const prompt = buildBriefPrompt(ctx, briefType);
 
@@ -617,6 +632,10 @@ async function runBriefForClient(
   settings: EffectiveSettings
 ): Promise<void> {
   const brief = await generateBriefForClient(clientId, briefType);
+  if (!brief) {
+    console.log(`[briefing] No brief generated for client ${clientId} (${briefType}): no activity`);
+    return;
+  }
 
   const [client] = await db
     .select({ contactEmail: clientsTable.contactEmail })

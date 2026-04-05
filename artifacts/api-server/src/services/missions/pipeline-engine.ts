@@ -129,6 +129,7 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
           botId: bot.id,
           botName: bot.name,
           clientId: pipeline.clientId,
+          depth: 0,
         },
       });
 

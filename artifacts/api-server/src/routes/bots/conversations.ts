@@ -17,6 +17,10 @@ import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base
 import { logLlmUsage } from "../../services/analytics/llm-usage";
 import { getPackOverlayForBot } from "../../services/billing/pack-overlays";
 import { recordSlaDirective, resolveSlaResponse } from "../../services/analytics/sla";
+import { screenForInjection, wrapWithSafetyReinforcement, validateInputLength } from "../../services/ai-safety/prompt-injection";
+import { checkCostCapAlerts } from "../../services/analytics/cost-caps";
+import { applySlidingWindow, trimToFitContextWindow } from "../../services/ai-safety/context-window";
+import { callWithFallback } from "../../services/ai-safety/model-fallback";
 
 const router: IRouter = Router();
 
@@ -99,6 +103,38 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     return;
   }
 
+  const lengthCheck = validateInputLength(body.data.content);
+  if (!lengthCheck.valid) {
+    res.status(400).json({ error: lengthCheck.message });
+    return;
+  }
+
+  const injectionScreen = screenForInjection(body.data.content);
+  let safeContent = body.data.content;
+  if (injectionScreen.flagged) {
+    if (injectionScreen.action === "reject") {
+      res.status(400).json({ error: "Your message was flagged by our safety system. Please rephrase and try again." });
+      return;
+    }
+    if (injectionScreen.action === "wrap") {
+      safeContent = wrapWithSafetyReinforcement(body.data.content);
+    }
+  }
+
+  if (req.user!.clientId) {
+    try {
+      const costCheck = await checkCostCapAlerts(req.user!.clientId);
+      if (!costCheck.withinBudget) {
+        res.status(429).json({ error: `Monthly AI usage cap reached ($${costCheck.spend.toFixed(2)} / $${costCheck.cap.toFixed(2)}). Please contact your administrator.` });
+        return;
+      }
+    } catch (err) {
+      console.error("[Conversations] Cost cap check failed (fail-closed):", err);
+      res.status(503).json({ error: "Unable to verify usage limits. Please try again shortly." });
+      return;
+    }
+  }
+
   const slaEventId = await recordSlaDirective({
     botId: bot.id,
     clientId: req.user!.clientId,
@@ -163,21 +199,26 @@ You have access to tools that allow you to search the web, read/write shared sta
       content: m.content,
     }));
 
+  const windowResult = await applySlidingWindow(
+    { role: "system", content: systemPrompt },
+    [...chatMessages, { role: "user" as const, content: safeContent }],
+  );
+
   const { finalContent, events } = await runAgenticLoop({
     model: "gpt-5.4",
     maxIterations: 10,
     maxTokens: 8192,
     systemPrompt,
-    messages: [
-      ...chatMessages,
-      { role: "user" as const, content: body.data.content },
-    ],
+    messages: windowResult.messages.slice(1),
     context: {
       conversationId: params.data.id,
       botId: bot.id,
       botName: bot.name,
       clientId: req.user!.clientId,
       userId: req.user!.userId,
+      isGuest: req.user!.role === "guest",
+      guestSessionToken: (req as unknown as Record<string, unknown>).sessionID as string | undefined,
+      depth: 0,
     },
   });
 
@@ -254,6 +295,37 @@ router.post("/conversations/:id/messages/stream", async (req, res): Promise<void
     return;
   }
 
+  const streamLengthCheck = validateInputLength(body.data.content);
+  if (!streamLengthCheck.valid) {
+    res.status(400).json({ error: streamLengthCheck.message });
+    return;
+  }
+
+  const streamInjectionScreen = screenForInjection(body.data.content);
+  if (streamInjectionScreen.flagged && streamInjectionScreen.action === "reject") {
+    res.status(400).json({ error: "Your message was flagged by our safety system. Please rephrase and try again." });
+    return;
+  }
+
+  if (req.user!.clientId) {
+    try {
+      const costCheck = await checkCostCapAlerts(req.user!.clientId);
+      if (!costCheck.withinBudget) {
+        res.status(429).json({ error: `Monthly AI usage cap reached ($${costCheck.spend.toFixed(2)} / $${costCheck.cap.toFixed(2)}). Please contact your administrator.` });
+        return;
+      }
+    } catch (err) {
+      console.error("[Conversations/stream] Cost cap check failed (fail-closed):", err);
+      res.status(503).json({ error: "Unable to verify usage limits. Please try again shortly." });
+      return;
+    }
+  }
+
+  let streamSafeContent = body.data.content;
+  if (streamInjectionScreen.flagged && streamInjectionScreen.action === "wrap") {
+    streamSafeContent = wrapWithSafetyReinforcement(body.data.content);
+  }
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -323,14 +395,21 @@ You speak with the authority, expertise, and professionalism of a Fortune 500 ex
 
 You have access to tools that allow you to search the web, read/write shared state, query platform data, and delegate tasks to other bots. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.${langInstruction}`;
 
-    const chatMessages = history.slice(0, -1)
+    const rawChatMessages = history.slice(0, -1)
       .filter((m) => m.messageType === "text" || !m.messageType)
       .map(m => ({
         role: (m.role === "bot" ? "assistant" : m.role) as "user" | "assistant" | "system",
         content: m.content,
       }));
 
+    const streamWindowResult = await applySlidingWindow(
+      { role: "system", content: systemPrompt },
+      [...rawChatMessages, { role: "user" as const, content: streamSafeContent }],
+    );
+    const chatMessages = streamWindowResult.messages.slice(1, -1);
+
     const isMoA = req.body.moa === true;
+    const moaComplexity = typeof req.body.complexity === "number" ? Math.min(Math.max(req.body.complexity, 1), 10) : undefined;
 
     if (isMoA) {
       const plan = req.user!.plan;
@@ -343,49 +422,61 @@ You have access to tools that allow you to search the web, read/write shared sta
       }
     }
 
+    let moaDowngraded = false;
+    if (isMoA && req.user!.clientId) {
+      try {
+        const moaCostCheck = await checkCostCapAlerts(req.user!.clientId);
+        if (moaCostCheck.pctUsed >= 90) {
+          moaDowngraded = true;
+          sendSSE({ type: "moa_progress", moaIndex: 0, moaTotal: 1, content: "Budget near limit — using standard mode instead of Deep Thinking" });
+        }
+      } catch (err) {
+        console.error("[Conversations/MoA] Cost cap check failed, downgrading MoA (fail-safe):", err);
+        moaDowngraded = true;
+      }
+    }
+
     let botResponseContent: string;
 
-    if (isMoA) {
-      const MOA_COUNT = 10;
+    if (isMoA && !moaDowngraded) {
+      const DEFAULT_MOA_COUNT = 5;
+      const MAX_MOA_COUNT = 10;
+      const MOA_COUNT = moaComplexity ? Math.min(moaComplexity, MAX_MOA_COUNT) : DEFAULT_MOA_COUNT;
       const temperatures = Array.from({ length: MOA_COUNT }, (_, i) =>
-        parseFloat((0.3 + i * 0.12).toFixed(2))
+        parseFloat((0.3 + i * (0.6 / Math.max(MOA_COUNT - 1, 1))).toFixed(2))
       );
 
       const userTurn = [
         ...chatMessages,
-        { role: "user" as const, content: body.data.content },
+        { role: "user" as const, content: streamSafeContent },
       ];
 
       const perspectives: string[] = new Array(MOA_COUNT).fill("");
       let completed = 0;
 
-      sendSSE({ type: "moa_progress", moaIndex: 0, moaTotal: MOA_COUNT, content: "Spawning 10 parallel perspectives…" });
+      sendSSE({ type: "moa_progress", moaIndex: 0, moaTotal: MOA_COUNT, content: `Spawning ${MOA_COUNT} parallel perspectives…` });
 
       await Promise.all(
         temperatures.map(async (temp, i) => {
-          const moaStart = Date.now();
-          const completion = await openai.chat.completions.create({
-            model: "gpt-5.4",
-            temperature: temp,
-            messages: [
+          try {
+            const moaMessages = trimToFitContextWindow([
               { role: "system", content: systemPrompt },
               ...userTurn,
-            ],
-          });
-          perspectives[i] = completion.choices[0]?.message?.content ?? "";
-          completed++;
-          const moaUsage = completion.usage;
-          if (moaUsage) {
-            logLlmUsage({
+            ], "gpt-5.4");
+            const moaResult = await callWithFallback({
+              model: "gpt-5.4",
+              messages: moaMessages,
+              temperature: temp,
               clientId: req.user!.clientId,
               botId: bot.id,
               conversationId: params.data.id,
-              model: "gpt-5.4",
-              promptTokens: moaUsage.prompt_tokens ?? 0,
-              completionTokens: moaUsage.completion_tokens ?? 0,
-              latencyMs: Date.now() - moaStart,
             });
+            perspectives[i] = moaResult.completion.choices[0]?.message?.content ?? "";
+          } catch (err) {
+            perspectives[i] = "";
+            console.error(`[MoA] Perspective ${i} failed:`, err instanceof Error ? err.message : err);
           }
+          completed++;
           sendSSE({
             type: "moa_progress",
             moaIndex: completed,
@@ -395,9 +486,9 @@ You have access to tools that allow you to search the web, read/write shared sta
         })
       );
 
-      sendSSE({ type: "moa_synthesizing", content: "Synthesizing all 10 perspectives into one definitive response…" });
+      sendSSE({ type: "moa_synthesizing", content: `Synthesizing all ${MOA_COUNT} perspectives into one definitive response…` });
 
-      const synthesisPrompt = `You are ${bot.name}, ${bot.title}. You have just produced 10 independent analytical perspectives on the same question, each at a different creative temperature. Your task is to synthesize them into a single, definitive, authoritative response.
+      const synthesisPrompt = `You are ${bot.name}, ${bot.title}. You have just produced ${MOA_COUNT} independent analytical perspectives on the same question, each at a different creative temperature. Your task is to synthesize them into a single, definitive, authoritative response.
 
 Rules:
 - Integrate the strongest reasoning from all perspectives
@@ -407,34 +498,25 @@ Rules:
 - The output should feel like your single best possible answer, not a summary of drafts
 - Stay fully in character as ${bot.name}${langInstruction}
 
-The 10 perspectives follow, delimited by ---:
+The ${MOA_COUNT} perspectives follow, delimited by ---:
 
-${perspectives.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
+${perspectives.filter(Boolean).map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
 
 Now write the single definitive synthesized response:`;
 
-      const synthStart = Date.now();
-      const synthesis = await openai.chat.completions.create({
+      const synthMessages = trimToFitContextWindow([
+        { role: "system", content: synthesisPrompt },
+        { role: "user", content: streamSafeContent },
+      ], "gpt-5.4");
+      const synthResult = await callWithFallback({
         model: "gpt-5.4",
-        messages: [
-          { role: "system", content: synthesisPrompt },
-          { role: "user", content: body.data.content },
-        ],
+        messages: synthMessages,
+        clientId: req.user!.clientId,
+        botId: bot.id,
+        conversationId: params.data.id,
       });
-      const synthUsage = synthesis.usage;
-      if (synthUsage) {
-        logLlmUsage({
-          clientId: req.user!.clientId,
-          botId: bot.id,
-          conversationId: params.data.id,
-          model: "gpt-5.4",
-          promptTokens: synthUsage.prompt_tokens ?? 0,
-          completionTokens: synthUsage.completion_tokens ?? 0,
-          latencyMs: Date.now() - synthStart,
-        });
-      }
 
-      botResponseContent = synthesis.choices[0]?.message?.content
+      botResponseContent = synthResult.completion.choices[0]?.message?.content
         ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";
     } else {
       const { finalContent, events } = await runAgenticLoop({
@@ -444,7 +526,7 @@ Now write the single definitive synthesized response:`;
         systemPrompt,
         messages: [
           ...chatMessages,
-          { role: "user" as const, content: body.data.content },
+          { role: "user" as const, content: streamSafeContent },
         ],
         context: {
           conversationId: params.data.id,
@@ -452,6 +534,9 @@ Now write the single definitive synthesized response:`;
           botName: bot.name,
           clientId: req.user!.clientId,
           userId: req.user!.userId,
+          isGuest: req.user!.role === "guest",
+          guestSessionToken: (req as unknown as Record<string, unknown>).sessionID as string | undefined,
+          depth: 0,
         },
         onEvent: (event) => {
           sendSSE(event);
@@ -497,7 +582,7 @@ Now write the single definitive synthesized response:`;
       content: botResponseContent,
       senderName: bot.name,
       messageType: "text",
-      toolData: isMoA ? { moa: true } : undefined,
+      toolData: isMoA && !moaDowngraded ? { moa: true } : undefined,
     });
 
     sendSSE({ type: "done", content: botResponseContent });

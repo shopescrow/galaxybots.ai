@@ -298,22 +298,35 @@ registerTool({
       return { success: false, error: `Bot with ID ${input.botId} not found` };
     }
 
+    const currentDepth = context.depth ?? 0;
+    if (currentDepth >= 3) {
+      return { success: false, error: "Delegation depth limit reached. Cannot delegate further to prevent recursive loops." };
+    }
+
     const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 
 You have been asked by a teammate to handle a specific sub-task. Provide a focused, expert response (3-5 sentences).`;
 
-    const completion = await openai.chat.completions.create({
+    const { runAgenticLoop } = await import("./agentic-loop");
+    const result = await runAgenticLoop({
       model: "gpt-4o-mini",
-      max_completion_tokens: 500,
+      maxIterations: 5,
+      maxTokens: 500,
+      systemPrompt,
       messages: [
-        { role: "system", content: systemPrompt },
         { role: "user", content: input.task },
       ],
+      context: {
+        ...context,
+        botId: bot.id,
+        botName: bot.name,
+        depth: currentDepth + 1,
+      },
     });
 
-    const response = completion.choices[0]?.message?.content ?? "I'll look into this.";
+    const response = result.finalContent || "I'll look into this.";
 
     return {
       success: true,

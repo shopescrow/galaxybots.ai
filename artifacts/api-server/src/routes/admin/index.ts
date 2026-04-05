@@ -5,6 +5,7 @@ import onboardingRouter from "./onboarding";
 import notificationsRouter from "./notifications";
 import pushTokensRouter from "./push-tokens";
 import storageRouter from "./storage";
+import modelCostsRouter from "./model-costs";
 
 export function registerAdminRoutes(router: IRouter) {
   router.use(orgAdminRouter);
@@ -13,4 +14,5 @@ export function registerAdminRoutes(router: IRouter) {
   router.use(notificationsRouter);
   router.use(pushTokensRouter);
   router.use(storageRouter);
+  router.use(modelCostsRouter);
 }

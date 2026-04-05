@@ -325,6 +325,7 @@ You are executing a standing order autonomously. Use your available tools to com
         clientId: req.user!.clientId,
         botId: bot.id,
         botName: bot.name,
+        depth: 0,
       },
     });
 

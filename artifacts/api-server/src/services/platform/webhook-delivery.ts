@@ -71,10 +71,14 @@ async function processDeliveries() {
       if (!claimed) continue;
 
       const payloadStr = JSON.stringify(delivery.payload);
+      const webhookDepth = typeof (delivery.payload as Record<string, unknown>)?.webhookDepth === "number"
+        ? (delivery.payload as Record<string, unknown>).webhookDepth as number
+        : 0;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-PirateMonster-Event": delivery.eventType,
         "X-PirateMonster-Delivery": String(delivery.id),
+        "X-GalaxyBots-Webhook-Depth": String(webhookDepth),
       };
 
       if (webhook.secretHash) {

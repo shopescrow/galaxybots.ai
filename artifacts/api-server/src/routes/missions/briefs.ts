@@ -89,6 +89,10 @@ router.post("/briefs/generate", requireRole("owner", "admin"), async (req, res):
 
   try {
     const brief = await generateBriefForClient(clientId, body.data.briefType);
+    if (!brief) {
+      res.json({ message: "No activity in the briefing period — brief generation skipped." });
+      return;
+    }
 
     const settings = await getBriefingSettingsForClient(clientId);
     const [client] = await db.select({ contactEmail: clientsTable.contactEmail }).from(clientsTable).where(eq(clientsTable.id, clientId));

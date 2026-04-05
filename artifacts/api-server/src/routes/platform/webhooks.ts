@@ -27,6 +27,15 @@ const LeadPayload = z.object({
 const router: IRouter = Router();
 
 router.post("/webhooks/lead/:clientId", async (req, res): Promise<void> => {
+  const webhookDepthHeader = req.headers["x-galaxybots-webhook-depth"];
+  if (webhookDepthHeader) {
+    const depth = parseInt(String(webhookDepthHeader), 10);
+    if (!isNaN(depth) && depth > 5) {
+      res.status(429).json({ error: "Webhook depth limit exceeded. Possible recursive loop detected." });
+      return;
+    }
+  }
+
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
     res.status(400).json({ error: "Invalid client ID" });
@@ -189,6 +198,7 @@ Keep responses focused and actionable (3-5 sentences per point).`;
           botId: bot.id,
           botName: bot.name,
           clientId,
+          depth: webhookDepthHeader ? parseInt(String(webhookDepthHeader), 10) : 0,
         },
       });
 

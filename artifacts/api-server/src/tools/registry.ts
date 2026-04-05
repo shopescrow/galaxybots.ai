@@ -17,6 +17,8 @@ export interface ToolContext {
   clientId?: number;
   userId?: number;
   isGuest?: boolean;
+  depth?: number;
+  guestSessionToken?: string;
 }
 
 const toolMap = new Map<string, ToolDefinition>();
