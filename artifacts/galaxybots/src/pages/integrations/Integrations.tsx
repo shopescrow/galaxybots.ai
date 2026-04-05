@@ -24,7 +24,8 @@ export default function Integrations() {
     queryKey: ["clients"],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/clients`);
-      return res.json();
+      const json = await res.json();
+      return Array.isArray(json) ? json : (json.data ?? []);
     },
   });
 

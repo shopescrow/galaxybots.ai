@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -18,6 +18,7 @@ export const botsTable = pgTable("bots", {
   rank: text("rank").notNull().default("analyst"),
   isAvailable: boolean("is_available").notNull().default(true),
   isAiGenerated: boolean("is_ai_generated").notNull().default(false),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

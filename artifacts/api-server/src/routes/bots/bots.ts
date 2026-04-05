@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db, botsTable, botSlaEventsTable, botSlaOverridesTable, slaTiersTable, clientsTable } from "@workspace/db";
-import { eq, and, gte, desc, sql } from "drizzle-orm";
+import { eq, and, gte, desc, sql, or, isNull } from "drizzle-orm";
 import { GetBotParams, ListBotsResponse, GetBotResponse } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { llmRateLimit } from "../../middleware/rate-limit";
 import { getEffectiveSlaTargets } from "../../services/analytics/sla";
+import { sendValidationError, sendParamError } from "../../utils/validation";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
@@ -32,14 +33,60 @@ function sortByDepartment<T extends { department: string; name: string }>(bots: 
   });
 }
 
-router.get("/bots", async (_req, res): Promise<void> => {
-  const bots = await db.select().from(botsTable).orderBy(botsTable.department, botsTable.title);
-  res.json(ListBotsResponse.parse(bots));
+const PaginationQuery = z.object({
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-router.get("/bots/declarations", async (_req, res): Promise<void> => {
-  const bots = await db.select().from(botsTable);
-  const sorted = sortByDepartment(bots);
+router.get("/bots", async (req, res): Promise<void> => {
+  const pagination = PaginationQuery.safeParse(req.query);
+  if (!pagination.success) {
+    sendValidationError(res, pagination.error, "Invalid pagination parameters");
+    return;
+  }
+  const { cursor, limit } = pagination.data;
+  const callerClientId = req.user?.clientId;
+
+  const conditions = callerClientId
+    ? or(isNull(botsTable.tenantId), eq(botsTable.tenantId, callerClientId))
+    : isNull(botsTable.tenantId);
+
+  let query = db.select().from(botsTable)
+    .where(cursor ? and(conditions, gte(botsTable.id, cursor)) : conditions)
+    .orderBy(botsTable.id)
+    .limit(limit + 1);
+
+  const bots = await query;
+  const hasMore = bots.length > limit;
+  const page = hasMore ? bots.slice(0, limit) : bots;
+  const nextCursor = hasMore ? page[page.length - 1].id + 1 : null;
+
+  res.json({ data: ListBotsResponse.parse(page), nextCursor, hasMore });
+});
+
+router.get("/bots/declarations", async (req, res): Promise<void> => {
+  const pagination = PaginationQuery.safeParse(req.query);
+  if (!pagination.success) {
+    sendValidationError(res, pagination.error, "Invalid pagination parameters");
+    return;
+  }
+  const { cursor, limit } = pagination.data;
+  const callerClientId = req.user?.clientId;
+
+  const conditions = callerClientId
+    ? or(isNull(botsTable.tenantId), eq(botsTable.tenantId, callerClientId))
+    : isNull(botsTable.tenantId);
+
+  const bots = await db.select().from(botsTable)
+    .where(cursor ? and(conditions, gte(botsTable.id, cursor)) : conditions)
+    .orderBy(botsTable.id)
+    .limit(limit + 1);
+
+  const hasMore = bots.length > limit;
+  const page = hasMore ? bots.slice(0, limit) : bots;
+  const nextCursor = hasMore ? page[page.length - 1].id + 1 : null;
+
+  const sorted = sortByDepartment(page);
   const result = sorted.map((bot) => ({
     id: bot.id,
     name: bot.name,
@@ -48,7 +95,7 @@ router.get("/bots/declarations", async (_req, res): Promise<void> => {
     avatar: bot.avatar,
     declaration: bot.declaration,
   }));
-  res.json(result);
+  res.json({ data: result, nextCursor, hasMore });
 });
 
 router.post("/bots/generate-declarations", llmRateLimit, async (req, res): Promise<void> => {
@@ -64,7 +111,11 @@ router.post("/bots/generate-declarations", llmRateLimit, async (req, res): Promi
   };
 
   try {
-    const allBots = await db.select().from(botsTable);
+    const callerClientId = req.user?.clientId;
+    const tenantCondition = callerClientId
+      ? or(isNull(botsTable.tenantId), eq(botsTable.tenantId, callerClientId))
+      : isNull(botsTable.tenantId);
+    const allBots = await db.select().from(botsTable).where(tenantCondition);
     const sorted = sortByDepartment(allBots);
 
     type BotRow = (typeof sorted)[number];
@@ -150,11 +201,16 @@ Be bold, specific, and speak in your unique voice and personality. No quotation 
 router.get("/bots/:id", async (req, res): Promise<void> => {
   const params = GetBotParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendValidationError(res, params.error);
     return;
   }
 
-  const [bot] = await db.select().from(botsTable).where(eq(botsTable.id, params.data.id));
+  const callerClientId = req.user?.clientId;
+  const tenantCondition = callerClientId
+    ? or(isNull(botsTable.tenantId), eq(botsTable.tenantId, callerClientId))
+    : isNull(botsTable.tenantId);
+
+  const [bot] = await db.select().from(botsTable).where(and(eq(botsTable.id, params.data.id), tenantCondition));
   if (!bot) {
     res.status(404).json({ error: "Bot not found" });
     return;
@@ -313,7 +369,7 @@ router.put("/bots/:id/sla", async (req, res): Promise<void> => {
   });
 
   const parsed = schema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!parsed.success) { sendValidationError(res, parsed.error); return; }
 
   try {
     const [client] = await db.select({ plan: clientsTable.plan }).from(clientsTable).where(eq(clientsTable.id, clientId));

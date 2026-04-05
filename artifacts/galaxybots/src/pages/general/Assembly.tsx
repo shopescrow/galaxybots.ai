@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { BotIcon, ArrowRight, Radio, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fetchAllPages } from "@/lib/utils";
 
 interface BotDeclaration {
   id: number;
@@ -172,8 +172,7 @@ export default function Assembly() {
 
     async function loadDeclarations() {
       try {
-        const res = await fetch(`${apiBase}/bots/declarations`);
-        const data = await res.json();
+        const data = await fetchAllPages<BotDeclaration>(`${apiBase}/bots/declarations`);
         const withDeclarations = data.filter((b: BotDeclaration) => b.declaration);
         setTotalBots(data.length);
 

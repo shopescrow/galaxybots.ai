@@ -1,3 +1,4 @@
+import { fetchAllPages } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -115,10 +116,8 @@ export default function Prospects() {
   const { data: clients = [] } = useQuery<ClientOption[]>({
     queryKey: ["clients-list"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/clients`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []).map((c: { id: number; companyName: string }) => ({
+      const data = await fetchAllPages<{ id: number; companyName: string }>(`${BASE}/api/clients`);
+      return data.map((c) => ({
         id: c.id,
         companyName: c.companyName,
       }));

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db, clientsTable, clientBotsTable, botsTable, botToolPermissionsTable, type WebsiteIntel } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, or, isNull } from "drizzle-orm";
 import {
   GetClientBotsParams,
   HireBotBody,
@@ -10,6 +10,7 @@ import {
   CreateClientBody,
 } from "@workspace/api-zod";
 import { requireRole } from "../../middleware/auth";
+import { sendValidationError } from "../../utils/validation";
 import { getAllTools } from "../../tools";
 import { SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS } from "../../services/platform/governance";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -116,10 +117,28 @@ function isPlatformAdmin(req: Express.Request): boolean {
   return req.user?.bypassPayment === true;
 }
 
+const ClientsPaginationQuery = z.object({
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
 router.get("/clients", async (req, res): Promise<void> => {
   if (isPlatformAdmin(req)) {
-    const allClients = await db.select().from(clientsTable);
-    res.json(allClients.map(sanitizeClient));
+    const pagination = ClientsPaginationQuery.safeParse(req.query);
+    if (!pagination.success) {
+      sendValidationError(res, pagination.error, "Invalid pagination parameters");
+      return;
+    }
+    const { cursor, limit } = pagination.data;
+    const conditions = cursor ? gte(clientsTable.id, cursor) : undefined;
+    const allClients = await db.select().from(clientsTable)
+      .where(conditions)
+      .orderBy(clientsTable.id)
+      .limit(limit + 1);
+    const hasMore = allClients.length > limit;
+    const page = hasMore ? allClients.slice(0, limit) : allClients;
+    const nextCursor = hasMore ? page[page.length - 1].id + 1 : null;
+    res.json({ data: page.map(sanitizeClient), nextCursor, hasMore });
   } else {
     const clientId = req.user!.clientId;
     const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId));
@@ -127,7 +146,7 @@ router.get("/clients", async (req, res): Promise<void> => {
       res.status(404).json({ error: "Client not found" });
       return;
     }
-    res.json([sanitizeClient(client)]);
+    res.json({ data: [sanitizeClient(client)], nextCursor: null, hasMore: false });
   }
 });
 
@@ -139,7 +158,7 @@ router.post("/clients", requireRole("owner"), async (req, res): Promise<void> =>
 
   const parsed = CreateClientBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body", details: parsed.error.errors });
+    sendValidationError(res, parsed.error, "Invalid request body");
     return;
   }
 
@@ -180,7 +199,7 @@ router.patch("/clients/:id", requireRole("owner", "admin"), async (req, res): Pr
 
   const body = UpdateClientBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    sendValidationError(res, body.error);
     return;
   }
 
@@ -230,11 +249,12 @@ router.post("/clients/:id/bots", requireRole("owner", "admin"), async (req, res)
 
   const body = HireBotBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    sendValidationError(res, body.error);
     return;
   }
 
-  const [bot] = await db.select().from(botsTable).where(eq(botsTable.id, body.data.botId));
+  const tenantCondition = or(isNull(botsTable.tenantId), eq(botsTable.tenantId, id));
+  const [bot] = await db.select().from(botsTable).where(and(eq(botsTable.id, body.data.botId), tenantCondition));
   if (!bot) {
     res.status(400).json({ error: "Bot not found" });
     return;

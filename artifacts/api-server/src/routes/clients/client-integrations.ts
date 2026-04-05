@@ -3,12 +3,20 @@ import { db, clientIntegrationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { encryptCredential } from "../../utils/credential-encryption";
 import { requireRole } from "../../middleware/auth";
+import { sendValidationError } from "../../utils/validation";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
 const REDACTED = "••••••••";
 
 const VALID_SERVICES = ["gmail", "google_calendar", "hubspot", "notion", "piratemonster", "salesforce", "bingolingo", "google_sheets", "twilio", "slack", "github", "twitter", "facebook", "instagram", "youtube", "tiktok", "social365", "family_movers_crm"] as const;
+
+const CreateIntegrationBody = z.object({
+  service: z.enum(VALID_SERVICES),
+  credential: z.string().min(1, "credential is required"),
+  label: z.string().nullish(),
+});
 
 router.get("/client-integrations/:clientId", async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
@@ -31,18 +39,14 @@ router.get("/client-integrations/:clientId", async (req, res): Promise<void> => 
 });
 
 router.post("/client-integrations", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const { service, credential, label } = req.body;
+  const parsed = CreateIntegrationBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
+    return;
+  }
+
+  const { service, credential, label } = parsed.data;
   const clientId = req.user!.clientId;
-
-  if (!service || !credential) {
-    res.status(400).json({ error: "service and credential are required" });
-    return;
-  }
-
-  if (!VALID_SERVICES.includes(service)) {
-    res.status(400).json({ error: `Invalid service. Must be one of: ${VALID_SERVICES.join(", ")}` });
-    return;
-  }
 
   const encrypted = encryptCredential(credential);
 

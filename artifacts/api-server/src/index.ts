@@ -126,6 +126,20 @@ async function validateDatabaseTables() {
   }
 }
 
+if (process.env.NODE_ENV === "production" && !process.env.CREDENTIAL_ENCRYPTION_KEY) {
+  throw new Error(
+    "CREDENTIAL_ENCRYPTION_KEY must be set in production. " +
+    "Generate a 32+ character random string and set it as an environment variable."
+  );
+}
+
+if (!process.env.CREDENTIAL_ENCRYPTION_KEY) {
+  console.warn(
+    "[startup] WARNING: CREDENTIAL_ENCRYPTION_KEY is not set. " +
+    "Falling back to DATABASE_URL for credential encryption. This is insecure and not allowed in production."
+  );
+}
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {

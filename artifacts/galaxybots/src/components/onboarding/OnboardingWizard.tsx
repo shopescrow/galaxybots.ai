@@ -155,8 +155,9 @@ export default function OnboardingWizard({ open, onOpenChange }: OnboardingWizar
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((r) => r.ok ? r.json() : [])
-        .then((clients: { id: number }[]) => {
-          if (Array.isArray(clients) && clients.length > 0) {
+        .then((json: { data?: unknown[] } | unknown[]) => {
+          const clients = Array.isArray(json) ? json : (json.data ?? []);
+          if (clients.length > 0) {
             updateOnboarding({ firstClient: true }).catch(() => {});
           }
         })

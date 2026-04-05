@@ -105,7 +105,10 @@ function PermissionsTab() {
 
   const { data: bots, isLoading: botsLoading } = useQuery<BotInfo[]>({
     queryKey: ["bots-list"],
-    queryFn: () => apiFetch("/bots"),
+    queryFn: async () => {
+      const json = await apiFetch("/bots");
+      return Array.isArray(json) ? json : (json.data ?? []);
+    },
   });
 
   const { data: tools } = useQuery<ToolInfo[]>({
@@ -464,7 +467,10 @@ function TemplatesTab() {
 
   const { data: bots } = useQuery<BotInfo[]>({
     queryKey: ["bots-list"],
-    queryFn: () => apiFetch("/bots"),
+    queryFn: async () => {
+      const json = await apiFetch("/bots");
+      return Array.isArray(json) ? json : (json.data ?? []);
+    },
   });
 
   const { data: tools } = useQuery<ToolInfo[]>({

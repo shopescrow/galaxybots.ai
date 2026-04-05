@@ -6,7 +6,7 @@ import {
   taskSessionBotsTable,
   taskSessionMessagesTable,
 } from "@workspace/db";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, gt, or, isNull } from "drizzle-orm";
 import { captureSessionOutcome } from "../../services/analytics/outcome-capture";
 import { getPackOverlayForBot } from "../../services/billing/pack-overlays";
 import {
@@ -27,6 +27,8 @@ import { buildMemoryContext } from "../../services/bots/memory";
 import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base";
 import { requireRole } from "../../middleware/auth";
 import { llmRateLimit } from "../../middleware/rate-limit";
+import { requireTenantAccess } from "../../middleware/tenant";
+import { sendValidationError, sendParamError } from "../../utils/validation";
 import { buildClientContext } from "../../services/clients/client-context";
 import { applyBrandVoiceGuardrails } from "../../services/platform/governance";
 import {
@@ -38,14 +40,18 @@ import {
 
 const router: IRouter = Router();
 
-router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/task-sessions/analyze", requireRole("owner", "admin"), requireTenantAccess("subClientId"), llmRateLimit, async (req, res): Promise<void> => {
   const body = AnalyzeTaskBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    sendValidationError(res, body.error);
     return;
   }
 
-  const allBots = await db.select().from(botsTable);
+  const analyzeSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
+  const analyzeContextClientId = (analyzeSubClientId && !isNaN(analyzeSubClientId)) ? analyzeSubClientId : req.user!.clientId;
+
+  const tenantCondition = or(isNull(botsTable.tenantId), eq(botsTable.tenantId, analyzeContextClientId));
+  const allBots = await db.select().from(botsTable).where(tenantCondition);
 
   const botRoster = allBots
     .map(
@@ -53,9 +59,6 @@ router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimi
         `ID:${b.id} | ${b.name} | ${b.title} | ${b.department} | ${b.responsibilities.join(", ")}`,
     )
     .join("\n");
-
-  const analyzeSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
-  const analyzeContextClientId = (analyzeSubClientId && !isNaN(analyzeSubClientId)) ? analyzeSubClientId : req.user!.clientId;
   const clientContext = await buildClientContext(analyzeContextClientId);
 
   const completion = await openai.chat.completions.create({
@@ -128,9 +131,11 @@ Select 3-6 bots total. Only propose new bots if truly no existing bot covers a c
 router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
   const body = FabricateBotBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    sendValidationError(res, body.error);
     return;
   }
+
+  const callerClientId = req.user!.clientId;
 
   const [bot] = await db
     .insert(botsTable)
@@ -144,6 +149,7 @@ router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, asyn
       personality: body.data.personality,
       isAvailable: true,
       isAiGenerated: true,
+      tenantId: callerClientId,
     })
     .returning();
 
@@ -156,28 +162,29 @@ router.get("/task-sessions", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.post("/task-sessions", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/task-sessions", requireRole("owner", "admin"), requireTenantAccess("subClientId"), llmRateLimit, async (req, res): Promise<void> => {
   const body = CreateTaskSessionBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    sendValidationError(res, body.error);
     return;
-  }
-
-  if (body.data.botIds.length > 0) {
-    const existingBots = await db
-      .select({ id: botsTable.id })
-      .from(botsTable)
-      .where(inArray(botsTable.id, body.data.botIds));
-    const validIds = new Set(existingBots.map((b) => b.id));
-    const invalidIds = body.data.botIds.filter((id) => !validIds.has(id));
-    if (invalidIds.length > 0) {
-      res.status(400).json({ error: `Invalid bot IDs: ${invalidIds.join(", ")}` });
-      return;
-    }
   }
 
   const createSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
   const sessionClientId = (createSubClientId && !isNaN(createSubClientId)) ? createSubClientId : req.user!.clientId;
+
+  if (body.data.botIds.length > 0) {
+    const createTenantCondition = or(isNull(botsTable.tenantId), eq(botsTable.tenantId, sessionClientId));
+    const existingBots = await db
+      .select({ id: botsTable.id })
+      .from(botsTable)
+      .where(and(inArray(botsTable.id, body.data.botIds), createTenantCondition));
+    const validIds = new Set(existingBots.map((b) => b.id));
+    const invalidIds = body.data.botIds.filter((id: number) => !validIds.has(id));
+    if (invalidIds.length > 0) {
+      sendParamError(res, `Invalid bot IDs: ${invalidIds.join(", ")}`);
+      return;
+    }
+  }
 
   const [session] = await db
     .insert(taskSessionsTable)
@@ -201,7 +208,7 @@ router.post("/task-sessions", requireRole("owner", "admin"), llmRateLimit, async
 router.get("/task-sessions/:id", async (req, res): Promise<void> => {
   const params = GetTaskSessionParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendValidationError(res, params.error);
     return;
   }
 
@@ -217,7 +224,7 @@ router.get("/task-sessions/:id", async (req, res): Promise<void> => {
 router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
   const params = GetTaskSessionMessagesParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendValidationError(res, params.error);
     return;
   }
 
@@ -250,13 +257,13 @@ router.post(
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {
-      res.status(400).json({ error: params.error.message });
+      sendValidationError(res, params.error);
       return;
     }
 
     const body = SendTaskSessionMessageBody.safeParse(req.body);
     if (!body.success) {
-      res.status(400).json({ error: body.error.message });
+      sendValidationError(res, body.error);
       return;
     }
 
@@ -437,13 +444,13 @@ router.post(
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {
-      res.status(400).json({ error: params.error.message });
+      sendValidationError(res, params.error);
       return;
     }
 
     const body = SendTaskSessionMessageBody.safeParse(req.body);
     if (!body.success) {
-      res.status(400).json({ error: body.error.message });
+      sendValidationError(res, body.error);
       return;
     }
 
@@ -642,7 +649,7 @@ router.get(
   async (req, res): Promise<void> => {
     const params = GetTaskSessionAlertsParams.safeParse(req.params);
     if (!params.success) {
-      res.status(400).json({ error: params.error.message });
+      sendValidationError(res, params.error);
       return;
     }
 
@@ -689,13 +696,13 @@ router.post(
   async (req, res): Promise<void> => {
     const params = ExpandTaskSessionParams.safeParse(req.params);
     if (!params.success) {
-      res.status(400).json({ error: params.error.message });
+      sendValidationError(res, params.error);
       return;
     }
 
     const body = ExpandTaskSessionBody.safeParse(req.body);
     if (!body.success) {
-      res.status(400).json({ error: body.error.message });
+      sendValidationError(res, body.error);
       return;
     }
 
@@ -709,14 +716,15 @@ router.post(
     }
 
     if (body.data.botIds.length > 0) {
+      const expandTenantCondition = or(isNull(botsTable.tenantId), eq(botsTable.tenantId, req.user!.clientId));
       const existingBots = await db
         .select({ id: botsTable.id })
         .from(botsTable)
-        .where(inArray(botsTable.id, body.data.botIds));
+        .where(and(inArray(botsTable.id, body.data.botIds), expandTenantCondition));
       const validIds = new Set(existingBots.map((b) => b.id));
       const invalidIds = body.data.botIds.filter((id) => !validIds.has(id));
       if (invalidIds.length > 0) {
-        res.status(400).json({ error: `Invalid bot IDs: ${invalidIds.join(", ")}` });
+        sendParamError(res, `Invalid bot IDs: ${invalidIds.join(", ")}`);
         return;
       }
 

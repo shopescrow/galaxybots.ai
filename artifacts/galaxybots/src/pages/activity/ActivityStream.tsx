@@ -1,3 +1,4 @@
+import { fetchAllPages } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -148,10 +149,7 @@ export default function ActivityStream() {
   const { data: clientsData } = useQuery<{ id: number; companyName: string }[]>({
     queryKey: ["clients-list"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/clients`, { headers });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json) ? json : (json.clients ?? []);
+      return fetchAllPages<{ id: number; companyName: string }>(`${BASE}/api/clients`, { headers });
     },
   });
 

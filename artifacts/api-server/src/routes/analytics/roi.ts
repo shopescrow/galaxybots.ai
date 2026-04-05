@@ -4,13 +4,15 @@ import { captureSessionOutcome } from "../../services/analytics/outcome-capture"
 import { db, sessionOutcomesTable, clientsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
+import { requireTenantAccess } from "../../middleware/tenant";
+import { sendValidationError, sendParamError } from "../../utils/validation";
 
 const router: IRouter = Router();
 
-router.get("/roi/client/:clientId", async (req, res): Promise<void> => {
+router.get("/roi/client/:clientId", requireTenantAccess("clientId"), async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
-    res.status(400).json({ error: "Invalid client ID" });
+    sendParamError(res, "Invalid client ID");
     return;
   }
 
@@ -25,10 +27,10 @@ router.get("/roi/client/:clientId", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/roi/client/:clientId/briefing", async (req, res): Promise<void> => {
+router.get("/roi/client/:clientId/briefing", requireTenantAccess("clientId"), async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
-    res.status(400).json({ error: "Invalid client ID" });
+    sendParamError(res, "Invalid client ID");
     return;
   }
 
@@ -43,7 +45,7 @@ router.get("/roi/client/:clientId/briefing", async (req, res): Promise<void> => 
 router.post("/briefings/trigger", async (req, res): Promise<void> => {
   const clientId = Number(req.user?.clientId);
   if (isNaN(clientId) || !clientId) {
-    res.status(401).json({ error: "Authentication required" });
+    res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
     return;
   }
 
@@ -55,10 +57,10 @@ router.post("/briefings/trigger", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/roi/client/:clientId/shareable", async (req, res): Promise<void> => {
+router.post("/roi/client/:clientId/shareable", requireTenantAccess("clientId"), async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
-    res.status(400).json({ error: "Invalid client ID" });
+    sendParamError(res, "Invalid client ID");
     return;
   }
 
@@ -70,7 +72,7 @@ router.post("/roi/client/:clientId/shareable", async (req, res): Promise<void> =
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -102,7 +104,7 @@ router.get("/roi/shared/:token", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/roi/capture-outcome", async (req, res): Promise<void> => {
+router.post("/roi/capture-outcome", requireTenantAccess("clientId"), async (req, res): Promise<void> => {
   const schema = z.object({
     sessionId: z.number(),
     objective: z.string(),
@@ -111,7 +113,7 @@ router.post("/roi/capture-outcome", async (req, res): Promise<void> => {
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -127,17 +129,17 @@ router.post("/roi/capture-outcome", async (req, res): Promise<void> => {
   }
 });
 
-router.patch("/roi/client/:clientId/hourly-rate", async (req, res): Promise<void> => {
+router.patch("/roi/client/:clientId/hourly-rate", requireTenantAccess("clientId"), async (req, res): Promise<void> => {
   const clientId = Number(req.params.clientId);
   if (isNaN(clientId)) {
-    res.status(400).json({ error: "Invalid client ID" });
+    sendParamError(res, "Invalid client ID");
     return;
   }
 
   const schema = z.object({ hourlyRate: z.number().min(0) });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendValidationError(res, parsed.error);
     return;
   }
 

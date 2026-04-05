@@ -5,22 +5,47 @@ import { eq, or, ilike, and } from "drizzle-orm";
 import { signToken, authenticate } from "../../middleware/auth";
 import { recordLoginSignal } from "../../middleware/health-signals";
 import { authRateLimit } from "../../middleware/rate-limit";
+import { sendValidationError } from "../../utils/validation";
 import { checkWorkflowTriggers, seedBuiltInWorkflows } from "../../services/missions/workflow-engine";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
+const RegisterBody = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  companyName: z.string().min(1),
+  contactName: z.string().min(1),
+  displayName: z.string().optional(),
+});
+
+const LoginBody = z.object({
+  email: z.string().min(1, "email/username is required"),
+  password: z.string().min(1, "password is required"),
+});
+
+const ForgotUsernameBody = z.object({
+  companyName: z.string().min(1),
+  contactName: z.string().min(1),
+});
+
+const RequestPasswordResetBody = z.object({
+  email: z.string().email(),
+});
+
+const ResetPasswordBody = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
+});
+
 router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => {
-  const { email, password, companyName, contactName, displayName } = req.body;
-
-  if (!email || !password || !companyName || !contactName) {
-    res.status(400).json({ error: "email, password, companyName, and contactName are required" });
+  const parsed = RegisterBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
     return;
   }
 
-  if (typeof password !== "string" || password.length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters" });
-    return;
-  }
+  const { email, password, companyName, contactName, displayName } = parsed.data;
 
   const [existingUser] = await db
     .select()
@@ -96,12 +121,13 @@ router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => 
 });
 
 router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    res.status(400).json({ error: "email/username and password are required" });
+  const parsed = LoginBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
     return;
   }
+
+  const { email, password } = parsed.data;
 
   const identifier = String(email).trim();
   const isEmail = identifier.includes("@");
@@ -189,12 +215,13 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
 });
 
 router.post("/auth/forgot-username", authRateLimit, async (req, res): Promise<void> => {
-  const { companyName, contactName } = req.body;
-
-  if (!companyName || !contactName) {
-    res.status(400).json({ error: "companyName and contactName are required" });
+  const parsed = ForgotUsernameBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
     return;
   }
+
+  const { companyName, contactName } = parsed.data;
 
   const clients = await db
     .select()
@@ -228,12 +255,13 @@ router.post("/auth/forgot-username", authRateLimit, async (req, res): Promise<vo
 });
 
 router.post("/auth/request-password-reset", authRateLimit, async (req, res): Promise<void> => {
-  const { email } = req.body;
-
-  if (!email) {
-    res.status(400).json({ error: "email is required" });
+  const parsed = RequestPasswordResetBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
     return;
   }
+
+  const { email } = parsed.data;
 
   const [user] = await db
     .select()
@@ -257,17 +285,13 @@ router.post("/auth/request-password-reset", authRateLimit, async (req, res): Pro
 });
 
 router.post("/auth/reset-password", authRateLimit, async (req, res): Promise<void> => {
-  const { token, newPassword } = req.body;
-
-  if (!token || !newPassword) {
-    res.status(400).json({ error: "token and newPassword are required" });
+  const parsed = ResetPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
     return;
   }
 
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    res.status(400).json({ error: "New password must be at least 8 characters" });
-    return;
-  }
+  const { token, newPassword } = parsed.data;
 
   const secret = process.env["JWT_SECRET"];
   if (!secret) {

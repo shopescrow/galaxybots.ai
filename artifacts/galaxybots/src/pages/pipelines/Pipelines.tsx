@@ -1,3 +1,4 @@
+import { fetchAllPages } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -118,7 +119,14 @@ export default function Pipelines() {
 
   const { data: bots = [] } = useQuery<BotInfo[]>({
     queryKey: ["bots-list"],
-    queryFn: () => apiFetch("/bots"),
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      return fetchAllPages<BotInfo>(`${BASE}/api/bots`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    },
     enabled: isAuthorized,
   });
 

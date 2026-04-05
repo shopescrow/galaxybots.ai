@@ -391,7 +391,8 @@ export default function KnowledgeBase() {
     queryKey: ["clients"],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/clients`, { credentials: "include" });
-      return res.json();
+      const json = await res.json();
+      return Array.isArray(json) ? json : (json.data ?? []);
     },
   });
 
