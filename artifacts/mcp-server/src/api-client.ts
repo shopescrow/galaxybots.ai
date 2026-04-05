@@ -111,3 +111,53 @@ export async function apiPostStream(
 
   return finalContent;
 }
+
+const EXPECTED_API_ENDPOINTS = [
+  { method: "GET", path: "/bots", label: "Bots listing" },
+  { method: "GET", path: "/conversations", label: "Conversations" },
+  { method: "GET", path: "/task-sessions", label: "Task sessions listing" },
+  { method: "POST", path: "/task-sessions/analyze", label: "Task analysis" },
+  { method: "POST", path: "/integrations/piratemonster/recommend", label: "PirateMonster recommendations" },
+  { method: "GET", path: "/analytics/overview", label: "Analytics overview" },
+  { method: "GET", path: "/compliance/platform", label: "Compliance platform status" },
+];
+
+export async function runStartupHealthCheck(): Promise<void> {
+  console.log("[MCP:HealthCheck] Validating GalaxyBots API endpoints...");
+  const results: { path: string; label: string; ok: boolean; status?: number; error?: string }[] = [];
+
+  for (const endpoint of EXPECTED_API_ENDPOINTS) {
+    const url = `${API_BASE}${endpoint.path}`;
+    try {
+      const res = await fetch(url, {
+        method: endpoint.method === "POST" ? "POST" : "HEAD",
+        headers: {
+          "Authorization": `Bearer ${getServiceToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: endpoint.method === "POST" ? JSON.stringify({}) : undefined,
+        signal: AbortSignal.timeout(5000),
+      });
+      const reachable = res.status !== 404 && res.status !== 502 && res.status !== 503;
+      results.push({ path: endpoint.path, label: endpoint.label, ok: reachable, status: res.status });
+    } catch (err) {
+      results.push({
+        path: endpoint.path,
+        label: endpoint.label,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const unreachable = results.filter(r => !r.ok);
+  if (unreachable.length === 0) {
+    console.log(`[MCP:HealthCheck] All ${results.length} API endpoints reachable`);
+  } else {
+    for (const r of unreachable) {
+      const detail = r.status ? `status=${r.status}` : `error=${r.error}`;
+      console.warn(`[MCP:HealthCheck] UNREACHABLE: ${r.label} (${r.path}) — ${detail}`);
+    }
+    console.warn(`[MCP:HealthCheck] ${unreachable.length}/${results.length} endpoints unreachable — MCP tool calls to these routes will fail`);
+  }
+}
