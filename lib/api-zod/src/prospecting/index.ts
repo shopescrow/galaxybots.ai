@@ -40,9 +40,9 @@ export const ProspectContactInfoSchema = z.object({
   domain: z.string().url("Invalid domain URL").or(z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/, "Invalid domain format")).optional().nullable(),
 });
 
-export const SocialLinksSchema = z.record(z.string().url());
+export const SocialLinksSchema = z.record(z.string(), z.string().url());
 
-export const IcpCriteriaSchema = z.record(z.any());
+export const IcpCriteriaSchema = z.record(z.string(), z.any());
 
 export const ProspectingJobRequestSchema = z.object({
   query: z.string().min(1),
