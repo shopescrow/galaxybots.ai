@@ -1,0 +1,51 @@
+Server-Side Folder Reorganization
+What & Why
+The server directory has 135 flat files (368 cross-imports) with no subdirectory grouping. Route files double as service layers — exporting core business logic consumed by other modules. This half of the reorganization focuses exclusively on the server side: extracting business logic, adding a path alias, moving files into domain subfolders, and slimming the 1,642-line god file (routes.ts) into a thin orchestrator.
+
+Firm Rule Going Forward: All new server files must be placed in the appropriate domain subfolder — no more flat dumping into server/.
+
+Done looks like
+@server/ path alias added to tsconfig.json and vite.config.ts so all server imports use absolute paths
+Business logic extracted out of route files into proper service files (aeo-grader, custom-auth, engine-registry, admin-revenue, crm)
+server/routes.ts renamed to server/router.ts and slimmed to ~10 domain registration calls instead of 89 individual imports
+Server files grouped into domain subfolders: routes/, services/, schedulers/, middleware/, migrations/, mcp/, core/
+Barrel index.ts files in each subfolder re-exporting the public API (no cross-barrel imports)
+replit_integrations/ upward relative imports converted to @server/ alias
+All 368 relative imports converted to absolute @server/ paths
+TypeScript compilation (tsc --noEmit) and Vite build (npm run build) pass
+Dev server starts and key API endpoints respond: /api/aeo-grader, /api/session, /api/mcp, admin routes
+MCP health endpoint returns all 50+ tools active
+scripts/post-merge.sh verified — no hardcoded server file paths broken
+Out of scope
+Client-side pages, components, App.tsx (separate task)
+Renaming individual files (only moving and extracting shared functions)
+Refactoring business logic itself
+Changing shared/ or client/src/lib/ structure
+AI cost optimization (separate task)
+Tasks
+Add @server/ path alias — Add "@server/*": ["./server/*"] to tsconfig.json paths. Add matching resolve.alias entry in vite.config.ts. Verify the server runtime (tsx) resolves tsconfig paths — if not, add tsconfig-paths/register.
+
+Extract business logic from route files — Pull shared exported functions into proper service files before moving anything:
+
+aeo-grader-routes.ts → extract extractDomain(), analyzeWebsiteAEO(), logSearchHistory() into aeo-analysis-service.ts
+custom-auth-routes.ts → extract requireActiveSubscription() into existing middleware file; extract seedAdminUser() into a seed file
+engine-registry-routes.ts → extract 15 exported functions into engine-registry-service.ts
+admin-revenue-routes.ts → extract computeTierMargin(), buildFunnelData(), buildFeatureUsageData() into revenue-analytics-service.ts
+crm-routes.ts → extract autoSyncLeadToCrm() into crm-service.ts
+Update all 11+ consumer files to import from new locations
+Create domain subfolders and move server files — Rename server/routes.ts to server/router.ts. Create subfolders and move files:
+
+server/routes/ — all *-routes.ts files, grouped by domain (routes/aeo/, routes/admin/, routes/mcp/)
+server/services/ — all *-service.ts, *-engine.ts, *-detection.ts, plus newly extracted services
+server/schedulers/ — all *-scheduler.ts files
+server/middleware/ — all *-middleware.ts files
+server/migrations/ — all *-migration.ts, *-seed.ts files
+server/mcp/ — all mcp-*.ts files plus mcp-shared-ops.ts, mcp-channels.ts, mcp-tools-manifest.ts
+server/core/ — shared utilities: analysis-cache.ts, prompt-cache.ts, ai-model-router.ts, ai-usage-tracker.ts, content-fetcher.ts, content-validator.ts, token-encryption.ts, predictive-score.ts, active-port.ts
+Core root files stay: index.ts, db.ts, router.ts, storage.ts, vite.ts, static.ts
+Add barrel index.ts in each subfolder (no cross-barrel imports to avoid circular dependencies)
+Slim router.ts to domain registrations — Refactor from 89 individual imports into ~10 domain registration calls. Extract inline MCP manifest endpoints (lines ~694-869) into server/routes/mcp/mcp-manifest-routes.ts. Each domain subfolder exports register[Domain]Routes(app).
+
+Convert all server imports to @server/ alias — Update all 368 relative imports across server files including replit_integrations/auth/routes.ts, replit_integrations/auth/storage.ts, replit_integrations/chat/storage.ts, replit_integrations/audio/routes.ts. Update server/index.ts import of registerRoutes to point to @server/router.
+
+Verification — Run npx tsc --noEmit, npm run build, start dev server. Hit key endpoints: landing page, AEO grader scan, admin dashboard, MCP health. Verify scripts/post-merge.sh has no broken paths. If build fails, fix — do not ship broken. If unfixable, revert entire commit via checkpoint.
