@@ -449,15 +449,19 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
 });
 
 router.get("/events/background", (req, res) => {
+  const sseId = `sse-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  const tenantClientId = req.user!.clientId;
+  const accepted = addSSEClient(sseId, res, tenantClientId);
+  if (!accepted) {
+    res.status(503).json({ error: "Service Unavailable", message: "Too many SSE connections" });
+    return;
+  }
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
   });
-
-  const sseId = `sse-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-  const tenantClientId = req.user!.clientId;
-  addSSEClient(sseId, res, tenantClientId);
 
   res.write(`event: connected\ndata: ${JSON.stringify({ clientId: sseId })}\n\n`);
 

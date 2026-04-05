@@ -1,8 +1,10 @@
 import app from "./app";
-import { startScheduler } from "./services/platform/scheduler";
+import { setShuttingDown } from "./app";
+import { startScheduler, stopScheduler } from "./services/platform/scheduler";
 import { backfillExistingBotPermissions } from "./services/platform/governance";
-import { startWebhookDeliveryWorker } from "./services/platform/webhook-delivery";
+import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from "./services/platform/webhook-delivery";
 import { ProspectingWorker } from "./services/prospecting/prospecting-worker";
+import { closeAllSSEClients } from "./services/platform/sse";
 import { getAllTools } from "./tools";
 import { seedDefaultOutreachTemplates } from "./services/prospecting/seed-outreach-templates";
 import { seedDefaultPartners } from "./services/admin/seed-partners";
@@ -184,7 +186,57 @@ async function ensurePirateMonsterPartnerRegistered() {
   }
 }
 
-app.listen(port, async () => {
+// The drain timeout covers HTTP in-flight request completion via server.close().
+// Worker intervals are cleared immediately (no new ticks), but any already-executing
+// async work (e.g., active webhook deliveries, prospect enrichments) will complete
+// naturally as the event loop drains before process.exit().
+const DRAIN_TIMEOUT_MS = 15_000;
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string, server: ReturnType<typeof app.listen>) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`[shutdown] Received ${signal}, starting graceful shutdown...`);
+  setShuttingDown(true);
+
+  stopScheduler();
+  console.log("[shutdown] Scheduler stopped (new ticks halted)");
+
+  ProspectingWorker.stop();
+  console.log("[shutdown] Prospecting worker stopped (new polls halted)");
+
+  stopWebhookDeliveryWorker();
+  console.log("[shutdown] Webhook delivery worker stopped (new ticks halted)");
+
+  closeAllSSEClients();
+  console.log("[shutdown] SSE clients closed");
+
+  await new Promise<void>((resolve) => {
+    const drainTimer = setTimeout(() => {
+      console.log("[shutdown] Drain timeout reached, forcing close");
+      resolve();
+    }, DRAIN_TIMEOUT_MS);
+
+    server.close(() => {
+      clearTimeout(drainTimer);
+      console.log("[shutdown] HTTP server closed (all in-flight requests completed)");
+      resolve();
+    });
+  });
+
+  try {
+    await pool.end();
+    console.log("[shutdown] Database pool closed");
+  } catch (err) {
+    console.error("[shutdown] Error closing database pool:", err);
+  }
+
+  console.log("[shutdown] Graceful shutdown complete");
+  process.exit(0);
+}
+
+const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
   await validateDatabaseTables();
   await ensurePirateMonsterPartnerRegistered();
@@ -207,3 +259,6 @@ app.listen(port, async () => {
     console.error("[governance] Permission backfill failed:", err);
   });
 });
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM", server));
+process.on("SIGINT", () => gracefulShutdown("SIGINT", server));
