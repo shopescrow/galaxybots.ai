@@ -1,0 +1,68 @@
+Codebase Folder Reorganization
+What & Why
+The project has grown to 135 flat server files (368 cross-imports) and 124 flat page files with no subdirectory grouping. This makes navigation slow, increases agent scanning overhead, and creates merge-conflict risk as the platform scales. Several route files also double as service layers — exporting core business logic consumed by other modules — which masks the real architecture.
+
+Reorganizing into domain-based subfolders with proper separation of concerns improves developer productivity, organizational clarity, and reduces AI processing cost on every future task.
+
+Firm Rule Going Forward: All new files must be placed in the appropriate domain subfolder — no more flat dumping into server/ or client/src/pages/.
+
+Done looks like
+Business logic extracted out of route files into proper service files (aeo-grader, custom-auth, engine-registry, admin-revenue)
+server/routes.ts (1,642-line god file) renamed to server/router.ts and slimmed to a thin orchestrator importing ~10 domain registration functions instead of 89 individual files
+Server files grouped into domain subfolders with @server/ path alias so imports survive future moves
+Client pages grouped into domain subfolders
+App.tsx (621 lines) refactored to use a route config array pattern instead of 100+ individual Route/lazy entries
+Barrel index.ts files in each new subfolder re-exporting the public API
+replit_integrations/ upward relative imports converted to use the new path alias
+TypeScript compilation (tsc --noEmit), Vite production build (npm run build), and runtime smoke test all pass
+STRUCTURE.md at project root documenting the folder convention
+A lightweight structure validation script that flags new files landing directly in server/ or client/src/pages/ root
+Out of scope
+Renaming individual files (only moving them and extracting shared functions)
+Refactoring business logic itself (only relocating it to proper service files)
+Changing the shared/ or client/src/lib/ structure (already clean)
+Reorganizing attached_assets/ (cosmetic, no code impact)
+Tasks
+Add @server/ path alias — Add a @server/* path alias in tsconfig.json (mapping to ./server/*) so all server-side imports use absolute paths. This prevents path rot as subfolders are added and eliminates the fragile ../../ chains that replit_integrations/ already suffers from.
+
+Extract business logic from route files — Before moving anything, pull shared exported functions out of route files into proper service files:
+
+aeo-grader-routes.ts → extract extractDomain(), analyzeWebsiteAEO(), logSearchHistory() into aeo-analysis-service.ts
+custom-auth-routes.ts → extract requireActiveSubscription() into auth-middleware.ts; extract seedAdminUser() into a seed file
+engine-registry-routes.ts → extract 15 exported functions (resolveUserTier, seedEngineRegistry, getRegistryEngines, trust scoring, calibration, CUSUM analysis, etc.) into engine-registry-service.ts
+admin-revenue-routes.ts → extract computeTierMargin(), buildFunnelData(), buildFeatureUsageData() into revenue-analytics-service.ts
+crm-routes.ts → extract autoSyncLeadToCrm() into crm-service.ts
+Update all 11+ consumer files to import from the new service locations
+Rename routes.ts and reorganize server into domain subfolders — Rename server/routes.ts to server/router.ts to resolve the naming collision with server/routes/. Create subfolders and move files:
+
+server/routes/ — all *-routes.ts files, grouped by domain where sensible (e.g., server/routes/aeo/, server/routes/admin/, server/routes/mcp/)
+server/services/ — all *-service.ts, *-engine.ts, *-detection.ts, plus the newly extracted services
+server/schedulers/ — all *-scheduler.ts files
+server/middleware/ — all *-middleware.ts files
+server/migrations/ — all *-migration.ts, *-seed.ts files
+server/mcp/ — all mcp-*.ts files
+Core files stay at server/ root: index.ts, db.ts, router.ts, storage.ts, vite.ts, static.ts
+Add barrel index.ts in each subfolder re-exporting the public API
+Slim down router.ts to domain registrations — Refactor the renamed router.ts from 89 individual imports into ~10 domain registration calls. Each domain subfolder exports a single register[Domain]Routes(app) function that wires its own sub-routes internally.
+
+Update all server-side imports to use @server/ alias — Convert all 368 relative imports across server files (including replit_integrations/auth/routes.ts, replit_integrations/auth/storage.ts, replit_integrations/chat/storage.ts, replit_integrations/audio/routes.ts) to use the new absolute path alias.
+
+Reorganize client pages into domain subfolders — Create subfolders under client/src/pages/ and move files:
+
+client/src/pages/admin/ — all Admin*.tsx files
+client/src/pages/aeo/ — all Aeo*.tsx files
+client/src/pages/monitor/ — all Monitor*.tsx files
+client/src/pages/backlinks/ — all Backlink*.tsx files
+client/src/pages/social/ — all Social365*.tsx files
+client/src/pages/auth/ — Login, Register, ForgotPassword, ResetPassword, VerifyEmail
+client/src/pages/marketing/ — Landing, Pricing, Comparison, ProductHunt, HowItWorks, Blog, Whitepaper, BusinessPlan
+client/src/pages/dashboard/ — Analytics, Search, CRM, Leads, Settings, Suggestions
+client/src/pages/intelligence/ — AI Crawler, AI Citation, AI Readiness, AI Visibility, Search Intelligence, Guardian, Competitor
+Remaining unique pages stay at client/src/pages/ root
+Refactor App.tsx to route config pattern — Replace 100+ individual <Route> / lazy() entries with a route configuration array (e.g., { path, component, auth?, layout? }[]). Split route definitions by domain into separate config files that each domain subfolder owns. This makes adding new pages a one-line config change.
+
+Update AppSidebar.tsx and component imports — Fix all @/pages/ references in sidebar, shell, and any cross-component references to use the new subfolder paths. Group components logically: client/src/components/layout/ for AppShell/AppSidebar, keep ui/ as-is.
+
+Verification — full build pipeline — Run TypeScript compilation (npx tsc --noEmit), Vite production build (npm run build), and start the dev server. Verify key routes render: landing page, AEO grader, admin dashboard, login, pricing. Fix any breakage.
+
+Add STRUCTURE.md and structure validation — Document the folder convention at project root. Add a lightweight validation script (scripts/check-structure.ts) that flags any new .ts/.tsx files placed directly in server/ or client/src/pages/ root, to enforce the convention going forward.

@@ -6,7 +6,7 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { isRateLimitError } from "@workspace/integrations-anthropic-ai/batch";
 import pRetry from "p-retry";
 import { decryptCredential } from "../utils/credential-encryption";
-import { retrieveMemories } from "../services/memory";
+import { retrieveMemories } from "../services/bots/memory";
 
 async function getClientCredential(clientId: number | undefined, service: string): Promise<string | null> {
   if (!clientId) return null;

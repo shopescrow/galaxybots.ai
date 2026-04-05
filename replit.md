@@ -55,6 +55,22 @@ The project is built as a monorepo using `pnpm workspaces`, Node.js 24, TypeScri
     - **Bot SLA & Performance Guarantees:** Configurable SLA tiers with compliance tracking, breach detection, and per-bot scorecards. DB tables: `sla_tiers` (3 default tiers: Standard 90s/4h, Priority 30s/90m, Enterprise 10s/30m response/resolution targets), `bot_sla_overrides` (per-bot tier assignments with optional tighter custom targets), `bot_sla_events` (per-message SLA tracking: directive recorded at user message, resolved at bot response, breach detected by scheduler). Tier mapping follows subscription plan: free/starter/standard→Standard, team/priority→Priority, enterprise→Enterprise. SLA service functions: `recordSlaDirective` (called before message processing in both sync and streaming handlers), `resolveSlaResponse` (called after bot response generated), `recordSlaCompletion` (session-level completion SLA), `checkSlaBreaches` (runs every 60s via scheduler, marks expired events as breached and fires SSE alerts), `getEffectiveSlaTargets` (resolves per-bot effective targets from tier + overrides). API routes: `GET /api/bots/:id/sla` (per-bot scorecard: compliance %, avg response time, breach count, tier info), `PUT /api/bots/:id/sla` (update bot tier override, validates tighter-only constraint), `GET /api/analytics/sla-overview` (Command Center SLA health section). Frontend: `BotSlaPerformance.tsx` component (scorecard with compliance ring chart, trend, breach log), Performance tab in Bot Detail page, SLA Health section in Command Center, SLA Performance card in ROI Dashboard.
     - **White-Label Partner Platform:** A full white-label reseller system that allows agencies to deploy GalaxyBots as their own branded product. DB table: `partners` (slug, platformName, logoUrl, primaryColor, welcomeMessage, offer, adminPassword, isActive). When a user visits `/partner/:ref`, the partner's branding (name, logo, primary color) is saved to localStorage and persists throughout the session via `PartnerContext` (React context). The Navbar replaces "GalaxyBots" with the partner's platformName and logo when a partner context is active. The AppLayout footer shows a "Powered by GalaxyBots.ai" attribution when a partner context is active. A partner admin portal at `/partner-admin` provides password-based login, a referral link generator, a referred clients table (plan, contact, join date), and a branding editor. API endpoints: `GET /api/partner/link?ref=` (resolve partner), `POST /api/partner/register` (register referred client), `POST /api/partner/admin/login` (partner admin auth), `GET /api/partner/:ref/clients?adminPassword=` (list referred clients), `PUT /api/partner/:ref` (update branding). The hardcoded `PARTNERS` dictionary in partner.ts was replaced by DB-driven lookups; the "bingolingo" partner is seeded with adminPassword "bingolingo2026". All partner endpoints are publicly accessible (no session auth required, partner uses admin password for write operations).
 
+# Codebase Organization (PirateMonster Pattern)
+
+The codebase follows a domain-based folder organization:
+
+**API Server (`artifacts/api-server/src/`):**
+- `routes/` — 12 domain subfolders (admin, analytics, auth, billing, bots, clients, compliance, content, missions, partner, platform, prospecting), each with a barrel `index.ts` exporting a `registerXRoutes(router)` function. The main `routes/index.ts` calls each domain's register function.
+- `services/` — 9 domain subfolders (admin, analytics, billing, bots, clients, content, missions, platform, prospecting) mirroring the route structure. Cross-domain imports use `../otherdomain/file` paths.
+- `middleware/` — Flat, shared across all domains.
+- `tools/` — Flat, tool registry and implementations.
+- See `artifacts/api-server/STRUCTURE.md` for full mapping.
+
+**Frontend (`artifacts/galaxybots/src/`):**
+- `pages/` — 30+ domain subdirectories (activity, analytics, auth, billing, bots, clients, general, marketing, settings, etc.). No flat page files at root.
+- `components/` — Domain subdirectories (billing, command, layout, missions, notifications, ui, etc.). No flat component files at root.
+- See `artifacts/galaxybots/STRUCTURE.md` for full mapping.
+
 # External Dependencies
 
 - **OpenAI GPT-5.2:** For AI capabilities and bot intelligence.

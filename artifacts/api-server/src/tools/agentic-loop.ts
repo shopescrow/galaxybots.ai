@@ -5,9 +5,9 @@ import { getTool, getOpenAIToolDefinitions, type ToolContext } from "./registry"
 import { db, platformAuditLogTable } from "@workspace/db";
 import pLimit from "p-limit";
 import pRetry from "p-retry";
-import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/governance";
-import { logLlmUsage } from "../services/llm-usage";
-import { isToolSandboxed, getSandboxedToolResponse } from "../services/demo-sandbox";
+import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/platform/governance";
+import { logLlmUsage } from "../services/analytics/llm-usage";
+import { isToolSandboxed, getSandboxedToolResponse } from "../services/platform/demo-sandbox";
 
 function auditToolExecution(
   context: ToolContext,

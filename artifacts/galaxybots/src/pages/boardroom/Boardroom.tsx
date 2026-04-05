@@ -8,7 +8,7 @@ import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
-import { DashboardNotificationFeed } from "@/components/DashboardNotificationFeed";
+import { DashboardNotificationFeed } from "@/components/notifications/DashboardNotificationFeed";
 
 export default function Boardroom() {
   const { data: messages, isLoading } = useBoardroom(50);

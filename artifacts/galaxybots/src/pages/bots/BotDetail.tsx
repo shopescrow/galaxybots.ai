@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { useBot } from "@/hooks/use-bots";
 import { useStartConversation, useConversations, useChatMessages, useSendChatMessage } from "@/hooks/use-chat";
 import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
-import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
+import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/missions/ToolStepCard";
 import { useParams, Redirect } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

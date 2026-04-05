@@ -37,7 +37,7 @@ import {
 import { useState, useEffect } from "react";
 import { Redirect, useSearch } from "wouter";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
-import { DashboardNotificationFeed } from "@/components/DashboardNotificationFeed";
+import { DashboardNotificationFeed } from "@/components/notifications/DashboardNotificationFeed";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 

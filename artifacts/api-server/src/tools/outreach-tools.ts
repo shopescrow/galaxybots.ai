@@ -8,7 +8,7 @@ import {
   clientsTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { broadcastSSE } from "../services/scheduler";
+import { broadcastSSE } from "../services/platform/scheduler";
 
 function substituteTemplateVars(
   text: string,

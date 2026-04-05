@@ -11,14 +11,14 @@ import { ActiveClientProvider } from "@/contexts/ActiveClientContext";
 
 // ─── Lazy page imports ──────────────────────────────────────────────────────
 const OnboardingWizard    = lazy(() => import("@/components/onboarding/OnboardingWizard"));
-const Home                = lazy(() => import("@/pages/Home"));
-const HowItWorks          = lazy(() => import("@/pages/HowItWorks"));
-const Valuation           = lazy(() => import("@/pages/Valuation"));
-const Global              = lazy(() => import("@/pages/Global"));
-const Assembly            = lazy(() => import("@/pages/Assembly"));
-const Billing             = lazy(() => import("@/pages/Billing"));
-const Pricing             = lazy(() => import("@/pages/Pricing"));
-const Settings            = lazy(() => import("@/pages/Settings"));
+const Home                = lazy(() => import("@/pages/general/Home"));
+const HowItWorks          = lazy(() => import("@/pages/marketing/HowItWorks"));
+const Valuation           = lazy(() => import("@/pages/marketing/Valuation"));
+const Global              = lazy(() => import("@/pages/general/Global"));
+const Assembly            = lazy(() => import("@/pages/general/Assembly"));
+const Billing             = lazy(() => import("@/pages/billing/Billing"));
+const Pricing             = lazy(() => import("@/pages/marketing/Pricing"));
+const Settings            = lazy(() => import("@/pages/settings/Settings"));
 
 const BotRoster           = lazy(() => import("@/pages/bots/BotRoster"));
 const BotDetail           = lazy(() => import("@/pages/bots/BotDetail"));
@@ -66,7 +66,7 @@ const CommandCenter       = lazy(() => import("@/pages/command-center/CommandCen
 const AnalyticsDashboard  = lazy(() => import("@/pages/analytics/AnalyticsDashboard"));
 const PitchDeck           = lazy(() => import("@/pages/five-year-plan/PitchDeck"));
 const DeveloperPortal     = lazy(() => import("@/pages/developers/DeveloperPortal"));
-const NotFound            = lazy(() => import("@/pages/not-found"));
+const NotFound            = lazy(() => import("@/pages/general/not-found"));
 
 const Login               = lazy(() => import("@/pages/auth/Login"));
 const Register            = lazy(() => import("@/pages/auth/Register"));

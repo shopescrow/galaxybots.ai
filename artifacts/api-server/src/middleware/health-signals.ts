@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { recordHealthEvent } from "../services/client-health";
+import { recordHealthEvent } from "../services/clients/client-health";
 
 function getClientId(req: Request): number | null {
   const clientId = req.user?.clientId;

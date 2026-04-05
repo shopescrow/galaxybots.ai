@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerTool, type ToolContext } from "./registry";
 import { db, prospectingJobsTable, prospectsTable, platformAuditLogTable, prospectingPatternsTable } from "@workspace/db";
 import { eq, and, desc, sql, gte, isNotNull } from "drizzle-orm";
-import { ProspectingWorker } from "../services/prospecting-worker";
+import { ProspectingWorker } from "../services/prospecting/prospecting-worker";
 
 // 1. prospect_search tool
 registerTool({

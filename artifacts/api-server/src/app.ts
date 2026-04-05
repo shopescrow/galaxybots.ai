@@ -5,7 +5,7 @@ import router from "./routes";
 import { authenticate } from "./middleware/auth";
 import { auditLogger } from "./middleware/audit";
 import { generalRateLimit } from "./middleware/rate-limit";
-import { stripeWebhookHandler } from "./routes/billing";
+import { stripeWebhookHandler } from "./routes/billing/billing";
 import { analyticsApiKeyAuth } from "./middleware/analytics-api-key";
 import { instrumentHealthSignals } from "./middleware/health-signals";
 import { developerApiKeyAuth } from "./middleware/developer-api-key";

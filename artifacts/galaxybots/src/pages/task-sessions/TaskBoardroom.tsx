@@ -12,8 +12,8 @@ import {
   useFabricateBotMutation,
 } from "@/hooks/use-task-sessions";
 import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
-import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/ToolStepCard";
-import { SaveAsTemplateModal } from "@/components/SaveAsTemplate";
+import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/missions/ToolStepCard";
+import { SaveAsTemplateModal } from "@/components/missions/SaveAsTemplate";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { format } from "date-fns";

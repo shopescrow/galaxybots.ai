@@ -2,9 +2,9 @@ import { z } from "zod";
 import { registerTool, type ToolContext } from "./registry";
 import { db, prospectsTable, botsTable, botAssignmentsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { createNotification } from "../services/notifications";
+import { createNotification } from "../services/admin/notifications";
 import * as cheerio from "cheerio";
-import { broadcastSSE } from "../services/scheduler";
+import { broadcastSSE } from "../services/platform/scheduler";
 
 const ProspectStatusEnum = z.enum(["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"]);
 const ProspectErrorCategoryEnum = z.enum(["network", "parsing", "not_found", "validation"]);

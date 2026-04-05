@@ -44,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MissionTemplatesModal } from "@/components/MissionTemplates";
+import { MissionTemplatesModal } from "@/components/missions/MissionTemplates";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 

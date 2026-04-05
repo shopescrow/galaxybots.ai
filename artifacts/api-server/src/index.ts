@@ -1,13 +1,13 @@
 import app from "./app";
-import { startScheduler } from "./services/scheduler";
-import { backfillExistingBotPermissions } from "./services/governance";
-import { startWebhookDeliveryWorker } from "./services/webhook-delivery";
-import { ProspectingWorker } from "./services/prospecting-worker";
+import { startScheduler } from "./services/platform/scheduler";
+import { backfillExistingBotPermissions } from "./services/platform/governance";
+import { startWebhookDeliveryWorker } from "./services/platform/webhook-delivery";
+import { ProspectingWorker } from "./services/prospecting/prospecting-worker";
 import { getAllTools } from "./tools";
-import { seedDefaultOutreachTemplates } from "./services/seed-outreach-templates";
-import { seedDefaultPartners } from "./services/seed-partners";
-import { seedMissionTemplates } from "./services/seed-mission-templates";
-import { seedPlaybooks } from "./services/seed-playbooks";
+import { seedDefaultOutreachTemplates } from "./services/prospecting/seed-outreach-templates";
+import { seedDefaultPartners } from "./services/admin/seed-partners";
+import { seedMissionTemplates } from "./services/missions/seed-mission-templates";
+import { seedPlaybooks } from "./services/missions/seed-playbooks";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
