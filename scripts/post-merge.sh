@@ -27,3 +27,14 @@ if [ -n "$SCHEMA_CHANGED" ]; then
 else
   echo "[post-merge] No schema changes detected — skipping schema push."
 fi
+
+echo "[post-merge] Running type check..."
+pnpm typecheck
+
+echo "[post-merge] Running format check..."
+pnpm format:check
+
+echo "[post-merge] Running smoke tests..."
+pnpm test:smoke
+
+echo "[post-merge] All checks passed."

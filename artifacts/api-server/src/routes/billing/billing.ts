@@ -17,7 +17,14 @@ const STRIPE_PRICE_IDS: Record<string, string | undefined> = {
 function getStripe(): Stripe | null {
   const key = process.env["STRIPE_SECRET_KEY"];
   if (!key) return null;
-  return new Stripe(key);
+  const opts: Stripe.StripeConfig = {};
+  if (process.env["STRIPE_API_BASE"]) {
+    const base = new URL(process.env["STRIPE_API_BASE"]);
+    opts.host = base.hostname;
+    opts.port = parseInt(base.port, 10);
+    opts.protocol = base.protocol.replace(":", "") as "http" | "https";
+  }
+  return new Stripe(key, opts);
 }
 
 function getErrorMessage(error: unknown): string {

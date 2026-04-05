@@ -18,6 +18,7 @@ import { checkAeoScanQueue } from "./jobs/check-aeo-scan-queue";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
+export { checkDueAssignments };
 
 const SCHEDULER_LOCK_ID = 999999;
 

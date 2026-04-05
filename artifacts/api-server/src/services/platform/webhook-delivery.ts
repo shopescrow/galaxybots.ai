@@ -33,7 +33,7 @@ function getBackoffDelay(attemptCount: number): number {
   return BACKOFF_BASE_MS * Math.pow(2, attemptCount - 1);
 }
 
-async function processDeliveries() {
+export async function processDeliveries() {
   try {
     const now = new Date();
 

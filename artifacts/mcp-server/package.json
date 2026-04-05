@@ -7,7 +7,8 @@
     "dev": "NODE_ENV=development tsx ./src/index.ts",
     "build": "tsx ./build.ts",
     "start": "node dist/index.cjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:smoke": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -22,7 +23,11 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "catalog:",
+    "@types/supertest": "^6.0.3",
     "esbuild": "^0.27.3",
-    "tsx": "catalog:"
+    "msw": "^2.12.14",
+    "supertest": "^7.2.2",
+    "tsx": "catalog:",
+    "vitest": "^3.2.4"
   }
 }

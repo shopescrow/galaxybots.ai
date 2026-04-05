@@ -185,3 +185,35 @@ The project includes a standalone MCP (Model Context Protocol) server at `artifa
 **Push Notifications:** `expo-notifications` for device token registration. DB table: `push_tokens` (userId, token, platform). API routes: `POST /api/push-tokens/register`, `DELETE /api/push-tokens/deregister`.
 
 **Shared Components:** `components/ui/` — StatusBadge, MetricCard, SectionHeader, EmptyState, LoadingSkeleton (shimmer animation).
+
+## Smoke Test Suite
+
+**Command:** `pnpm test:smoke` at monorepo root (runs api-server then mcp-server sequentially).
+
+**Stack:** Vitest + msw (HTTP-layer mocking) + supertest. Real test database — no DB mocking. OpenAI and external APIs mocked via msw at the HTTP layer.
+
+**API Server Tests (43 tests, 9 files):**
+- `src/routes/auth/auth.smoke.test.ts` — register, login, /auth/me, logout (4 tests)
+- `src/routes/bots/conversations.smoke.test.ts` — bot creation, conversation flow, AI response (1 test)
+- `src/routes/missions/task-sessions.smoke.test.ts` — task session lifecycle (1 test)
+- `src/routes/billing/billing.smoke.test.ts` — Stripe checkout session creation (local HTTP mock), webhook signature validation, subscription activation, plan listing (9 tests)
+- `src/services/platform/sse.smoke.test.ts` — real SSE connection via http.createServer, broadcast scoping, heartbeat pruning, disconnect cleanup (5 tests)
+- `src/services/platform/webhook-delivery.smoke.test.ts` — real worker delivery with polling, HMAC verification, failure handling (4 tests)
+- `src/services/platform/scheduler.smoke.test.ts` — checkDueAssignments execution (cost-cap blocking, graceful error handling, recently-run skip), SLA auto-rejection via checkApprovalSLAs, advisory lock + start/stop (9 tests)
+- `src/services/analytics/cost-caps.smoke.test.ts` — cost cap CRUD, shouldPauseAutonomous logic (5 tests)
+- `src/tools/agentic-loop.smoke.test.ts` — iteration cap at 10, lower cap at 2, cost-cap blocking (5 tests)
+
+**MCP Server Tests (6 tests, 1 file):**
+- `src/mcp.smoke.test.ts` — real MCP server SSE connection (trial + authenticated), full tool call flow (SSE → sessionId → POST tools/list), messages endpoint session validation, partner key DB lookup, rate limit enforcement with time-window expiry
+
+**Test Infrastructure:**
+- `artifacts/api-server/vitest.config.ts` — includes `src/**/*.smoke.test.ts` pattern only
+- `artifacts/api-server/src/test-setup.ts` — msw server mocking OpenAI, Anthropic, and Twilio at HTTP layer
+- `artifacts/api-server/src/test-utils.ts` — `createTestUser()`, `authedAgent()`, `request()`, `createSSEClient(url, token, { port })`, DB seed/teardown helpers
+- `artifacts/mcp-server/vitest.config.ts` and `src/test-setup.ts` — same pattern with Anthropic/Twilio handlers
+- Billing tests use a local HTTP server to mock Stripe API (MSW close/reopen for Stripe SDK compatibility)
+- Webhook delivery tests use `pollDeliveryStatus()` helper for deterministic, fast waiting instead of fixed timeouts
+- MCP tests use `createApp()` + `http.createServer` for real SSE endpoint testing
+- `billing.ts` `getStripe()` supports `STRIPE_API_BASE` env var for test-time Stripe SDK redirection
+
+**Post-Merge:** `scripts/post-merge.sh` runs typecheck, format check, and smoke tests after every merge.
