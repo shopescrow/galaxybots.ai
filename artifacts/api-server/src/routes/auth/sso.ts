@@ -1,24 +1,36 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { SAML } from "@node-saml/node-saml";
-import {
-  db,
-  ssoConfigsTable,
-  usersTable,
-  clientsTable,
-  platformAuditLogTable,
-  permissionProfileTemplatesTable,
-  botToolPermissionsTable,
-} from "@workspace/db";
+import { db, ssoConfigsTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { signToken, authenticate, setRevocationChecker } from "../../middleware/auth";
-import { encryptCredential, decryptCredential } from "../../utils/credential-encryption";
+import { authenticate, setRevocationChecker } from "../../middleware/auth";
+import { decryptCredential } from "../../utils/credential-encryption";
 import { validateExternalUrl } from "../../utils/url-validation";
+import {
+  setSsoState,
+  consumeSsoState,
+  setSsoCompletionCode,
+  consumeSsoCompletionCode,
+} from "../../services/auth/sso-state-store";
+import {
+  fetchSamlMetadata,
+  buildSamlInstance,
+  resolveSamlConfig,
+  generateSamlMetadataXml,
+  jitProvision,
+  logSsoEvent,
+  issueToken,
+  computeSessionExpiry,
+} from "../../services/auth/saml";
+import {
+  fetchOidcJwks,
+  verifyJwtSignatureWithJwks,
+  generatePkceChallenge,
+  discoverOidcEndpoints,
+} from "../../services/auth/oidc";
 
 const router: IRouter = Router();
 
-const ssoStateStore = new Map<string, { clientId: number; codeVerifier?: string; nonce?: string; createdAt: number }>();
-const ssoCompletionCodes = new Map<string, { token: string; maxAge: number; createdAt: number }>();
 const revokedSessions = new Map<string, number>();
 
 setRevocationChecker((email: string, iat: number): boolean => {
@@ -28,129 +40,11 @@ setRevocationChecker((email: string, iat: number): boolean => {
 });
 
 setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of ssoStateStore) {
-    if (now - val.createdAt > 10 * 60 * 1000) ssoStateStore.delete(key);
-  }
-  for (const [key, val] of ssoCompletionCodes) {
-    if (now - val.createdAt > 2 * 60 * 1000) ssoCompletionCodes.delete(key);
-  }
-  const cutoff = Math.floor(now / 1000) - 24 * 60 * 60;
+  const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
   for (const [email, revokedAt] of revokedSessions) {
     if (revokedAt < cutoff) revokedSessions.delete(email);
   }
 }, 60 * 1000);
-
-function logSsoEvent(
-  action: string,
-  clientId: number | null,
-  userId: number | null,
-  metadata: Record<string, unknown>,
-  ipAddress?: string,
-) {
-  return db.insert(platformAuditLogTable).values({
-    clientId,
-    userId,
-    action,
-    resource: "sso",
-    metadata,
-    ipAddress,
-  });
-}
-
-interface JwkKey {
-  kid?: string;
-  kty?: string;
-  n?: string;
-  e?: string;
-  alg?: string;
-  use?: string;
-}
-
-async function fetchSamlMetadata(metadataUrl: string): Promise<{ ssoUrl: string; entityId: string; cert: string } | null> {
-  if (!validateExternalUrl(metadataUrl)) return null;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch(metadataUrl, { signal: controller.signal, redirect: "error" });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const xml = await res.text();
-
-    const redirectMatch = xml.match(/SingleSignOnService[^>]*Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"[^>]*Location="([^"]+)"/);
-    const fallbackMatch = xml.match(/SingleSignOnService[^>]*Location="([^"]+)"/);
-    const ssoUrl = redirectMatch?.[1] || fallbackMatch?.[1] || "";
-
-    const entityIdMatch = xml.match(/entityID="([^"]+)"/);
-    const entityId = entityIdMatch?.[1] || "";
-
-    const certMatch = xml.match(/<(?:ds:)?X509Certificate>([^<]+)<\/(?:ds:)?X509Certificate>/);
-    const cert = certMatch?.[1]?.replace(/\s/g, "") || "";
-
-    if (!ssoUrl) return null;
-    return { ssoUrl, entityId, cert };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchOidcJwks(issuerUrl: string): Promise<JwkKey[]> {
-  if (!validateExternalUrl(issuerUrl)) return [];
-
-  try {
-    const discoveryUrl = issuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-    const controller1 = new AbortController();
-    const t1 = setTimeout(() => controller1.abort(), 10000);
-    const discoveryRes = await fetch(discoveryUrl, { signal: controller1.signal, redirect: "error" });
-    clearTimeout(t1);
-    const discovery = (await discoveryRes.json()) as { jwks_uri?: string };
-    if (!discovery.jwks_uri || !validateExternalUrl(discovery.jwks_uri)) return [];
-    const controller2 = new AbortController();
-    const t2 = setTimeout(() => controller2.abort(), 10000);
-    const jwksRes = await fetch(discovery.jwks_uri, { signal: controller2.signal, redirect: "error" });
-    clearTimeout(t2);
-    const jwks = (await jwksRes.json()) as { keys: JwkKey[] };
-    return jwks.keys || [];
-  } catch {
-    return [];
-  }
-}
-
-function verifyJwtSignatureWithJwks(idToken: string, keys: JwkKey[]): boolean {
-  if (keys.length === 0) return false;
-
-  try {
-    const [headerB64] = idToken.split(".");
-    const header = JSON.parse(Buffer.from(headerB64, "base64url").toString()) as { kid?: string; alg?: string };
-    const kid = header.kid;
-    const alg = header.alg;
-
-    if (alg !== "RS256") return false;
-
-    let key = keys.find((k) => k.kid === kid);
-    if (!key) key = keys[0];
-
-    if (!key.n || !key.e) return false;
-
-    const pubKey = crypto.createPublicKey({
-      key: {
-        kty: key.kty || "RSA",
-        n: key.n,
-        e: key.e,
-      },
-      format: "jwk",
-    });
-
-    const [headerPart, payloadPart, signaturePart] = idToken.split(".");
-    const data = `${headerPart}.${payloadPart}`;
-    const signature = Buffer.from(signaturePart, "base64url");
-
-    return crypto.createVerify("RSA-SHA256").update(data).verify(pubKey, signature);
-  } catch {
-    return false;
-  }
-}
 
 export function revokeUserSessions(email: string): void {
   revokedSessions.set(email.toLowerCase(), Math.floor(Date.now() / 1000));
@@ -237,18 +131,9 @@ router.get(
 
     const baseUrl = `https://${req.get("host")}`;
     const state = crypto.randomBytes(32).toString("hex");
-    ssoStateStore.set(state, { clientId, createdAt: Date.now() });
+    await setSsoState(state, { clientId, createdAt: Date.now() });
 
-    const saml = new SAML({
-      callbackUrl: `${baseUrl}/api/sso/saml/acs`,
-      entryPoint: idpSsoUrl,
-      issuer: baseUrl,
-      cert: idpCert,
-      wantAssertionsSigned: true,
-      wantAuthnResponseSigned: true,
-      audience: baseUrl,
-      ...(idpEntityId ? { idpIssuer: idpEntityId } : {}),
-    });
+    const saml = buildSamlInstance(baseUrl, idpSsoUrl, idpCert, idpEntityId || undefined);
 
     try {
       const loginUrl = await saml.getAuthorizeUrlAsync(state, req.get("host") || "", {});
@@ -270,12 +155,11 @@ router.post(
       return;
     }
 
-    const stateEntry = RelayState ? ssoStateStore.get(RelayState) : null;
+    const stateEntry = RelayState ? await consumeSsoState(RelayState) : null;
     if (!stateEntry) {
       res.status(400).json({ error: "Invalid or expired SSO state" });
       return;
     }
-    ssoStateStore.delete(RelayState);
 
     const clientId = stateEntry.clientId;
 
@@ -295,31 +179,9 @@ router.post(
       return;
     }
 
-    let idpSsoUrl = config.idpSsoUrl;
-    let idpCert = config.idpCert ? decryptCredential(config.idpCert) : "";
-    let idpEntityId = config.idpEntityId;
-
-    if (config.idpMetadataUrl) {
-      const metadata = await fetchSamlMetadata(config.idpMetadataUrl);
-      if (metadata) {
-        idpSsoUrl = idpSsoUrl || metadata.ssoUrl;
-        idpCert = idpCert || metadata.cert;
-        idpEntityId = idpEntityId || metadata.entityId;
-      }
-    }
-
+    const { idpSsoUrl, idpCert, idpEntityId } = await resolveSamlConfig(config);
     const baseUrl = `https://${req.get("host")}`;
-
-    const saml = new SAML({
-      callbackUrl: `${baseUrl}/api/sso/saml/acs`,
-      entryPoint: idpSsoUrl || "",
-      issuer: baseUrl,
-      cert: idpCert,
-      wantAssertionsSigned: true,
-      wantAuthnResponseSigned: true,
-      audience: baseUrl,
-      ...(idpEntityId ? { idpIssuer: idpEntityId } : {}),
-    });
+    const saml = buildSamlInstance(baseUrl, idpSsoUrl || "", idpCert, idpEntityId || undefined);
 
     let profile: { nameID?: string; email?: string; displayName?: string; sessionNotOnOrAfter?: string; [key: string]: unknown } | null;
     try {
@@ -363,42 +225,15 @@ router.post(
       return;
     }
 
-    await db
-      .update(usersTable)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(usersTable.id, user.id));
-
-    const [client] = await db
-      .select()
-      .from(clientsTable)
-      .where(eq(clientsTable.id, user.clientId));
-
-    let sessionTtlMs: number;
-    let jwtExpiry: string;
-
+    let idpSessionExpiry: number | null = null;
     if (profile.sessionNotOnOrAfter) {
       const sessionEnd = new Date(profile.sessionNotOnOrAfter as string).getTime();
-      const remaining = sessionEnd - Date.now();
-      if (remaining > 0) {
-        sessionTtlMs = remaining;
-        jwtExpiry = `${Math.ceil(remaining / 1000)}s`;
-      } else {
-        sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-        jwtExpiry = config.forceSso ? "8h" : "7d";
+      if (sessionEnd > Date.now()) {
+        idpSessionExpiry = sessionEnd;
       }
-    } else {
-      sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-      jwtExpiry = config.forceSso ? "8h" : "7d";
     }
 
-    const token = signToken({
-      userId: user.id,
-      clientId: user.clientId,
-      role: user.role,
-      email: user.email,
-      plan: client?.plan,
-      bypassPayment: user.bypassPayment,
-    }, jwtExpiry);
+    const { token, sessionTtlMs } = await issueToken(user, config, idpSessionExpiry);
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
@@ -409,7 +244,7 @@ router.post(
     );
 
     const completionCode = crypto.randomBytes(32).toString("hex");
-    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
+    await setSsoCompletionCode(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
     const basePath = process.env.BASE_PATH || "/galaxybots";
@@ -421,22 +256,8 @@ router.get(
   "/sso/saml/metadata",
   (req, res): void => {
     const baseUrl = `https://${req.get("host")}`;
-    const metadata = `<?xml version="1.0"?>
-<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
-  entityID="${baseUrl}"
-  validUntil="${new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()}">
-  <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true"
-    protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-    <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
-    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-      Location="${baseUrl}/api/sso/saml/acs" index="0" isDefault="true"/>
-    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-      Location="${baseUrl}/api/sso/saml/slo"/>
-  </md:SPSSODescriptor>
-</md:EntityDescriptor>`;
-
     res.set("Content-Type", "application/xml");
-    res.send(metadata);
+    res.send(generateSamlMetadataXml(baseUrl));
   },
 );
 
@@ -465,28 +286,13 @@ router.get(
       return;
     }
 
-    const state = crypto.randomBytes(32).toString("hex");
-    const nonce = crypto.randomBytes(16).toString("hex");
-    const codeVerifier = crypto.randomBytes(32).toString("base64url");
-    const codeChallenge = crypto
-      .createHash("sha256")
-      .update(codeVerifier)
-      .digest("base64url");
-
-    ssoStateStore.set(state, { clientId, codeVerifier, nonce, createdAt: Date.now() });
+    const { state, nonce, codeVerifier, codeChallenge } = generatePkceChallenge();
+    await setSsoState(state, { clientId, codeVerifier, nonce, createdAt: Date.now() });
 
     const baseUrl = `https://${req.get("host")}`;
     const redirectUri = `${baseUrl}/api/sso/oidc/callback`;
 
-    let authorizationEndpoint: string;
-    try {
-      const discoveryUrl = config.oidcIssuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-      const discoveryRes = await fetch(discoveryUrl);
-      const discovery = (await discoveryRes.json()) as { authorization_endpoint: string };
-      authorizationEndpoint = discovery.authorization_endpoint;
-    } catch {
-      authorizationEndpoint = `${config.oidcIssuerUrl}/authorize`;
-    }
+    const { authorizationEndpoint } = await discoverOidcEndpoints(config.oidcIssuerUrl);
 
     const params = new URLSearchParams({
       client_id: config.oidcClientId,
@@ -500,9 +306,7 @@ router.get(
     });
 
     const redirectUrl = `${authorizationEndpoint}?${params}`;
-
     await logSsoEvent("sso_login_initiated", clientId, null, { provider: "oidc" }, req.ip);
-
     res.json({ redirectUrl, state });
   },
 );
@@ -517,12 +321,11 @@ router.get(
       return;
     }
 
-    const stateEntry = ssoStateStore.get(state);
+    const stateEntry = await consumeSsoState(state);
     if (!stateEntry) {
       res.status(400).json({ error: "Invalid or expired SSO state. Please try again." });
       return;
     }
-    ssoStateStore.delete(state);
 
     const clientId = stateEntry.clientId;
     const codeVerifier = stateEntry.codeVerifier;
@@ -552,27 +355,15 @@ router.get(
     const baseUrl = `https://${req.get("host")}`;
     const redirectUri = `${baseUrl}/api/sso/oidc/callback`;
 
-    let tokenEndpoint: string;
-    let userinfoEndpoint: string;
-    try {
-      const discoveryUrl = config.oidcIssuerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      const discoveryRes = await fetch(discoveryUrl, { signal: controller.signal, redirect: "error" });
-      clearTimeout(timeout);
-      const discovery = (await discoveryRes.json()) as {
-        token_endpoint: string;
-        userinfo_endpoint: string;
-      };
-      tokenEndpoint = discovery.token_endpoint;
-      userinfoEndpoint = discovery.userinfo_endpoint;
-      if (!validateExternalUrl(tokenEndpoint) || !validateExternalUrl(userinfoEndpoint)) {
+    const { tokenEndpoint, userinfoEndpoint } = await discoverOidcEndpoints(config.oidcIssuerUrl);
+
+    if (!validateExternalUrl(tokenEndpoint) || !validateExternalUrl(userinfoEndpoint)) {
+      if (tokenEndpoint.startsWith(config.oidcIssuerUrl) || userinfoEndpoint.startsWith(config.oidcIssuerUrl)) {
+        // fallback endpoints are fine
+      } else {
         res.status(400).json({ error: "OIDC endpoints resolved to invalid URLs" });
         return;
       }
-    } catch {
-      tokenEndpoint = `${config.oidcIssuerUrl}/token`;
-      userinfoEndpoint = `${config.oidcIssuerUrl}/userinfo`;
     }
 
     const tokenParams = new URLSearchParams({
@@ -690,41 +481,7 @@ router.get(
       return;
     }
 
-    await db
-      .update(usersTable)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(usersTable.id, user.id));
-
-    const [client] = await db
-      .select()
-      .from(clientsTable)
-      .where(eq(clientsTable.id, user.clientId));
-
-    let sessionTtlMs: number;
-    let jwtExpiry: string;
-
-    if (idpSessionExpiry) {
-      const remaining = idpSessionExpiry - Date.now();
-      if (remaining > 0) {
-        sessionTtlMs = remaining;
-        jwtExpiry = `${Math.ceil(remaining / 1000)}s`;
-      } else {
-        sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-        jwtExpiry = config.forceSso ? "8h" : "7d";
-      }
-    } else {
-      sessionTtlMs = config.forceSso ? 8 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-      jwtExpiry = config.forceSso ? "8h" : "7d";
-    }
-
-    const token = signToken({
-      userId: user.id,
-      clientId: user.clientId,
-      role: user.role,
-      email: user.email,
-      plan: client?.plan,
-      bypassPayment: user.bypassPayment,
-    }, jwtExpiry);
+    const { token, sessionTtlMs } = await issueToken(user, config, idpSessionExpiry);
 
     await logSsoEvent(
       isNewUser ? "sso_jit_provision" : "sso_login",
@@ -735,7 +492,7 @@ router.get(
     );
 
     const completionCode = crypto.randomBytes(32).toString("hex");
-    ssoCompletionCodes.set(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
+    await setSsoCompletionCode(completionCode, { token, maxAge: sessionTtlMs, createdAt: Date.now() });
 
     const frontendBase = `https://${req.get("host")}`;
     const basePath = process.env.BASE_PATH || "/galaxybots";
@@ -752,12 +509,11 @@ router.post(
       return;
     }
 
-    const entry = ssoCompletionCodes.get(code);
+    const entry = await consumeSsoCompletionCode(code);
     if (!entry) {
       res.status(400).json({ error: "Invalid or expired completion code" });
       return;
     }
-    ssoCompletionCodes.delete(code);
 
     res.cookie("token", entry.token, {
       httpOnly: true,
@@ -833,8 +589,8 @@ router.post(
       callbackUrl: `${baseUrl}/api/sso/saml/acs`,
       entryPoint: config.idpSsoUrl || "",
       issuer: baseUrl,
-      cert: idpCert,
-      wantLogoutResponseSigned: true,
+      idpCert,
+      wantAuthnResponseSigned: true,
     });
 
     let logoutProfile: { profile: { nameID?: string } | null; loggedOut: boolean };
@@ -875,99 +631,5 @@ router.post(
     res.status(200).send();
   },
 );
-
-async function jitProvision(
-  email: string,
-  displayName: string,
-  clientId: number,
-  defaultRole: string,
-  provider: string,
-  permissionProfileId?: number,
-): Promise<{ user: { id: number; email: string; clientId: number; role: string; bypassPayment: boolean }; isNewUser: boolean }> {
-  const [existingUser] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email));
-
-  if (existingUser) {
-    if (!existingUser.isActive) {
-      throw new Error("User account is deactivated");
-    }
-    if (existingUser.clientId !== clientId) {
-      throw new Error("Email is associated with a different organization");
-    }
-    return {
-      user: {
-        id: existingUser.id,
-        email: existingUser.email,
-        clientId: existingUser.clientId,
-        role: existingUser.role,
-        bypassPayment: existingUser.bypassPayment,
-      },
-      isNewUser: false,
-    };
-  }
-
-  const placeholderHash = "$2a$12$SSO_PLACEHOLDER_HASH_DO_NOT_USE_FOR_PASSWORD_LOGIN";
-
-  const [newUser] = await db
-    .insert(usersTable)
-    .values({
-      email,
-      passwordHash: placeholderHash,
-      clientId,
-      role: defaultRole,
-      displayName,
-      ssoProvider: provider,
-    })
-    .returning();
-
-  if (permissionProfileId) {
-    const [profile] = await db
-      .select()
-      .from(permissionProfileTemplatesTable)
-      .where(
-        and(
-          eq(permissionProfileTemplatesTable.id, permissionProfileId),
-          eq(permissionProfileTemplatesTable.clientId, clientId),
-        ),
-      );
-
-    if (profile && Array.isArray(profile.permissions)) {
-      const existingPerms = await db
-        .select()
-        .from(botToolPermissionsTable)
-        .where(eq(botToolPermissionsTable.clientId, clientId));
-
-      const existingBotIds = [...new Set(existingPerms.map((p) => p.botId))];
-
-      for (const botId of existingBotIds) {
-        for (const perm of profile.permissions as Array<{ toolName: string; allowed: boolean; requiresApproval?: boolean }>) {
-          await db
-            .insert(botToolPermissionsTable)
-            .values({
-              clientId,
-              botId,
-              toolName: perm.toolName,
-              allowed: perm.allowed,
-              requiresApproval: perm.requiresApproval ?? false,
-            })
-            .onConflictDoNothing();
-        }
-      }
-    }
-  }
-
-  return {
-    user: {
-      id: newUser.id,
-      email: newUser.email,
-      clientId: newUser.clientId,
-      role: newUser.role,
-      bypassPayment: newUser.bypassPayment,
-    },
-    isNewUser: true,
-  };
-}
 
 export default router;

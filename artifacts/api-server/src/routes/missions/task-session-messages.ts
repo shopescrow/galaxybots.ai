@@ -1,218 +1,31 @@
 import { Router, type IRouter } from "express";
 import {
   db,
-  botsTable,
   taskSessionsTable,
-  taskSessionBotsTable,
   taskSessionMessagesTable,
 } from "@workspace/db";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { captureSessionOutcome } from "../../services/analytics/outcome-capture";
 import { getPackOverlayForBot } from "../../services/billing/pack-overlays";
 import {
-  AnalyzeTaskBody,
-  CreateTaskSessionBody,
   SendTaskSessionMessageBody,
-  GetTaskSessionParams,
-  GetTaskSessionMessagesParams,
   SendTaskSessionMessageParams,
+  GetTaskSessionMessagesParams,
   GetTaskSessionAlertsParams,
-  ExpandTaskSessionParams,
-  ExpandTaskSessionBody,
-  FabricateBotBody,
 } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { runAgenticLoop, type AgenticEvent } from "../../tools";
 import { buildMemoryContext } from "../../services/bots/memory";
 import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base";
-import { requireRole } from "../../middleware/auth";
 import { llmRateLimit } from "../../middleware/rate-limit";
 import { buildClientContext } from "../../services/clients/client-context";
 import { applyBrandVoiceGuardrails } from "../../services/platform/governance";
 import {
-  getSessionWithBots,
-  getSessionsByClient,
   getTeamBotsForSession,
   verifyGuestAccess,
 } from "../../services/missions/session-queries";
 
 const router: IRouter = Router();
-
-router.post("/task-sessions/analyze", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
-  const body = AnalyzeTaskBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  const allBots = await db.select().from(botsTable);
-
-  const botRoster = allBots
-    .map(
-      (b) =>
-        `ID:${b.id} | ${b.name} | ${b.title} | ${b.department} | ${b.responsibilities.join(", ")}`,
-    )
-    .join("\n");
-
-  const analyzeSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
-  const analyzeContextClientId = (analyzeSubClientId && !isNaN(analyzeSubClientId)) ? analyzeSubClientId : req.user!.clientId;
-  const clientContext = await buildClientContext(analyzeContextClientId);
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-5.4",
-    max_completion_tokens: 2000,
-    messages: [
-      {
-        role: "system",
-        content: `You are Optima Prime, a corporate task-force assembler. Given a business task/objective and the existing bot roster, you must:
-1. Identify all specialist roles needed for this task
-2. Match roles to existing bots from the roster
-3. Identify any gaps where no existing bot covers the required expertise
-4. For gaps, propose new bot specifications
-${clientContext}
-Respond in valid JSON with this exact structure:
-{
-  "matchedBotIds": [1, 2, 3],
-  "proposedBots": [
-    {
-      "name": "Bot Name",
-      "title": "Job Title",
-      "department": "Department",
-      "personality": "Personality description",
-      "responsibilities": ["resp1", "resp2"]
-    }
-  ],
-  "reasoning": "Brief explanation of why these roles are needed"
-}
-
-Select 3-6 bots total. Only propose new bots if truly no existing bot covers a critical expertise area.`,
-      },
-      {
-        role: "user",
-        content: `TASK: ${body.data.objective}\n\nAVAILABLE BOTS:\n${botRoster}`,
-      },
-    ],
-    response_format: { type: "json_object" },
-  });
-
-  const raw = completion.choices[0]?.message?.content ?? "{}";
-  let parsed: {
-    matchedBotIds: number[];
-    proposedBots: Array<{
-      name: string;
-      title: string;
-      department: string;
-      personality: string;
-      responsibilities: string[];
-    }>;
-    reasoning: string;
-  };
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    parsed = { matchedBotIds: [], proposedBots: [], reasoning: "Analysis failed" };
-  }
-
-  const matchedBots = allBots.filter((b) =>
-    (parsed.matchedBotIds || []).includes(b.id),
-  );
-
-  res.json({
-    objective: body.data.objective,
-    matchedBots,
-    proposedBots: parsed.proposedBots || [],
-    reasoning: parsed.reasoning || "",
-  });
-});
-
-router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
-  const body = FabricateBotBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  const [bot] = await db
-    .insert(botsTable)
-    .values({
-      name: body.data.name,
-      title: body.data.title,
-      department: body.data.department,
-      category: body.data.category,
-      description: body.data.description,
-      responsibilities: body.data.responsibilities,
-      personality: body.data.personality,
-      isAvailable: true,
-      isAiGenerated: true,
-    })
-    .returning();
-
-  res.status(201).json(bot);
-});
-
-router.get("/task-sessions", async (req, res): Promise<void> => {
-  const clientId = req.user!.clientId;
-  const result = await getSessionsByClient(clientId);
-  res.json(result);
-});
-
-router.post("/task-sessions", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
-  const body = CreateTaskSessionBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  if (body.data.botIds.length > 0) {
-    const existingBots = await db
-      .select({ id: botsTable.id })
-      .from(botsTable)
-      .where(inArray(botsTable.id, body.data.botIds));
-    const validIds = new Set(existingBots.map((b) => b.id));
-    const invalidIds = body.data.botIds.filter((id) => !validIds.has(id));
-    if (invalidIds.length > 0) {
-      res.status(400).json({ error: `Invalid bot IDs: ${invalidIds.join(", ")}` });
-      return;
-    }
-  }
-
-  const createSubClientId = req.body.subClientId ? Number(req.body.subClientId) : null;
-  const sessionClientId = (createSubClientId && !isNaN(createSubClientId)) ? createSubClientId : req.user!.clientId;
-
-  const [session] = await db
-    .insert(taskSessionsTable)
-    .values({ objective: body.data.objective, clientId: sessionClientId })
-    .returning();
-
-  if (body.data.botIds.length > 0) {
-    const uniqueBotIds = [...new Set(body.data.botIds)];
-    await db.insert(taskSessionBotsTable).values(
-      uniqueBotIds.map((botId) => ({
-        sessionId: session.id,
-        botId,
-      })),
-    );
-  }
-
-  const result = await getSessionWithBots(session.id);
-  res.status(201).json(result);
-});
-
-router.get("/task-sessions/:id", async (req, res): Promise<void> => {
-  const params = GetTaskSessionParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const result = await getSessionWithBots(params.data.id);
-  if (!result || result.clientId !== req.user!.clientId) {
-    res.status(404).json({ error: "Task session not found" });
-    return;
-  }
-
-  res.json(result);
-});
 
 router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
   const params = GetTaskSessionMessagesParams.safeParse(req.params);
@@ -354,7 +167,6 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
           clientId: msgContextClientId,
           userId: req.user!.userId,
           isGuest: req.user!.role === "guest",
-          depth: 0,
         },
       });
 
@@ -554,7 +366,6 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
               clientId: streamContextClientId,
               userId: req.user!.userId,
               isGuest: req.user!.role === "guest",
-              depth: 0,
             },
             onEvent: (event) => {
               sendSSE({ ...event, botId: bot.id, botName: bot.name, botTitle: bot.title });
@@ -681,64 +492,6 @@ router.get(
     }
 
     res.json(alerts);
-  },
-);
-
-router.post(
-  "/task-sessions/:id/expand",
-  async (req, res): Promise<void> => {
-    const params = ExpandTaskSessionParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
-
-    const body = ExpandTaskSessionBody.safeParse(req.body);
-    if (!body.success) {
-      res.status(400).json({ error: body.error.message });
-      return;
-    }
-
-    const [session] = await db
-      .select()
-      .from(taskSessionsTable)
-      .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
-    if (!session) {
-      res.status(404).json({ error: "Task session not found" });
-      return;
-    }
-
-    if (body.data.botIds.length > 0) {
-      const existingBots = await db
-        .select({ id: botsTable.id })
-        .from(botsTable)
-        .where(inArray(botsTable.id, body.data.botIds));
-      const validIds = new Set(existingBots.map((b) => b.id));
-      const invalidIds = body.data.botIds.filter((id) => !validIds.has(id));
-      if (invalidIds.length > 0) {
-        res.status(400).json({ error: `Invalid bot IDs: ${invalidIds.join(", ")}` });
-        return;
-      }
-
-      const alreadyAssigned = await db
-        .select({ botId: taskSessionBotsTable.botId })
-        .from(taskSessionBotsTable)
-        .where(eq(taskSessionBotsTable.sessionId, session.id));
-      const assignedSet = new Set(alreadyAssigned.map((r) => r.botId));
-      const newBotIds = [...new Set(body.data.botIds)].filter((id) => !assignedSet.has(id));
-
-      if (newBotIds.length > 0) {
-        await db.insert(taskSessionBotsTable).values(
-          newBotIds.map((botId) => ({
-            sessionId: session.id,
-            botId,
-          })),
-        );
-      }
-    }
-
-    const result = await getSessionWithBots(session.id);
-    res.json(result);
   },
 );
 

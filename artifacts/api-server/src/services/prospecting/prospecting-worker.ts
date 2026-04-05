@@ -1,6 +1,6 @@
 import { db, prospectingJobsTable, prospectsTable, confidenceConfigsTable, prospectingPatternsTable } from "@workspace/db";
 import { eq, and, or, isNull, sql } from "drizzle-orm";
-import { scoreConfidence } from "../../routes/prospecting/prospecting";
+import { scoreConfidence } from "./score-confidence";
 
 export class ProspectingWorker {
   private static isRunning = false;

@@ -104,7 +104,7 @@ router.patch(
 
     if (isActive === false && updated?.email) {
       invalidateActiveStatusCache(memberId);
-      const { revokeUserSessions } = await import("./sso");
+      const { revokeUserSessions } = await import("../auth/sso");
       revokeUserSessions(updated.email);
     }
 

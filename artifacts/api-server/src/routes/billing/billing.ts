@@ -117,53 +117,7 @@ router.post("/billing/stripe/checkout", authenticate, async (req, res): Promise<
   }
 });
 
-export async function stripeWebhookHandler(req: Request, res: Response): Promise<void> {
-  const webhookSecret = process.env["STRIPE_WEBHOOK_SECRET"];
-  const stripeKey = process.env["STRIPE_SECRET_KEY"];
-  if (!webhookSecret || !stripeKey) {
-    res.status(503).json({ error: "Stripe webhook not configured" });
-    return;
-  }
-
-  const stripe = new Stripe(stripeKey);
-  const sig = req.headers["stripe-signature"];
-  if (!sig) {
-    res.status(400).json({ error: "Missing stripe-signature header" });
-    return;
-  }
-
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (error: unknown) {
-    console.error("Stripe webhook signature verification failed:", getErrorMessage(error));
-    res.status(400).json({ error: "Invalid signature" });
-    return;
-  }
-
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const clientId = session.metadata?.clientId;
-    const plan = session.metadata?.plan;
-    if (clientId && plan && VALID_PLANS.includes(plan)) {
-      try {
-        await db
-          .update(clientsTable)
-          .set({ plan, status: "active" })
-          .where(eq(clientsTable.id, Number(clientId)));
-        console.log(`Stripe webhook: activated client ${clientId} with plan ${plan}`);
-      } catch (error: unknown) {
-        console.error("Stripe webhook DB update failed:", getErrorMessage(error));
-        res.status(500).json({ error: "Database update failed" });
-        return;
-      }
-    } else {
-      console.error("Stripe webhook: missing or invalid metadata", { clientId, plan });
-    }
-  }
-
-  res.json({ received: true });
-}
+export { stripeWebhookHandler, processBillingWebhook } from "../../services/billing/webhook-handler";
 
 router.post(
   "/billing/activate",
