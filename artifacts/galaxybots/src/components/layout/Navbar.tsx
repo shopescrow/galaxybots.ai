@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Menu, X, Settings, Sparkles, ChevronRight } from "lucide-react";
+import { Menu, X, Settings, Sparkles, ChevronRight, LogOut, User } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "../ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
@@ -9,6 +9,65 @@ import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePartner } from "@/contexts/PartnerContext";
 import logoImg from "@assets/galaxybots-logo-transparent.png";
+
+function NavbarUserAvatar() {
+  const { user, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  if (!user) return null;
+
+  const initials = user.displayName
+    ? user.displayName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : user.email.slice(0, 2).toUpperCase();
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-tech font-bold text-primary hover:bg-primary/30 transition-colors"
+        aria-label="User menu"
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        {initials}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur-xl py-1 z-50">
+          <div className="px-3 py-2 border-b border-border/40">
+            <p className="text-xs font-tech font-semibold text-foreground truncate">
+              {user.displayName || user.email}
+            </p>
+            <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+          </div>
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+          >
+            <User className="w-3.5 h-3.5" />
+            Profile & Settings
+          </Link>
+          <button
+            onClick={() => { setOpen(false); logout(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface NavLink {
   href: string;
@@ -77,7 +136,7 @@ export function Navbar() {
   const [showRightFade, setShowRightFade] = useState(false);
   const navScrollRef = useRef<HTMLDivElement>(null);
   const { preferences } = useUserPreferences();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { partner } = usePartner();
 
   const NAV_LINKS = useMemo(
@@ -206,6 +265,7 @@ export function Navbar() {
             <Link href="/hire">
               <Button variant="glow" className="min-h-[44px]">Hire Directors</Button>
             </Link>
+            <NavbarUserAvatar />
           </div>
 
           {/* Mobile: notification + hamburger */}
@@ -302,6 +362,16 @@ export function Navbar() {
           <Link href="/hire" onClick={() => setIsOpen(false)}>
             <Button variant="glow" className="w-full min-h-[44px]">Hire Directors</Button>
           </Link>
+          {user && (
+            <Button
+              variant="ghost"
+              className="w-full font-tech text-sm min-h-[44px] text-muted-foreground hover:text-foreground gap-2"
+              onClick={() => { setIsOpen(false); logout(); }}
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </Button>
+          )}
         </div>
       </div>
     </>
