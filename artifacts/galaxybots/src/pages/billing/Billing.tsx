@@ -15,6 +15,7 @@ interface PlanLink {
 
 interface BillingLinks {
   provider: string;
+  activeProvider: "stripe" | "godaddy";
   plans: {
     single: PlanLink;
     team: PlanLink;
@@ -96,13 +97,26 @@ export default function Billing() {
   }, [token]);
 
   const handleSubscribe = async (planKey: string, planName: string) => {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (!links) return;
 
     setSubscribing(planKey);
+
     try {
+      if (links.activeProvider === "godaddy") {
+        const plan = links.plans[planKey as keyof typeof links.plans];
+        if (plan.link) {
+          window.location.href = plan.link;
+          return;
+        }
+        alert(`Payment link not configured for the ${planName} plan. Please contact support.`);
+        return;
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${BASE}/api/billing/stripe/checkout`, {
         method: "POST",
         headers,
@@ -124,6 +138,10 @@ export default function Billing() {
   };
 
   const planKeys = ["single", "team", "enterprise"] as const;
+  const providerName = links?.provider || "Payment Provider";
+  const providerUrl = links?.activeProvider === "godaddy"
+    ? "https://www.godaddy.com/payments"
+    : "https://stripe.com";
 
   return (
     <AppLayout>
@@ -131,13 +149,13 @@ export default function Billing() {
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary font-tech text-sm mb-6">
             <CreditCard className="w-3.5 h-3.5" />
-            <span>Powered by Stripe</span>
+            <span>Powered by {providerName}</span>
           </div>
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-display font-bold mb-6">
             Choose Your <span className="text-gradient">Command Tier</span>
           </h1>
           <p className="text-lg text-muted-foreground">
-            Secure, seamless checkout via Stripe. Select a plan and you'll be taken to
+            Secure, seamless checkout via {providerName}. Select a plan and you'll be taken to
             our payment partner to complete your subscription.
           </p>
 
@@ -246,12 +264,12 @@ export default function Billing() {
           <p>
             Payments are securely processed by{" "}
             <a
-              href="https://stripe.com"
+              href={providerUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
             >
-              Stripe
+              {providerName}
             </a>
             . You will be redirected to their secure hosted checkout page to complete your
             subscription.

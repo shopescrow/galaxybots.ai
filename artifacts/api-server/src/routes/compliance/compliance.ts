@@ -253,4 +253,128 @@ router.delete("/compliance/client/:clientId/:id", async (req, res): Promise<void
   }
 });
 
+router.get("/data-export/:clientId", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  if (isNaN(clientId)) {
+    res.status(400).json({ error: "Invalid clientId" });
+    return;
+  }
+
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const isOrgOwner = user.clientId === clientId && user.role === "owner";
+  const isPlatformAdmin = user.bypassPayment === true;
+  if (!isOrgOwner && !isPlatformAdmin) {
+    res.status(403).json({ error: "Only organization owners and platform admins can request data exports" });
+    return;
+  }
+
+  try {
+    const { startDataExport } = await import("../../services/compliance/data-export");
+    const job = await startDataExport(clientId, user.userId);
+    res.status(202).json({
+      jobId: job.jobId,
+      status: job.status,
+      message: "Data export initiated. Use the job ID to check status.",
+    });
+  } catch (err) {
+    console.error("Data export initiation failed:", err);
+    res.status(500).json({ error: "Failed to initiate data export" });
+  }
+});
+
+router.get("/data-export/:clientId/download/:jobId", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  const jobId = req.params.jobId;
+
+  if (isNaN(clientId)) {
+    res.status(400).json({ error: "Invalid clientId" });
+    return;
+  }
+
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const isOrgOwner = user.clientId === clientId && user.role === "owner";
+  const isPlatformAdmin = user.bypassPayment === true;
+  if (!isOrgOwner && !isPlatformAdmin) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  try {
+    const { getExportJob } = await import("../../services/compliance/data-export");
+    const job = getExportJob(jobId);
+    if (!job || job.clientId !== clientId) {
+      res.status(404).json({ error: "Export job not found" });
+      return;
+    }
+    if (job.status !== "completed") {
+      res.status(409).json({ error: "Export not yet completed", status: job.status });
+      return;
+    }
+    if (job.expiresAt && new Date(job.expiresAt) < new Date()) {
+      res.status(410).json({ error: "Export download link has expired" });
+      return;
+    }
+    if (job.downloadUrl && job.downloadUrl.startsWith("http")) {
+      res.redirect(302, job.downloadUrl);
+      return;
+    }
+    res.json({
+      jobId: job.jobId,
+      status: job.status,
+      message: "Export data is available via object storage",
+      downloadUrl: job.downloadUrl,
+      expiresAt: job.expiresAt,
+    });
+  } catch (err) {
+    console.error("Data export download failed:", err);
+    res.status(500).json({ error: "Failed to retrieve export" });
+  }
+});
+
+router.get("/data-export/:clientId/status/:jobId", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.clientId);
+  const jobId = req.params.jobId;
+
+  if (isNaN(clientId)) {
+    res.status(400).json({ error: "Invalid clientId" });
+    return;
+  }
+
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const isOrgOwner = user.clientId === clientId && user.role === "owner";
+  const isPlatformAdmin = user.bypassPayment === true;
+  if (!isOrgOwner && !isPlatformAdmin) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  try {
+    const { getExportJob } = await import("../../services/compliance/data-export");
+    const job = getExportJob(jobId);
+    if (!job || job.clientId !== clientId) {
+      res.status(404).json({ error: "Export job not found" });
+      return;
+    }
+    res.json(job);
+  } catch (err) {
+    console.error("Data export status check failed:", err);
+    res.status(500).json({ error: "Failed to check export status" });
+  }
+});
+
 export default router;

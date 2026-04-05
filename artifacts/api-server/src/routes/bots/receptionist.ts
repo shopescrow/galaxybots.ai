@@ -8,6 +8,63 @@ import { sendParamError } from "../../utils/validation";
 
 const router: IRouter = Router();
 
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+
+function requireCredentials(_req: Request, res: Response, next: NextFunction): void {
+  const missing: string[] = [];
+  if (!ELEVENLABS_API_KEY) missing.push("ELEVENLABS_API_KEY");
+  if (!TWILIO_ACCOUNT_SID) missing.push("TWILIO_ACCOUNT_SID");
+  if (!TWILIO_AUTH_TOKEN) missing.push("TWILIO_AUTH_TOKEN");
+  if (!TWILIO_PHONE_NUMBER) missing.push("TWILIO_PHONE_NUMBER");
+  if (missing.length > 0) {
+    res.status(503).json({
+      error: "AI Receptionist service unavailable",
+      message: `Missing required credentials: ${missing.join(", ")}`,
+      missingCredentials: missing,
+    });
+    return;
+  }
+  next();
+}
+
+function validateTwilioSignature(req: Request, res: Response, next: NextFunction): void {
+  if (!TWILIO_AUTH_TOKEN) {
+    res.status(503).json({ error: "Twilio auth token not configured" });
+    return;
+  }
+
+  const signature = req.headers["x-twilio-signature"] as string | undefined;
+  if (!signature) {
+    res.status(403).json({ error: "Missing X-Twilio-Signature header" });
+    return;
+  }
+
+  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
+  const host = (req.headers["x-forwarded-host"] as string) || req.headers.host;
+  const url = `${proto}://${host}${req.originalUrl}`;
+  const params = (req.body || {}) as Record<string, string>;
+  const sortedKeys = Object.keys(params).sort();
+  const paramString = sortedKeys.map(key => `${key}${params[key]}`).join("");
+  const data = url + paramString;
+
+  const computed = createHmac("sha1", TWILIO_AUTH_TOKEN)
+    .update(Buffer.from(data, "utf-8"))
+    .digest("base64");
+
+  if (computed !== signature) {
+    if (process.env.NODE_ENV === "development") {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Invalid Twilio signature" });
+    return;
+  }
+  next();
+}
+
 async function validateClientExists(req: Request, res: Response, next: NextFunction): Promise<void> {
   let clientId = Number(req.params.clientId || req.body?.clientId || req.query?.clientId);
 

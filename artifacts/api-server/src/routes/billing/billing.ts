@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { db, clientsTable, subscriptionPlansTable, accountSubscriptionsTable, accessorialAddonsTable, accessorialSubscriptionsTable, usageEventsTable } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../../middleware/auth";
+import { getActiveBillingProvider, getGoDaddyPaymentLinks, upsertGoDaddyPaymentLink, listBillingProviderConfigs } from "../../services/billing/godaddy-provider";
 
 const router: IRouter = Router();
 
@@ -32,24 +33,28 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-router.get("/billing/links", authenticate, (_req, res): void => {
+router.get("/billing/links", authenticate, async (_req, res): Promise<void> => {
+  const provider = getActiveBillingProvider();
+  const godaddyLinks = await getGoDaddyPaymentLinks();
+
   res.json({
-    provider: "Stripe",
+    provider: provider === "godaddy" ? "GoDaddy Payments" : "Stripe",
+    activeProvider: provider,
     plans: {
       single: {
         name: "Single Director",
         price: 999,
-        link: null,
+        link: provider === "godaddy" ? (godaddyLinks.single || null) : null,
       },
       team: {
         name: "Department Team",
         price: 2999,
-        link: null,
+        link: provider === "godaddy" ? (godaddyLinks.team || null) : null,
       },
       enterprise: {
         name: "Enterprise Command",
         price: 7999,
-        link: null,
+        link: provider === "godaddy" ? (godaddyLinks.enterprise || null) : null,
       },
     },
   });
@@ -344,5 +349,60 @@ router.post("/billing/addons/toggle", authenticate, requireRole("owner", "admin"
     res.status(500).json({ error: "Failed to toggle add-on" });
   }
 });
+
+router.get(
+  "/billing/provider-config",
+  authenticate,
+  requireRole("owner", "admin"),
+  async (req, res): Promise<void> => {
+    if (!req.user?.bypassPayment) {
+      res.status(403).json({ error: "Platform admin access required" });
+      return;
+    }
+    try {
+      const provider = req.query.provider as string | undefined;
+      const configs = await listBillingProviderConfigs(provider || undefined);
+      res.json(configs);
+    } catch (error) {
+      console.error("Error fetching provider configs:", error);
+      res.status(500).json({ error: "Failed to fetch provider configs" });
+    }
+  }
+);
+
+router.put(
+  "/billing/provider-config",
+  authenticate,
+  requireRole("owner", "admin"),
+  async (req, res): Promise<void> => {
+    if (!req.user?.bypassPayment) {
+      res.status(403).json({ error: "Platform admin access required" });
+      return;
+    }
+
+    const { provider, tier, paymentLinkUrl } = req.body;
+    if (!provider || !tier || !paymentLinkUrl) {
+      res.status(400).json({ error: "provider, tier, and paymentLinkUrl are required" });
+      return;
+    }
+    if (provider !== "godaddy") {
+      res.status(400).json({ error: "Only 'godaddy' provider config is supported" });
+      return;
+    }
+
+    try {
+      const config = await upsertGoDaddyPaymentLink(tier, paymentLinkUrl, req.user!.userId);
+      res.json({ success: true, config });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("Invalid tier")) {
+        res.status(400).json({ error: msg });
+        return;
+      }
+      console.error("Error updating provider config:", error);
+      res.status(500).json({ error: "Failed to update provider config" });
+    }
+  }
+);
 
 export default router;

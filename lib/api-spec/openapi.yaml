@@ -4,8 +4,10 @@ info:
   version: 0.1.0
   description: GalaxyBots.ai API - AI-powered corporate bot platform
 servers:
+  - url: /api/v1
+    description: Versioned API path (v1)
   - url: /api
-    description: Base API path
+    description: Legacy API path (deprecated — sunset 2026-10-05)
 tags:
   - name: health
     description: Health operations
@@ -1527,8 +1529,240 @@ paths:
                   success:
                     type: boolean
 
+  /billing/provider-config:
+    get:
+      operationId: listProviderConfigs
+      tags: [billing]
+      summary: List billing provider payment link configurations
+      description: Platform admin endpoint to retrieve all configured payment link URLs. Requires bypassPayment privilege.
+      parameters:
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider configurations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingProviderConfig"
+        "403":
+          description: Platform admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertProviderConfig
+      tags: [billing]
+      summary: Create or update a billing provider payment link configuration
+      description: Platform admin endpoint to configure payment link URLs per tier. Currently supports GoDaddy provider. Requires bypassPayment privilege.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [godaddy]
+                tier:
+                  type: string
+                  enum: [single, team, enterprise]
+                paymentLinkUrl:
+                  type: string
+              required: [provider, tier, paymentLinkUrl]
+      responses:
+        "200":
+          description: Configuration saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  config:
+                    $ref: "#/components/schemas/BillingProviderConfig"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /billing/godaddy/webhook:
+    post:
+      operationId: godaddyWebhook
+      tags: [billing]
+      summary: GoDaddy Payments webhook
+      description: Receives GoDaddy payment confirmations. Verifies HMAC signature via x-godaddy-signature header.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+        "400":
+          description: Invalid signature or payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-export/{clientId}:
+    get:
+      operationId: startDataExport
+      tags: [compliance]
+      summary: Initiate GDPR Subject Access Request data export
+      description: Starts an asynchronous export of all client data. Restricted to organization owners and platform admins. Returns a job ID to track progress.
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Export job initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataExportJobResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-export/{clientId}/status/{jobId}:
+    get:
+      operationId: getDataExportStatus
+      tags: [compliance]
+      summary: Check data export job status
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataExportJobResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-export/{clientId}/download/{jobId}:
+    get:
+      operationId: downloadDataExport
+      tags: [compliance]
+      summary: Download completed data export
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to download URL
+        "409":
+          description: Export not yet completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: Download link expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
+    DataExportJobResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        clientId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        downloadUrl:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+        error:
+          type: string
+      required: [jobId, status]
+
+    BillingProviderConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+        tier:
+          type: string
+        paymentLinkUrl:
+          type: string
+        updatedBy:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, provider, tier, paymentLinkUrl]
+
     HealthStatus:
       type: object
       properties:

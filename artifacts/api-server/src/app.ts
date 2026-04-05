@@ -74,9 +74,51 @@ app.use(
 );
 
 app.post(
+  "/api/v1/billing/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler
+);
+
+app.post(
+  "/api/v1/billing/godaddy/webhook",
+  express.raw({ type: "application/json" }),
+  async (req: Request, res: Response) => {
+    const { processBillingWebhook } = await import("./services/billing/webhook-handler");
+    const sig = req.headers["x-godaddy-signature"] as string | undefined;
+    const result = await processBillingWebhook("godaddy", req.body, sig);
+    if (result.error) {
+      const statusCode = result.error.includes("not configured") ? 503 :
+                         result.error.includes("signature") || result.error.includes("Missing") ? 400 :
+                         result.error.includes("Database") ? 500 : 400;
+      res.status(statusCode).json({ error: result.error });
+      return;
+    }
+    res.json({ received: result.received });
+  }
+);
+
+app.post(
   "/api/billing/stripe/webhook",
   express.raw({ type: "application/json" }),
   stripeWebhookHandler
+);
+
+app.post(
+  "/api/billing/godaddy/webhook",
+  express.raw({ type: "application/json" }),
+  async (req: Request, res: Response) => {
+    const { processBillingWebhook } = await import("./services/billing/webhook-handler");
+    const sig = req.headers["x-godaddy-signature"] as string | undefined;
+    const result = await processBillingWebhook("godaddy", req.body, sig);
+    if (result.error) {
+      const statusCode = result.error.includes("not configured") ? 503 :
+                         result.error.includes("signature") || result.error.includes("Missing") ? 400 :
+                         result.error.includes("Database") ? 500 : 400;
+      res.status(statusCode).json({ error: result.error });
+      return;
+    }
+    res.json({ received: result.received });
+  }
 );
 
 app.use(cookieParser());
@@ -89,88 +131,116 @@ app.use(express.urlencoded({ extended: true }));
 app.use(generalRateLimit);
 app.use(auditLogger);
 
-const PUBLIC_PATHS = [
-  "/api/",
-  "/api/healthz",
-  "/api/auth/register",
-  "/api/auth/login",
-  "/api/auth/logout",
-  "/api/auth/forgot-username",
-  "/api/auth/request-password-reset",
-  "/api/auth/reset-password",
-  "/api/compliance/inbound",
-  "/api/compliance/platform/config",
-  "/api/integrations/piratemonster/webhook",
-  "/api/integrations/piratemonster/register-partner",
-  "/api/prospecting/webhook/piratemonster",
-  "/api/partner/link",
-  "/api/partner/register",
-  "/api/partner/admin/login",
-  "/api/partner/apply",
-  "/api/billing/plans",
-  "/api/billing/addons",
-  "/api/demo/book",
-  "/api/packs",
-  "/api/marketplace",
-  "/api/client-portal/request-pin",
-  "/api/client-portal/verify-pin",
-  "/api/client-portal/me",
-  "/api/client-portal/roi",
-  "/api/client-portal/missions",
-  "/api/client-portal/approvals",
-  "/api/sso/check-domain",
-  "/api/sso/saml/metadata",
-  "/api/sso/exchange",
-  "/api/developer/changelog",
-  "/api/developer/openapi",
-  "/api/developer/webhook-events",
-  "/api/mcp-marketing/social-proof",
-  "/api/mcp-marketing/launch-signup",
-  "/api/mcp-marketing/download-extension",
-  "/api/pdf/health",
+const PUBLIC_SUFFIXES = [
+  "/",
+  "/healthz",
+  "/auth/register",
+  "/auth/login",
+  "/auth/logout",
+  "/auth/forgot-username",
+  "/auth/request-password-reset",
+  "/auth/reset-password",
+  "/compliance/inbound",
+  "/compliance/platform/config",
+  "/integrations/piratemonster/webhook",
+  "/integrations/piratemonster/register-partner",
+  "/prospecting/webhook/piratemonster",
+  "/partner/link",
+  "/partner/register",
+  "/partner/admin/login",
+  "/partner/apply",
+  "/billing/plans",
+  "/billing/addons",
+  "/demo/book",
+  "/packs",
+  "/marketplace",
+  "/client-portal/request-pin",
+  "/client-portal/verify-pin",
+  "/client-portal/me",
+  "/client-portal/roi",
+  "/client-portal/missions",
+  "/client-portal/approvals",
+  "/sso/check-domain",
+  "/sso/saml/metadata",
+  "/sso/exchange",
+  "/developer/changelog",
+  "/developer/openapi",
+  "/developer/webhook-events",
+  "/mcp-marketing/social-proof",
+  "/mcp-marketing/launch-signup",
+  "/mcp-marketing/download-extension",
+  "/pdf/health",
+  "/data-export",
 ];
 
-const PUBLIC_PATH_PREFIXES = [
-  "/api/partner/",
-  "/api/packs/",
-  "/api/marketplace/",
-  "/api/webhooks/lead/",
-  "/api/webhooks/pipeline/",
-  "/api/storage/public-objects/",
-  "/api/client-portal/missions/",
-  "/api/client-portal/approvals/",
-  "/api/bingolingo/hub/",
-  "/api/bingolingo/ext/",
-  "/api/sso/saml/",
-  "/api/sso/oidc/",
-  "/api/scim/v2/",
-  "/api/proposals/shared/",
-  "/api/roi/shared/",
+const PUBLIC_PREFIX_SUFFIXES = [
+  "/partner/",
+  "/packs/",
+  "/marketplace/",
+  "/webhooks/lead/",
+  "/webhooks/pipeline/",
+  "/storage/public-objects/",
+  "/client-portal/missions/",
+  "/client-portal/approvals/",
+  "/bingolingo/hub/",
+  "/bingolingo/ext/",
+  "/sso/saml/",
+  "/sso/oidc/",
+  "/scim/v2/",
+  "/proposals/shared/",
+  "/roi/shared/",
 ];
 
-app.use("/api", (req, res, next) => {
-  const fullPath = `/api${req.path}`;
-  if (PUBLIC_PATHS.includes(fullPath) || PUBLIC_PATH_PREFIXES.some(p => fullPath.startsWith(p))) {
+function buildPublicPaths(prefix: string) {
+  return {
+    paths: PUBLIC_SUFFIXES.map(s => `${prefix}${s}`),
+    prefixes: PUBLIC_PREFIX_SUFFIXES.map(s => `${prefix}${s}`),
+  };
+}
+
+function createAuthMiddleware(prefix: string) {
+  const { paths, prefixes } = buildPublicPaths(prefix);
+  return (req: Request, res: Response, next: NextFunction) => {
+    const fullPath = `${prefix}${req.path}`;
+    if (paths.includes(fullPath) || prefixes.some(p => fullPath.startsWith(p))) {
+      return next();
+    }
+    if (
+      (req.method === "POST" && new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/partner\\/[^/]+\\/clients$`).test(fullPath)) ||
+      (req.method === "PUT" && new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/partner\\/[^/]+$`).test(fullPath))
+    ) {
+      return next();
+    }
+    if (fullPath.startsWith(`${prefix}/analytics/`) && req.headers.authorization?.startsWith("Bearer gba_")) {
+      return analyticsApiKeyAuth(req, res, next);
+    }
+    if (req.headers.authorization?.startsWith("Bearer gbdev_")) {
+      return developerApiKeyAuth(req, res, next);
+    }
+    if (req.headers["x-platform-key"]) {
+      return platformApiKeyAuth(req, res, next);
+    }
+    return authenticate(req, res, next);
+  };
+}
+
+const SUNSET_DATE = "2026-10-05";
+
+app.use("/api/v1", createAuthMiddleware("/api/v1"));
+app.use("/api/v1", instrumentHealthSignals);
+app.use("/api/v1", router);
+
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  if (req.path.startsWith("/v1")) {
     return next();
   }
-  if (
-    (req.method === "POST" && /^\/api\/partner\/[^/]+\/clients$/.test(fullPath)) ||
-    (req.method === "PUT" && /^\/api\/partner\/[^/]+$/.test(fullPath))
-  ) {
-    return next();
-  }
-  if (fullPath.startsWith("/api/analytics/") && req.headers.authorization?.startsWith("Bearer gba_")) {
-    return analyticsApiKeyAuth(req, res, next);
-  }
-  if (req.headers.authorization?.startsWith("Bearer gbdev_")) {
-    return developerApiKeyAuth(req, res, next);
-  }
-  if (req.headers["x-platform-key"]) {
-    return platformApiKeyAuth(req, res, next);
-  }
-  return authenticate(req, res, next);
+  res.set("Deprecation", "true");
+  res.set("Sunset", SUNSET_DATE);
+  res.set("Link", `</api/v1${req.path}>; rel="successor-version"`);
+  next();
 });
 
+app.use("/api", createAuthMiddleware("/api"));
 app.use("/api", instrumentHealthSignals);
 app.use("/api", router);
 

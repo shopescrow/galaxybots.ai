@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-const API_BASE = `http://localhost:${process.env.API_PORT || "8080"}/api`;
+const API_BASE = `http://localhost:${process.env.API_PORT || "8080"}/api/v1`;
 
 function getServiceToken(): string {
   const secret = process.env.JWT_SECRET;

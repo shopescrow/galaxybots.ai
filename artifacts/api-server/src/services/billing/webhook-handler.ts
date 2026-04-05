@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { db, clientsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { parseStripePayload } from "./stripe-provider";
+import { parseGoDaddyPayload } from "./godaddy-provider";
 
 const VALID_PLANS = ["single", "team", "enterprise"];
 
@@ -30,12 +31,8 @@ async function activateClientPlan(clientId: number, plan: string): Promise<void>
 async function applyBillingEvent(event: BillingEvent): Promise<void> {
   if (event.type === "plan_activated" && VALID_PLANS.includes(event.plan)) {
     await activateClientPlan(event.clientId, event.plan);
-    console.log(`Billing: activated client ${event.clientId} with plan ${event.plan}`);
+    console.log(`Billing: activated client ${event.clientId} with plan ${event.plan} via ${event.metadata?.provider || "unknown"}`);
   }
-}
-
-function parseGodaddyPayload(_payload: unknown): BillingWebhookResult {
-  return { received: false, error: "GoDaddy Payments provider not yet implemented" };
 }
 
 export async function processBillingWebhook(provider: BillingProvider, payload: unknown, signature?: string): Promise<BillingWebhookResult> {
@@ -49,7 +46,7 @@ export async function processBillingWebhook(provider: BillingProvider, payload: 
       result = parseStripePayload(payload as Buffer | string, signature);
       break;
     case "godaddy":
-      result = parseGodaddyPayload(payload);
+      result = parseGoDaddyPayload(payload, signature);
       break;
     default:
       return { received: false, error: `Unknown billing provider: ${provider}` };

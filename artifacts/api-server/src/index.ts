@@ -10,6 +10,7 @@ import { seedDefaultOutreachTemplates } from "./services/prospecting/seed-outrea
 import { seedDefaultPartners } from "./services/admin/seed-partners";
 import { seedMissionTemplates } from "./services/missions/seed-mission-templates";
 import { seedPlaybooks } from "./services/missions/seed-playbooks";
+import { seedApiVersioningChangelog } from "./services/platform/seed-changelog";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -271,6 +272,9 @@ const server = app.listen(port, async () => {
   });
   backfillExistingBotPermissions(getAllTools).catch((err) => {
     console.error("[governance] Permission backfill failed:", err);
+  });
+  seedApiVersioningChangelog().catch((err) => {
+    console.error("[seed] API versioning changelog seeding failed:", err);
   });
 });
 
