@@ -18,7 +18,7 @@ import {
   deleteMemory,
 } from "../../services/bots/memory";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { addSSEClient, broadcastSSE } from "../../services/platform/scheduler";
+import { addSSEClient, broadcastSSE } from "../../services/platform/sse";
 import { createNotification } from "../../services/admin/notifications";
 import { runAgenticLoop } from "../../tools/agentic-loop";
 

@@ -4,7 +4,7 @@ import { db, prospectsTable, botsTable, botAssignmentsTable } from "@workspace/d
 import { eq, and, desc } from "drizzle-orm";
 import { createNotification } from "../services/admin/notifications";
 import * as cheerio from "cheerio";
-import { broadcastSSE } from "../services/platform/scheduler";
+import { broadcastSSE } from "../services/platform/sse";
 
 const ProspectStatusEnum = z.enum(["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"]);
 const ProspectErrorCategoryEnum = z.enum(["network", "parsing", "not_found", "validation"]);

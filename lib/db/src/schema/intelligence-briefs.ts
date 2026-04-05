@@ -25,7 +25,7 @@ export const briefingSettingsTable = pgTable("briefing_settings", {
   slackChannel: text("slack_channel").default("galaxybots-brief"),
   deliveryHour: integer("delivery_hour").notNull().default(7),
   deliveryMinute: integer("delivery_minute").notNull().default(30),
-  timezone: text("timezone").notNull().default("America/Toronto"),
+  timezone: text("timezone").notNull().default("UTC"),
   lastMorningBriefAt: timestamp("last_morning_brief_at", { withTimezone: true }),
   lastWeeklyBriefAt: timestamp("last_weekly_brief_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

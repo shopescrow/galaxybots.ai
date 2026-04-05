@@ -19,7 +19,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
 import { requireRole } from "../../middleware/auth";
-import { broadcastSSE } from "../../services/platform/scheduler";
+import { broadcastSSE } from "../../services/platform/sse";
 export { emitActivityEvent, type ActivityEventInput } from "../../services/analytics/activity-events";
 
 const router: IRouter = Router();

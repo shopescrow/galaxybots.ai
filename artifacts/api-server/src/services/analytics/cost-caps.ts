@@ -1,6 +1,6 @@
 import { db, llmUsageLogTable, clientCostCapsTable } from "@workspace/db";
 import { eq, and, gte, sql } from "drizzle-orm";
-import { broadcastSSE } from "../platform/scheduler";
+import { broadcastSSE } from "../platform/sse";
 import { createNotification } from "../admin/notifications";
 
 export async function getMonthlySpend(clientId: number): Promise<number> {

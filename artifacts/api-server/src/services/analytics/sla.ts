@@ -1,7 +1,7 @@
 import { db, botSlaEventsTable, botSlaOverridesTable, slaTiersTable, clientsTable } from "@workspace/db";
 import { eq, and, isNull, lt, sql } from "drizzle-orm";
 import { createNotification } from "../admin/notifications";
-import { broadcastSSE } from "../platform/scheduler";
+import { broadcastSSE } from "../platform/sse";
 
 const SLA_TIER_MAP: Record<string, string> = {
   free: "standard",

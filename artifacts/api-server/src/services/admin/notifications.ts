@@ -1,6 +1,6 @@
 import { db, notificationsTable } from "@workspace/db";
 import type { InsertNotification } from "@workspace/db";
-import { broadcastSSE } from "../platform/scheduler";
+import { broadcastSSE } from "../platform/sse";
 import { sendPushToClient, sendPushToUser } from "./push-sender";
 
 export async function createNotification(payload: {
