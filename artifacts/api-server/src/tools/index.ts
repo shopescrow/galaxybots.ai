@@ -1,6 +1,6 @@
 import "./definitions";
 import "./pdf-tools";
-import "./operational-tools";
+import "./integrations";
 import "./expanded-tools";
 import "./aeo-tools";
 import "./competitor-tools";
