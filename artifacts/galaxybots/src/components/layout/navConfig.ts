@@ -93,6 +93,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/billing", label: "Billing", description: "Billing and subscription" },
       { href: "/marketplace", label: "Marketplace", description: "Apps and add-ons" },
       { href: "/five-year-plan", label: "Strategic Plan", description: "5-Year business strategy" },
+      { href: "/user-guide", label: "User Guide", description: "New user onboarding guide" },
       { href: "/packs", label: "Industry Packs", description: "Vertical-specific packs" },
       { href: "/developers", label: "Developer Portal", description: "API and developer tools" },
       { href: "/mcp-growth-hub", label: "MCP Growth Hub", description: "Market your MCP servers across agent discovery platforms" },

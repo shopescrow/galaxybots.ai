@@ -1,60 +1,41 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, MessageSquare, MessageSquareOff, Share2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { narration } from "./narration";
 
-// Import all slides
-import Slide01Cover from "./slides/Slide01Cover";
-import Slide02ExecSummary from "./slides/Slide02ExecSummary";
-import Slide03Problem from "./slides/Slide03Problem";
-import Slide04Vision from "./slides/Slide04Vision";
-import Slide05Market from "./slides/Slide05Market";
-import Slide06Competition from "./slides/Slide06Competition";
-import Slide07Infrastructure from "./slides/Slide07Infrastructure";
-import Slide08GalaxyBots from "./slides/Slide08GalaxyBots";
-import Slide09BingoLingo from "./slides/Slide09BingoLingo";
-import Slide10Prospector from "./slides/Slide10Prospector";
-import Slide11Mobile from "./slides/Slide11Mobile";
-import Slide12BusinessModel from "./slides/Slide12BusinessModel";
-import Slide13UnitEconomics from "./slides/Slide13UnitEconomics";
-import Slide14FinancialProjections from "./slides/Slide14FinancialProjections";
-import Slide15ScenarioModeling from "./slides/Slide15ScenarioModeling";
-import Slide16GTMStrategy from "./slides/Slide16GTMStrategy";
-import Slide17Year1Priorities from "./slides/Slide17Year1Priorities";
-import Slide18Roadmap from "./slides/Slide18Roadmap";
-import Slide19Moat from "./slides/Slide19Moat";
-import Slide20Risks from "./slides/Slide20Risks";
-import Slide21Team from "./slides/Slide21Team";
-import Slide22ExitAsk from "./slides/Slide22ExitAsk";
+import Slide01Title from "./slides/Slide01Title";
+import Slide02Login from "./slides/Slide02Login";
+import Slide03CommandCenter from "./slides/Slide03CommandCenter";
+import Slide04BotTeam from "./slides/Slide04BotTeam";
+import Slide05OpenChannel from "./slides/Slide05OpenChannel";
+import Slide06Directive from "./slides/Slide06Directive";
+import Slide07DeepThinking from "./slides/Slide07DeepThinking";
+import Slide08DeployTeam from "./slides/Slide08DeployTeam";
+import Slide09OptimaPrime from "./slides/Slide09OptimaPrime";
+import Slide10Boardroom from "./slides/Slide10Boardroom";
+import Slide11Approvals from "./slides/Slide11Approvals";
+import Slide12Closing from "./slides/Slide12Closing";
+import Slide13QuickStart from "./slides/Slide13QuickStart";
 
 const slides = [
-  Slide01Cover,
-  Slide02ExecSummary,
-  Slide03Problem,
-  Slide04Vision,
-  Slide05Market,
-  Slide06Competition,
-  Slide07Infrastructure,
-  Slide08GalaxyBots,
-  Slide09BingoLingo,
-  Slide10Prospector,
-  Slide11Mobile,
-  Slide12BusinessModel,
-  Slide13UnitEconomics,
-  Slide14FinancialProjections,
-  Slide15ScenarioModeling,
-  Slide16GTMStrategy,
-  Slide17Year1Priorities,
-  Slide18Roadmap,
-  Slide19Moat,
-  Slide20Risks,
-  Slide21Team,
-  Slide22ExitAsk,
+  Slide01Title,
+  Slide02Login,
+  Slide03CommandCenter,
+  Slide04BotTeam,
+  Slide05OpenChannel,
+  Slide06Directive,
+  Slide07DeepThinking,
+  Slide08DeployTeam,
+  Slide09OptimaPrime,
+  Slide10Boardroom,
+  Slide11Approvals,
+  Slide12Closing,
+  Slide13QuickStart,
 ];
 
-export default function PitchDeck() {
+export default function UserGuide() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNarration, setShowNarration] = useState(false);
@@ -80,6 +61,28 @@ export default function PitchDeck() {
     }
   };
 
+  const handleShare = async () => {
+    const url = new URL("/user-guide", window.location.origin).href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement("input");
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === " ") nextSlide();
@@ -98,7 +101,6 @@ export default function PitchDeck() {
     <AppLayout>
       <div className="flex flex-col h-[calc(100vh-64px)] bg-[#08091A] text-[#E8EAF0] overflow-hidden">
 
-        {/* Slide canvas */}
         <div className={`relative flex items-center justify-center p-4 sm:p-8 transition-all duration-300 ${showNarration ? "flex-[0_0_auto]" : "flex-1"}`}>
           <AnimatePresence mode="wait">
             <motion.div
@@ -115,7 +117,7 @@ export default function PitchDeck() {
 
               <div className="h-1 bg-border/20 w-full">
                 <motion.div
-                  className="h-full bg-[#D4A853]"
+                  className="h-full bg-[#8b5cf6]"
                   initial={{ width: 0 }}
                   animate={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }}
                 />
@@ -124,7 +126,6 @@ export default function PitchDeck() {
           </AnimatePresence>
         </div>
 
-        {/* Speaker Notes panel */}
         <AnimatePresence>
           {showNarration && (
             <motion.div
@@ -133,15 +134,15 @@ export default function PitchDeck() {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.25 }}
-              className="overflow-hidden border-t border-[#D4A853]/30 bg-[#0a0c1f]"
+              className="overflow-hidden border-t border-[#8b5cf6]/30 bg-[#0a0c1f]"
             >
               <div className="px-6 py-4 max-w-6xl mx-auto w-full">
                 <div className="flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <span className="text-[10px] font-tech text-[#D4A853] uppercase tracking-[0.2em] block mb-1">Speaker Notes</span>
+                    <span className="text-[10px] font-tech text-[#8b5cf6] uppercase tracking-[0.2em] block mb-1">Speaker Notes</span>
                     <span className="text-[10px] font-tech text-muted-foreground/50 uppercase tracking-widest">Slide {currentSlide + 1} of {slides.length}</span>
                   </div>
-                  <div className="w-px self-stretch bg-[#D4A853]/20 mx-2 shrink-0" />
+                  <div className="w-px self-stretch bg-[#8b5cf6]/20 mx-2 shrink-0" />
                   <AnimatePresence mode="wait">
                     <motion.p
                       key={currentSlide}
@@ -160,7 +161,6 @@ export default function PitchDeck() {
           )}
         </AnimatePresence>
 
-        {/* Controls bar */}
         <div className="shrink-0 h-20 bg-[#0C0E26] border-t border-border/40 px-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -188,7 +188,7 @@ export default function PitchDeck() {
 
           <div className="hidden sm:block text-center">
             <p className="text-xs font-tech text-muted-foreground uppercase tracking-widest">
-              GalaxyBots Strategic Business Plan 2026-2030 • Strictly Confidential
+              GalaxyBots New User Guide
             </p>
           </div>
 
@@ -196,23 +196,7 @@ export default function PitchDeck() {
             <Button
               variant="outline"
               size="sm"
-              onClick={async () => {
-                const url = new URL("/five-year-plan", window.location.origin).href;
-                try {
-                  await navigator.clipboard.writeText(url);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                } catch {
-                  const input = document.createElement("input");
-                  input.value = url;
-                  document.body.appendChild(input);
-                  input.select();
-                  document.execCommand("copy");
-                  document.body.removeChild(input);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }
-              }}
+              onClick={handleShare}
               className="bg-transparent border-border/40 hover:bg-white/5 gap-2"
             >
               <Share2 className="w-4 h-4" />
@@ -221,7 +205,7 @@ export default function PitchDeck() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="bg-transparent border-border/40 hover:bg-white/5 gap-2"
             >
               <Printer className="w-4 h-4" />
@@ -231,7 +215,7 @@ export default function PitchDeck() {
               variant="outline"
               size="sm"
               onClick={() => setShowNarration((v) => !v)}
-              className={`bg-transparent border-border/40 hover:bg-white/5 gap-2 transition-colors ${showNarration ? "border-[#D4A853]/60 text-[#D4A853]" : ""}`}
+              className={`bg-transparent border-border/40 hover:bg-white/5 gap-2 transition-colors ${showNarration ? "border-[#8b5cf6]/60 text-[#8b5cf6]" : ""}`}
             >
               {showNarration
                 ? <MessageSquareOff className="w-4 h-4" />

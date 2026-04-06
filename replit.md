@@ -66,7 +66,7 @@ The codebase follows a domain-based folder organization:
 - `routes/` — 12 domain subfolders (admin, analytics, auth, billing, bots, clients, compliance, content, missions, partner, platform, prospecting), each with a barrel `index.ts` exporting a `registerXRoutes(router)` function. The main `routes/index.ts` calls each domain's register function.
 - `routes/partner/piratemonster/` — Split into domain files: `webhook-aeo.ts`, `webhook-prospecting.ts`, `dispatch.ts`, `recommendations.ts`, `competitors.ts`, `content-attribution.ts`, `mcp-keys.ts`, `health-stats.ts`, `_shared.ts` (HMAC auth middleware, webhook delivery helper), `index.ts` (registerPirateMonsterRoutes barrel).
 - `services/` — 9 domain subfolders (admin, analytics, billing, bots, clients, content, missions, platform, prospecting) mirroring the route structure. Cross-domain imports use `../otherdomain/file` paths.
-- `services/platform/jobs/` — 13 individual scheduled job files extracted from scheduler.ts. Each exports a single async function. Jobs: check-due-assignments, check-weekly-briefings, check-kb-syncs, check-bingolingo-auto-content, check-competitor-alerts, check-health-scores, check-weekly-pulse, check-content-aeo-rescans, check-partner-tier-compliance, check-approval-slas, check-scheduled-workflows, check-activation-nurture, check-aeo-scan-queue.
+- `services/platform/jobs/` — 17 individual scheduled job files extracted from scheduler.ts. Each exports a single async function. Jobs: check-due-assignments, check-weekly-briefings, check-kb-syncs, check-bingolingo-auto-content, check-competitor-alerts, check-health-scores, check-weekly-pulse, check-content-aeo-rescans, check-partner-tier-compliance, check-approval-slas, check-scheduled-workflows, check-activation-nurture, check-aeo-scan-queue, check-morning-briefs, check-weekly-briefs, check-sla-breaches, check-integration-health.
 - `services/platform/scheduler.ts` — Tiered job registry (~130 lines): 3 high-freq (5min), 6 medium-freq (1hr), 8 low-freq (24hr) jobs with staggered execution, overlap guard, and PostgreSQL advisory lock.
 - `services/partner/piratemonster-client.ts` — Extracted service for `dispatchScanToPirateMonster` (eliminates circular import between scheduler and piratemonster routes).
 - `middleware/` — Flat, shared across all domains.
@@ -74,7 +74,7 @@ The codebase follows a domain-based folder organization:
 - See `artifacts/api-server/STRUCTURE.md` for full mapping.
 
 **Frontend (`artifacts/galaxybots/src/`):**
-- `pages/` — 30+ domain subdirectories (activity, analytics, auth, billing, bots, clients, general, marketing, settings, etc.). No flat page files at root.
+- `pages/` — 30+ domain subdirectories (activity, analytics, auth, billing, bots, clients, general, marketing, settings, etc.). No flat page files at root. Includes `five-year-plan/` (22-slide strategic plan presentation with share/print/narration) and `user-guide/` (13-slide new user onboarding guide with share/print/narration) — both render inline within the dashboard layout under Platform nav.
 - `components/` — Domain subdirectories (billing, command, layout, missions, notifications, ui, etc.). No flat component files at root.
 - See `artifacts/galaxybots/STRUCTURE.md` for full mapping.
 

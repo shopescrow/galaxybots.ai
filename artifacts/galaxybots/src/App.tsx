@@ -65,6 +65,7 @@ const Pipelines           = lazy(() => import("@/pages/pipelines/Pipelines"));
 const CommandCenter       = lazy(() => import("@/pages/command-center/CommandCenter"));
 const AnalyticsDashboard  = lazy(() => import("@/pages/analytics/AnalyticsDashboard"));
 const PitchDeck           = lazy(() => import("@/pages/five-year-plan/PitchDeck"));
+const UserGuide           = lazy(() => import("@/pages/user-guide/UserGuide"));
 const DeveloperPortal     = lazy(() => import("@/pages/developers/DeveloperPortal"));
 const NotFound            = lazy(() => import("@/pages/general/not-found"));
 
@@ -193,6 +194,7 @@ function AuthenticatedRoutes() {
         <Route path="/pipelines"              component={Pipelines} />
         <Route path="/analytics"              component={AnalyticsDashboard} />
         <Route path="/five-year-plan"         component={PitchDeck} />
+        <Route path="/user-guide"              component={UserGuide} />
         <Route path="/admin/marketplace"      component={() => <AdminOnly component={AdminModeration} />} />
         <Route path="/settings/org"           component={() => <AdminOnly component={OrgAdmin} />} />
         <Route path="/notifications"          component={NotificationsPage} />

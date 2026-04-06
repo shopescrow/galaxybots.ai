@@ -200,3 +200,34 @@
 .text-scale-xl table {
   min-width: max-content;
 }
+
+.quote-panel {
+  background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(245,158,11,0.05));
+  border-left: 0.3vw solid #f59e0b;
+  padding: 2vh 2vw;
+}
+
+.stat-card {
+  background: rgba(17, 24, 41, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  padding: 2vh 1.5vw;
+}
+
+.stars-bg {
+  background-image:
+    radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 35% 60%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 15%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 45%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 75%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 80%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 48% 88%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 62% 35%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 25% 40%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 100%);
+}
+
+.blue-rule {
+  height: 0.2vh;
+}
