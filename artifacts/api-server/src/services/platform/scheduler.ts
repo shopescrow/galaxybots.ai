@@ -15,6 +15,7 @@ import { checkApprovalSLAs } from "./jobs/check-approval-slas";
 import { checkScheduledWorkflows, resumePausedWorkflows } from "./jobs/check-scheduled-workflows";
 import { checkActivationNurture } from "./jobs/check-activation-nurture";
 import { checkAeoScanQueue } from "./jobs/check-aeo-scan-queue";
+import { checkIntegrationHealth } from "./jobs/check-integration-health";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -621,8 +622,8 @@ export async function startScheduler() {
     checkHealthScores().catch(handleTickError("health scores"));
     checkWeeklyPulse().catch(handleTickError("weekly pulse"));
     checkPartnerTierCompliance().catch(handleTickError("partner tier review"));
-    generateMorningBriefs().catch(handleTickError("morning intelligence briefs"));
-    generateWeeklyBriefs().catch(handleTickError("weekly intelligence briefs"));
+    checkMorningBriefs().catch(handleTickError("morning intelligence briefs"));
+    checkWeeklyBriefs().catch(handleTickError("weekly intelligence briefs"));
     checkApprovalSLAs().catch(handleTickError("approval SLAs"));
     checkScheduledWorkflows().catch(handleTickError("scheduled workflows"));
     resumePausedWorkflows().catch(handleTickError("resume paused workflows"));
