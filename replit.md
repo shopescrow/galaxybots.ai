@@ -1,3 +1,5 @@
+`docs/GALAXYBOTS_STAGES.md` — Product stages and processes. Read before planning any new feature or task.
+
 # Overview
 
 GalaxyBots.ai is a white-label AI-powered corporate bot platform designed to deploy Fortune 500 intelligence for businesses. It offers AI personalities representing director-level positions that provide expert professional perspectives through chat interactions. The platform enables the creation of cross-functional bot teams, supports long-term memory retention for bots, and facilitates background autonomous assignments. Key features include a chat interface for AI conversations, an internal boardroom for communications, client management, task rooms for team-based operations, and a robust proof-of-value engine with an ROI dashboard. The project also incorporates external compliance application integrations and a comprehensive compliance center.
