@@ -5,6 +5,36 @@
  * GalaxyBots.ai API - AI-powered corporate bot platform
  * OpenAPI spec version: 0.1.0
  */
+export type DataExportJobResponseStatus =
+  (typeof DataExportJobResponseStatus)[keyof typeof DataExportJobResponseStatus];
+
+export const DataExportJobResponseStatus = {
+  pending: "pending",
+  processing: "processing",
+  completed: "completed",
+  failed: "failed",
+} as const;
+
+export interface DataExportJobResponse {
+  jobId: string;
+  clientId?: number;
+  status: DataExportJobResponseStatus;
+  downloadUrl?: string;
+  expiresAt?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface BillingProviderConfig {
+  id: number;
+  provider: string;
+  tier: string;
+  paymentLinkUrl: string;
+  updatedBy?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -57,8 +87,7 @@ export const MessageRole = {
   system: "system",
 } as const;
 
-export type MessageMessageType =
-  (typeof MessageMessageType)[keyof typeof MessageMessageType];
+export type MessageMessageType = (typeof MessageMessageType)[keyof typeof MessageMessageType];
 
 export const MessageMessageType = {
   text: "text",
@@ -95,8 +124,7 @@ export interface MessageResponse {
   botResponse: Message;
 }
 
-export type BoardroomMessageRole =
-  (typeof BoardroomMessageRole)[keyof typeof BoardroomMessageRole];
+export type BoardroomMessageRole = (typeof BoardroomMessageRole)[keyof typeof BoardroomMessageRole];
 
 export const BoardroomMessageRole = {
   bot: "bot",
@@ -156,8 +184,7 @@ export interface Client {
   createdAt: string;
 }
 
-export type CreateClientBodyPlan =
-  (typeof CreateClientBodyPlan)[keyof typeof CreateClientBodyPlan];
+export type CreateClientBodyPlan = (typeof CreateClientBodyPlan)[keyof typeof CreateClientBodyPlan];
 
 export const CreateClientBodyPlan = {
   single: "single",
@@ -200,8 +227,7 @@ export interface LeadWebhookResponse {
   message: string;
 }
 
-export type ClientBotStatus =
-  (typeof ClientBotStatus)[keyof typeof ClientBotStatus];
+export type ClientBotStatus = (typeof ClientBotStatus)[keyof typeof ClientBotStatus];
 
 export const ClientBotStatus = {
   active: "active",
@@ -401,8 +427,7 @@ export interface BotMemory {
   createdAt: string;
 }
 
-export type BotAssignmentActionMode =
-  (typeof BotAssignmentActionMode)[keyof typeof BotAssignmentActionMode];
+export type BotAssignmentActionMode = (typeof BotAssignmentActionMode)[keyof typeof BotAssignmentActionMode];
 
 export const BotAssignmentActionMode = {
   passive: "passive",
@@ -477,8 +502,7 @@ export interface UpdateBotAssignmentBody {
   schedule?: UpdateBotAssignmentBodySchedule;
 }
 
-export type BackgroundReportRunStatus =
-  (typeof BackgroundReportRunStatus)[keyof typeof BackgroundReportRunStatus];
+export type BackgroundReportRunStatus = (typeof BackgroundReportRunStatus)[keyof typeof BackgroundReportRunStatus];
 
 export const BackgroundReportRunStatus = {
   success: "success",
@@ -615,12 +639,9 @@ export interface UpdateClientComplianceBody {
 /**
  * @nullable
  */
-export type ReceptionistConfigBusinessHoursJson = {
-  [key: string]: unknown;
-} | null;
+export type ReceptionistConfigBusinessHoursJson = { [key: string]: unknown } | null;
 
-export type ReceptionistConfigCrmType =
-  (typeof ReceptionistConfigCrmType)[keyof typeof ReceptionistConfigCrmType];
+export type ReceptionistConfigCrmType = (typeof ReceptionistConfigCrmType)[keyof typeof ReceptionistConfigCrmType];
 
 export const ReceptionistConfigCrmType = {
   hubspot: "hubspot",
@@ -632,9 +653,7 @@ export const ReceptionistConfigCrmType = {
 /**
  * @nullable
  */
-export type ReceptionistConfigCrmFieldMapJson = {
-  [key: string]: unknown;
-} | null;
+export type ReceptionistConfigCrmFieldMapJson = { [key: string]: unknown } | null;
 
 export interface ReceptionistConfig {
   id: number;
@@ -664,9 +683,7 @@ export interface ReceptionistConfig {
   updatedAt: string;
 }
 
-export type CreateReceptionistConfigBodyBusinessHoursJson = {
-  [key: string]: unknown;
-};
+export type CreateReceptionistConfigBodyBusinessHoursJson = { [key: string]: unknown };
 
 export type CreateReceptionistConfigBodyCrmType =
   (typeof CreateReceptionistConfigBodyCrmType)[keyof typeof CreateReceptionistConfigBodyCrmType];
@@ -678,9 +695,7 @@ export const CreateReceptionistConfigBodyCrmType = {
   none: "none",
 } as const;
 
-export type CreateReceptionistConfigBodyCrmFieldMapJson = {
-  [key: string]: unknown;
-};
+export type CreateReceptionistConfigBodyCrmFieldMapJson = { [key: string]: unknown };
 
 export interface CreateReceptionistConfigBody {
   clientId: number;
@@ -696,9 +711,7 @@ export interface CreateReceptionistConfigBody {
   isActive?: boolean;
 }
 
-export type UpdateReceptionistConfigBodyBusinessHoursJson = {
-  [key: string]: unknown;
-};
+export type UpdateReceptionistConfigBodyBusinessHoursJson = { [key: string]: unknown };
 
 export type UpdateReceptionistConfigBodyCrmType =
   (typeof UpdateReceptionistConfigBodyCrmType)[keyof typeof UpdateReceptionistConfigBodyCrmType];
@@ -710,9 +723,7 @@ export const UpdateReceptionistConfigBodyCrmType = {
   none: "none",
 } as const;
 
-export type UpdateReceptionistConfigBodyCrmFieldMapJson = {
-  [key: string]: unknown;
-};
+export type UpdateReceptionistConfigBodyCrmFieldMapJson = { [key: string]: unknown };
 
 export interface UpdateReceptionistConfigBody {
   elevenlabsAgentId?: string;
@@ -786,6 +797,110 @@ export interface KnowledgeBaseDocument {
   fileType: string;
   chunkCount: number;
   uploadedAt: string;
+}
+
+export type ExtractionJobStatus = (typeof ExtractionJobStatus)[keyof typeof ExtractionJobStatus];
+
+export const ExtractionJobStatus = {
+  pending: "pending",
+  running: "running",
+  paused: "paused",
+  completed: "completed",
+  failed: "failed",
+} as const;
+
+export type ExtractionJobExtractionType =
+  (typeof ExtractionJobExtractionType)[keyof typeof ExtractionJobExtractionType];
+
+export const ExtractionJobExtractionType = {
+  table: "table",
+  list: "list",
+  contacts: "contacts",
+  custom: "custom",
+} as const;
+
+export interface ExtractionJob {
+  id: number;
+  name: string;
+  sourceUrl: string;
+  status: ExtractionJobStatus;
+  extractionType: ExtractionJobExtractionType;
+  totalPages: number;
+  pagesCompleted: number;
+  rowsExtracted: number;
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateExtractionJobBodyExtractionType =
+  (typeof CreateExtractionJobBodyExtractionType)[keyof typeof CreateExtractionJobBodyExtractionType];
+
+export const CreateExtractionJobBodyExtractionType = {
+  table: "table",
+  list: "list",
+  contacts: "contacts",
+  custom: "custom",
+} as const;
+
+export interface CreateExtractionJobBody {
+  name: string;
+  sourceUrl: string;
+  extractionType?: CreateExtractionJobBodyExtractionType;
+  fields?: string[];
+  /** @nullable */
+  instructions?: string | null;
+}
+
+export type ExtractionPageStatus = (typeof ExtractionPageStatus)[keyof typeof ExtractionPageStatus];
+
+export const ExtractionPageStatus = {
+  pending: "pending",
+  captured: "captured",
+  extracted: "extracted",
+  failed: "failed",
+} as const;
+
+export type ExtractionPageExtractedRowsItem = { [key: string]: unknown };
+
+export interface ExtractionPage {
+  id: number;
+  jobId: number;
+  pageUrl: string;
+  pageNumber: number;
+  status: ExtractionPageStatus;
+  extractedRows: ExtractionPageExtractedRowsItem[];
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt: string;
+}
+
+export type ExtractionJobDetailFieldMapping = {
+  fields?: string[];
+  /** @nullable */
+  instructions?: string | null;
+};
+
+export interface ExtractionJobDetail {
+  job: ExtractionJob;
+  pages: ExtractionPage[];
+  fieldMapping: ExtractionJobDetailFieldMapping;
+}
+
+export type ExtractionPreviewRowsItem = { [key: string]: unknown };
+
+export interface ExtractionPreview {
+  columns: string[];
+  rows: ExtractionPreviewRowsItem[];
+  totalRows: number;
+}
+
+export interface ExtractionStats {
+  totalJobs: number;
+  completedJobs: number;
+  totalRowsExtracted: number;
+  recentJobs: ExtractionJob[];
 }
 
 export type ListConversationsParams = {
@@ -889,8 +1004,7 @@ export type GetCallLogsParams = {
   limit?: number;
 };
 
-export type GetCallLogsDirection =
-  (typeof GetCallLogsDirection)[keyof typeof GetCallLogsDirection];
+export type GetCallLogsDirection = (typeof GetCallLogsDirection)[keyof typeof GetCallLogsDirection];
 
 export const GetCallLogsDirection = {
   inbound: "inbound",
@@ -934,3 +1048,54 @@ export type UploadKnowledgeBaseDocumentBody = {
 export type DeleteKnowledgeBaseDocument200 = {
   success?: boolean;
 };
+
+export type ListProviderConfigsParams = {
+  provider?: string;
+};
+
+export type UpsertProviderConfigBodyProvider =
+  (typeof UpsertProviderConfigBodyProvider)[keyof typeof UpsertProviderConfigBodyProvider];
+
+export const UpsertProviderConfigBodyProvider = {
+  godaddy: "godaddy",
+} as const;
+
+export type UpsertProviderConfigBodyTier =
+  (typeof UpsertProviderConfigBodyTier)[keyof typeof UpsertProviderConfigBodyTier];
+
+export const UpsertProviderConfigBodyTier = {
+  single: "single",
+  team: "team",
+  enterprise: "enterprise",
+} as const;
+
+export type UpsertProviderConfigBody = {
+  provider: UpsertProviderConfigBodyProvider;
+  tier: UpsertProviderConfigBodyTier;
+  paymentLinkUrl: string;
+};
+
+export type UpsertProviderConfig200 = {
+  success?: boolean;
+  config?: BillingProviderConfig;
+};
+
+export type GodaddyWebhookBody = { [key: string]: unknown };
+
+export type GodaddyWebhook200 = {
+  received?: boolean;
+};
+
+export type DownloadExtractionDataParams = {
+  format?: DownloadExtractionDataFormat;
+};
+
+export type DownloadExtractionDataFormat =
+  (typeof DownloadExtractionDataFormat)[keyof typeof DownloadExtractionDataFormat];
+
+export const DownloadExtractionDataFormat = {
+  csv: "csv",
+  json: "json",
+} as const;
+
+export type DownloadExtractionData200TwoItem = { [key: string]: unknown };

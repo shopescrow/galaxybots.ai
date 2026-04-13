@@ -35,6 +35,8 @@ tags:
     description: AI Receptionist voice call operations
   - name: knowledge-base
     description: Company knowledge base document management
+  - name: liberator
+    description: Data extraction bot — visual scraping with AI vision
 paths:
   /healthz:
     get:
@@ -1719,6 +1721,176 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /liberator/jobs:
+    get:
+      operationId: listExtractionJobs
+      tags: [liberator]
+      summary: List all extraction jobs
+      responses:
+        "200":
+          description: List of extraction jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExtractionJob"
+    post:
+      operationId: createExtractionJob
+      tags: [liberator]
+      summary: Create a new extraction job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExtractionJobBody"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionJob"
+
+  /liberator/jobs/{id}:
+    get:
+      operationId: getExtractionJob
+      tags: [liberator]
+      summary: Get extraction job details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job details with pages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionJobDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteExtractionJob
+      tags: [liberator]
+      summary: Delete an extraction job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /liberator/jobs/{id}/run:
+    post:
+      operationId: runExtractionJob
+      tags: [liberator]
+      summary: Start or resume an extraction job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionJob"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/jobs/{id}/download:
+    get:
+      operationId: downloadExtractionData
+      tags: [liberator]
+      summary: Download extracted data as CSV or JSON
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, json]
+            default: csv
+      responses:
+        "200":
+          description: Extracted data file
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/jobs/{id}/preview:
+    get:
+      operationId: previewExtractionData
+      tags: [liberator]
+      summary: Preview extracted data (first 50 rows)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Preview data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionPreview"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/stats:
+    get:
+      operationId: getExtractionStats
+      tags: [liberator]
+      summary: Get extraction dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionStats"
+
 components:
   schemas:
     DataExportJobResponse:
@@ -2783,3 +2955,127 @@ components:
           type: string
           format: date-time
       required: [id, clientId, title, sourceFilename, fileType, chunkCount, uploadedAt]
+
+    ExtractionJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sourceUrl:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, paused, completed, failed]
+        extractionType:
+          type: string
+          enum: [table, list, contacts, custom]
+        totalPages:
+          type: integer
+        pagesCompleted:
+          type: integer
+        rowsExtracted:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, sourceUrl, status, extractionType, totalPages, pagesCompleted, rowsExtracted, createdAt, updatedAt]
+
+    CreateExtractionJobBody:
+      type: object
+      properties:
+        name:
+          type: string
+        sourceUrl:
+          type: string
+        extractionType:
+          type: string
+          enum: [table, list, contacts, custom]
+        fields:
+          type: array
+          items:
+            type: string
+        instructions:
+          type: ["string", "null"]
+      required: [name, sourceUrl]
+
+    ExtractionPage:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        pageUrl:
+          type: string
+        pageNumber:
+          type: integer
+        status:
+          type: string
+          enum: [pending, captured, extracted, failed]
+        extractedRows:
+          type: array
+          items:
+            type: object
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, jobId, pageUrl, pageNumber, status, extractedRows, createdAt]
+
+    ExtractionJobDetail:
+      type: object
+      properties:
+        job:
+          $ref: "#/components/schemas/ExtractionJob"
+        pages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractionPage"
+        fieldMapping:
+          type: object
+          properties:
+            fields:
+              type: array
+              items:
+                type: string
+            instructions:
+              type: ["string", "null"]
+      required: [job, pages, fieldMapping]
+
+    ExtractionPreview:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: object
+        totalRows:
+          type: integer
+      required: [columns, rows, totalRows]
+
+    ExtractionStats:
+      type: object
+      properties:
+        totalJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        totalRowsExtracted:
+          type: integer
+        recentJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractionJob"
+      required: [totalJobs, completedJobs, totalRowsExtracted, recentJobs]

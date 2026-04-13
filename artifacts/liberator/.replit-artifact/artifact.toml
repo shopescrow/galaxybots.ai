@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/liberator/"
+title = "Liberator - Data Extraction Bot"
+version = "1.0.0"
+id = "artifacts/liberator"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/liberator/" ]
+localPort = 19665
+
+[services.development]
+run = "pnpm --filter @workspace/liberator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/liberator", "run", "build" ]
+publicDir = "artifacts/liberator/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19665"
+BASE_PATH = "/liberator/"

@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BotAssignmentActionMode =
-  (typeof BotAssignmentActionMode)[keyof typeof BotAssignmentActionMode];
+export type BotAssignmentActionMode = (typeof BotAssignmentActionMode)[keyof typeof BotAssignmentActionMode];
 
 export const BotAssignmentActionMode = {
   passive: "passive",

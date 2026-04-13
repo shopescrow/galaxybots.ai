@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetCallLogsDirection =
-  (typeof GetCallLogsDirection)[keyof typeof GetCallLogsDirection];
+export type GetCallLogsDirection = (typeof GetCallLogsDirection)[keyof typeof GetCallLogsDirection];
 
 export const GetCallLogsDirection = {
   inbound: "inbound",

@@ -101,6 +101,8 @@ const EXPECTED_TABLES = [
   "mission_templates",
   "mcp_servers",
   "mcp_directory_submissions",
+  "extraction_jobs",
+  "extraction_pages",
 ];
 
 async function validateDatabaseTables() {

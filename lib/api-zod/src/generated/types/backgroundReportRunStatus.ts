@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BackgroundReportRunStatus =
-  (typeof BackgroundReportRunStatus)[keyof typeof BackgroundReportRunStatus];
+export type BackgroundReportRunStatus = (typeof BackgroundReportRunStatus)[keyof typeof BackgroundReportRunStatus];
 
 export const BackgroundReportRunStatus = {
   success: "success",

@@ -9,6 +9,4 @@
 /**
  * @nullable
  */
-export type ReceptionistConfigBusinessHoursJson = {
-  [key: string]: unknown;
-} | null;
+export type ReceptionistConfigBusinessHoursJson = { [key: string]: unknown } | null;

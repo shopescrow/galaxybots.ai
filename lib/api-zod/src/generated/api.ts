@@ -74,9 +74,7 @@ export const ListConversationsResponseItem = zod.object({
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
-export const ListConversationsResponse = zod.array(
-  ListConversationsResponseItem,
-);
+export const ListConversationsResponse = zod.array(ListConversationsResponseItem);
 
 /**
  * @summary Start a new conversation
@@ -108,9 +106,7 @@ export const GetConversationMessagesResponseItem = zod.object({
   toolData: zod.object({}).passthrough().nullish(),
   createdAt: zod.date(),
 });
-export const GetConversationMessagesResponse = zod.array(
-  GetConversationMessagesResponseItem,
-);
+export const GetConversationMessagesResponse = zod.array(GetConversationMessagesResponseItem);
 
 /**
  * @summary Send a message in a conversation
@@ -142,9 +138,7 @@ export const GetBoardroomMessagesResponseItem = zod.object({
   topic: zod.string().nullish(),
   createdAt: zod.date(),
 });
-export const GetBoardroomMessagesResponse = zod.array(
-  GetBoardroomMessagesResponseItem,
-);
+export const GetBoardroomMessagesResponse = zod.array(GetBoardroomMessagesResponseItem);
 
 /**
  * @summary Post a message to the board room
@@ -300,9 +294,7 @@ export const GetJournalEntriesResponseItem = zod.object({
   boardroomHighlights: zod.array(zod.string()),
   createdAt: zod.date(),
 });
-export const GetJournalEntriesResponse = zod.array(
-  GetJournalEntriesResponseItem,
-);
+export const GetJournalEntriesResponse = zod.array(GetJournalEntriesResponseItem);
 
 /**
  * @summary List all published blog posts
@@ -393,9 +385,7 @@ export const ListPartnerReferralsResponseItem = zod.object({
   status: zod.string(),
   registeredAt: zod.date(),
 });
-export const ListPartnerReferralsResponse = zod.array(
-  ListPartnerReferralsResponseItem,
-);
+export const ListPartnerReferralsResponse = zod.array(ListPartnerReferralsResponseItem);
 
 /**
  * @summary Analyze a task and propose a bot team
@@ -521,16 +511,12 @@ export const GetTaskSessionMessagesResponseItem = zod.object({
   botTitle: zod.string().nullish(),
   role: zod.string(),
   content: zod.string(),
-  messageType: zod
-    .enum(["text", "tool_call", "tool_result"])
-    .default(getTaskSessionMessagesResponseMessageTypeDefault),
+  messageType: zod.enum(["text", "tool_call", "tool_result"]).default(getTaskSessionMessagesResponseMessageTypeDefault),
   toolData: zod.object({}).passthrough().nullish(),
   flaggedRoles: zod.array(zod.string()).optional(),
   createdAt: zod.date(),
 });
-export const GetTaskSessionMessagesResponse = zod.array(
-  GetTaskSessionMessagesResponseItem,
-);
+export const GetTaskSessionMessagesResponse = zod.array(GetTaskSessionMessagesResponseItem);
 
 /**
  * @summary Send a message in a task session
@@ -580,9 +566,7 @@ export const GetTaskSessionAlertsResponseItem = zod.object({
   suggestedBy: zod.string(),
   messageId: zod.number(),
 });
-export const GetTaskSessionAlertsResponse = zod.array(
-  GetTaskSessionAlertsResponseItem,
-);
+export const GetTaskSessionAlertsResponse = zod.array(GetTaskSessionAlertsResponseItem);
 
 /**
  * @summary Add bots to an active task session
@@ -680,9 +664,7 @@ export const SearchBotMemoriesResponseItem = zod.object({
   topic: zod.string().nullish(),
   createdAt: zod.date(),
 });
-export const SearchBotMemoriesResponse = zod.array(
-  SearchBotMemoriesResponseItem,
-);
+export const SearchBotMemoriesResponse = zod.array(SearchBotMemoriesResponseItem);
 
 /**
  * @summary Delete a specific memory
@@ -744,9 +726,7 @@ export const ListBotAssignmentsResponseItem = zod.object({
   botName: zod.string().nullish(),
   botTitle: zod.string().nullish(),
 });
-export const ListBotAssignmentsResponse = zod.array(
-  ListBotAssignmentsResponseItem,
-);
+export const ListBotAssignmentsResponse = zod.array(ListBotAssignmentsResponseItem);
 
 /**
  * @summary Create a new bot assignment
@@ -826,9 +806,7 @@ export const ListBackgroundReportsResponseItem = zod.object({
   botTitle: zod.string().nullish(),
   objective: zod.string().nullish(),
 });
-export const ListBackgroundReportsResponse = zod.array(
-  ListBackgroundReportsResponseItem,
-);
+export const ListBackgroundReportsResponse = zod.array(ListBackgroundReportsResponseItem);
 
 /**
  * @summary Push compliance data from external app
@@ -862,9 +840,7 @@ export const GetPlatformComplianceResponseItem = zod.object({
   expiresAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
-export const GetPlatformComplianceResponse = zod.array(
-  GetPlatformComplianceResponseItem,
-);
+export const GetPlatformComplianceResponse = zod.array(GetPlatformComplianceResponseItem);
 
 /**
  * @summary Get compliance API configuration
@@ -894,9 +870,7 @@ export const ListClientComplianceResponseItem = zod.object({
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
-export const ListClientComplianceResponse = zod.array(
-  ListClientComplianceResponseItem,
-);
+export const ListClientComplianceResponse = zod.array(ListClientComplianceResponseItem);
 
 /**
  * @summary Create a client compliance requirement
@@ -961,9 +935,7 @@ export const CreateReceptionistConfigBody = zod.object({
   businessHoursJson: zod.object({}).passthrough().optional(),
   knowledgeBasePrompt: zod.string().optional(),
   notificationEmail: zod.string().optional(),
-  crmType: zod
-    .enum(["hubspot", "salesforce", "custom_webhook", "none"])
-    .optional(),
+  crmType: zod.enum(["hubspot", "salesforce", "custom_webhook", "none"]).optional(),
   crmWebhookUrl: zod.string().optional(),
   crmFieldMapJson: zod.object({}).passthrough().optional(),
   isActive: zod.boolean().optional(),
@@ -1012,9 +984,7 @@ export const UpdateReceptionistConfigBody = zod.object({
   businessHoursJson: zod.object({}).passthrough().optional(),
   knowledgeBasePrompt: zod.string().optional(),
   notificationEmail: zod.string().optional(),
-  crmType: zod
-    .enum(["hubspot", "salesforce", "custom_webhook", "none"])
-    .optional(),
+  crmType: zod.enum(["hubspot", "salesforce", "custom_webhook", "none"]).optional(),
   crmWebhookUrl: zod.string().optional(),
   crmFieldMapJson: zod.object({}).passthrough().optional(),
   isActive: zod.boolean().optional(),
@@ -1090,12 +1060,7 @@ export const getCallLogsQueryLimitDefault = 20;
 
 export const GetCallLogsQueryParams = zod.object({
   configId: zod.coerce.number().optional(),
-  clientId: zod.coerce
-    .number()
-    .optional()
-    .describe(
-      "Client ID for tenant scoping (required if configId not provided)",
-    ),
+  clientId: zod.coerce.number().optional().describe("Client ID for tenant scoping (required if configId not provided)"),
   direction: zod.enum(["inbound", "outbound"]).optional(),
   crmSynced: zod.coerce.string().optional(),
   startDate: zod.date().optional(),
@@ -1148,9 +1113,7 @@ export const GetImprovementHistoryResponseItem = zod.object({
   improvementNotes: zod.string().nullish(),
   createdAt: zod.date(),
 });
-export const GetImprovementHistoryResponse = zod.array(
-  GetImprovementHistoryResponseItem,
-);
+export const GetImprovementHistoryResponse = zod.array(GetImprovementHistoryResponseItem);
 
 /**
  * @summary Twilio webhook for call status updates
@@ -1178,9 +1141,7 @@ export const ListKnowledgeBaseDocumentsResponseItem = zod.object({
   chunkCount: zod.number(),
   uploadedAt: zod.date(),
 });
-export const ListKnowledgeBaseDocumentsResponse = zod.array(
-  ListKnowledgeBaseDocumentsResponseItem,
-);
+export const ListKnowledgeBaseDocumentsResponse = zod.array(ListKnowledgeBaseDocumentsResponseItem);
 
 /**
  * @summary Upload a document to the knowledge base
@@ -1199,4 +1160,241 @@ export const DeleteKnowledgeBaseDocumentParams = zod.object({
 
 export const DeleteKnowledgeBaseDocumentResponse = zod.object({
   success: zod.boolean().optional(),
+});
+
+/**
+ * Platform admin endpoint to retrieve all configured payment link URLs. Requires bypassPayment privilege.
+ * @summary List billing provider payment link configurations
+ */
+export const ListProviderConfigsQueryParams = zod.object({
+  provider: zod.coerce.string().optional(),
+});
+
+export const ListProviderConfigsResponseItem = zod.object({
+  id: zod.number(),
+  provider: zod.string(),
+  tier: zod.string(),
+  paymentLinkUrl: zod.string(),
+  updatedBy: zod.number().optional(),
+  createdAt: zod.date().optional(),
+  updatedAt: zod.date().optional(),
+});
+export const ListProviderConfigsResponse = zod.array(ListProviderConfigsResponseItem);
+
+/**
+ * Platform admin endpoint to configure payment link URLs per tier. Currently supports GoDaddy provider. Requires bypassPayment privilege.
+ * @summary Create or update a billing provider payment link configuration
+ */
+export const UpsertProviderConfigBody = zod.object({
+  provider: zod.enum(["godaddy"]),
+  tier: zod.enum(["single", "team", "enterprise"]),
+  paymentLinkUrl: zod.string(),
+});
+
+export const UpsertProviderConfigResponse = zod.object({
+  success: zod.boolean().optional(),
+  config: zod
+    .object({
+      id: zod.number(),
+      provider: zod.string(),
+      tier: zod.string(),
+      paymentLinkUrl: zod.string(),
+      updatedBy: zod.number().optional(),
+      createdAt: zod.date().optional(),
+      updatedAt: zod.date().optional(),
+    })
+    .optional(),
+});
+
+/**
+ * Receives GoDaddy payment confirmations. Verifies HMAC signature via x-godaddy-signature header.
+ * @summary GoDaddy Payments webhook
+ */
+export const GodaddyWebhookBody = zod.object({}).passthrough();
+
+export const GodaddyWebhookResponse = zod.object({
+  received: zod.boolean().optional(),
+});
+
+/**
+ * Starts an asynchronous export of all client data. Restricted to organization owners and platform admins. Returns a job ID to track progress.
+ * @summary Initiate GDPR Subject Access Request data export
+ */
+export const StartDataExportParams = zod.object({
+  clientId: zod.coerce.number(),
+});
+
+/**
+ * @summary Check data export job status
+ */
+export const GetDataExportStatusParams = zod.object({
+  clientId: zod.coerce.number(),
+  jobId: zod.coerce.string(),
+});
+
+export const GetDataExportStatusResponse = zod.object({
+  jobId: zod.string(),
+  clientId: zod.number().optional(),
+  status: zod.enum(["pending", "processing", "completed", "failed"]),
+  downloadUrl: zod.string().optional(),
+  expiresAt: zod.date().optional(),
+  message: zod.string().optional(),
+  error: zod.string().optional(),
+});
+
+/**
+ * @summary Download completed data export
+ */
+export const DownloadDataExportParams = zod.object({
+  clientId: zod.coerce.number(),
+  jobId: zod.coerce.string(),
+});
+
+/**
+ * @summary List all extraction jobs
+ */
+export const ListExtractionJobsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  sourceUrl: zod.string(),
+  status: zod.enum(["pending", "running", "paused", "completed", "failed"]),
+  extractionType: zod.enum(["table", "list", "contacts", "custom"]),
+  totalPages: zod.number(),
+  pagesCompleted: zod.number(),
+  rowsExtracted: zod.number(),
+  errorMessage: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListExtractionJobsResponse = zod.array(ListExtractionJobsResponseItem);
+
+/**
+ * @summary Create a new extraction job
+ */
+export const CreateExtractionJobBody = zod.object({
+  name: zod.string(),
+  sourceUrl: zod.string(),
+  extractionType: zod.enum(["table", "list", "contacts", "custom"]).optional(),
+  fields: zod.array(zod.string()).optional(),
+  instructions: zod.string().nullish(),
+});
+
+/**
+ * @summary Get extraction job details
+ */
+export const GetExtractionJobParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetExtractionJobResponse = zod.object({
+  job: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    sourceUrl: zod.string(),
+    status: zod.enum(["pending", "running", "paused", "completed", "failed"]),
+    extractionType: zod.enum(["table", "list", "contacts", "custom"]),
+    totalPages: zod.number(),
+    pagesCompleted: zod.number(),
+    rowsExtracted: zod.number(),
+    errorMessage: zod.string().nullish(),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  }),
+  pages: zod.array(
+    zod.object({
+      id: zod.number(),
+      jobId: zod.number(),
+      pageUrl: zod.string(),
+      pageNumber: zod.number(),
+      status: zod.enum(["pending", "captured", "extracted", "failed"]),
+      extractedRows: zod.array(zod.object({}).passthrough()),
+      errorMessage: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+  fieldMapping: zod.object({
+    fields: zod.array(zod.string()).optional(),
+    instructions: zod.string().nullish(),
+  }),
+});
+
+/**
+ * @summary Delete an extraction job
+ */
+export const DeleteExtractionJobParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Start or resume an extraction job
+ */
+export const RunExtractionJobParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RunExtractionJobResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  sourceUrl: zod.string(),
+  status: zod.enum(["pending", "running", "paused", "completed", "failed"]),
+  extractionType: zod.enum(["table", "list", "contacts", "custom"]),
+  totalPages: zod.number(),
+  pagesCompleted: zod.number(),
+  rowsExtracted: zod.number(),
+  errorMessage: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Download extracted data as CSV or JSON
+ */
+export const DownloadExtractionDataParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const downloadExtractionDataQueryFormatDefault = `csv`;
+
+export const DownloadExtractionDataQueryParams = zod.object({
+  format: zod.enum(["csv", "json"]).default(downloadExtractionDataQueryFormatDefault),
+});
+
+export const DownloadExtractionDataResponseItem = zod.object({}).passthrough();
+export const DownloadExtractionDataResponse = zod.array(DownloadExtractionDataResponseItem);
+
+/**
+ * @summary Preview extracted data (first 50 rows)
+ */
+export const PreviewExtractionDataParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PreviewExtractionDataResponse = zod.object({
+  columns: zod.array(zod.string()),
+  rows: zod.array(zod.object({}).passthrough()),
+  totalRows: zod.number(),
+});
+
+/**
+ * @summary Get extraction dashboard stats
+ */
+export const GetExtractionStatsResponse = zod.object({
+  totalJobs: zod.number(),
+  completedJobs: zod.number(),
+  totalRowsExtracted: zod.number(),
+  recentJobs: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      sourceUrl: zod.string(),
+      status: zod.enum(["pending", "running", "paused", "completed", "failed"]),
+      extractionType: zod.enum(["table", "list", "contacts", "custom"]),
+      totalPages: zod.number(),
+      pagesCompleted: zod.number(),
+      rowsExtracted: zod.number(),
+      errorMessage: zod.string().nullish(),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
 });

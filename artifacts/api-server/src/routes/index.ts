@@ -12,6 +12,7 @@ import { registerPartnerRoutes } from "./partner";
 import { registerProspectingRoutes } from "./prospecting";
 import { registerAdminRoutes } from "./admin";
 import { registerPlatformRoutes } from "./platform";
+import { registerLiberatorRoutes } from "./liberator";
 
 const router: IRouter = Router();
 
@@ -27,5 +28,6 @@ registerComplianceRoutes(router);
 registerPartnerRoutes(router);
 registerProspectingRoutes(router);
 registerAdminRoutes(router);
+registerLiberatorRoutes(router);
 
 export default router;

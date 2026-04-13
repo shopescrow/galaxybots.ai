@@ -6,6 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateReceptionistConfigBodyBusinessHoursJson = {
-  [key: string]: unknown;
-};
+export type UpdateReceptionistConfigBodyBusinessHoursJson = { [key: string]: unknown };

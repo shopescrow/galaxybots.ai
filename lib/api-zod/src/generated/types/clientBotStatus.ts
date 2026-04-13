@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ClientBotStatus =
-  (typeof ClientBotStatus)[keyof typeof ClientBotStatus];
+export type ClientBotStatus = (typeof ClientBotStatus)[keyof typeof ClientBotStatus];
 
 export const ClientBotStatus = {
   active: "active",

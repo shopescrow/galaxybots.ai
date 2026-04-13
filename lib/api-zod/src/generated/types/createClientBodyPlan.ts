@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CreateClientBodyPlan =
-  (typeof CreateClientBodyPlan)[keyof typeof CreateClientBodyPlan];
+export type CreateClientBodyPlan = (typeof CreateClientBodyPlan)[keyof typeof CreateClientBodyPlan];
 
 export const CreateClientBodyPlan = {
   single: "single",

@@ -9,6 +9,4 @@
 /**
  * @nullable
  */
-export type ReceptionistConfigCrmFieldMapJson = {
-  [key: string]: unknown;
-} | null;
+export type ReceptionistConfigCrmFieldMapJson = { [key: string]: unknown } | null;

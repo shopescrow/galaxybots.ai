@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ReceptionistConfigCrmType =
-  (typeof ReceptionistConfigCrmType)[keyof typeof ReceptionistConfigCrmType];
+export type ReceptionistConfigCrmType = (typeof ReceptionistConfigCrmType)[keyof typeof ReceptionistConfigCrmType];
 
 export const ReceptionistConfigCrmType = {
   hubspot: "hubspot",

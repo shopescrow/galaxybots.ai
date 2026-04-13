@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BoardroomMessageRole =
-  (typeof BoardroomMessageRole)[keyof typeof BoardroomMessageRole];
+export type BoardroomMessageRole = (typeof BoardroomMessageRole)[keyof typeof BoardroomMessageRole];
 
 export const BoardroomMessageRole = {
   bot: "bot",
