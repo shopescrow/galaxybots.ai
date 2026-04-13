@@ -1,4 +1,13 @@
 `docs/GALAXYBOTS_STAGES.md` — Product stages and processes. Read before planning any new feature or task.
+`docs/PERMANENT_MEMORY_SYSTEM.md` — Permanent memory rules. Update replit.md on every significant change. Never let memory drift.
+
+# Agent Memory Rules
+- This file (`replit.md`) IS the permanent memory — it persists across all sessions and is loaded automatically.
+- **On every significant change** (new feature, removed feature, schema change, dependency change, architectural decision): update this file immediately. Do not wait until end of session.
+- **Record decisions with rationale** — not just what was done, but why.
+- **Track unresolved issues** — log open bugs, tech debt, and blockers with severity.
+- **Verify before writing** — cross-reference routes, file paths, billing tiers, and feature gates against actual code before documenting them here.
+- **Reference implementation:** `docs/memory_system_reference.py` — Python SecureMemoryManager with auto-save, versioning, encryption, compression, search, checkpoints, and rollback.
 
 # Overview
 
