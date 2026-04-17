@@ -4,7 +4,7 @@ import { db, clientIntegrationsTable, toolActivityLogTable, sessionOutcomesTable
 import { eq, and, desc } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { isRateLimitError } from "@workspace/integrations-anthropic-ai/batch";
-import pRetry from "p-retry";
+import pRetry, { AbortError } from "p-retry";
 import { decryptCredential } from "../utils/credential-encryption";
 import { retrieveMemories } from "../services/bots/memory";
 
@@ -64,7 +64,7 @@ registerTool({
           factor: 2,
           onFailedAttempt: (error) => {
             if (!isRateLimitError(error)) {
-              throw new pRetry.AbortError(
+              throw new AbortError(
                 error instanceof Error ? error : new Error(String(error))
               );
             }

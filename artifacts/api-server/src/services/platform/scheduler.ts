@@ -1,4 +1,10 @@
-import { pool } from "@workspace/db";
+import { pool, db, aeoScanRequestsTable, workflowsTable, partnersTable, partnerRegistrationsTable, partnerTierReviewLogTable, clientIntegrationsTable, bingolingoContentTable, platformApiKeysTable } from "@workspace/db";
+import { eq, and, isNotNull } from "drizzle-orm";
+import { executeWorkflow } from "../missions/workflow-engine";
+import { createNotification } from "../admin/notifications";
+import { dispatchScanToPirateMonster } from "../partner/piratemonster-client";
+
+const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 import { checkSlaBreaches } from "./jobs/check-sla-breaches";
 import { checkMorningBriefs } from "./jobs/check-morning-briefs";
 import { checkWeeklyBriefs } from "./jobs/check-weekly-briefs";
@@ -9,13 +15,9 @@ import { checkBingolingoAutoContent } from "./jobs/check-bingolingo-auto-content
 import { checkCompetitorAlerts } from "./jobs/check-competitor-alerts";
 import { checkHealthScores } from "./jobs/check-health-scores";
 import { checkWeeklyPulse } from "./jobs/check-weekly-pulse";
-import { checkContentAeoRescans } from "./jobs/check-content-aeo-rescans";
-import { checkPartnerTierCompliance } from "./jobs/check-partner-tier-compliance";
 import { checkApprovalSLAs } from "./jobs/check-approval-slas";
-import { checkScheduledWorkflows, resumePausedWorkflows } from "./jobs/check-scheduled-workflows";
+import { resumePausedWorkflows } from "./jobs/check-scheduled-workflows";
 import { checkActivationNurture } from "./jobs/check-activation-nurture";
-import { checkAeoScanQueue } from "./jobs/check-aeo-scan-queue";
-import { checkIntegrationHealth } from "./jobs/check-integration-health";
 import { checkLiberatorSyncs } from "../liberator/sync-engine";
 import { checkCrmAnomalies } from "./jobs/check-crm-anomalies";
 

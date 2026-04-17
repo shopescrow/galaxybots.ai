@@ -193,7 +193,7 @@ registerTool({
           success: false,
           prospects: [],
           error: `Search request failed after ${maxRetries} attempts (status ${response?.status ?? "unknown"})`,
-          errorCategory: "network" satisfies ProspectErrorCategory,
+          errorCategory: "network" as ProspectErrorCategory,
         };
       }
 
@@ -240,7 +240,7 @@ registerTool({
         success: false,
         prospects: [],
         error: err instanceof Error ? err.message : "Network error during search",
-        errorCategory: "network" satisfies ProspectErrorCategory,
+        errorCategory: "network" as ProspectErrorCategory,
       };
     }
 
@@ -301,7 +301,7 @@ registerTool({
             confidenceScore: 0,
             attemptCount: 1,
             socialLinks: {},
-            errorCategory: "parsing" satisfies ProspectErrorCategory,
+            errorCategory: "parsing" as ProspectErrorCategory,
             extractionNotes: "Parsing: could not extract clean company name from search result",
           }).returning();
           continue;
@@ -349,7 +349,7 @@ registerTool({
             confidenceScore: 0,
             attemptCount: 1,
             socialLinks: {},
-            errorCategory: "parsing" satisfies ProspectErrorCategory,
+            errorCategory: "parsing" as ProspectErrorCategory,
             extractionNotes: `Parsing error: ${errorMsg}`,
           });
         } catch {
@@ -401,7 +401,7 @@ registerTool({
       return {
         success: false,
         error: "Prospect not found. Provide a valid prospectId or domain.",
-        errorCategory: "not_found" satisfies ProspectErrorCategory,
+        errorCategory: "not_found" as ProspectErrorCategory,
       };
     }
 

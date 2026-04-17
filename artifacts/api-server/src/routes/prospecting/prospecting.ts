@@ -3,6 +3,7 @@ import { db, confidenceConfigsTable, prospectsTable, platformAuditLogTable } fro
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { checkWorkflowTriggers } from "../../services/missions/workflow-engine";
+import { scoreConfidence } from "../../services/prospecting/score-confidence";
 
 const router = Router();
 

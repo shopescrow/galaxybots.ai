@@ -1,4 +1,5 @@
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { OpenAI } from "@workspace/integrations-openai-ai-server";
+type ChatCompletionMessageParam = OpenAI.ChatCompletionMessageParam;
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { isRateLimitError } from "@workspace/integrations-openai-ai-server";
 import { adaptOpenAIToAnthropic } from "./prompt-adapter";

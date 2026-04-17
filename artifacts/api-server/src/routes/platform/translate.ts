@@ -26,16 +26,16 @@ router.post("/translate", async (req, res) => {
     const { texts, targetLanguage } = req.body;
 
     if (!texts || !targetLanguage) {
-      return res.status(400).json({ error: "texts and targetLanguage are required" });
+      res.status(400).json({ error: "texts and targetLanguage are required" }); return;
     }
 
     if (!SUPPORTED_LANGUAGES[targetLanguage]) {
-      return res.status(400).json({ error: `Unsupported language: ${targetLanguage}` });
+      res.status(400).json({ error: `Unsupported language: ${targetLanguage}` }); return;
     }
 
     if (targetLanguage === "en") {
       const arr = Array.isArray(texts) ? texts : [texts];
-      return res.json({ translations: arr, language: "en" });
+      res.json({ translations: arr, language: "en" }); return;
     }
 
     const langName = SUPPORTED_LANGUAGES[targetLanguage];

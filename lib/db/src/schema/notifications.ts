@@ -7,7 +7,7 @@ export const notificationsTable = pgTable("notifications", {
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   userId: integer("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   category: text("category", {
-    enum: ["prospect", "aeo", "competitor", "cost", "bot", "pipeline", "system"],
+    enum: ["prospect", "aeo", "competitor", "cost", "bot", "pipeline", "system", "approval"],
   }).notNull(),
   severity: text("severity", {
     enum: ["info", "warning", "critical"],

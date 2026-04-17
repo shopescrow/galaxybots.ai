@@ -7,7 +7,7 @@ const router = Router();
 router.get("/prospecting/stats", async (req: Request, res: Response) => {
   try {
     const clientId = req.user?.clientId;
-    if (!clientId) return res.status(403).json({ error: "Unauthorized" });
+    if (!clientId) res.status(403).json({ error: "Unauthorized" }); return;
 
     const [stats] = await db
       .select({
@@ -49,11 +49,11 @@ router.get("/prospecting/stats", async (req: Request, res: Response) => {
 
 router.get("/prospecting/jobs/:jobId/status", async (req: Request, res: Response) => {
   try {
-    const jobId = parseInt(req.params.jobId);
+    const jobId = parseInt(String(req.params.jobId));
     const [job] = await db.select().from(prospectingJobsTable).where(eq(prospectingJobsTable.id, jobId));
 
     if (!job) {
-      return res.status(404).json({ error: "Job not found" });
+      res.status(404).json({ error: "Job not found" }); return;
     }
 
     const checkpoint = (job.checkpointData as Record<string, unknown>) || {};
@@ -77,7 +77,7 @@ router.get("/prospecting/jobs/:jobId/status", async (req: Request, res: Response
 router.get("/prospecting/prospects", async (req: Request, res: Response) => {
   try {
     const clientId = req.user?.clientId;
-    if (!clientId) return res.status(403).json({ error: "Unauthorized" });
+    if (!clientId) res.status(403).json({ error: "Unauthorized" }); return;
 
     const results = await db
       .select()
@@ -95,7 +95,7 @@ router.get("/prospecting/prospects", async (req: Request, res: Response) => {
 router.get("/prospecting/jobs", async (req: Request, res: Response) => {
   try {
     const clientId = req.user?.clientId;
-    if (!clientId) return res.status(403).json({ error: "Unauthorized" });
+    if (!clientId) res.status(403).json({ error: "Unauthorized" }); return;
 
     const results = await db
       .select()

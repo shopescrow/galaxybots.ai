@@ -320,7 +320,7 @@ router.post("/documents/:id/push-notion", async (req, res): Promise<void> => {
     .where(and(eq(documentsTable.id, id), eq(documentsTable.clientId, req.user!.clientId)));
   if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
-  const { getTool } = await import("../tools/registry");
+  const { getTool } = await import("../../tools/registry");
   const createDocTool = getTool("create_document");
   if (!createDocTool) { res.status(500).json({ error: "Notion tool not available" }); return; }
 
@@ -344,7 +344,7 @@ router.post("/documents/:id/email", async (req, res): Promise<void> => {
     .where(and(eq(documentsTable.id, id), eq(documentsTable.clientId, req.user!.clientId)));
   if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
-  const { getTool } = await import("../tools/registry");
+  const { getTool } = await import("../../tools/registry");
   const emailTool = getTool("send_email");
   if (!emailTool) { res.status(500).json({ error: "Email tool not available" }); return; }
 

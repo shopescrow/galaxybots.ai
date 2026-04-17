@@ -1,4 +1,5 @@
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { OpenAI } from "@workspace/integrations-openai-ai-server";
+type ChatCompletionMessageParam = OpenAI.ChatCompletionMessageParam;
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {

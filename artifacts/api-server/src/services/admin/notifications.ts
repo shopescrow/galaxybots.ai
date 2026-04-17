@@ -6,7 +6,7 @@ import { sendPushToClient, sendPushToUser } from "./push-sender";
 export async function createNotification(payload: {
   clientId: number | null;
   userId?: number | null;
-  category: "prospect" | "aeo" | "competitor" | "cost" | "bot" | "pipeline" | "system";
+  category: "prospect" | "aeo" | "competitor" | "cost" | "bot" | "pipeline" | "system" | "approval";
   severity: "info" | "warning" | "critical";
   title: string;
   body: string;

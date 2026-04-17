@@ -30,7 +30,7 @@ router.get("/blog/:slug", async (req, res) => {
     const [post] = await db.select().from(blogPostsTable)
       .where(eq(blogPostsTable.slug, slug));
     if (!post) {
-      return res.status(404).json({ error: "Blog post not found" });
+      res.status(404).json({ error: "Blog post not found" }); return;
     }
     res.json(post);
   } catch (error) {

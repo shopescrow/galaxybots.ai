@@ -126,7 +126,7 @@ router.get("/packs", optionalAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/packs/:packId", optionalAuth, async (req, res): Promise<void> => {
-  const pack = getPackById(req.params.packId);
+  const pack = getPackById(String(req.params.packId));
   if (!pack) {
     res.status(404).json({ error: "Pack not found" });
     return;
@@ -183,7 +183,7 @@ router.post(
   authenticate,
   requireRole("owner", "admin"),
   async (req, res): Promise<void> => {
-    const pack = getPackById(req.params.packId);
+    const pack = getPackById(String(req.params.packId));
     if (!pack) {
       res.status(404).json({ error: "Pack not found" });
       return;

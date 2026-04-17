@@ -15,6 +15,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireRole } from "../../middleware/auth";
 import { llmRateLimit } from "../../middleware/rate-limit";
 import { logLlmUsage } from "../../services/analytics/llm-usage";
+import { generateCallDebrief } from "../../services/bots/call-debrief";
 
 import multer from "multer";
 import fs from "fs";

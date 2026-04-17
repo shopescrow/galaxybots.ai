@@ -341,7 +341,7 @@ router.patch("/scim/v2/Users/:id", scimAuth, async (req, res): Promise<void> => 
       .where(eq(usersTable.id, userId));
 
     if (updates.isActive === false) {
-      const { invalidateActiveStatusCache } = await import("../middleware/auth");
+      const { invalidateActiveStatusCache } = await import("../../middleware/auth");
       invalidateActiveStatusCache(userId);
       const { revokeUserSessions } = await import("./sso");
       revokeUserSessions(user.email);
@@ -402,7 +402,7 @@ router.delete("/scim/v2/Users/:id", scimAuth, async (req, res): Promise<void> =>
     .set({ isActive: false })
     .where(eq(usersTable.id, userId));
 
-  const { invalidateActiveStatusCache } = await import("../middleware/auth");
+  const { invalidateActiveStatusCache } = await import("../../middleware/auth");
   invalidateActiveStatusCache(userId);
   const { revokeUserSessions } = await import("./sso");
   revokeUserSessions(user.email);

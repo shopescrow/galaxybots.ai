@@ -1,10 +1,11 @@
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { OpenAI } from "@workspace/integrations-openai-ai-server";
+type ChatCompletionMessageParam = OpenAI.ChatCompletionMessageParam;
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { isRateLimitError } from "@workspace/integrations-openai-ai-server";
 import { getTool, getOpenAIToolDefinitions, type ToolContext } from "./registry";
 import { db, platformAuditLogTable } from "@workspace/db";
 import pLimit from "p-limit";
-import pRetry from "p-retry";
+import pRetry, { AbortError } from "p-retry";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/platform/governance";
 import { logLlmUsage } from "../services/analytics/llm-usage";
 import { isToolSandboxed, getSandboxedToolResponse } from "../services/platform/demo-sandbox";
@@ -90,7 +91,7 @@ async function executeToolWithRetry(
       async () => {
         const validated = tool.inputSchema.safeParse(parsedArgs);
         if (!validated.success) {
-          throw new pRetry.AbortError(
+          throw new AbortError(
             new Error(`Invalid input: ${validated.error.message}`)
           );
         }
@@ -98,7 +99,7 @@ async function executeToolWithRetry(
         if (tool.outputSchema) {
           const outputValidated = tool.outputSchema.safeParse(output);
           if (!outputValidated.success) {
-            throw new pRetry.AbortError(
+            throw new AbortError(
               new Error(`Tool output validation failed: ${outputValidated.error.message}`)
             );
           }
@@ -113,7 +114,7 @@ async function executeToolWithRetry(
         factor: 2,
         onFailedAttempt: (error) => {
           if (!isRateLimitError(error)) {
-            throw new pRetry.AbortError(
+            throw new AbortError(
               error instanceof Error ? error : new Error(String(error))
             );
           }
@@ -334,7 +335,7 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
           loopMessages.push({
             role: "assistant",
             content: assistantMessage.content,
-            tool_calls: assistantMessage.tool_calls,
+            tool_calls: assistantMessage.tool_calls as OpenAI.ChatCompletionMessageToolCall[],
           });
 
           const approvalId = await createPendingApproval({
@@ -396,7 +397,7 @@ export async function runAgenticLoop(options: AgenticLoopOptions): Promise<Agent
     loopMessages.push({
       role: "assistant",
       content: assistantMessage.content,
-      tool_calls: assistantMessage.tool_calls,
+      tool_calls: assistantMessage.tool_calls as OpenAI.ChatCompletionMessageToolCall[],
     });
 
     const toolResults = await Promise.all(

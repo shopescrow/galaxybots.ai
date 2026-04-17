@@ -62,7 +62,7 @@ router.get("/proposals", async (req, res): Promise<void> => {
 });
 
 router.get("/proposals/:id", async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   if (isNaN(id)) { res.status(400).json({ error: "Invalid proposal ID" }); return; }
 
   const [proposal] = await db
@@ -108,7 +108,7 @@ router.post("/proposals", requireRole("owner", "admin"), async (req, res): Promi
 });
 
 router.put("/proposals/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   if (isNaN(id)) { res.status(400).json({ error: "Invalid proposal ID" }); return; }
 
   const [existing] = await db.select().from(proposalsTable)
@@ -130,7 +130,7 @@ router.put("/proposals/:id", requireRole("owner", "admin"), async (req, res): Pr
 });
 
 router.put("/proposals/:id/sections/:sectionId", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   const sectionId = req.params.sectionId;
   if (isNaN(id)) { res.status(400).json({ error: "Invalid proposal ID" }); return; }
 
@@ -157,7 +157,7 @@ router.put("/proposals/:id/sections/:sectionId", requireRole("owner", "admin"), 
 });
 
 router.patch("/proposals/:id/status", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   if (isNaN(id)) { res.status(400).json({ error: "Invalid proposal ID" }); return; }
 
   const { status } = req.body;
@@ -183,7 +183,7 @@ router.patch("/proposals/:id/status", requireRole("owner", "admin"), async (req,
 });
 
 router.delete("/proposals/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   if (isNaN(id)) { res.status(400).json({ error: "Invalid proposal ID" }); return; }
 
   const [deleted] = await db.delete(proposalsTable)
@@ -195,7 +195,7 @@ router.delete("/proposals/:id", requireRole("owner", "admin"), async (req, res):
 });
 
 router.post("/proposals/:id/share", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   if (isNaN(id)) { res.status(400).json({ error: "Invalid proposal ID" }); return; }
 
   const [existing] = await db.select().from(proposalsTable)

@@ -156,7 +156,7 @@ router.get("/prospects", async (req: Request, res: Response) => {
   try {
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const { status, limit } = req.query;
@@ -182,7 +182,7 @@ router.get("/prospects/stats", async (req, res) => {
   try {
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const stats = await db.select({
@@ -210,7 +210,7 @@ router.get("/prospects/review-queue", async (req, res) => {
   try {
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const reviewStatus: ProspectStatus = "review_needed";
@@ -232,17 +232,17 @@ router.patch("/prospects/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
-      return res.status(400).json({ error: "Invalid prospect ID" });
+      res.status(400).json({ error: "Invalid prospect ID" }); return;
     }
 
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const parsed = PatchProspectSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten().fieldErrors });
+      res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten().fieldErrors }); return;
     }
 
     const { status, phone, email, domain, companyName, notes } = parsed.data;
@@ -250,7 +250,7 @@ router.patch("/prospects/:id", async (req, res) => {
     const [existing] = await db.select().from(prospectsTable)
       .where(and(eq(prospectsTable.id, id), eq(prospectsTable.clientId, clientId)));
     if (!existing) {
-      return res.status(404).json({ error: "Prospect not found" });
+      res.status(404).json({ error: "Prospect not found" }); return;
     }
 
     const updates: Partial<typeof prospectsTable.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
@@ -277,7 +277,7 @@ router.get("/prospects/funnel", async (req, res) => {
   try {
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const allProspects = await db.select({
@@ -351,7 +351,7 @@ router.get("/prospects/roi", async (req, res) => {
   try {
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const thirtyDaysAgo = new Date();
@@ -431,18 +431,18 @@ router.delete("/prospects/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
-      return res.status(400).json({ error: "Invalid prospect ID" });
+      res.status(400).json({ error: "Invalid prospect ID" }); return;
     }
 
     const clientId = getEffectiveClientId(req);
     if (!clientId) {
-      return res.status(403).json({ error: "Client context required" });
+      res.status(403).json({ error: "Client context required" }); return;
     }
 
     const [existing] = await db.select().from(prospectsTable)
       .where(and(eq(prospectsTable.id, id), eq(prospectsTable.clientId, clientId)));
     if (!existing) {
-      return res.status(404).json({ error: "Prospect not found" });
+      res.status(404).json({ error: "Prospect not found" }); return;
     }
 
     await db.delete(prospectsTable).where(eq(prospectsTable.id, id));

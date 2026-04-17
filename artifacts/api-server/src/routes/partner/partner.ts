@@ -11,7 +11,7 @@ router.post("/partner", requireRole("owner", "admin"), async (req, res) => {
   try {
     const { ref, partnerName, partnerLogo, primaryColor, welcomeMessage, offer, adminPassword } = req.body;
     if (!ref || !partnerName || !welcomeMessage || !adminPassword) {
-      return res.status(400).json({ error: "ref, partnerName, welcomeMessage, and adminPassword are required" });
+      res.status(400).json({ error: "ref, partnerName, welcomeMessage, and adminPassword are required" }); return;
     }
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     const [partner] = await db.insert(partnersTable).values({
@@ -35,7 +35,7 @@ router.post("/partner", requireRole("owner", "admin"), async (req, res) => {
     });
   } catch (error: any) {
     if (error?.code === "23505") {
-      return res.status(409).json({ error: "A partner with this ref already exists" });
+      res.status(409).json({ error: "A partner with this ref already exists" }); return;
     }
     console.error("Error creating partner:", error);
     res.status(500).json({ error: "Failed to create partner" });
@@ -46,7 +46,7 @@ router.get("/partner/link", async (req, res) => {
   try {
     const { ref } = req.query;
     if (!ref || typeof ref !== "string") {
-      return res.status(400).json({ error: "Partner ref is required" });
+      res.status(400).json({ error: "Partner ref is required" }); return;
     }
     const [partner] = await db
       .select()
@@ -54,7 +54,7 @@ router.get("/partner/link", async (req, res) => {
       .where(and(eq(partnersTable.ref, ref.toLowerCase()), eq(partnersTable.isActive, true)));
 
     if (!partner) {
-      return res.status(404).json({ error: "Partner not found" });
+      res.status(404).json({ error: "Partner not found" }); return;
     }
     res.json({
       ref: partner.ref,
@@ -76,7 +76,7 @@ router.post("/partner/register", async (req, res) => {
     const { partnerRef, companyName, contactName, contactEmail, plan, source } = req.body;
 
     if (!partnerRef || !companyName || !contactName || !contactEmail || !plan) {
-      return res.status(400).json({ error: "Missing required fields" });
+      res.status(400).json({ error: "Missing required fields" }); return;
     }
 
     const [partner] = await db
@@ -85,7 +85,7 @@ router.post("/partner/register", async (req, res) => {
       .where(and(eq(partnersTable.ref, partnerRef.toLowerCase()), eq(partnersTable.isActive, true)));
 
     if (!partner) {
-      return res.status(404).json({ error: "Partner not found" });
+      res.status(404).json({ error: "Partner not found" }); return;
     }
 
     const [client] = await db.insert(clientsTable).values({
@@ -130,18 +130,18 @@ router.post("/partner/admin/login", async (req, res) => {
   try {
     const { ref, password } = req.body;
     if (!ref || !password) {
-      return res.status(400).json({ error: "Partner ref and password are required" });
+      res.status(400).json({ error: "Partner ref and password are required" }); return;
     }
     const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.ref, ref.toLowerCase()));
     if (!partner || !partner.isActive) {
-      return res.status(404).json({ error: "Partner not found" });
+      res.status(404).json({ error: "Partner not found" }); return;
     }
     if (!partner.adminPasswordHash) {
-      return res.status(401).json({ error: "Partner admin not configured" });
+      res.status(401).json({ error: "Partner admin not configured" }); return;
     }
     const valid = await bcrypt.compare(password, partner.adminPasswordHash);
     if (!valid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" }); return;
     }
     res.json({
       ref: partner.ref,
@@ -162,18 +162,18 @@ router.post("/partner/:ref/clients", async (req, res) => {
     const { ref } = req.params;
     const { adminPassword } = req.body;
     if (!adminPassword) {
-      return res.status(401).json({ error: "Admin password required" });
+      res.status(401).json({ error: "Admin password required" }); return;
     }
     const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.ref, ref.toLowerCase()));
     if (!partner || !partner.isActive) {
-      return res.status(404).json({ error: "Partner not found" });
+      res.status(404).json({ error: "Partner not found" }); return;
     }
     if (!partner.adminPasswordHash) {
-      return res.status(401).json({ error: "Partner admin not configured" });
+      res.status(401).json({ error: "Partner admin not configured" }); return;
     }
     const clientsValid = await bcrypt.compare(adminPassword, partner.adminPasswordHash);
     if (!clientsValid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" }); return;
     }
     const clients = await db.select().from(partnerRegistrationsTable)
       .where(eq(partnerRegistrationsTable.partnerRef, ref.toLowerCase()))
@@ -190,11 +190,11 @@ router.post("/partner/apply", async (req, res) => {
     const { companyName, contactName, contactEmail, currentClientCount, requestedTier, resellerAgreementAccepted } = req.body;
 
     if (!companyName || !contactName || !contactEmail) {
-      return res.status(400).json({ error: "Missing required fields: companyName, contactName, contactEmail" });
+      res.status(400).json({ error: "Missing required fields: companyName, contactName, contactEmail" }); return;
     }
 
     if (!resellerAgreementAccepted) {
-      return res.status(400).json({ error: "You must accept the reseller agreement to apply" });
+      res.status(400).json({ error: "You must accept the reseller agreement to apply" }); return;
     }
 
     const validTiers = ["authorized", "certified", "elite"];
@@ -226,7 +226,7 @@ router.get("/partner/:ref/status", async (req, res) => {
       .where(eq(partnersTable.ref, ref.toLowerCase()));
 
     if (!partner) {
-      return res.status(404).json({ error: "Partner not found" });
+      res.status(404).json({ error: "Partner not found" }); return;
     }
 
     const recentLogs = await db
@@ -288,17 +288,17 @@ router.put("/partner/:ref", async (req, res) => {
       .where(eq(partnersTable.ref, ref.toLowerCase()));
 
     if (!partner || !partner.isActive) {
-      return res.status(404).json({ error: "Partner not found" });
+      res.status(404).json({ error: "Partner not found" }); return;
     }
 
     const providedPassword = password || adminPassword;
     if (partner.adminPasswordHash) {
       if (!providedPassword) {
-        return res.status(401).json({ error: "Admin password required" });
+        res.status(401).json({ error: "Admin password required" }); return;
       }
       const valid = await bcrypt.compare(providedPassword, partner.adminPasswordHash);
       if (!valid) {
-        return res.status(401).json({ error: "Invalid admin password" });
+        res.status(401).json({ error: "Invalid admin password" }); return;
       }
     }
 

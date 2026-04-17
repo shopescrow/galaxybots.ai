@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { createHmac } from "node:crypto";
 import { db, receptionistConfigsTable, clientsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendTestWebhook } from "../../services/clients/crm-adapter";
