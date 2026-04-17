@@ -1891,6 +1891,343 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExtractionStats"
 
+  /liberator/jobs/{id}/rebuild:
+    post:
+      operationId: rebuildJobAsCrm
+      tags: [liberator]
+      summary: Infer a CRM blueprint from an extraction job (creates a draft CRM)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Draft CRM created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+        "400":
+          description: Job not completed or has no rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms:
+    get:
+      operationId: listCrms
+      tags: [liberator]
+      summary: List all CRMs
+      responses:
+        "200":
+          description: List of CRMs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Crm"
+
+  /liberator/crms/{id}:
+    get:
+      operationId: getCrm
+      tags: [liberator]
+      summary: Get a CRM with its blueprint
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: CRM details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCrm
+      tags: [liberator]
+      summary: Update a CRM (rename or edit blueprint while in draft)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCrmBody"
+      responses:
+        "200":
+          description: Updated CRM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+    delete:
+      operationId: deleteCrm
+      tags: [liberator]
+      summary: Delete a CRM and all of its records
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /liberator/crms/{id}/commit:
+    post:
+      operationId: commitCrm
+      tags: [liberator]
+      summary: Load extracted rows into the CRM record store
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Commit result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmCommitResult"
+        "404":
+          description: CRM not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms/{id}/entities/{entity}/records:
+    get:
+      operationId: listCrmRecords
+      tags: [liberator]
+      summary: List records in a CRM entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [asc, desc, null]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Records page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecordsPage"
+    post:
+      operationId: createCrmRecord
+      tags: [liberator]
+      summary: Create a new record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrmRecordWriteBody"
+      responses:
+        "201":
+          description: Created record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecord"
+
+  /liberator/crms/{id}/entities/{entity}/records/{recordId}:
+    get:
+      operationId: getCrmRecord
+      tags: [liberator]
+      summary: Get a single record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecord"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCrmRecord
+      tags: [liberator]
+      summary: Update a record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrmRecordWriteBody"
+      responses:
+        "200":
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecord"
+    delete:
+      operationId: deleteCrmRecord
+      tags: [liberator]
+      summary: Delete a record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /liberator/crms/{id}/entities/{entity}/export:
+    get:
+      operationId: exportCrmEntity
+      tags: [liberator]
+      summary: Export entity records as CSV or JSON
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [csv, json, null]
+      responses:
+        "200":
+          description: Export file
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+            text/csv:
+              schema:
+                type: string
+
 components:
   schemas:
     DataExportJobResponse:
@@ -3079,3 +3416,160 @@ components:
           items:
             $ref: "#/components/schemas/ExtractionJob"
       required: [totalJobs, completedJobs, totalRowsExtracted, recentJobs]
+
+    CrmFieldDef:
+      type: object
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        type:
+          type: string
+          enum: [string, text, number, boolean, date, email, url, phone, enum]
+        required:
+          type: boolean
+        enumValues:
+          type: array
+          items:
+            type: string
+        sampleValues:
+          type: array
+          items: {}
+        sourceField:
+          type: ["string", "null"]
+      required: [name, label, type, required]
+
+    CrmEntityDef:
+      type: object
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        primaryDisplayField:
+          type: ["string", "null"]
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmFieldDef"
+      required: [name, label, fields]
+
+    CrmBlueprintDef:
+      type: object
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmEntityDef"
+      required: [entities]
+
+    Crm:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        sourceJobId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [draft, committed]
+        recordCount:
+          type: integer
+        definition:
+          $ref: "#/components/schemas/CrmBlueprintDef"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, status, recordCount, definition, createdAt, updatedAt]
+
+    CrmEntityCount:
+      type: object
+      properties:
+        entity:
+          type: string
+        count:
+          type: integer
+      required: [entity, count]
+
+    CrmDetail:
+      type: object
+      properties:
+        crm:
+          $ref: "#/components/schemas/Crm"
+        entityCounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmEntityCount"
+      required: [crm, entityCounts]
+
+    UpdateCrmBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        definition:
+          $ref: "#/components/schemas/CrmBlueprintDef"
+
+    CrmCommitResult:
+      type: object
+      properties:
+        crmId:
+          type: integer
+        recordsLoaded:
+          type: integer
+        status:
+          type: string
+      required: [crmId, recordsLoaded, status]
+
+    CrmRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        crmId:
+          type: integer
+        entityType:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, crmId, entityType, data, createdAt, updatedAt]
+
+    CrmRecordsPage:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmRecord"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [records, total, limit, offset]
+
+    CrmRecordWriteBody:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+      required: [data]

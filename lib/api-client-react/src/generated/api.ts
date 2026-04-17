@@ -43,6 +43,12 @@ import type {
   CreateExtractionJobBody,
   CreateReceptionistConfigBody,
   CreateTaskSessionBody,
+  Crm,
+  CrmCommitResult,
+  CrmDetail,
+  CrmRecord,
+  CrmRecordWriteBody,
+  CrmRecordsPage,
   DataExportJobResponse,
   DeleteBotAssignment200,
   DeleteClientCompliance200,
@@ -52,6 +58,8 @@ import type {
   DownloadExtractionDataParams,
   ErrorResponse,
   ExpandTaskSessionBody,
+  ExportCrmEntity200OneItem,
+  ExportCrmEntityParams,
   ExtractionJob,
   ExtractionJobDetail,
   ExtractionPreview,
@@ -75,6 +83,7 @@ import type {
   ListBackgroundReportsParams,
   ListBlogPostsParams,
   ListConversationsParams,
+  ListCrmRecordsParams,
   ListPartnerReferralsParams,
   ListProviderConfigsParams,
   MakeOutboundCall200,
@@ -101,6 +110,7 @@ import type {
   UpdateBotAssignmentBody,
   UpdateClientBody,
   UpdateClientComplianceBody,
+  UpdateCrmBody,
   UpdateReceptionistConfigBody,
   UploadKnowledgeBaseDocumentBody,
   UpsertProviderConfig200,
@@ -5613,6 +5623,813 @@ export function useGetExtractionStats<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetExtractionStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Infer a CRM blueprint from an extraction job (creates a draft CRM)
+ */
+export const getRebuildJobAsCrmUrl = (id: number) => {
+  return `/api/liberator/jobs/${id}/rebuild`;
+};
+
+export const rebuildJobAsCrm = async (id: number, options?: RequestInit): Promise<Crm> => {
+  return customFetch<Crm>(getRebuildJobAsCrmUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRebuildJobAsCrmMutationOptions = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof rebuildJobAsCrm>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof rebuildJobAsCrm>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["rebuildJobAsCrm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof rebuildJobAsCrm>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+
+    return rebuildJobAsCrm(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RebuildJobAsCrmMutationResult = NonNullable<Awaited<ReturnType<typeof rebuildJobAsCrm>>>;
+
+export type RebuildJobAsCrmMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Infer a CRM blueprint from an extraction job (creates a draft CRM)
+ */
+export const useRebuildJobAsCrm = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof rebuildJobAsCrm>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof rebuildJobAsCrm>>, TError, { id: number }, TContext> => {
+  return useMutation(getRebuildJobAsCrmMutationOptions(options));
+};
+
+/**
+ * @summary List all CRMs
+ */
+export const getListCrmsUrl = () => {
+  return `/api/liberator/crms`;
+};
+
+export const listCrms = async (options?: RequestInit): Promise<Crm[]> => {
+  return customFetch<Crm[]>(getListCrmsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCrmsQueryKey = () => {
+  return [`/api/liberator/crms`] as const;
+};
+
+export const getListCrmsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCrms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listCrms>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCrmsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCrms>>> = ({ signal }) =>
+    listCrms({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCrms>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCrmsQueryResult = NonNullable<Awaited<ReturnType<typeof listCrms>>>;
+export type ListCrmsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all CRMs
+ */
+
+export function useListCrms<TData = Awaited<ReturnType<typeof listCrms>>, TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listCrms>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCrmsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a CRM with its blueprint
+ */
+export const getGetCrmUrl = (id: number) => {
+  return `/api/liberator/crms/${id}`;
+};
+
+export const getCrm = async (id: number, options?: RequestInit): Promise<CrmDetail> => {
+  return customFetch<CrmDetail>(getGetCrmUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCrmQueryKey = (id: number) => {
+  return [`/api/liberator/crms/${id}`] as const;
+};
+
+export const getGetCrmQueryOptions = <TData = Awaited<ReturnType<typeof getCrm>>, TError = ErrorType<ErrorResponse>>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getCrm>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCrmQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCrm>>> = ({ signal }) =>
+    getCrm(id, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCrm>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCrmQueryResult = NonNullable<Awaited<ReturnType<typeof getCrm>>>;
+export type GetCrmQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a CRM with its blueprint
+ */
+
+export function useGetCrm<TData = Awaited<ReturnType<typeof getCrm>>, TError = ErrorType<ErrorResponse>>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getCrm>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCrmQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a CRM (rename or edit blueprint while in draft)
+ */
+export const getUpdateCrmUrl = (id: number) => {
+  return `/api/liberator/crms/${id}`;
+};
+
+export const updateCrm = async (id: number, updateCrmBody: UpdateCrmBody, options?: RequestInit): Promise<Crm> => {
+  return customFetch<Crm>(getUpdateCrmUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateCrmBody),
+  });
+};
+
+export const getUpdateCrmMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCrm>>,
+    TError,
+    { id: number; data: BodyType<UpdateCrmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCrm>>,
+  TError,
+  { id: number; data: BodyType<UpdateCrmBody> },
+  TContext
+> => {
+  const mutationKey = ["updateCrm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCrm>>,
+    { id: number; data: BodyType<UpdateCrmBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateCrm(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCrmMutationResult = NonNullable<Awaited<ReturnType<typeof updateCrm>>>;
+export type UpdateCrmMutationBody = BodyType<UpdateCrmBody>;
+export type UpdateCrmMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a CRM (rename or edit blueprint while in draft)
+ */
+export const useUpdateCrm = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCrm>>,
+    TError,
+    { id: number; data: BodyType<UpdateCrmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCrm>>,
+  TError,
+  { id: number; data: BodyType<UpdateCrmBody> },
+  TContext
+> => {
+  return useMutation(getUpdateCrmMutationOptions(options));
+};
+
+/**
+ * @summary Delete a CRM and all of its records
+ */
+export const getDeleteCrmUrl = (id: number) => {
+  return `/api/liberator/crms/${id}`;
+};
+
+export const deleteCrm = async (id: number, options?: RequestInit): Promise<void> => {
+  return customFetch<void>(getDeleteCrmUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCrmMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteCrm>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof deleteCrm>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["deleteCrm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCrm>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+
+    return deleteCrm(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCrmMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCrm>>>;
+
+export type DeleteCrmMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a CRM and all of its records
+ */
+export const useDeleteCrm = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteCrm>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof deleteCrm>>, TError, { id: number }, TContext> => {
+  return useMutation(getDeleteCrmMutationOptions(options));
+};
+
+/**
+ * @summary Load extracted rows into the CRM record store
+ */
+export const getCommitCrmUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/commit`;
+};
+
+export const commitCrm = async (id: number, options?: RequestInit): Promise<CrmCommitResult> => {
+  return customFetch<CrmCommitResult>(getCommitCrmUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCommitCrmMutationOptions = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof commitCrm>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof commitCrm>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["commitCrm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitCrm>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+
+    return commitCrm(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CommitCrmMutationResult = NonNullable<Awaited<ReturnType<typeof commitCrm>>>;
+
+export type CommitCrmMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Load extracted rows into the CRM record store
+ */
+export const useCommitCrm = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof commitCrm>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof commitCrm>>, TError, { id: number }, TContext> => {
+  return useMutation(getCommitCrmMutationOptions(options));
+};
+
+/**
+ * @summary List records in a CRM entity
+ */
+export const getListCrmRecordsUrl = (id: number, entity: string, params?: ListCrmRecordsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/liberator/crms/${id}/entities/${entity}/records?${stringifiedParams}`
+    : `/api/liberator/crms/${id}/entities/${entity}/records`;
+};
+
+export const listCrmRecords = async (
+  id: number,
+  entity: string,
+  params?: ListCrmRecordsParams,
+  options?: RequestInit,
+): Promise<CrmRecordsPage> => {
+  return customFetch<CrmRecordsPage>(getListCrmRecordsUrl(id, entity, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCrmRecordsQueryKey = (id: number, entity: string, params?: ListCrmRecordsParams) => {
+  return [`/api/liberator/crms/${id}/entities/${entity}/records`, ...(params ? [params] : [])] as const;
+};
+
+export const getListCrmRecordsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCrmRecords>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  entity: string,
+  params?: ListCrmRecordsParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCrmRecords>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCrmRecordsQueryKey(id, entity, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCrmRecords>>> = ({ signal }) =>
+    listCrmRecords(id, entity, params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!(id && entity), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCrmRecords>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCrmRecordsQueryResult = NonNullable<Awaited<ReturnType<typeof listCrmRecords>>>;
+export type ListCrmRecordsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List records in a CRM entity
+ */
+
+export function useListCrmRecords<TData = Awaited<ReturnType<typeof listCrmRecords>>, TError = ErrorType<unknown>>(
+  id: number,
+  entity: string,
+  params?: ListCrmRecordsParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCrmRecords>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCrmRecordsQueryOptions(id, entity, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new record
+ */
+export const getCreateCrmRecordUrl = (id: number, entity: string) => {
+  return `/api/liberator/crms/${id}/entities/${entity}/records`;
+};
+
+export const createCrmRecord = async (
+  id: number,
+  entity: string,
+  crmRecordWriteBody: CrmRecordWriteBody,
+  options?: RequestInit,
+): Promise<CrmRecord> => {
+  return customFetch<CrmRecord>(getCreateCrmRecordUrl(id, entity), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(crmRecordWriteBody),
+  });
+};
+
+export const getCreateCrmRecordMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCrmRecord>>,
+    TError,
+    { id: number; entity: string; data: BodyType<CrmRecordWriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCrmRecord>>,
+  TError,
+  { id: number; entity: string; data: BodyType<CrmRecordWriteBody> },
+  TContext
+> => {
+  const mutationKey = ["createCrmRecord"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCrmRecord>>,
+    { id: number; entity: string; data: BodyType<CrmRecordWriteBody> }
+  > = (props) => {
+    const { id, entity, data } = props ?? {};
+
+    return createCrmRecord(id, entity, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateCrmRecordMutationResult = NonNullable<Awaited<ReturnType<typeof createCrmRecord>>>;
+export type CreateCrmRecordMutationBody = BodyType<CrmRecordWriteBody>;
+export type CreateCrmRecordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new record
+ */
+export const useCreateCrmRecord = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCrmRecord>>,
+    TError,
+    { id: number; entity: string; data: BodyType<CrmRecordWriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createCrmRecord>>,
+  TError,
+  { id: number; entity: string; data: BodyType<CrmRecordWriteBody> },
+  TContext
+> => {
+  return useMutation(getCreateCrmRecordMutationOptions(options));
+};
+
+/**
+ * @summary Get a single record
+ */
+export const getGetCrmRecordUrl = (id: number, entity: string, recordId: number) => {
+  return `/api/liberator/crms/${id}/entities/${entity}/records/${recordId}`;
+};
+
+export const getCrmRecord = async (
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: RequestInit,
+): Promise<CrmRecord> => {
+  return customFetch<CrmRecord>(getGetCrmRecordUrl(id, entity, recordId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCrmRecordQueryKey = (id: number, entity: string, recordId: number) => {
+  return [`/api/liberator/crms/${id}/entities/${entity}/records/${recordId}`] as const;
+};
+
+export const getGetCrmRecordQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCrmRecord>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getCrmRecord>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCrmRecordQueryKey(id, entity, recordId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCrmRecord>>> = ({ signal }) =>
+    getCrmRecord(id, entity, recordId, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!(id && entity && recordId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCrmRecord>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCrmRecordQueryResult = NonNullable<Awaited<ReturnType<typeof getCrmRecord>>>;
+export type GetCrmRecordQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a single record
+ */
+
+export function useGetCrmRecord<TData = Awaited<ReturnType<typeof getCrmRecord>>, TError = ErrorType<ErrorResponse>>(
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getCrmRecord>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCrmRecordQueryOptions(id, entity, recordId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a record
+ */
+export const getUpdateCrmRecordUrl = (id: number, entity: string, recordId: number) => {
+  return `/api/liberator/crms/${id}/entities/${entity}/records/${recordId}`;
+};
+
+export const updateCrmRecord = async (
+  id: number,
+  entity: string,
+  recordId: number,
+  crmRecordWriteBody: CrmRecordWriteBody,
+  options?: RequestInit,
+): Promise<CrmRecord> => {
+  return customFetch<CrmRecord>(getUpdateCrmRecordUrl(id, entity, recordId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(crmRecordWriteBody),
+  });
+};
+
+export const getUpdateCrmRecordMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCrmRecord>>,
+    TError,
+    { id: number; entity: string; recordId: number; data: BodyType<CrmRecordWriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCrmRecord>>,
+  TError,
+  { id: number; entity: string; recordId: number; data: BodyType<CrmRecordWriteBody> },
+  TContext
+> => {
+  const mutationKey = ["updateCrmRecord"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCrmRecord>>,
+    { id: number; entity: string; recordId: number; data: BodyType<CrmRecordWriteBody> }
+  > = (props) => {
+    const { id, entity, recordId, data } = props ?? {};
+
+    return updateCrmRecord(id, entity, recordId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCrmRecordMutationResult = NonNullable<Awaited<ReturnType<typeof updateCrmRecord>>>;
+export type UpdateCrmRecordMutationBody = BodyType<CrmRecordWriteBody>;
+export type UpdateCrmRecordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a record
+ */
+export const useUpdateCrmRecord = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCrmRecord>>,
+    TError,
+    { id: number; entity: string; recordId: number; data: BodyType<CrmRecordWriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCrmRecord>>,
+  TError,
+  { id: number; entity: string; recordId: number; data: BodyType<CrmRecordWriteBody> },
+  TContext
+> => {
+  return useMutation(getUpdateCrmRecordMutationOptions(options));
+};
+
+/**
+ * @summary Delete a record
+ */
+export const getDeleteCrmRecordUrl = (id: number, entity: string, recordId: number) => {
+  return `/api/liberator/crms/${id}/entities/${entity}/records/${recordId}`;
+};
+
+export const deleteCrmRecord = async (
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteCrmRecordUrl(id, entity, recordId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCrmRecordMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCrmRecord>>,
+    TError,
+    { id: number; entity: string; recordId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCrmRecord>>,
+  TError,
+  { id: number; entity: string; recordId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteCrmRecord"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCrmRecord>>,
+    { id: number; entity: string; recordId: number }
+  > = (props) => {
+    const { id, entity, recordId } = props ?? {};
+
+    return deleteCrmRecord(id, entity, recordId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCrmRecordMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCrmRecord>>>;
+
+export type DeleteCrmRecordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a record
+ */
+export const useDeleteCrmRecord = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCrmRecord>>,
+    TError,
+    { id: number; entity: string; recordId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCrmRecord>>,
+  TError,
+  { id: number; entity: string; recordId: number },
+  TContext
+> => {
+  return useMutation(getDeleteCrmRecordMutationOptions(options));
+};
+
+/**
+ * @summary Export entity records as CSV or JSON
+ */
+export const getExportCrmEntityUrl = (id: number, entity: string, params?: ExportCrmEntityParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/liberator/crms/${id}/entities/${entity}/export?${stringifiedParams}`
+    : `/api/liberator/crms/${id}/entities/${entity}/export`;
+};
+
+export const exportCrmEntity = async (
+  id: number,
+  entity: string,
+  params?: ExportCrmEntityParams,
+  options?: RequestInit,
+): Promise<ExportCrmEntity200OneItem[] | string> => {
+  return customFetch<ExportCrmEntity200OneItem[] | string>(getExportCrmEntityUrl(id, entity, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportCrmEntityQueryKey = (id: number, entity: string, params?: ExportCrmEntityParams) => {
+  return [`/api/liberator/crms/${id}/entities/${entity}/export`, ...(params ? [params] : [])] as const;
+};
+
+export const getExportCrmEntityQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportCrmEntity>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  entity: string,
+  params?: ExportCrmEntityParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof exportCrmEntity>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportCrmEntityQueryKey(id, entity, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportCrmEntity>>> = ({ signal }) =>
+    exportCrmEntity(id, entity, params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!(id && entity), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportCrmEntity>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportCrmEntityQueryResult = NonNullable<Awaited<ReturnType<typeof exportCrmEntity>>>;
+export type ExportCrmEntityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export entity records as CSV or JSON
+ */
+
+export function useExportCrmEntity<TData = Awaited<ReturnType<typeof exportCrmEntity>>, TError = ErrorType<unknown>>(
+  id: number,
+  entity: string,
+  params?: ExportCrmEntityParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof exportCrmEntity>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportCrmEntityQueryOptions(id, entity, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

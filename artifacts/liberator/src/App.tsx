@@ -11,6 +11,10 @@ import { NewJob } from "@/pages/NewJob";
 import { JobDetail } from "@/pages/JobDetail";
 import { CostOfCaptivity } from "@/pages/CostOfCaptivity";
 import { TheReclamation } from "@/pages/TheReclamation";
+import { CrmList } from "@/pages/CrmList";
+import { CrmHome } from "@/pages/CrmHome";
+import { CrmEntity } from "@/pages/CrmEntity";
+import { CrmRecord } from "@/pages/CrmRecord";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +27,10 @@ function Router() {
         <Route path="/jobs/:id" component={JobDetail} />
         <Route path="/intel/cost-of-captivity" component={CostOfCaptivity} />
         <Route path="/intel/reclamation" component={TheReclamation} />
+        <Route path="/crms" component={CrmList} />
+        <Route path="/crms/:id/:entity/:recordId" component={CrmRecord} />
+        <Route path="/crms/:id/:entity" component={CrmEntity} />
+        <Route path="/crms/:id" component={CrmHome} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

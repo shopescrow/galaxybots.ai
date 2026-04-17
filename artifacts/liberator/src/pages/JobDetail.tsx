@@ -8,12 +8,14 @@ import {
   usePreviewExtractionData,
   getPreviewExtractionDataQueryKey,
   getListExtractionJobsQueryKey,
-  getGetExtractionStatsQueryKey
+  getGetExtractionStatsQueryKey,
+  useRebuildJobAsCrm,
+  getListCrmsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
   ArrowLeft, Play, Pause, Trash2, Download, AlertCircle, CheckCircle2, 
-  Clock, Database, LayoutList, Server, Bot, Contact2, ExternalLink, RefreshCw
+  Clock, Database, LayoutList, Server, Bot, Contact2, ExternalLink, RefreshCw, Wand2
 } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,6 +77,7 @@ export function JobDetail() {
 
   const deleteJob = useDeleteExtractionJob();
   const runJob = useRunExtractionJob();
+  const rebuild = useRebuildJobAsCrm();
 
   if (!jobId) {
     return <div>Invalid Job ID</div>;
@@ -193,6 +196,26 @@ export function JobDetail() {
         </div>
 
         <div className="flex items-center gap-3">
+          {job.status === 'completed' && job.rowsExtracted > 0 && (
+            <Button
+              onClick={() => {
+                rebuild.mutate({ id: jobId }, {
+                  onSuccess: (crm) => {
+                    toast({ title: "CRM blueprint inferred", description: "Review the schema, then commit." });
+                    queryClient.invalidateQueries({ queryKey: getListCrmsQueryKey() });
+                    setLocation(`/crms/${crm.id}`);
+                  },
+                  onError: () => toast({ title: "Rebuild failed", variant: "destructive" }),
+                });
+              }}
+              disabled={rebuild.isPending}
+              className="gap-2"
+            >
+              <Wand2 className="w-4 h-4" />
+              {rebuild.isPending ? "Inferring…" : "Rebuild as CRM"}
+            </Button>
+          )}
+
           {(job.status === 'pending' || job.status === 'failed' || job.status === 'paused' || job.status === 'completed') && (
             <Button variant="secondary" onClick={handleRun} disabled={runJob.isPending} className="gap-2">
               {job.status === 'completed' ? <RefreshCw className="w-4 h-4" /> : <Play className="w-4 h-4" />}

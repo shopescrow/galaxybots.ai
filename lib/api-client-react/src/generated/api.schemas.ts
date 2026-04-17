@@ -903,6 +903,112 @@ export interface ExtractionStats {
   recentJobs: ExtractionJob[];
 }
 
+export type CrmFieldDefType = (typeof CrmFieldDefType)[keyof typeof CrmFieldDefType];
+
+export const CrmFieldDefType = {
+  string: "string",
+  text: "text",
+  number: "number",
+  boolean: "boolean",
+  date: "date",
+  email: "email",
+  url: "url",
+  phone: "phone",
+  enum: "enum",
+} as const;
+
+export interface CrmFieldDef {
+  name: string;
+  label: string;
+  type: CrmFieldDefType;
+  required: boolean;
+  enumValues?: string[];
+  sampleValues?: unknown[];
+  /** @nullable */
+  sourceField?: string | null;
+}
+
+export interface CrmEntityDef {
+  name: string;
+  label: string;
+  /** @nullable */
+  primaryDisplayField?: string | null;
+  fields: CrmFieldDef[];
+}
+
+export interface CrmBlueprintDef {
+  entities: CrmEntityDef[];
+}
+
+export type CrmStatus = (typeof CrmStatus)[keyof typeof CrmStatus];
+
+export const CrmStatus = {
+  draft: "draft",
+  committed: "committed",
+} as const;
+
+export interface Crm {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  sourceJobId?: number | null;
+  status: CrmStatus;
+  recordCount: number;
+  definition: CrmBlueprintDef;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmEntityCount {
+  entity: string;
+  count: number;
+}
+
+export interface CrmDetail {
+  crm: Crm;
+  entityCounts: CrmEntityCount[];
+}
+
+export interface UpdateCrmBody {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  description?: string | null;
+  definition?: CrmBlueprintDef;
+}
+
+export interface CrmCommitResult {
+  crmId: number;
+  recordsLoaded: number;
+  status: string;
+}
+
+export type CrmRecordData = { [key: string]: unknown };
+
+export interface CrmRecord {
+  id: number;
+  crmId: number;
+  entityType: string;
+  data: CrmRecordData;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmRecordsPage {
+  records: CrmRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type CrmRecordWriteBodyData = { [key: string]: unknown };
+
+export interface CrmRecordWriteBody {
+  data: CrmRecordWriteBodyData;
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -1099,3 +1205,49 @@ export const DownloadExtractionDataFormat = {
 } as const;
 
 export type DownloadExtractionData200TwoItem = { [key: string]: unknown };
+
+export type ListCrmRecordsParams = {
+  /**
+   * @nullable
+   */
+  search?: string | null;
+  /**
+   * @nullable
+   */
+  sort?: string | null;
+  /**
+   * @nullable
+   */
+  order?: ListCrmRecordsOrder;
+  /**
+   * @nullable
+   */
+  limit?: number | null;
+  /**
+   * @nullable
+   */
+  offset?: number | null;
+};
+
+export type ListCrmRecordsOrder = (typeof ListCrmRecordsOrder)[keyof typeof ListCrmRecordsOrder] | null;
+
+export const ListCrmRecordsOrder = {
+  asc: "asc",
+  desc: "desc",
+} as const;
+
+export type ExportCrmEntityParams = {
+  /**
+   * @nullable
+   */
+  format?: ExportCrmEntityFormat;
+};
+
+export type ExportCrmEntityFormat = (typeof ExportCrmEntityFormat)[keyof typeof ExportCrmEntityFormat] | null;
+
+export const ExportCrmEntityFormat = {
+  csv: "csv",
+  json: "json",
+} as const;
+
+export type ExportCrmEntity200OneItem = { [key: string]: unknown };

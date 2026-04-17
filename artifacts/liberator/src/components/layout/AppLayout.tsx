@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Boxes, LayoutDashboard, Plus, Settings, TrendingDown, Crown } from "lucide-react";
+import { Boxes, LayoutDashboard, Plus, Settings, TrendingDown, Crown, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
@@ -26,6 +26,12 @@ export function AppLayout({ children }: AppLayoutProps) {
       items: [
         { name: "Dashboard", href: "/", icon: LayoutDashboard },
         { name: "New Extraction", href: "/jobs/new", icon: Plus },
+      ],
+    },
+    {
+      label: "My CRMs",
+      items: [
+        { name: "All CRMs", href: "/crms", icon: Database },
       ],
     },
     {

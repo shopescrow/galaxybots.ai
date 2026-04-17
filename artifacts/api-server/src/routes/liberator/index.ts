@@ -11,6 +11,7 @@ import {
   DeleteExtractionJobParams,
 } from "@workspace/api-zod";
 import { runExtractionForJob } from "../../services/liberator/extraction-engine";
+import { registerCrmRoutes } from "./crms";
 
 const router: IRouter = Router();
 
@@ -232,4 +233,5 @@ router.get("/liberator/stats", async (_req: Request, res: Response): Promise<voi
 
 export function registerLiberatorRoutes(parent: IRouter): void {
   parent.use(router);
+  registerCrmRoutes(parent);
 }

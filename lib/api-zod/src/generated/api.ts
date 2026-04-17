@@ -1398,3 +1398,284 @@ export const GetExtractionStatsResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Infer a CRM blueprint from an extraction job (creates a draft CRM)
+ */
+export const RebuildJobAsCrmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List all CRMs
+ */
+export const ListCrmsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["draft", "committed"]),
+  recordCount: zod.number(),
+  definition: zod.object({
+    entities: zod.array(
+      zod.object({
+        name: zod.string(),
+        label: zod.string(),
+        primaryDisplayField: zod.string().nullish(),
+        fields: zod.array(
+          zod.object({
+            name: zod.string(),
+            label: zod.string(),
+            type: zod.enum(["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"]),
+            required: zod.boolean(),
+            enumValues: zod.array(zod.string()).optional(),
+            sampleValues: zod.array(zod.unknown()).optional(),
+            sourceField: zod.string().nullish(),
+          }),
+        ),
+      }),
+    ),
+  }),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListCrmsResponse = zod.array(ListCrmsResponseItem);
+
+/**
+ * @summary Get a CRM with its blueprint
+ */
+export const GetCrmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetCrmResponse = zod.object({
+  crm: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    description: zod.string().nullish(),
+    sourceJobId: zod.number().nullish(),
+    status: zod.enum(["draft", "committed"]),
+    recordCount: zod.number(),
+    definition: zod.object({
+      entities: zod.array(
+        zod.object({
+          name: zod.string(),
+          label: zod.string(),
+          primaryDisplayField: zod.string().nullish(),
+          fields: zod.array(
+            zod.object({
+              name: zod.string(),
+              label: zod.string(),
+              type: zod.enum(["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"]),
+              required: zod.boolean(),
+              enumValues: zod.array(zod.string()).optional(),
+              sampleValues: zod.array(zod.unknown()).optional(),
+              sourceField: zod.string().nullish(),
+            }),
+          ),
+        }),
+      ),
+    }),
+    createdAt: zod.date(),
+    updatedAt: zod.date(),
+  }),
+  entityCounts: zod.array(
+    zod.object({
+      entity: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Update a CRM (rename or edit blueprint while in draft)
+ */
+export const UpdateCrmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCrmBody = zod.object({
+  name: zod.string().nullish(),
+  description: zod.string().nullish(),
+  definition: zod
+    .object({
+      entities: zod.array(
+        zod.object({
+          name: zod.string(),
+          label: zod.string(),
+          primaryDisplayField: zod.string().nullish(),
+          fields: zod.array(
+            zod.object({
+              name: zod.string(),
+              label: zod.string(),
+              type: zod.enum(["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"]),
+              required: zod.boolean(),
+              enumValues: zod.array(zod.string()).optional(),
+              sampleValues: zod.array(zod.unknown()).optional(),
+              sourceField: zod.string().nullish(),
+            }),
+          ),
+        }),
+      ),
+    })
+    .optional(),
+});
+
+export const UpdateCrmResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["draft", "committed"]),
+  recordCount: zod.number(),
+  definition: zod.object({
+    entities: zod.array(
+      zod.object({
+        name: zod.string(),
+        label: zod.string(),
+        primaryDisplayField: zod.string().nullish(),
+        fields: zod.array(
+          zod.object({
+            name: zod.string(),
+            label: zod.string(),
+            type: zod.enum(["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"]),
+            required: zod.boolean(),
+            enumValues: zod.array(zod.string()).optional(),
+            sampleValues: zod.array(zod.unknown()).optional(),
+            sourceField: zod.string().nullish(),
+          }),
+        ),
+      }),
+    ),
+  }),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a CRM and all of its records
+ */
+export const DeleteCrmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Load extracted rows into the CRM record store
+ */
+export const CommitCrmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CommitCrmResponse = zod.object({
+  crmId: zod.number(),
+  recordsLoaded: zod.number(),
+  status: zod.string(),
+});
+
+/**
+ * @summary List records in a CRM entity
+ */
+export const ListCrmRecordsParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+});
+
+export const ListCrmRecordsQueryParams = zod.object({
+  search: zod.coerce.string().nullish(),
+  sort: zod.coerce.string().nullish(),
+  order: zod.union([zod.literal("asc"), zod.literal("desc"), zod.literal(null)]).nullish(),
+  limit: zod.coerce.number().nullish(),
+  offset: zod.coerce.number().nullish(),
+});
+
+export const ListCrmRecordsResponse = zod.object({
+  records: zod.array(
+    zod.object({
+      id: zod.number(),
+      crmId: zod.number(),
+      entityType: zod.string(),
+      data: zod.record(zod.string(), zod.unknown()),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Create a new record
+ */
+export const CreateCrmRecordParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+});
+
+export const CreateCrmRecordBody = zod.object({
+  data: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Get a single record
+ */
+export const GetCrmRecordParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+  recordId: zod.coerce.number(),
+});
+
+export const GetCrmRecordResponse = zod.object({
+  id: zod.number(),
+  crmId: zod.number(),
+  entityType: zod.string(),
+  data: zod.record(zod.string(), zod.unknown()),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Update a record
+ */
+export const UpdateCrmRecordParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+  recordId: zod.coerce.number(),
+});
+
+export const UpdateCrmRecordBody = zod.object({
+  data: zod.record(zod.string(), zod.unknown()),
+});
+
+export const UpdateCrmRecordResponse = zod.object({
+  id: zod.number(),
+  crmId: zod.number(),
+  entityType: zod.string(),
+  data: zod.record(zod.string(), zod.unknown()),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a record
+ */
+export const DeleteCrmRecordParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+  recordId: zod.coerce.number(),
+});
+
+/**
+ * @summary Export entity records as CSV or JSON
+ */
+export const ExportCrmEntityParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+});
+
+export const ExportCrmEntityQueryParams = zod.object({
+  format: zod.union([zod.literal("csv"), zod.literal("json"), zod.literal(null)]).nullish(),
+});
+
+export const ExportCrmEntityResponseItem = zod.record(zod.string(), zod.unknown());
+export const ExportCrmEntityResponse = zod.array(ExportCrmEntityResponseItem);
