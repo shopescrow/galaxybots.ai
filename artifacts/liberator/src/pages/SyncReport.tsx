@@ -300,7 +300,7 @@ export function SyncReport() {
                           </tr>
                         </thead>
                         <tbody>
-                          {ch.fieldDiffs.map((fd, i) => (
+                          {ch.fieldDiffs.map((fd: { field: string; oldValue: unknown; newValue: unknown; conflictWithLocal?: boolean }, i: number) => (
                             <tr key={i} className={fd.conflictWithLocal ? "bg-destructive/10" : ""}>
                               <td className="px-2 py-1 font-mono">{fd.field}</td>
                               <td className="px-2 py-1 text-muted-foreground">{formatVal(fd.oldValue)}</td>
