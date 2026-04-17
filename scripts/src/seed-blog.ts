@@ -234,6 +234,105 @@ In 10 years, every mid-market company will have an AI executive team. GalaxyBots
     category: "Strategy",
     publishedAt: new Date("2026-03-05"),
   },
+  {
+    title: "The Reclamation: How One Company Took Back Their Data and Built Something Better",
+    slug: "the-reclamation",
+    excerpt: "A scenario story of a 150-person company trapped in a $200K/year CRM — and how they discovered that their data was theirs all along. The Liberator made the right to data portability actionable, and freedom followed.",
+    content: `# The Reclamation: How One Company Took Back Their Data and Built Something Better
+
+This is a story about a company that did the right thing for its people, its customers, and its future. It is not a heist. There is nothing illicit here. It is the story of a business owner who learned that her data belonged to her, and decided to act on that truth.
+
+We will call her Sarah.
+
+## The Setup
+
+Sarah is the Head of Revenue Operations at a 150-person company. They sell into the mid-market, support hundreds of customers, and run a small army of account executives, customer success managers, and renewals specialists.
+
+Four years ago, when the company was thirty people, they signed a CRM contract. It was the obvious choice at the time. Everyone used it. Investors expected it. Onboarding was a weekend project.
+
+Today, the bill arrives every quarter for **two hundred thousand dollars a year**. They use a fraction of the features. The schema is full of custom fields nobody remembers creating, named after employees who left in 2023. Every report requires a certified administrator. Every workflow change requires a ticket. Every integration requires a renewal of a different contract.
+
+The CRM is no longer a tool. It is a tax.
+
+## The Breaking Point
+
+The renewal email arrives on a Tuesday morning. The price has gone up **thirty-five percent**.
+
+Sarah's team runs the numbers. They could build a custom system — purpose-built for exactly how their business actually works — for less than half of what the CRM costs. The features they actually use are not complex. The features they do not use are not missed.
+
+But there is a problem. And the problem is not technical. The problem is **gravity**.
+
+Inside the CRM are four years of contacts, accounts, opportunities, activities, notes, attachments, email threads, call recordings, and a thousand small relationships between them. Forty-seven thousand records. The lifeblood of the business.
+
+The official export tool produces a flat CSV. No relationships. No attachments. No history. Just rows.
+
+The API exists, technically. It also requires a developer who understands the CRM's particular dialect of REST, rate limits that punish bulk operations, and an estimated **eight to twelve weeks** of engineering work to extract everything cleanly.
+
+## The Fear
+
+Sarah brings the proposal to the executive team. The conversation does not go the way she expected.
+
+People are afraid. They have heard the horror stories. The migration that took nine months. The lost accounts. The broken integrations. The renewals that fell through the cracks because nobody knew which deals were active. The quarter where revenue reporting simply stopped working.
+
+The CRM vendor knows this fear exists. The fear **is** the product. The features are just the wrapping paper.
+
+The team agrees to renew. For another year. At the new price. Sarah goes home that night and stares at the ceiling.
+
+## The Discovery
+
+A week later, Sarah is reading an article about GDPR enforcement actions in Europe. She follows a link to a piece on data portability. Then another. Then another.
+
+And she learns something that surprises her.
+
+Her data is **legally hers**. Not the vendor's. Hers. GDPR Article 20 names it. CCPA echoes it. A growing patchwork of state laws reinforces it. The right to data portability is not a courtesy the vendor extends. It is a right she already has.
+
+The CRM contract does not override the law. The contract cannot make her data stop being hers.
+
+A few searches later, Sarah finds **The Liberator**.
+
+The Liberator is not a scraper. It does not need API keys. It does not require a developer. It does not break terms of service, because exercising a legal right cannot break terms of service.
+
+The Liberator sees the screen the way a human user does. It logs in with Sarah's own credentials. It navigates the CRM the way her team navigates it every day. It reads the contacts, the accounts, the opportunities, the activities, the attachments, the relationships between them. It captures everything. It writes it out in a clean, structured, portable format.
+
+It is, in the most literal sense, Sarah doing what she has always been allowed to do — read her own data — at machine speed.
+
+## The Reclamation
+
+Sarah starts with the **Scout**. It is free. It is read-only. It walks the CRM and produces a complete map of what is actually inside: how many contacts, how many accounts, how many open opportunities, how many attachments, what custom fields exist, what relationships connect what. For the first time in four years, Sarah sees her own data clearly. She prints the map and pins it to her wall.
+
+Next she runs a **sandbox extraction** on fifty contacts. She picks the messiest fifty she can find — accounts with merged duplicates, contacts with attachments, opportunities with long activity histories. Four minutes later, she has a clean, structured export. Every relationship preserved. Every attachment downloaded. Every note in place. She opens it in a spreadsheet and her shoulders drop two inches.
+
+Then she runs the **full extraction**.
+
+She kicks it off on a Thursday morning. She goes to a meeting. She answers email. She has lunch. She runs a one-on-one. **Four hours later**, it is done.
+
+**Forty-seven thousand records.** Contacts, accounts, opportunities, activities, attachments, notes, custom fields, the works. Clean. Structured. Portable. Ready to import into the new system her team is building.
+
+There is no drama. There is no last-minute scramble. There is no broken integration. There is just a folder, on a drive, that contains the company's data, in a form the company can actually use.
+
+## The After
+
+Six months later, Sarah's team runs lean custom software, purpose-built for exactly how they sell, exactly how they support, exactly how they renew. The reports are written in plain SQL. The workflows are owned by the people who use them. New fields take an afternoon, not a quarter.
+
+They pay roughly **a third** of what the CRM cost. They never paid the renewal hike. The data is theirs. The system is theirs. The roadmap is theirs.
+
+The fear was real. The gravity was real. The switching costs were real. None of them were stronger than the simple fact that the data belonged to Sarah's company in the first place.
+
+## The Truth Underneath
+
+The Liberator did not give Sarah anything she did not already have. It gave her the **ability to act** on what she already had.
+
+That is the entire idea.
+
+Vendor lock-in is not a law of physics. It is a business strategy that depends on customers feeling stuck. The moment extraction becomes a Thursday afternoon instead of a twelve-week engineering project, the strategy stops working. Companies stop renewing out of fear and start renewing out of value — or they leave, with everything they came in with.
+
+Your data belongs to you. The Liberator exists to make that truth actionable. Freedom awaits everyone.
+
+[Meet The Liberator →](/liberator/)`,
+    author: "GalaxyBots Intelligence",
+    category: "Strategy",
+    publishedAt: new Date("2026-04-17"),
+  },
 ];
 
 async function seedBlog() {
