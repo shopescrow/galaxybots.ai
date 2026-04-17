@@ -1438,6 +1438,12 @@ export const ListCrmsResponseItem = zod.object({
   }),
   createdAt: zod.date(),
   updatedAt: zod.date(),
+  syncEnabled: zod.boolean(),
+  syncCadence: zod.enum(["manual", "hourly", "daily", "weekly"]),
+  syncConflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+  syncIdentityFields: zod.array(zod.string()),
+  lastSyncAt: zod.date().nullish(),
+  lastSyncStatus: zod.string().nullish(),
 });
 export const ListCrmsResponse = zod.array(ListCrmsResponseItem);
 
@@ -1478,6 +1484,12 @@ export const GetCrmResponse = zod.object({
     }),
     createdAt: zod.date(),
     updatedAt: zod.date(),
+    syncEnabled: zod.boolean(),
+    syncCadence: zod.enum(["manual", "hourly", "daily", "weekly"]),
+    syncConflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+    syncIdentityFields: zod.array(zod.string()),
+    lastSyncAt: zod.date().nullish(),
+    lastSyncStatus: zod.string().nullish(),
   }),
   entityCounts: zod.array(
     zod.object({
@@ -1550,6 +1562,12 @@ export const UpdateCrmResponse = zod.object({
   }),
   createdAt: zod.date(),
   updatedAt: zod.date(),
+  syncEnabled: zod.boolean(),
+  syncCadence: zod.enum(["manual", "hourly", "daily", "weekly"]),
+  syncConflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+  syncIdentityFields: zod.array(zod.string()),
+  lastSyncAt: zod.date().nullish(),
+  lastSyncStatus: zod.string().nullish(),
 });
 
 /**
@@ -2148,3 +2166,370 @@ export const ExportCrmEntityQueryParams = zod.object({
 
 export const ExportCrmEntityResponseItem = zod.record(zod.string(), zod.unknown());
 export const ExportCrmEntityResponse = zod.array(ExportCrmEntityResponseItem);
+
+/**
+ * @summary Update auto-sync configuration for a CRM
+ */
+export const UpdateCrmSyncConfigParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCrmSyncConfigBody = zod.object({
+  enabled: zod.boolean().nullish(),
+  cadence: zod
+    .union([
+      zod.literal("manual"),
+      zod.literal("hourly"),
+      zod.literal("daily"),
+      zod.literal("weekly"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  conflictPolicy: zod
+    .union([zod.literal("local_wins"), zod.literal("source_wins"), zod.literal("ask"), zod.literal(null)])
+    .nullish(),
+  identityFields: zod.array(zod.string()).nullish(),
+});
+
+export const UpdateCrmSyncConfigResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["draft", "committed"]),
+  recordCount: zod.number(),
+  definition: zod.object({
+    entities: zod.array(
+      zod.object({
+        name: zod.string(),
+        label: zod.string(),
+        primaryDisplayField: zod.string().nullish(),
+        fields: zod.array(
+          zod.object({
+            name: zod.string(),
+            label: zod.string(),
+            type: zod.enum(["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"]),
+            required: zod.boolean(),
+            enumValues: zod.array(zod.string()).optional(),
+            sampleValues: zod.array(zod.unknown()).optional(),
+            sourceField: zod.string().nullish(),
+          }),
+        ),
+      }),
+    ),
+  }),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+  syncEnabled: zod.boolean(),
+  syncCadence: zod.enum(["manual", "hourly", "daily", "weekly"]),
+  syncConflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+  syncIdentityFields: zod.array(zod.string()),
+  lastSyncAt: zod.date().nullish(),
+  lastSyncStatus: zod.string().nullish(),
+});
+
+/**
+ * @summary Trigger an immediate sync for this CRM (manual run)
+ */
+export const TriggerCrmSyncParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List sync runs for a CRM
+ */
+export const ListCrmSyncRunsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCrmSyncRunsQueryParams = zod.object({
+  limit: zod.coerce.number().nullish(),
+  offset: zod.coerce.number().nullish(),
+});
+
+export const ListCrmSyncRunsResponse = zod.object({
+  runs: zod.array(
+    zod.object({
+      id: zod.number(),
+      crmId: zod.number(),
+      status: zod.enum(["pending", "running", "completed", "failed", "drift_paused", "rolled_back"]),
+      triggeredBy: zod.enum(["manual", "scheduler"]),
+      conflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+      startedAt: zod.date(),
+      completedAt: zod.date().nullish(),
+      totals: zod.object({
+        new: zod.number(),
+        changed: zod.number(),
+        unchanged: zod.number(),
+        removed: zod.number(),
+        conflicts: zod.number(),
+      }),
+      schemaDrift: zod
+        .union([
+          zod.object({
+            added: zod.array(
+              zod.object({
+                name: zod.string(),
+                type: zod.string(),
+              }),
+            ),
+            removed: zod.array(
+              zod.object({
+                name: zod.string(),
+                type: zod.string(),
+              }),
+            ),
+            changed: zod.array(
+              zod.object({
+                name: zod.string(),
+                oldType: zod.string(),
+                newType: zod.string(),
+              }),
+            ),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      errorMessage: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Get a single sync run with summary totals
+ */
+export const GetCrmSyncRunParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+});
+
+export const GetCrmSyncRunResponse = zod.object({
+  id: zod.number(),
+  crmId: zod.number(),
+  status: zod.enum(["pending", "running", "completed", "failed", "drift_paused", "rolled_back"]),
+  triggeredBy: zod.enum(["manual", "scheduler"]),
+  conflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+  startedAt: zod.date(),
+  completedAt: zod.date().nullish(),
+  totals: zod.object({
+    new: zod.number(),
+    changed: zod.number(),
+    unchanged: zod.number(),
+    removed: zod.number(),
+    conflicts: zod.number(),
+  }),
+  schemaDrift: zod
+    .union([
+      zod.object({
+        added: zod.array(
+          zod.object({
+            name: zod.string(),
+            type: zod.string(),
+          }),
+        ),
+        removed: zod.array(
+          zod.object({
+            name: zod.string(),
+            type: zod.string(),
+          }),
+        ),
+        changed: zod.array(
+          zod.object({
+            name: zod.string(),
+            oldType: zod.string(),
+            newType: zod.string(),
+          }),
+        ),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  errorMessage: zod.string().nullish(),
+});
+
+/**
+ * @summary List per-record changes for a sync run
+ */
+export const ListCrmSyncChangesParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+});
+
+export const ListCrmSyncChangesQueryParams = zod.object({
+  changeType: zod
+    .union([
+      zod.literal("new"),
+      zod.literal("changed"),
+      zod.literal("unchanged"),
+      zod.literal("removed"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  decision: zod
+    .union([
+      zod.literal("pending"),
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal("auto_applied"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  limit: zod.coerce.number().nullish(),
+  offset: zod.coerce.number().nullish(),
+});
+
+export const ListCrmSyncChangesResponse = zod.object({
+  changes: zod.array(
+    zod.object({
+      id: zod.number(),
+      syncRunId: zod.number(),
+      crmId: zod.number(),
+      entityType: zod.string(),
+      changeType: zod.enum(["new", "changed", "unchanged", "removed"]),
+      identityKey: zod.string().nullish(),
+      recordId: zod.number().nullish(),
+      oldData: zod.record(zod.string(), zod.unknown()).nullish(),
+      newData: zod.record(zod.string(), zod.unknown()).nullish(),
+      fieldDiffs: zod.array(
+        zod.object({
+          field: zod.string(),
+          oldValue: zod.unknown().optional(),
+          newValue: zod.unknown().optional(),
+          conflictWithLocal: zod.boolean().nullish(),
+          localValue: zod.unknown().optional(),
+        }),
+      ),
+      hasConflicts: zod.boolean(),
+      decision: zod.enum(["pending", "approved", "rejected", "auto_applied"]),
+      decidedAt: zod.date().nullish(),
+      appliedAt: zod.date().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Approve or reject a single sync change
+ */
+export const DecideCrmSyncChangeParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+  changeId: zod.coerce.number(),
+});
+
+export const DecideCrmSyncChangeBody = zod.object({
+  decision: zod.enum(["approved", "rejected"]),
+});
+
+export const DecideCrmSyncChangeResponse = zod.object({
+  id: zod.number(),
+  syncRunId: zod.number(),
+  crmId: zod.number(),
+  entityType: zod.string(),
+  changeType: zod.enum(["new", "changed", "unchanged", "removed"]),
+  identityKey: zod.string().nullish(),
+  recordId: zod.number().nullish(),
+  oldData: zod.record(zod.string(), zod.unknown()).nullish(),
+  newData: zod.record(zod.string(), zod.unknown()).nullish(),
+  fieldDiffs: zod.array(
+    zod.object({
+      field: zod.string(),
+      oldValue: zod.unknown().optional(),
+      newValue: zod.unknown().optional(),
+      conflictWithLocal: zod.boolean().nullish(),
+      localValue: zod.unknown().optional(),
+    }),
+  ),
+  hasConflicts: zod.boolean(),
+  decision: zod.enum(["pending", "approved", "rejected", "auto_applied"]),
+  decidedAt: zod.date().nullish(),
+  appliedAt: zod.date().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Approve and apply all pending changes in a sync run
+ */
+export const ApplyAllCrmSyncChangesParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+});
+
+export const ApplyAllCrmSyncChangesResponse = zod.object({
+  applied: zod.number(),
+});
+
+/**
+ * @summary Reject all pending changes in a sync run
+ */
+export const RejectAllCrmSyncChangesParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+});
+
+export const RejectAllCrmSyncChangesResponse = zod.object({
+  rejected: zod.number(),
+});
+
+/**
+ * @summary Roll back the merges applied by this sync run
+ */
+export const RollbackCrmSyncRunParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+});
+
+export const RollbackCrmSyncRunResponse = zod.object({
+  reversed: zod.number(),
+});
+
+/**
+ * @summary Adopt the drifted source schema into the active blueprint
+ */
+export const ReblueprintCrmFromDriftParams = zod.object({
+  id: zod.coerce.number(),
+  runId: zod.coerce.number(),
+});
+
+export const ReblueprintCrmFromDriftResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["draft", "committed"]),
+  recordCount: zod.number(),
+  definition: zod.object({
+    entities: zod.array(
+      zod.object({
+        name: zod.string(),
+        label: zod.string(),
+        primaryDisplayField: zod.string().nullish(),
+        fields: zod.array(
+          zod.object({
+            name: zod.string(),
+            label: zod.string(),
+            type: zod.enum(["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"]),
+            required: zod.boolean(),
+            enumValues: zod.array(zod.string()).optional(),
+            sampleValues: zod.array(zod.unknown()).optional(),
+            sourceField: zod.string().nullish(),
+          }),
+        ),
+      }),
+    ),
+  }),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+  syncEnabled: zod.boolean(),
+  syncCadence: zod.enum(["manual", "hourly", "daily", "weekly"]),
+  syncConflictPolicy: zod.enum(["local_wins", "source_wins", "ask"]),
+  syncIdentityFields: zod.array(zod.string()),
+  lastSyncAt: zod.date().nullish(),
+  lastSyncStatus: zod.string().nullish(),
+});

@@ -7,6 +7,8 @@
  */
 import type { CrmBlueprintDef } from "./crmBlueprintDef";
 import type { CrmStatus } from "./crmStatus";
+import type { CrmSyncCadence } from "./crmSyncCadence";
+import type { CrmSyncConflictPolicy } from "./crmSyncConflictPolicy";
 
 export interface Crm {
   id: number;
@@ -20,4 +22,12 @@ export interface Crm {
   definition: CrmBlueprintDef;
   createdAt: Date;
   updatedAt: Date;
+  syncEnabled: boolean;
+  syncCadence: CrmSyncCadence;
+  syncConflictPolicy: CrmSyncConflictPolicy;
+  syncIdentityFields: string[];
+  /** @nullable */
+  lastSyncAt?: Date | null;
+  /** @nullable */
+  lastSyncStatus?: string | null;
 }

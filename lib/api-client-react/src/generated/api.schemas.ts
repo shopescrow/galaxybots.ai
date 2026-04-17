@@ -947,6 +947,23 @@ export const CrmStatus = {
   committed: "committed",
 } as const;
 
+export type CrmSyncCadence = (typeof CrmSyncCadence)[keyof typeof CrmSyncCadence];
+
+export const CrmSyncCadence = {
+  manual: "manual",
+  hourly: "hourly",
+  daily: "daily",
+  weekly: "weekly",
+} as const;
+
+export type CrmSyncConflictPolicy = (typeof CrmSyncConflictPolicy)[keyof typeof CrmSyncConflictPolicy];
+
+export const CrmSyncConflictPolicy = {
+  local_wins: "local_wins",
+  source_wins: "source_wins",
+  ask: "ask",
+} as const;
+
 export interface Crm {
   id: number;
   name: string;
@@ -959,6 +976,14 @@ export interface Crm {
   definition: CrmBlueprintDef;
   createdAt: string;
   updatedAt: string;
+  syncEnabled: boolean;
+  syncCadence: CrmSyncCadence;
+  syncConflictPolicy: CrmSyncConflictPolicy;
+  syncIdentityFields: string[];
+  /** @nullable */
+  lastSyncAt?: string | null;
+  /** @nullable */
+  lastSyncStatus?: string | null;
 }
 
 export interface CrmEntityCount {
@@ -1233,6 +1258,214 @@ export interface CrmRecordWriteBody {
   data: CrmRecordWriteBodyData;
 }
 
+/**
+ * @nullable
+ */
+export type UpdateCrmSyncConfigBodyCadence =
+  | (typeof UpdateCrmSyncConfigBodyCadence)[keyof typeof UpdateCrmSyncConfigBodyCadence]
+  | null;
+
+export const UpdateCrmSyncConfigBodyCadence = {
+  manual: "manual",
+  hourly: "hourly",
+  daily: "daily",
+  weekly: "weekly",
+} as const;
+
+/**
+ * @nullable
+ */
+export type UpdateCrmSyncConfigBodyConflictPolicy =
+  | (typeof UpdateCrmSyncConfigBodyConflictPolicy)[keyof typeof UpdateCrmSyncConfigBodyConflictPolicy]
+  | null;
+
+export const UpdateCrmSyncConfigBodyConflictPolicy = {
+  local_wins: "local_wins",
+  source_wins: "source_wins",
+  ask: "ask",
+} as const;
+
+export interface UpdateCrmSyncConfigBody {
+  /** @nullable */
+  enabled?: boolean | null;
+  /** @nullable */
+  cadence?: UpdateCrmSyncConfigBodyCadence;
+  /** @nullable */
+  conflictPolicy?: UpdateCrmSyncConfigBodyConflictPolicy;
+  /** @nullable */
+  identityFields?: string[] | null;
+}
+
+export type CrmSchemaDriftAddedItem = {
+  name: string;
+  type: string;
+};
+
+export type CrmSchemaDriftRemovedItem = {
+  name: string;
+  type: string;
+};
+
+export type CrmSchemaDriftChangedItem = {
+  name: string;
+  oldType: string;
+  newType: string;
+};
+
+export interface CrmSchemaDrift {
+  added: CrmSchemaDriftAddedItem[];
+  removed: CrmSchemaDriftRemovedItem[];
+  changed: CrmSchemaDriftChangedItem[];
+}
+
+export interface CrmSyncTotals {
+  new: number;
+  changed: number;
+  unchanged: number;
+  removed: number;
+  conflicts: number;
+}
+
+export type CrmSyncRunStatus = (typeof CrmSyncRunStatus)[keyof typeof CrmSyncRunStatus];
+
+export const CrmSyncRunStatus = {
+  pending: "pending",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+  drift_paused: "drift_paused",
+  rolled_back: "rolled_back",
+} as const;
+
+export type CrmSyncRunTriggeredBy = (typeof CrmSyncRunTriggeredBy)[keyof typeof CrmSyncRunTriggeredBy];
+
+export const CrmSyncRunTriggeredBy = {
+  manual: "manual",
+  scheduler: "scheduler",
+} as const;
+
+export type CrmSyncRunConflictPolicy = (typeof CrmSyncRunConflictPolicy)[keyof typeof CrmSyncRunConflictPolicy];
+
+export const CrmSyncRunConflictPolicy = {
+  local_wins: "local_wins",
+  source_wins: "source_wins",
+  ask: "ask",
+} as const;
+
+export interface CrmSyncRun {
+  id: number;
+  crmId: number;
+  status: CrmSyncRunStatus;
+  triggeredBy: CrmSyncRunTriggeredBy;
+  conflictPolicy: CrmSyncRunConflictPolicy;
+  startedAt: string;
+  /** @nullable */
+  completedAt?: string | null;
+  totals: CrmSyncTotals;
+  schemaDrift?: CrmSchemaDrift | null;
+  /** @nullable */
+  errorMessage?: string | null;
+}
+
+export interface CrmSyncRunsPage {
+  runs: CrmSyncRun[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CrmFieldDiff {
+  field: string;
+  oldValue?: unknown;
+  newValue?: unknown;
+  /** @nullable */
+  conflictWithLocal?: boolean | null;
+  localValue?: unknown;
+}
+
+export type CrmSyncChangeChangeType = (typeof CrmSyncChangeChangeType)[keyof typeof CrmSyncChangeChangeType];
+
+export const CrmSyncChangeChangeType = {
+  new: "new",
+  changed: "changed",
+  unchanged: "unchanged",
+  removed: "removed",
+} as const;
+
+/**
+ * @nullable
+ */
+export type CrmSyncChangeOldData = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type CrmSyncChangeNewData = { [key: string]: unknown } | null;
+
+export type CrmSyncChangeDecision = (typeof CrmSyncChangeDecision)[keyof typeof CrmSyncChangeDecision];
+
+export const CrmSyncChangeDecision = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  auto_applied: "auto_applied",
+} as const;
+
+export interface CrmSyncChange {
+  id: number;
+  syncRunId: number;
+  crmId: number;
+  entityType: string;
+  changeType: CrmSyncChangeChangeType;
+  /** @nullable */
+  identityKey?: string | null;
+  /** @nullable */
+  recordId?: number | null;
+  /** @nullable */
+  oldData?: CrmSyncChangeOldData;
+  /** @nullable */
+  newData?: CrmSyncChangeNewData;
+  fieldDiffs: CrmFieldDiff[];
+  hasConflicts: boolean;
+  decision: CrmSyncChangeDecision;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  appliedAt?: string | null;
+  createdAt: string;
+}
+
+export interface CrmSyncChangesPage {
+  changes: CrmSyncChange[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type DecideCrmSyncChangeBodyDecision =
+  (typeof DecideCrmSyncChangeBodyDecision)[keyof typeof DecideCrmSyncChangeBodyDecision];
+
+export const DecideCrmSyncChangeBodyDecision = {
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface DecideCrmSyncChangeBody {
+  decision: DecideCrmSyncChangeBodyDecision;
+}
+
+export interface CrmSyncApplyResult {
+  applied: number;
+}
+
+export interface CrmSyncRejectResult {
+  rejected: number;
+}
+
+export interface CrmSyncRollbackResult {
+  reversed: number;
+}
+
 export type ListConversationsParams = {
   /**
    * @nullable
@@ -1486,3 +1719,55 @@ export const ExportCrmEntityFormat = {
 } as const;
 
 export type ExportCrmEntity200OneItem = { [key: string]: unknown };
+
+export type ListCrmSyncRunsParams = {
+  /**
+   * @nullable
+   */
+  limit?: number | null;
+  /**
+   * @nullable
+   */
+  offset?: number | null;
+};
+
+export type ListCrmSyncChangesParams = {
+  /**
+   * @nullable
+   */
+  changeType?: ListCrmSyncChangesChangeType;
+  /**
+   * @nullable
+   */
+  decision?: ListCrmSyncChangesDecision;
+  /**
+   * @nullable
+   */
+  limit?: number | null;
+  /**
+   * @nullable
+   */
+  offset?: number | null;
+};
+
+export type ListCrmSyncChangesChangeType =
+  | (typeof ListCrmSyncChangesChangeType)[keyof typeof ListCrmSyncChangesChangeType]
+  | null;
+
+export const ListCrmSyncChangesChangeType = {
+  new: "new",
+  changed: "changed",
+  unchanged: "unchanged",
+  removed: "removed",
+} as const;
+
+export type ListCrmSyncChangesDecision =
+  | (typeof ListCrmSyncChangesDecision)[keyof typeof ListCrmSyncChangesDecision]
+  | null;
+
+export const ListCrmSyncChangesDecision = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  auto_applied: "auto_applied",
+} as const;

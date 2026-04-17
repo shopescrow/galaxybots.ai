@@ -2376,6 +2376,292 @@ paths:
               schema:
                 type: string
 
+  /liberator/crms/{id}/sync-config:
+    patch:
+      operationId: updateCrmSyncConfig
+      tags: [liberator]
+      summary: Update auto-sync configuration for a CRM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCrmSyncConfigBody"
+      responses:
+        "200":
+          description: Updated CRM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+
+  /liberator/crms/{id}/sync:
+    post:
+      operationId: triggerCrmSync
+      tags: [liberator]
+      summary: Trigger an immediate sync for this CRM (manual run)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Sync started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRun"
+        "400":
+          description: Bad request (CRM not committed, no source job, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms/{id}/syncs:
+    get:
+      operationId: listCrmSyncRuns
+      tags: [liberator]
+      summary: List sync runs for a CRM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Sync runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRunsPage"
+
+  /liberator/crms/{id}/syncs/{runId}:
+    get:
+      operationId: getCrmSyncRun
+      tags: [liberator]
+      summary: Get a single sync run with summary totals
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sync run detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRun"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms/{id}/syncs/{runId}/changes:
+    get:
+      operationId: listCrmSyncChanges
+      tags: [liberator]
+      summary: List per-record changes for a sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: changeType
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [new, changed, unchanged, removed, null]
+        - name: decision
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [pending, approved, rejected, auto_applied, null]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Changes page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncChangesPage"
+
+  /liberator/crms/{id}/syncs/{runId}/changes/{changeId}:
+    patch:
+      operationId: decideCrmSyncChange
+      tags: [liberator]
+      summary: Approve or reject a single sync change
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: changeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideCrmSyncChangeBody"
+      responses:
+        "200":
+          description: Updated change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncChange"
+
+  /liberator/crms/{id}/syncs/{runId}/apply:
+    post:
+      operationId: applyAllCrmSyncChanges
+      tags: [liberator]
+      summary: Approve and apply all pending changes in a sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncApplyResult"
+
+  /liberator/crms/{id}/syncs/{runId}/reject:
+    post:
+      operationId: rejectAllCrmSyncChanges
+      tags: [liberator]
+      summary: Reject all pending changes in a sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reject result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRejectResult"
+
+  /liberator/crms/{id}/syncs/{runId}/rollback:
+    post:
+      operationId: rollbackCrmSyncRun
+      tags: [liberator]
+      summary: Roll back the merges applied by this sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rollback result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRollbackResult"
+
+  /liberator/crms/{id}/syncs/{runId}/reblueprint:
+    post:
+      operationId: reblueprintCrmFromDrift
+      tags: [liberator]
+      summary: Adopt the drifted source schema into the active blueprint
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated CRM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+
 components:
   schemas:
     DataExportJobResponse:
@@ -3636,7 +3922,24 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, name, status, recordCount, definition, createdAt, updatedAt]
+        syncEnabled:
+          type: boolean
+        syncCadence:
+          type: string
+          enum: [manual, hourly, daily, weekly]
+        syncConflictPolicy:
+          type: string
+          enum: [local_wins, source_wins, ask]
+        syncIdentityFields:
+          type: array
+          items:
+            type: string
+        lastSyncAt:
+          type: ["string", "null"]
+          format: date-time
+        lastSyncStatus:
+          type: ["string", "null"]
+      required: [id, name, status, recordCount, definition, createdAt, updatedAt, syncEnabled, syncCadence, syncConflictPolicy, syncIdentityFields]
 
     CrmEntityCount:
       type: object
@@ -3986,3 +4289,189 @@ components:
           type: object
           additionalProperties: true
       required: [data]
+
+    UpdateCrmSyncConfigBody:
+      type: object
+      properties:
+        enabled:
+          type: ["boolean", "null"]
+        cadence:
+          type: ["string", "null"]
+          enum: [manual, hourly, daily, weekly, null]
+        conflictPolicy:
+          type: ["string", "null"]
+          enum: [local_wins, source_wins, ask, null]
+        identityFields:
+          type: ["array", "null"]
+          items:
+            type: string
+
+    CrmSchemaDrift:
+      type: object
+      properties:
+        added:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string }
+            required: [name, type]
+        removed:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string }
+            required: [name, type]
+        changed:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              oldType: { type: string }
+              newType: { type: string }
+            required: [name, oldType, newType]
+      required: [added, removed, changed]
+
+    CrmSyncTotals:
+      type: object
+      properties:
+        new: { type: integer }
+        changed: { type: integer }
+        unchanged: { type: integer }
+        removed: { type: integer }
+        conflicts: { type: integer }
+      required: [new, changed, unchanged, removed, conflicts]
+
+    CrmSyncRun:
+      type: object
+      properties:
+        id: { type: integer }
+        crmId: { type: integer }
+        status:
+          type: string
+          enum: [pending, running, completed, failed, drift_paused, rolled_back]
+        triggeredBy:
+          type: string
+          enum: [manual, scheduler]
+        conflictPolicy:
+          type: string
+          enum: [local_wins, source_wins, ask]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        totals:
+          $ref: "#/components/schemas/CrmSyncTotals"
+        schemaDrift:
+          oneOf:
+            - $ref: "#/components/schemas/CrmSchemaDrift"
+            - type: "null"
+        errorMessage:
+          type: ["string", "null"]
+      required: [id, crmId, status, triggeredBy, conflictPolicy, startedAt, totals]
+
+    CrmSyncRunsPage:
+      type: object
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmSyncRun"
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+      required: [runs, total, limit, offset]
+
+    CrmFieldDiff:
+      type: object
+      properties:
+        field: { type: string }
+        oldValue: {}
+        newValue: {}
+        conflictWithLocal:
+          type: ["boolean", "null"]
+        localValue: {}
+      required: [field]
+
+    CrmSyncChange:
+      type: object
+      properties:
+        id: { type: integer }
+        syncRunId: { type: integer }
+        crmId: { type: integer }
+        entityType: { type: string }
+        changeType:
+          type: string
+          enum: [new, changed, unchanged, removed]
+        identityKey:
+          type: ["string", "null"]
+        recordId:
+          type: ["integer", "null"]
+        oldData:
+          type: ["object", "null"]
+          additionalProperties: true
+        newData:
+          type: ["object", "null"]
+          additionalProperties: true
+        fieldDiffs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmFieldDiff"
+        hasConflicts: { type: boolean }
+        decision:
+          type: string
+          enum: [pending, approved, rejected, auto_applied]
+        decidedAt:
+          type: ["string", "null"]
+          format: date-time
+        appliedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, syncRunId, crmId, entityType, changeType, fieldDiffs, hasConflicts, decision, createdAt]
+
+    CrmSyncChangesPage:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmSyncChange"
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+      required: [changes, total, limit, offset]
+
+    DecideCrmSyncChangeBody:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+      required: [decision]
+
+    CrmSyncApplyResult:
+      type: object
+      properties:
+        applied: { type: integer }
+      required: [applied]
+
+    CrmSyncRejectResult:
+      type: object
+      properties:
+        rejected: { type: integer }
+      required: [rejected]
+
+    CrmSyncRollbackResult:
+      type: object
+      properties:
+        reversed: { type: integer }
+      required: [reversed]

@@ -16,6 +16,8 @@ import { CrmHome } from "@/pages/CrmHome";
 import { CrmPipeline } from "@/pages/CrmPipeline";
 import { CrmEntity } from "@/pages/CrmEntity";
 import { CrmRecord } from "@/pages/CrmRecord";
+import { SyncHistory } from "@/pages/SyncHistory";
+import { SyncReport } from "@/pages/SyncReport";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +32,8 @@ function Router() {
         <Route path="/intel/reclamation" component={TheReclamation} />
         <Route path="/crms" component={CrmList} />
         <Route path="/crms/:id/pipeline" component={CrmPipeline} />
+        <Route path="/crms/:id/syncs/:runId" component={SyncReport} />
+        <Route path="/crms/:id/syncs" component={SyncHistory} />
         <Route path="/crms/:id/:entity/:recordId" component={CrmRecord} />
         <Route path="/crms/:id/:entity" component={CrmEntity} />
         <Route path="/crms/:id" component={CrmHome} />

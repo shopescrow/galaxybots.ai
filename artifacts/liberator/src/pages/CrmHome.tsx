@@ -6,6 +6,9 @@ import {
   useUpdateCrm,
   useCommitCrm,
   getListCrmsQueryKey,
+  useUpdateCrmSyncConfig,
+  useTriggerCrmSync,
+  getListCrmSyncRunsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -19,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, Save, Database, Rocket, Plus, Trash2, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, Database, Rocket, Plus, Trash2, FileText, RefreshCw, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { CrmBlueprintDef, CrmEntityDef, CrmFieldDef } from "@workspace/api-client-react";
 
@@ -39,6 +42,8 @@ export function CrmHome() {
 
   const update = useUpdateCrm();
   const commit = useCommitCrm();
+  const updateSyncConfig = useUpdateCrmSyncConfig();
+  const triggerSync = useTriggerCrmSync();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -212,6 +217,121 @@ export function CrmHome() {
           </div>
         </CardContent>
       </Card>
+
+      {!isDraft && (
+        <Card className="border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-primary" /> Continuous Sync
+                </CardTitle>
+                <CardDescription>
+                  Automatically re-extract from the source and reconcile new, changed, and removed records.
+                  {crm.lastSyncAt && (
+                    <> Last sync: {new Date(crm.lastSyncAt).toLocaleString()}{crm.lastSyncStatus ? ` (${crm.lastSyncStatus})` : ""}.</>
+                  )}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href={`/crms/${crmId}/syncs`}>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <History className="w-4 h-4" /> History
+                  </Button>
+                </Link>
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  onClick={() =>
+                    triggerSync.mutate(
+                      { id: crmId },
+                      {
+                        onSuccess: (run) => {
+                          toast({ title: "Sync started" });
+                          qc.invalidateQueries({ queryKey: getGetCrmQueryKey(crmId) });
+                          qc.invalidateQueries({ queryKey: getListCrmSyncRunsQueryKey(crmId, {}) });
+                          if (run?.id) setLocation(`/crms/${crmId}/syncs/${run.id}`);
+                        },
+                        onError: (err) => {
+                          const msg = (err as { error?: string } | undefined)?.error ?? "Sync failed to start";
+                          toast({ title: "Sync failed", description: msg, variant: "destructive" });
+                        },
+                      },
+                    )
+                  }
+                  disabled={triggerSync.isPending}
+                >
+                  <RefreshCw className={`w-4 h-4 ${triggerSync.isPending ? "animate-spin" : ""}`} /> Sync Now
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Auto-sync</Label>
+              <Select
+                value={crm.syncEnabled ? "enabled" : "disabled"}
+                onValueChange={(v) => {
+                  updateSyncConfig.mutate(
+                    { id: crmId, data: { enabled: v === "enabled" } },
+                    {
+                      onSuccess: () => {
+                        toast({ title: "Sync setting updated" });
+                        qc.invalidateQueries({ queryKey: getGetCrmQueryKey(crmId) });
+                      },
+                    },
+                  );
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="disabled">Off</SelectItem>
+                  <SelectItem value="enabled">On</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Cadence</Label>
+              <Select
+                value={crm.syncCadence}
+                onValueChange={(v) => {
+                  updateSyncConfig.mutate(
+                    { id: crmId, data: { cadence: v as "manual" | "hourly" | "daily" | "weekly" } },
+                    { onSuccess: () => qc.invalidateQueries({ queryKey: getGetCrmQueryKey(crmId) }) },
+                  );
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual only</SelectItem>
+                  <SelectItem value="hourly">Hourly</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Conflict policy</Label>
+              <Select
+                value={crm.syncConflictPolicy}
+                onValueChange={(v) => {
+                  updateSyncConfig.mutate(
+                    { id: crmId, data: { conflictPolicy: v as "local_wins" | "source_wins" | "ask" } },
+                    { onSuccess: () => qc.invalidateQueries({ queryKey: getGetCrmQueryKey(crmId) }) },
+                  );
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="local_wins">Keep my edits (local wins)</SelectItem>
+                  <SelectItem value="source_wins">Source overrides (source wins)</SelectItem>
+                  <SelectItem value="ask">Always ask</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {bp.entities.map((entity, ei) => (
         <Card key={entity.name} className="border-border">

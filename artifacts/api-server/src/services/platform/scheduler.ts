@@ -16,6 +16,7 @@ import { checkScheduledWorkflows, resumePausedWorkflows } from "./jobs/check-sch
 import { checkActivationNurture } from "./jobs/check-activation-nurture";
 import { checkAeoScanQueue } from "./jobs/check-aeo-scan-queue";
 import { checkIntegrationHealth } from "./jobs/check-integration-health";
+import { checkLiberatorSyncs } from "../liberator/sync-engine";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -44,6 +45,7 @@ const mediumFreqJobs: Job[] = [
   { name: "health scores", fn: checkHealthScores },
   { name: "weekly briefings", fn: checkWeeklyBriefings },
   { name: "weekly pulse", fn: checkWeeklyPulse },
+  { name: "Liberator continuous sync", fn: async () => { await checkLiberatorSyncs(); } },
 ];
 
 const lowFreqJobs: Job[] = [

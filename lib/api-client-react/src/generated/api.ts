@@ -48,7 +48,15 @@ import type {
   CrmRecord,
   CrmRecordWriteBody,
   CrmRecordsPage,
+  CrmSyncApplyResult,
+  CrmSyncChange,
+  CrmSyncChangesPage,
+  CrmSyncRejectResult,
+  CrmSyncRollbackResult,
+  CrmSyncRun,
+  CrmSyncRunsPage,
   DataExportJobResponse,
+  DecideCrmSyncChangeBody,
   DeleteBotAssignment200,
   DeleteClientCompliance200,
   DeleteKnowledgeBaseDocument200,
@@ -84,6 +92,8 @@ import type {
   ListBlogPostsParams,
   ListConversationsParams,
   ListCrmRecordsParams,
+  ListCrmSyncChangesParams,
+  ListCrmSyncRunsParams,
   ListPartnerReferralsParams,
   ListProviderConfigsParams,
   MakeOutboundCall200,
@@ -115,6 +125,7 @@ import type {
   UpdateClientComplianceBody,
   UpdateClustersBody,
   UpdateCrmBody,
+  UpdateCrmSyncConfigBody,
   UpdateLinksBody,
   UpdateReceptionistConfigBody,
   UpdateRecipeBody,
@@ -6896,3 +6907,735 @@ export function useExportCrmEntity<TData = Awaited<ReturnType<typeof exportCrmEn
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update auto-sync configuration for a CRM
+ */
+export const getUpdateCrmSyncConfigUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/sync-config`;
+};
+
+export const updateCrmSyncConfig = async (
+  id: number,
+  updateCrmSyncConfigBody: UpdateCrmSyncConfigBody,
+  options?: RequestInit,
+): Promise<Crm> => {
+  return customFetch<Crm>(getUpdateCrmSyncConfigUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateCrmSyncConfigBody),
+  });
+};
+
+export const getUpdateCrmSyncConfigMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCrmSyncConfig>>,
+    TError,
+    { id: number; data: BodyType<UpdateCrmSyncConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCrmSyncConfig>>,
+  TError,
+  { id: number; data: BodyType<UpdateCrmSyncConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["updateCrmSyncConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCrmSyncConfig>>,
+    { id: number; data: BodyType<UpdateCrmSyncConfigBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateCrmSyncConfig(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCrmSyncConfigMutationResult = NonNullable<Awaited<ReturnType<typeof updateCrmSyncConfig>>>;
+export type UpdateCrmSyncConfigMutationBody = BodyType<UpdateCrmSyncConfigBody>;
+export type UpdateCrmSyncConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update auto-sync configuration for a CRM
+ */
+export const useUpdateCrmSyncConfig = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCrmSyncConfig>>,
+    TError,
+    { id: number; data: BodyType<UpdateCrmSyncConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCrmSyncConfig>>,
+  TError,
+  { id: number; data: BodyType<UpdateCrmSyncConfigBody> },
+  TContext
+> => {
+  return useMutation(getUpdateCrmSyncConfigMutationOptions(options));
+};
+
+/**
+ * @summary Trigger an immediate sync for this CRM (manual run)
+ */
+export const getTriggerCrmSyncUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/sync`;
+};
+
+export const triggerCrmSync = async (id: number, options?: RequestInit): Promise<CrmSyncRun> => {
+  return customFetch<CrmSyncRun>(getTriggerCrmSyncUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getTriggerCrmSyncMutationOptions = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof triggerCrmSync>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof triggerCrmSync>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["triggerCrmSync"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof triggerCrmSync>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+
+    return triggerCrmSync(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TriggerCrmSyncMutationResult = NonNullable<Awaited<ReturnType<typeof triggerCrmSync>>>;
+
+export type TriggerCrmSyncMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trigger an immediate sync for this CRM (manual run)
+ */
+export const useTriggerCrmSync = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof triggerCrmSync>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof triggerCrmSync>>, TError, { id: number }, TContext> => {
+  return useMutation(getTriggerCrmSyncMutationOptions(options));
+};
+
+/**
+ * @summary List sync runs for a CRM
+ */
+export const getListCrmSyncRunsUrl = (id: number, params?: ListCrmSyncRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/liberator/crms/${id}/syncs?${stringifiedParams}`
+    : `/api/liberator/crms/${id}/syncs`;
+};
+
+export const listCrmSyncRuns = async (
+  id: number,
+  params?: ListCrmSyncRunsParams,
+  options?: RequestInit,
+): Promise<CrmSyncRunsPage> => {
+  return customFetch<CrmSyncRunsPage>(getListCrmSyncRunsUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCrmSyncRunsQueryKey = (id: number, params?: ListCrmSyncRunsParams) => {
+  return [`/api/liberator/crms/${id}/syncs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListCrmSyncRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCrmSyncRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: ListCrmSyncRunsParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCrmSyncRuns>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCrmSyncRunsQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCrmSyncRuns>>> = ({ signal }) =>
+    listCrmSyncRuns(id, params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCrmSyncRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCrmSyncRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listCrmSyncRuns>>>;
+export type ListCrmSyncRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List sync runs for a CRM
+ */
+
+export function useListCrmSyncRuns<TData = Awaited<ReturnType<typeof listCrmSyncRuns>>, TError = ErrorType<unknown>>(
+  id: number,
+  params?: ListCrmSyncRunsParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCrmSyncRuns>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCrmSyncRunsQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a single sync run with summary totals
+ */
+export const getGetCrmSyncRunUrl = (id: number, runId: number) => {
+  return `/api/liberator/crms/${id}/syncs/${runId}`;
+};
+
+export const getCrmSyncRun = async (id: number, runId: number, options?: RequestInit): Promise<CrmSyncRun> => {
+  return customFetch<CrmSyncRun>(getGetCrmSyncRunUrl(id, runId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCrmSyncRunQueryKey = (id: number, runId: number) => {
+  return [`/api/liberator/crms/${id}/syncs/${runId}`] as const;
+};
+
+export const getGetCrmSyncRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCrmSyncRun>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getCrmSyncRun>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCrmSyncRunQueryKey(id, runId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCrmSyncRun>>> = ({ signal }) =>
+    getCrmSyncRun(id, runId, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!(id && runId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCrmSyncRun>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCrmSyncRunQueryResult = NonNullable<Awaited<ReturnType<typeof getCrmSyncRun>>>;
+export type GetCrmSyncRunQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a single sync run with summary totals
+ */
+
+export function useGetCrmSyncRun<TData = Awaited<ReturnType<typeof getCrmSyncRun>>, TError = ErrorType<ErrorResponse>>(
+  id: number,
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getCrmSyncRun>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCrmSyncRunQueryOptions(id, runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List per-record changes for a sync run
+ */
+export const getListCrmSyncChangesUrl = (id: number, runId: number, params?: ListCrmSyncChangesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/liberator/crms/${id}/syncs/${runId}/changes?${stringifiedParams}`
+    : `/api/liberator/crms/${id}/syncs/${runId}/changes`;
+};
+
+export const listCrmSyncChanges = async (
+  id: number,
+  runId: number,
+  params?: ListCrmSyncChangesParams,
+  options?: RequestInit,
+): Promise<CrmSyncChangesPage> => {
+  return customFetch<CrmSyncChangesPage>(getListCrmSyncChangesUrl(id, runId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCrmSyncChangesQueryKey = (id: number, runId: number, params?: ListCrmSyncChangesParams) => {
+  return [`/api/liberator/crms/${id}/syncs/${runId}/changes`, ...(params ? [params] : [])] as const;
+};
+
+export const getListCrmSyncChangesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCrmSyncChanges>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  runId: number,
+  params?: ListCrmSyncChangesParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCrmSyncChanges>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCrmSyncChangesQueryKey(id, runId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCrmSyncChanges>>> = ({ signal }) =>
+    listCrmSyncChanges(id, runId, params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!(id && runId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCrmSyncChanges>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCrmSyncChangesQueryResult = NonNullable<Awaited<ReturnType<typeof listCrmSyncChanges>>>;
+export type ListCrmSyncChangesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List per-record changes for a sync run
+ */
+
+export function useListCrmSyncChanges<
+  TData = Awaited<ReturnType<typeof listCrmSyncChanges>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  runId: number,
+  params?: ListCrmSyncChangesParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCrmSyncChanges>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCrmSyncChangesQueryOptions(id, runId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve or reject a single sync change
+ */
+export const getDecideCrmSyncChangeUrl = (id: number, runId: number, changeId: number) => {
+  return `/api/liberator/crms/${id}/syncs/${runId}/changes/${changeId}`;
+};
+
+export const decideCrmSyncChange = async (
+  id: number,
+  runId: number,
+  changeId: number,
+  decideCrmSyncChangeBody: DecideCrmSyncChangeBody,
+  options?: RequestInit,
+): Promise<CrmSyncChange> => {
+  return customFetch<CrmSyncChange>(getDecideCrmSyncChangeUrl(id, runId, changeId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(decideCrmSyncChangeBody),
+  });
+};
+
+export const getDecideCrmSyncChangeMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof decideCrmSyncChange>>,
+    TError,
+    { id: number; runId: number; changeId: number; data: BodyType<DecideCrmSyncChangeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof decideCrmSyncChange>>,
+  TError,
+  { id: number; runId: number; changeId: number; data: BodyType<DecideCrmSyncChangeBody> },
+  TContext
+> => {
+  const mutationKey = ["decideCrmSyncChange"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof decideCrmSyncChange>>,
+    { id: number; runId: number; changeId: number; data: BodyType<DecideCrmSyncChangeBody> }
+  > = (props) => {
+    const { id, runId, changeId, data } = props ?? {};
+
+    return decideCrmSyncChange(id, runId, changeId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DecideCrmSyncChangeMutationResult = NonNullable<Awaited<ReturnType<typeof decideCrmSyncChange>>>;
+export type DecideCrmSyncChangeMutationBody = BodyType<DecideCrmSyncChangeBody>;
+export type DecideCrmSyncChangeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve or reject a single sync change
+ */
+export const useDecideCrmSyncChange = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof decideCrmSyncChange>>,
+    TError,
+    { id: number; runId: number; changeId: number; data: BodyType<DecideCrmSyncChangeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof decideCrmSyncChange>>,
+  TError,
+  { id: number; runId: number; changeId: number; data: BodyType<DecideCrmSyncChangeBody> },
+  TContext
+> => {
+  return useMutation(getDecideCrmSyncChangeMutationOptions(options));
+};
+
+/**
+ * @summary Approve and apply all pending changes in a sync run
+ */
+export const getApplyAllCrmSyncChangesUrl = (id: number, runId: number) => {
+  return `/api/liberator/crms/${id}/syncs/${runId}/apply`;
+};
+
+export const applyAllCrmSyncChanges = async (
+  id: number,
+  runId: number,
+  options?: RequestInit,
+): Promise<CrmSyncApplyResult> => {
+  return customFetch<CrmSyncApplyResult>(getApplyAllCrmSyncChangesUrl(id, runId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getApplyAllCrmSyncChangesMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyAllCrmSyncChanges>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyAllCrmSyncChanges>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  const mutationKey = ["applyAllCrmSyncChanges"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyAllCrmSyncChanges>>,
+    { id: number; runId: number }
+  > = (props) => {
+    const { id, runId } = props ?? {};
+
+    return applyAllCrmSyncChanges(id, runId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyAllCrmSyncChangesMutationResult = NonNullable<Awaited<ReturnType<typeof applyAllCrmSyncChanges>>>;
+
+export type ApplyAllCrmSyncChangesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve and apply all pending changes in a sync run
+ */
+export const useApplyAllCrmSyncChanges = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyAllCrmSyncChanges>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyAllCrmSyncChanges>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  return useMutation(getApplyAllCrmSyncChangesMutationOptions(options));
+};
+
+/**
+ * @summary Reject all pending changes in a sync run
+ */
+export const getRejectAllCrmSyncChangesUrl = (id: number, runId: number) => {
+  return `/api/liberator/crms/${id}/syncs/${runId}/reject`;
+};
+
+export const rejectAllCrmSyncChanges = async (
+  id: number,
+  runId: number,
+  options?: RequestInit,
+): Promise<CrmSyncRejectResult> => {
+  return customFetch<CrmSyncRejectResult>(getRejectAllCrmSyncChangesUrl(id, runId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRejectAllCrmSyncChangesMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectAllCrmSyncChanges>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectAllCrmSyncChanges>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  const mutationKey = ["rejectAllCrmSyncChanges"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectAllCrmSyncChanges>>,
+    { id: number; runId: number }
+  > = (props) => {
+    const { id, runId } = props ?? {};
+
+    return rejectAllCrmSyncChanges(id, runId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RejectAllCrmSyncChangesMutationResult = NonNullable<Awaited<ReturnType<typeof rejectAllCrmSyncChanges>>>;
+
+export type RejectAllCrmSyncChangesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reject all pending changes in a sync run
+ */
+export const useRejectAllCrmSyncChanges = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectAllCrmSyncChanges>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rejectAllCrmSyncChanges>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  return useMutation(getRejectAllCrmSyncChangesMutationOptions(options));
+};
+
+/**
+ * @summary Roll back the merges applied by this sync run
+ */
+export const getRollbackCrmSyncRunUrl = (id: number, runId: number) => {
+  return `/api/liberator/crms/${id}/syncs/${runId}/rollback`;
+};
+
+export const rollbackCrmSyncRun = async (
+  id: number,
+  runId: number,
+  options?: RequestInit,
+): Promise<CrmSyncRollbackResult> => {
+  return customFetch<CrmSyncRollbackResult>(getRollbackCrmSyncRunUrl(id, runId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRollbackCrmSyncRunMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rollbackCrmSyncRun>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rollbackCrmSyncRun>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  const mutationKey = ["rollbackCrmSyncRun"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof rollbackCrmSyncRun>>, { id: number; runId: number }> = (
+    props,
+  ) => {
+    const { id, runId } = props ?? {};
+
+    return rollbackCrmSyncRun(id, runId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RollbackCrmSyncRunMutationResult = NonNullable<Awaited<ReturnType<typeof rollbackCrmSyncRun>>>;
+
+export type RollbackCrmSyncRunMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Roll back the merges applied by this sync run
+ */
+export const useRollbackCrmSyncRun = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rollbackCrmSyncRun>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rollbackCrmSyncRun>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  return useMutation(getRollbackCrmSyncRunMutationOptions(options));
+};
+
+/**
+ * @summary Adopt the drifted source schema into the active blueprint
+ */
+export const getReblueprintCrmFromDriftUrl = (id: number, runId: number) => {
+  return `/api/liberator/crms/${id}/syncs/${runId}/reblueprint`;
+};
+
+export const reblueprintCrmFromDrift = async (id: number, runId: number, options?: RequestInit): Promise<Crm> => {
+  return customFetch<Crm>(getReblueprintCrmFromDriftUrl(id, runId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getReblueprintCrmFromDriftMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reblueprintCrmFromDrift>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reblueprintCrmFromDrift>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  const mutationKey = ["reblueprintCrmFromDrift"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reblueprintCrmFromDrift>>,
+    { id: number; runId: number }
+  > = (props) => {
+    const { id, runId } = props ?? {};
+
+    return reblueprintCrmFromDrift(id, runId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReblueprintCrmFromDriftMutationResult = NonNullable<Awaited<ReturnType<typeof reblueprintCrmFromDrift>>>;
+
+export type ReblueprintCrmFromDriftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Adopt the drifted source schema into the active blueprint
+ */
+export const useReblueprintCrmFromDrift = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reblueprintCrmFromDrift>>,
+    TError,
+    { id: number; runId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reblueprintCrmFromDrift>>,
+  TError,
+  { id: number; runId: number },
+  TContext
+> => {
+  return useMutation(getReblueprintCrmFromDriftMutationOptions(options));
+};

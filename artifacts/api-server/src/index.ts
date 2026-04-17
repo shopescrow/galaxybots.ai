@@ -105,6 +105,8 @@ const EXPECTED_TABLES = [
   "extraction_pages",
   "crm_blueprints",
   "crm_records",
+  "crm_sync_runs",
+  "crm_sync_changes",
 ];
 
 async function ensureCrmTables() {
@@ -158,6 +160,58 @@ async function ensureCrmTables() {
       );
       CREATE INDEX IF NOT EXISTS "idx_rebuild_jobs_crm" ON "rebuild_jobs"("crm_id");
       CREATE INDEX IF NOT EXISTS "idx_rebuild_jobs_status" ON "rebuild_jobs"("status");
+
+      ALTER TABLE "crm_blueprints"
+        ADD COLUMN IF NOT EXISTS "sync_enabled" boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS "sync_cadence" text NOT NULL DEFAULT 'manual',
+        ADD COLUMN IF NOT EXISTS "sync_conflict_policy" text NOT NULL DEFAULT 'local_wins',
+        ADD COLUMN IF NOT EXISTS "sync_identity_fields" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS "last_sync_at" timestamp with time zone,
+        ADD COLUMN IF NOT EXISTS "last_sync_status" text;
+      CREATE INDEX IF NOT EXISTS "crm_blueprints_sync_due_idx" ON "crm_blueprints"("sync_enabled", "last_sync_at");
+
+      ALTER TABLE "crm_records"
+        ADD COLUMN IF NOT EXISTS "identity_key" text,
+        ADD COLUMN IF NOT EXISTS "source_data" jsonb,
+        ADD COLUMN IF NOT EXISTS "last_synced_at" timestamp with time zone,
+        ADD COLUMN IF NOT EXISTS "user_modified_at" timestamp with time zone;
+      CREATE INDEX IF NOT EXISTS "crm_records_identity_idx" ON "crm_records"("crm_id", "entity_type", "identity_key");
+
+      CREATE TABLE IF NOT EXISTS "crm_sync_runs" (
+        "id" serial PRIMARY KEY,
+        "crm_id" integer NOT NULL REFERENCES "crm_blueprints"("id") ON DELETE CASCADE,
+        "status" text NOT NULL DEFAULT 'pending',
+        "triggered_by" text NOT NULL DEFAULT 'manual',
+        "conflict_policy" text NOT NULL DEFAULT 'local_wins',
+        "started_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "completed_at" timestamp with time zone,
+        "totals" jsonb NOT NULL DEFAULT '{"new":0,"changed":0,"unchanged":0,"removed":0,"conflicts":0}'::jsonb,
+        "schema_drift" jsonb,
+        "error_message" text,
+        "rollback_of_run_id" integer
+      );
+      CREATE INDEX IF NOT EXISTS "crm_sync_runs_crm_idx" ON "crm_sync_runs"("crm_id", "started_at");
+
+      CREATE TABLE IF NOT EXISTS "crm_sync_changes" (
+        "id" serial PRIMARY KEY,
+        "sync_run_id" integer NOT NULL REFERENCES "crm_sync_runs"("id") ON DELETE CASCADE,
+        "crm_id" integer NOT NULL,
+        "entity_type" text NOT NULL,
+        "change_type" text NOT NULL,
+        "identity_key" text,
+        "record_id" integer,
+        "old_data" jsonb,
+        "new_data" jsonb,
+        "field_diffs" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "has_conflicts" boolean NOT NULL DEFAULT false,
+        "decision" text NOT NULL DEFAULT 'pending',
+        "decided_at" timestamp with time zone,
+        "applied_at" timestamp with time zone,
+        "reverse_snapshot" jsonb,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS "crm_sync_changes_run_idx" ON "crm_sync_changes"("sync_run_id");
+      CREATE INDEX IF NOT EXISTS "crm_sync_changes_record_idx" ON "crm_sync_changes"("record_id");
     `);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
