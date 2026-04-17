@@ -1,18 +1,43 @@
 import { Link, useLocation } from "wouter";
-import { Boxes, LayoutDashboard, Plus, Settings } from "lucide-react";
+import { Boxes, LayoutDashboard, Plus, Settings, TrendingDown, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
 
-  const navigation = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "New Extraction", href: "/jobs/new", icon: Plus },
+  const navGroups: NavGroup[] = [
+    {
+      label: "Command Center",
+      items: [
+        { name: "Dashboard", href: "/", icon: LayoutDashboard },
+        { name: "New Extraction", href: "/jobs/new", icon: Plus },
+      ],
+    },
+    {
+      label: "Intel",
+      items: [
+        { name: "Cost of Captivity", href: "/intel/cost-of-captivity", icon: TrendingDown },
+        { name: "The Reclamation", href: "/intel/reclamation", icon: Crown },
+      ],
+    },
   ];
+
+  const navigation = navGroups.flatMap((g) => g.items);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -23,28 +48,32 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
           <span className="font-bold text-lg tracking-tight">Liberator</span>
         </div>
-        <div className="flex-1 py-6 px-4 space-y-1">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">
-            Command Center
-          </div>
-          {navigation.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.name}
-              </Link>
-            );
-          })}
+        <div className="flex-1 py-6 px-4 space-y-6">
+          {navGroups.map((group) => (
+            <div key={group.label} className="space-y-1">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
+                {group.label}
+              </div>
+              {group.items.map((item) => {
+                const isActive = location === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </div>
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground cursor-pointer rounded-md hover:bg-secondary transition-colors">

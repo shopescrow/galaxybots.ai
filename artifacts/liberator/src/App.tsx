@@ -9,6 +9,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Dashboard } from "@/pages/Dashboard";
 import { NewJob } from "@/pages/NewJob";
 import { JobDetail } from "@/pages/JobDetail";
+import { CostOfCaptivity } from "@/pages/CostOfCaptivity";
+import { TheReclamation } from "@/pages/TheReclamation";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +21,8 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/jobs/new" component={NewJob} />
         <Route path="/jobs/:id" component={JobDetail} />
+        <Route path="/intel/cost-of-captivity" component={CostOfCaptivity} />
+        <Route path="/intel/reclamation" component={TheReclamation} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
