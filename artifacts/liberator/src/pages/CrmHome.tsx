@@ -21,25 +21,10 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, Save, Database, Rocket, Plus, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import type { CrmBlueprintDef, CrmEntityDef, CrmFieldDef } from "@workspace/api-client-react";
 
 const FIELD_TYPES = ["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"] as const;
-
-type FieldDef = {
-  name: string;
-  label: string;
-  type: typeof FIELD_TYPES[number];
-  required: boolean;
-  enumValues?: string[];
-  sampleValues?: unknown[];
-  sourceField?: string | null;
-};
-type EntityDef = {
-  name: string;
-  label: string;
-  primaryDisplayField?: string | null;
-  fields: FieldDef[];
-};
-type Blueprint = { entities: EntityDef[] };
+type FieldType = CrmFieldDef["type"];
 
 export function CrmHome() {
   const { id } = useParams();
@@ -57,13 +42,13 @@ export function CrmHome() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [bp, setBp] = useState<Blueprint>({ entities: [] });
+  const [bp, setBp] = useState<CrmBlueprintDef>({ entities: [] });
 
   useEffect(() => {
     if (data?.crm) {
       setName(data.crm.name);
       setDescription(data.crm.description ?? "");
-      setBp(data.crm.definition as unknown as Blueprint);
+      setBp(data.crm.definition);
     }
   }, [data?.crm?.id]);
 
@@ -82,9 +67,9 @@ export function CrmHome() {
   const isDraft = crm.status === "draft";
   const countMap = new Map(entityCounts.map((e) => [e.entity, e.count]));
 
-  const updateField = (entityIdx: number, fieldIdx: number, patch: Partial<FieldDef>) => {
+  const updateField = (entityIdx: number, fieldIdx: number, patch: Partial<CrmFieldDef>) => {
     setBp((prev) => {
-      const next = structuredClone(prev) as Blueprint;
+      const next: CrmBlueprintDef = structuredClone(prev);
       next.entities[entityIdx].fields[fieldIdx] = {
         ...next.entities[entityIdx].fields[fieldIdx],
         ...patch,
@@ -94,14 +79,14 @@ export function CrmHome() {
   };
   const removeField = (entityIdx: number, fieldIdx: number) => {
     setBp((prev) => {
-      const next = structuredClone(prev) as Blueprint;
+      const next: CrmBlueprintDef = structuredClone(prev);
       next.entities[entityIdx].fields.splice(fieldIdx, 1);
       return next;
     });
   };
   const addField = (entityIdx: number) => {
     setBp((prev) => {
-      const next = structuredClone(prev) as Blueprint;
+      const next: CrmBlueprintDef = structuredClone(prev);
       next.entities[entityIdx].fields.push({
         name: `field_${next.entities[entityIdx].fields.length + 1}`,
         label: "New Field",
@@ -111,9 +96,9 @@ export function CrmHome() {
       return next;
     });
   };
-  const updateEntity = (entityIdx: number, patch: Partial<EntityDef>) => {
+  const updateEntity = (entityIdx: number, patch: Partial<CrmEntityDef>) => {
     setBp((prev) => {
-      const next = structuredClone(prev) as Blueprint;
+      const next: CrmBlueprintDef = structuredClone(prev);
       next.entities[entityIdx] = { ...next.entities[entityIdx], ...patch };
       return next;
     });
@@ -121,7 +106,7 @@ export function CrmHome() {
 
   const handleSave = () => {
     update.mutate(
-      { id: crmId, data: { name, description, definition: bp as never } },
+      { id: crmId, data: { name, description, definition: bp } },
       {
         onSuccess: () => {
           toast({ title: "Blueprint saved" });
@@ -136,7 +121,7 @@ export function CrmHome() {
   const handleCommit = () => {
     // First save current edits, then commit
     update.mutate(
-      { id: crmId, data: { name, description, definition: bp as never } },
+      { id: crmId, data: { name, description, definition: bp } },
       {
         onSuccess: () => {
           commit.mutate(
@@ -287,7 +272,7 @@ export function CrmHome() {
                       </td>
                       <td className="px-3 py-2">
                         {isDraft ? (
-                          <Select value={f.type} onValueChange={(v) => updateField(ei, fi, { type: v as FieldDef["type"] })}>
+                          <Select value={f.type} onValueChange={(v) => updateField(ei, fi, { type: v as FieldType })}>
                             <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {FIELD_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
