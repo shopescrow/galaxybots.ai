@@ -226,6 +226,44 @@ export interface DryRunRow {
   needsReview: boolean;
 }
 
+export interface SavedViewDSL {
+  kind: "query";
+  entity: string;
+  filters: Array<{ field: string; op: string; value?: unknown }>;
+  sort?: { field: string; order: "asc" | "desc" } | null;
+  limit?: number | null;
+  aggregate?: { op: "count" | "sum" | "avg" | "min" | "max"; field?: string | null; groupBy?: string | null } | null;
+  project?: string[] | null;
+  output: "table" | "chart" | "summary";
+}
+
+export const crmSavedViewsTable = pgTable("crm_saved_views", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  question: text("question"),
+  dsl: jsonb("dsl").$type<SavedViewDSL>().notNull(),
+  pinned: boolean("pinned").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("crm_saved_views_crm_idx").on(table.crmId),
+]);
+
+export const crmInsightsTable = pgTable("crm_insights", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id"),
+  kind: text("kind").notNull(),
+  severity: text("severity", { enum: ["info", "warn", "alert"] }).notNull().default("info"),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({} as Record<string, unknown>),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("crm_insights_crm_idx").on(table.crmId),
+  index("crm_insights_observed_idx").on(table.crmId, table.observedAt),
+]);
+
 export const rebuildJobsTable = pgTable("rebuild_jobs", {
   id: serial("id").primaryKey(),
   crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),

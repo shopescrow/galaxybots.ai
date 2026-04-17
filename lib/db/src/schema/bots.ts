@@ -19,6 +19,7 @@ export const botsTable = pgTable("bots", {
   isAvailable: boolean("is_available").notNull().default(true),
   isAiGenerated: boolean("is_ai_generated").notNull().default(false),
   tenantId: integer("tenant_id"),
+  linkedCrmId: integer("linked_crm_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

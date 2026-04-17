@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, Save, Database, Rocket, Plus, Trash2, FileText, RefreshCw, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CrmAskCard } from "@/components/CrmAskCard";
 import type { CrmBlueprintDef, CrmEntityDef, CrmFieldDef } from "@workspace/api-client-react";
 
 const FIELD_TYPES = ["string", "text", "number", "boolean", "date", "email", "url", "phone", "enum"] as const;
@@ -445,6 +446,8 @@ export function CrmHome() {
           </CardContent>
         </Card>
       ))}
+
+      {!isDraft && <CrmAskCard crmId={crmId} />}
 
       {!isDraft && (
         <Card className="border-border">

@@ -901,6 +901,14 @@ export async function commitPipeline(jobId: number): Promise<CommitResult> {
       rowsOut: result.recordsLoaded,
       message: `${result.recordsLoaded} loaded, ${result.duplicatesDropped} duplicates dropped, ${result.identityLinksApplied} link(s) applied, ${result.needsReview} flagged for review`,
     });
+    // Auto-spawn a per-CRM steward bot the first time a CRM is committed.
+    // Fire-and-forget: a steward failure must never fail a successful commit.
+    void import("./steward")
+      .then(({ spawnStewardForCrm }) => spawnStewardForCrm(result.crmId))
+      .catch((err) => {
+        const m = err instanceof Error ? err.message : String(err);
+        console.error(`[liberator] steward spawn failed for crm ${result.crmId}: ${m}`);
+      });
     return result;
   }).catch(async (err) => {
     const msg = err instanceof Error ? err.message : String(err);

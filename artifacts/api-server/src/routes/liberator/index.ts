@@ -13,6 +13,7 @@ import {
 import { runExtractionForJob } from "../../services/liberator/extraction-engine";
 import { registerCrmRoutes } from "./crms";
 import { registerSyncRoutes } from "./syncs";
+import { registerAskRoutes } from "./ask";
 
 const router: IRouter = Router();
 
@@ -236,4 +237,5 @@ export function registerLiberatorRoutes(parent: IRouter): void {
   parent.use(router);
   registerCrmRoutes(parent);
   registerSyncRoutes(parent);
+  registerAskRoutes(parent);
 }

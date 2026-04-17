@@ -17,6 +17,7 @@ import { checkActivationNurture } from "./jobs/check-activation-nurture";
 import { checkAeoScanQueue } from "./jobs/check-aeo-scan-queue";
 import { checkIntegrationHealth } from "./jobs/check-integration-health";
 import { checkLiberatorSyncs } from "../liberator/sync-engine";
+import { checkCrmAnomalies } from "./jobs/check-crm-anomalies";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -54,6 +55,7 @@ const lowFreqJobs: Job[] = [
   { name: "content AEO re-scans", fn: checkContentAeoRescans },
   { name: "partner tier review", fn: checkPartnerTierCompliance },
   { name: "activation nurture", fn: checkActivationNurture },
+  { name: "CRM anomaly checks", fn: checkCrmAnomalies },
 ];
 
 const running = new Set<string>();

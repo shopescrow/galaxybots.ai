@@ -212,6 +212,34 @@ async function ensureCrmTables() {
       );
       CREATE INDEX IF NOT EXISTS "crm_sync_changes_run_idx" ON "crm_sync_changes"("sync_run_id");
       CREATE INDEX IF NOT EXISTS "crm_sync_changes_record_idx" ON "crm_sync_changes"("record_id");
+
+      CREATE TABLE IF NOT EXISTS "crm_saved_views" (
+        "id" serial PRIMARY KEY,
+        "crm_id" integer NOT NULL REFERENCES "crm_blueprints"("id") ON DELETE CASCADE,
+        "name" text NOT NULL,
+        "question" text,
+        "dsl" jsonb NOT NULL,
+        "pinned" boolean NOT NULL DEFAULT false,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "idx_crm_saved_views_crm" ON "crm_saved_views"("crm_id");
+
+      CREATE TABLE IF NOT EXISTS "crm_insights" (
+        "id" serial PRIMARY KEY,
+        "crm_id" integer NOT NULL REFERENCES "crm_blueprints"("id") ON DELETE CASCADE,
+        "bot_id" integer,
+        "kind" text NOT NULL,
+        "severity" text NOT NULL DEFAULT 'info',
+        "title" text NOT NULL,
+        "body" text NOT NULL,
+        "metadata" jsonb NOT NULL DEFAULT '{}'::jsonb,
+        "observed_at" timestamp with time zone DEFAULT now() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "idx_crm_insights_crm" ON "crm_insights"("crm_id");
+      CREATE INDEX IF NOT EXISTS "idx_crm_insights_observed" ON "crm_insights"("crm_id", "observed_at" DESC);
+
+      ALTER TABLE "bots" ADD COLUMN IF NOT EXISTS "linked_crm_id" integer;
+      CREATE INDEX IF NOT EXISTS "idx_bots_linked_crm" ON "bots"("linked_crm_id");
     `);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
