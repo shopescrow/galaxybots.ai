@@ -103,7 +103,42 @@ const EXPECTED_TABLES = [
   "mcp_directory_submissions",
   "extraction_jobs",
   "extraction_pages",
+  "crm_blueprints",
+  "crm_records",
 ];
+
+async function ensureCrmTables() {
+  // Idempotent DDL for Task #112 CRM tables. Mirrors lib/db/migrations/0027_add_crm_blueprints.sql.
+  // Safe to run on every startup; no-op if tables already exist.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "crm_blueprints" (
+        "id" serial PRIMARY KEY,
+        "name" text NOT NULL,
+        "description" text,
+        "source_job_id" integer REFERENCES "extraction_jobs"("id") ON DELETE SET NULL,
+        "status" text NOT NULL DEFAULT 'draft',
+        "definition" jsonb NOT NULL DEFAULT '{"entities":[]}'::jsonb,
+        "record_count" integer NOT NULL DEFAULT 0,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS "crm_records" (
+        "id" serial PRIMARY KEY,
+        "crm_id" integer NOT NULL REFERENCES "crm_blueprints"("id") ON DELETE CASCADE,
+        "entity_type" text NOT NULL,
+        "data" jsonb NOT NULL DEFAULT '{}'::jsonb,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "idx_crm_records_crm_entity" ON "crm_records"("crm_id", "entity_type");
+      CREATE INDEX IF NOT EXISTS "idx_crm_blueprints_source_job" ON "crm_blueprints"("source_job_id");
+    `);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[startup] ensureCrmTables failed: ${msg}`);
+  }
+}
 
 async function validateDatabaseTables() {
   try {
@@ -255,6 +290,7 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
 
 const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
+  await ensureCrmTables();
   await validateDatabaseTables();
   await ensurePirateMonsterPartnerRegistered();
   await startScheduler();
