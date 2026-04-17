@@ -31,6 +31,7 @@
     "prettier": "^3.8.1",
     "puppeteer": "^24.39.1",
     "puppeteer-core": "^24.39.1",
+    "tsx": "catalog:",
     "typescript": "~5.9.2"
   }
 }

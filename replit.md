@@ -1,3 +1,60 @@
+## PERMANENT MEMORY — READ FIRST EVERY SESSION
+**`.local/permanent_memory.json`** is the persistent memory system for this project. It contains:
+- **Project goals** with priorities and status
+- **Key decisions** with rationale (why things were done a certain way)
+- **User preferences** (MUST be respected — these are paid instructions)
+- **Unresolved issues** and known technical debt
+- **Progress timeline** of every feature built and instruction given
+
+**RULES:**
+1. Read `.local/permanent_memory.json` at the start of every session before doing any work.
+2. After completing any task, update the memory file with what was done.
+3. User preferences in the memory file are PERMANENT and override any default behavior.
+4. Never repeat a mistake that has already been recorded as a decision or instruction.
+
+## User Preferences
+- Iterative development — ask before major changes.
+- Agent must be honest about bugs it can prevent and bugs it overlooks prior to every build.
+- A bug assessment must also be performed after every analysis, question, or proposal.
+
+## Pre-Deploy Checklist
+**Always run before deploying:**
+
+```
+npx tsx scripts/pre-deploy-check.ts
+```
+
+### Required Secrets (Hard Blockers — server refuses to start without these)
+| Secret | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection |
+| `JWT_SECRET` | API auth token signing |
+| `CREDENTIAL_ENCRYPTION_KEY` | AES-256-GCM credential encryption |
+
+### Feature Secrets (graceful degradation if missing)
+| Secret | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | AI bot conversations + Liberator vision extraction |
+| `ELEVENLABS_API_KEY` | Vera AI Receptionist voice |
+| `REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` | Liberator headless browser |
+| `GODADDY_WEBHOOK_SECRET` | GoDaddy billing webhook verification |
+
+### Deployment Config
+- **Build:** `pnpm build`
+- **Run:** `node artifacts/api-server/dist/index.cjs`
+- **Target:** autoscale
+- **Port:** `process.env.PORT`, bound to `0.0.0.0`
+
+## Agent Self-Enhancement Rules
+1. **Read memory first** — `.local/permanent_memory.json` before every session.
+2. **Run pre-deploy check** — `npx tsx scripts/pre-deploy-check.ts` before every deploy suggestion.
+3. **Update memory after every task** — decisions, mistakes, completed features, user instructions.
+4. **Verify, don't assume** — run the build, check secrets exist, confirm output files before declaring ready.
+5. **Document secrets immediately** — any new required secret goes into replit.md and the pre-deploy script the same session it is discovered.
+6. **Bug assessment on every proposal** — list bugs that could occur before building, not after.
+
+---
+
 `docs/GALAXYBOTS_STAGES.md` — Product stages and processes. Read before planning any new feature or task.
 `docs/PERMANENT_MEMORY_SYSTEM.md` — Permanent memory rules. Update replit.md on every significant change. Never let memory drift.
 
