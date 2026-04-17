@@ -926,6 +926,11 @@ export interface CrmFieldDef {
   sampleValues?: unknown[];
   /** @nullable */
   sourceField?: string | null;
+  /**
+   * Name of another entity in the same blueprint that this field references.
+   * @nullable
+   */
+  linkTo?: string | null;
 }
 
 export interface CrmEntityDef {
@@ -1703,6 +1708,14 @@ export const ListCrmRecordsOrder = {
   asc: "asc",
   desc: "desc",
 } as const;
+
+export type ListRelatedRecords200Item = {
+  entityType: string;
+  entityLabel: string;
+  fieldName: string;
+  fieldLabel: string;
+  records: CrmRecord[];
+};
 
 export type ExportCrmEntityParams = {
   /**

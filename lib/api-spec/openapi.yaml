@@ -2340,6 +2340,51 @@ paths:
         "204":
           description: Deleted
 
+  /liberator/crms/{id}/entities/{entity}/records/{recordId}/related:
+    get:
+      operationId: listRelatedRecords
+      tags: [liberator]
+      summary: List records in other entities that reference this record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Related record groups, one per (entity, link field)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    entityType:
+                      type: string
+                    entityLabel:
+                      type: string
+                    fieldName:
+                      type: string
+                    fieldLabel:
+                      type: string
+                    records:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/CrmRecord"
+                  required: [entityType, entityLabel, fieldName, fieldLabel, records]
+
   /liberator/crms/{id}/entities/{entity}/export:
     get:
       operationId: exportCrmEntity
@@ -3872,6 +3917,9 @@ components:
           items: {}
         sourceField:
           type: ["string", "null"]
+        linkTo:
+          type: ["string", "null"]
+          description: Name of another entity in the same blueprint that this field references.
       required: [name, label, type, required]
 
     CrmEntityDef:

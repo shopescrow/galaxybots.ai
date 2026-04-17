@@ -827,8 +827,11 @@ export async function commitPipeline(jobId: number): Promise<CommitResult> {
   // Apply accepted clusters: keep representativeRowId, drop the others.
   // This is the EXACT same projection used by getLatestRebuildJobForCrm so
   // the user always commits what the dry-run preview showed.
-  const { rows: finalRows, dropIds } = applyDecisionsToDryRun(dryRun, clusters);
+  const decided = applyDecisionsToDryRun(dryRun, clusters, def);
+  const dropIds = decided.dropIds;
   const acceptedLinks = links.filter((l) => l.status === "accepted");
+  const finalRows = decided.rows;
+
   let needsReviewCount = 0;
   const perEntityCounts = new Map<string, number>();
 
@@ -935,6 +938,7 @@ export async function getRebuildJob(jobId: number) {
 export function applyDecisionsToDryRun(
   rows: DryRunRow[],
   clusters: DedupCluster[],
+  def?: CrmBlueprintDef,
 ): { rows: DryRunRow[]; dropIds: Set<number> } {
   const dropIds = new Set<number>();
   for (const c of clusters) {
@@ -943,7 +947,48 @@ export function applyDecisionsToDryRun(
       if (id !== c.representativeRowId) dropIds.add(id);
     }
   }
-  return { rows: rows.filter((r) => !dropIds.has(r.rowId)), dropIds };
+  let kept = rows.filter((r) => !dropIds.has(r.rowId));
+
+  // Dedupe rows projected into entities that are referenced by another
+  // entity's `linkTo` field. Without this, a "Companies" entity inferred
+  // alongside "Contacts" would get one row per source contact instead of
+  // one row per distinct company. Applied here (instead of only at commit
+  // time) so the preview always reflects the same row count as the commit.
+  if (def) {
+    const linkedTargets = new Set<string>();
+    for (const e of def.entities) {
+      for (const f of e.fields) {
+        if (f.linkTo) linkedTargets.add(f.linkTo);
+      }
+    }
+    if (linkedTargets.size > 0) {
+      const seenPerEntity = new Map<string, Set<string>>();
+      const finalRows: DryRunRow[] = [];
+      for (const r of kept) {
+        if (!linkedTargets.has(r.entityType)) {
+          finalRows.push(r);
+          continue;
+        }
+        const entity = def.entities.find((e) => e.name === r.entityType);
+        const primary = entity?.primaryDisplayField;
+        if (!primary) {
+          finalRows.push(r);
+          continue;
+        }
+        const v = r.data[primary];
+        const key = v === null || v === undefined ? "" : String(v).trim().toLowerCase();
+        if (key === "") continue;
+        const seen = seenPerEntity.get(r.entityType) ?? new Set<string>();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        seenPerEntity.set(r.entityType, seen);
+        finalRows.push(r);
+      }
+      kept = finalRows;
+    }
+  }
+
+  return { rows: kept, dropIds };
 }
 
 export async function getLatestRebuildJobForCrm(crmId: number) {
@@ -954,10 +999,14 @@ export async function getLatestRebuildJobForCrm(crmId: number) {
   if (rows.length === 0) return null;
   const job = rows.sort((a, b) => b.id - a.id)[0];
   // Decorate the response with a live "preview" view that reflects the
-  // current cluster decisions, so what the user sees == what they'll get.
+  // current cluster decisions AND the blueprint's linked-target dedupe,
+  // so what the user sees == what they'll get on commit.
+  const [crm] = await db.select().from(crmBlueprintsTable).where(eq(crmBlueprintsTable.id, crmId));
+  const def = (crm?.definition as CrmBlueprintDef | undefined) ?? undefined;
   const previewRows = applyDecisionsToDryRun(
     (job.dryRunRows as DryRunRow[]) ?? [],
     (job.dedupClusters as DedupCluster[]) ?? [],
+    def,
   ).rows;
   return Object.assign(job, { dryRunRowsPreview: previewRows });
 }

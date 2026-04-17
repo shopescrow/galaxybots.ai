@@ -7,12 +7,14 @@ import {
   getGetCrmRecordQueryKey,
   useUpdateCrmRecord,
   useDeleteCrmRecord,
+  useListRelatedRecords,
+  getListRelatedRecordsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Save, Trash2, AlertTriangle, Shield, FileSearch } from "lucide-react";
+import { ArrowLeft, Save, Trash2, AlertTriangle, Shield, FileSearch, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RecordEditor } from "@/components/crm/RecordEditor";
@@ -36,6 +38,13 @@ export function CrmRecord() {
 
   const update = useUpdateCrmRecord();
   const del = useDeleteCrmRecord();
+
+  const { data: related } = useListRelatedRecords(crmId, entityName, recId, {
+    query: {
+      enabled: !!crmId && !!recId && !!entityName,
+      queryKey: getListRelatedRecordsQueryKey(crmId, entityName, recId),
+    },
+  });
 
   const [draft, setDraft] = useState<Record<string, unknown>>({});
 
@@ -177,6 +186,53 @@ export function CrmRecord() {
           </Card>
         );
       })()}
+
+      {related && related.length > 0 && (
+        <div className="space-y-4">
+          {related.map((group) => {
+            const otherEntity = crmData.crm.definition.entities.find((e) => e.name === group.entityType);
+            const otherPrimary = otherEntity?.primaryDisplayField;
+            return (
+              <Card key={`${group.entityType}.${group.fieldName}`} className="border-border">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Link2 className="w-4 h-4 text-primary" />
+                    {group.entityLabel} for this {ent.label.toLowerCase()}
+                    <Badge variant="outline" className="ml-auto">{group.records.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {group.records.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No related records.</p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {group.records.map((r) => {
+                        const data = r.data as Record<string, unknown>;
+                        const display = otherPrimary && data[otherPrimary]
+                          ? String(data[otherPrimary])
+                          : `Record #${r.id}`;
+                        return (
+                          <li key={r.id} className="py-2 flex items-center justify-between gap-2">
+                            <Link
+                              href={`/crms/${crmId}/${group.entityType}/${r.id}`}
+                              className="font-medium hover:text-primary truncate"
+                            >
+                              {display}
+                            </Link>
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {group.fieldName}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <Card className="border-border">
         <CardHeader>

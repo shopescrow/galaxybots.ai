@@ -39,6 +39,13 @@ export interface CrmFieldDef {
   enumValues?: string[];
   sampleValues?: unknown[];
   sourceField?: string;
+  /**
+   * When set, this field is a foreign reference to another entity in the same
+   * blueprint. The stored value matches the target entity's primary display
+   * field, which allows commits and the related-records lookup to resolve
+   * links by value without depending on database ids.
+   */
+  linkTo?: string;
 }
 
 export interface CrmEntityDef {

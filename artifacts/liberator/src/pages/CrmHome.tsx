@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, Save, Database, Rocket, Plus, Trash2, FileText, RefreshCw, History } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, Database, Rocket, Plus, Trash2, FileText, RefreshCw, History, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CrmAskCard } from "@/components/CrmAskCard";
 import type { CrmBlueprintDef, CrmEntityDef, CrmFieldDef } from "@workspace/api-client-react";
@@ -110,6 +110,67 @@ export function CrmHome() {
     setBp((prev) => {
       const next: CrmBlueprintDef = structuredClone(prev);
       next.entities[entityIdx] = { ...next.entities[entityIdx], ...patch };
+      return next;
+    });
+  };
+  const addEntity = () => {
+    setBp((prev) => {
+      const next: CrmBlueprintDef = structuredClone(prev);
+      // Find a unique name slug
+      const base = "entity";
+      let i = next.entities.length + 1;
+      let name = `${base}_${i}`;
+      const taken = new Set(next.entities.map((e) => e.name));
+      while (taken.has(name)) {
+        i++;
+        name = `${base}_${i}`;
+      }
+      next.entities.push({
+        name,
+        label: `Entity ${i}`,
+        primaryDisplayField: undefined,
+        fields: [],
+      });
+      return next;
+    });
+  };
+  const removeEntity = (entityIdx: number) => {
+    setBp((prev) => {
+      const next: CrmBlueprintDef = structuredClone(prev);
+      const removed = next.entities[entityIdx]?.name;
+      next.entities.splice(entityIdx, 1);
+      // Clear any linkTo references that pointed to the deleted entity.
+      if (removed) {
+        for (const e of next.entities) {
+          for (const f of e.fields) {
+            if (f.linkTo === removed) delete f.linkTo;
+          }
+        }
+      }
+      return next;
+    });
+  };
+  const moveFieldToEntity = (fromIdx: number, fieldIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    setBp((prev) => {
+      const next: CrmBlueprintDef = structuredClone(prev);
+      const [field] = next.entities[fromIdx].fields.splice(fieldIdx, 1);
+      const oldName = field.name;
+      // If a field with this name already exists on the destination, give the
+      // moved field a uniquified name to avoid the duplicate-field validator.
+      const taken = new Set(next.entities[toIdx].fields.map((f) => f.name));
+      let candidate = oldName;
+      let n = 2;
+      while (taken.has(candidate)) {
+        candidate = `${oldName}_${n++}`;
+      }
+      field.name = candidate;
+      // If the source entity's primary was this field (matched by ORIGINAL
+      // name, before any rename for collision), clear/replace it.
+      if (next.entities[fromIdx].primaryDisplayField === oldName) {
+        next.entities[fromIdx].primaryDisplayField = next.entities[fromIdx].fields[0]?.name;
+      }
+      next.entities[toIdx].fields.push(field);
       return next;
     });
   };
@@ -334,8 +395,10 @@ export function CrmHome() {
         </Card>
       )}
 
-      {bp.entities.map((entity, ei) => (
-        <Card key={entity.name} className="border-border">
+      {bp.entities.map((entity, ei) => {
+        const otherEntities = bp.entities.filter((_, i) => i !== ei);
+        return (
+        <Card key={ei} className="border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -348,21 +411,58 @@ export function CrmHome() {
                   {" "}{(countMap.get(entity.name) ?? 0).toLocaleString()} records
                 </CardDescription>
               </div>
-              {!isDraft && (
-                <Link href={`/crms/${crmId}/${entity.name}`}>
-                  <Button variant="secondary" className="gap-2">
-                    Open Records <ArrowRight className="w-3 h-3" />
+              <div className="flex items-center gap-2">
+                {!isDraft && (
+                  <Link href={`/crms/${crmId}/${entity.name}`}>
+                    <Button variant="secondary" className="gap-2">
+                      Open Records <ArrowRight className="w-3 h-3" />
+                    </Button>
+                  </Link>
+                )}
+                {isDraft && bp.entities.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Remove entity"
+                    onClick={() => {
+                      if (!confirm(`Remove entity "${entity.label}"? Its fields will be discarded.`)) return;
+                      removeEntity(ei);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </Button>
-                </Link>
-              )}
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {isDraft && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Entity Label</Label>
                   <Input value={entity.label} onChange={(e) => updateEntity(ei, { label: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Entity Key</Label>
+                  <Input
+                    value={entity.name}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      const oldName = entity.name;
+                      setBp((prev) => {
+                        const next: CrmBlueprintDef = structuredClone(prev);
+                        next.entities[ei].name = newName;
+                        // Keep linkTo references in sync with the rename.
+                        for (const other of next.entities) {
+                          for (const f of other.fields) {
+                            if (f.linkTo === oldName) f.linkTo = newName;
+                          }
+                        }
+                        return next;
+                      });
+                    }}
+                    className="font-mono text-xs"
+                  />
                 </div>
                 <div>
                   <Label>Primary Display Field</Label>
@@ -388,6 +488,7 @@ export function CrmHome() {
                     <th className="px-3 py-2 font-medium">Field Key</th>
                     <th className="px-3 py-2 font-medium">Label</th>
                     <th className="px-3 py-2 font-medium">Type</th>
+                    <th className="px-3 py-2 font-medium">Links to</th>
                     <th className="px-3 py-2 font-medium">Required</th>
                     <th className="px-3 py-2 font-medium">Sample</th>
                     {isDraft && <th className="px-3 py-2"></th>}
@@ -417,6 +518,35 @@ export function CrmHome() {
                         ) : <Badge variant="outline">{f.type}</Badge>}
                       </td>
                       <td className="px-3 py-2">
+                        {isDraft ? (
+                          <Select
+                            value={f.linkTo ?? "__none__"}
+                            onValueChange={(v) =>
+                              updateField(ei, fi, { linkTo: v === "__none__" ? undefined : v })
+                            }
+                            disabled={otherEntities.length === 0}
+                          >
+                            <SelectTrigger className="h-8 w-40">
+                              <SelectValue placeholder={otherEntities.length === 0 ? "—" : "No link"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">No link</SelectItem>
+                              {otherEntities.map((e) => (
+                                <SelectItem key={e.name} value={e.name}>
+                                  → {e.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : f.linkTo ? (
+                          <Badge variant="outline" className="gap-1">
+                            <Link2 className="w-3 h-3" /> {bp.entities.find((e) => e.name === f.linkTo)?.label ?? f.linkTo}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
                         <Checkbox
                           checked={f.required}
                           disabled={!isDraft}
@@ -428,9 +558,29 @@ export function CrmHome() {
                       </td>
                       {isDraft && (
                         <td className="px-3 py-2">
-                          <Button variant="ghost" size="icon" onClick={() => removeField(ei, fi)}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          <div className="flex items-center gap-1 justify-end">
+                            {otherEntities.length > 0 && (
+                              <Select
+                                value=""
+                                onValueChange={(v) => {
+                                  const toIdx = bp.entities.findIndex((e) => e.name === v);
+                                  if (toIdx >= 0) moveFieldToEntity(ei, fi, toIdx);
+                                }}
+                              >
+                                <SelectTrigger className="h-8 w-32 text-xs">
+                                  <SelectValue placeholder="Move to…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {otherEntities.map((e) => (
+                                    <SelectItem key={e.name} value={e.name}>{e.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => removeField(ei, fi)} title="Remove field">
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -445,7 +595,14 @@ export function CrmHome() {
             )}
           </CardContent>
         </Card>
-      ))}
+        );
+      })}
+
+      {isDraft && (
+        <Button variant="outline" onClick={addEntity} className="gap-2">
+          <Plus className="w-4 h-4" /> Add Entity
+        </Button>
+      )}
 
       {!isDraft && <CrmAskCard crmId={crmId} />}
 

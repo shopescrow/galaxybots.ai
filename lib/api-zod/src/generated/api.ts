@@ -1431,6 +1431,10 @@ export const ListCrmsResponseItem = zod.object({
             enumValues: zod.array(zod.string()).optional(),
             sampleValues: zod.array(zod.unknown()).optional(),
             sourceField: zod.string().nullish(),
+            linkTo: zod
+              .string()
+              .nullish()
+              .describe("Name of another entity in the same blueprint that this field references."),
           }),
         ),
       }),
@@ -1477,6 +1481,10 @@ export const GetCrmResponse = zod.object({
               enumValues: zod.array(zod.string()).optional(),
               sampleValues: zod.array(zod.unknown()).optional(),
               sourceField: zod.string().nullish(),
+              linkTo: zod
+                .string()
+                .nullish()
+                .describe("Name of another entity in the same blueprint that this field references."),
             }),
           ),
         }),
@@ -1525,6 +1533,10 @@ export const UpdateCrmBody = zod.object({
               enumValues: zod.array(zod.string()).optional(),
               sampleValues: zod.array(zod.unknown()).optional(),
               sourceField: zod.string().nullish(),
+              linkTo: zod
+                .string()
+                .nullish()
+                .describe("Name of another entity in the same blueprint that this field references."),
             }),
           ),
         }),
@@ -1555,6 +1567,10 @@ export const UpdateCrmResponse = zod.object({
             enumValues: zod.array(zod.string()).optional(),
             sampleValues: zod.array(zod.unknown()).optional(),
             sourceField: zod.string().nullish(),
+            linkTo: zod
+              .string()
+              .nullish()
+              .describe("Name of another entity in the same blueprint that this field references."),
           }),
         ),
       }),
@@ -2153,6 +2169,45 @@ export const DeleteCrmRecordParams = zod.object({
 });
 
 /**
+ * @summary List records in other entities that reference this record
+ */
+export const ListRelatedRecordsParams = zod.object({
+  id: zod.coerce.number(),
+  entity: zod.coerce.string(),
+  recordId: zod.coerce.number(),
+});
+
+export const ListRelatedRecordsResponseItem = zod.object({
+  entityType: zod.string(),
+  entityLabel: zod.string(),
+  fieldName: zod.string(),
+  fieldLabel: zod.string(),
+  records: zod.array(
+    zod.object({
+      id: zod.number(),
+      crmId: zod.number(),
+      entityType: zod.string(),
+      data: zod.record(zod.string(), zod.unknown()),
+      provenance: zod.record(zod.string(), zod.unknown()).optional(),
+      warnings: zod
+        .array(
+          zod.object({
+            field: zod.string().nullish(),
+            code: zod.string(),
+            message: zod.string(),
+            severity: zod.enum(["info", "warn", "error"]),
+          }),
+        )
+        .optional(),
+      needsReview: zod.boolean().optional(),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
+});
+export const ListRelatedRecordsResponse = zod.array(ListRelatedRecordsResponseItem);
+
+/**
  * @summary Export entity records as CSV or JSON
  */
 export const ExportCrmEntityParams = zod.object({
@@ -2213,6 +2268,10 @@ export const UpdateCrmSyncConfigResponse = zod.object({
             enumValues: zod.array(zod.string()).optional(),
             sampleValues: zod.array(zod.unknown()).optional(),
             sourceField: zod.string().nullish(),
+            linkTo: zod
+              .string()
+              .nullish()
+              .describe("Name of another entity in the same blueprint that this field references."),
           }),
         ),
       }),
@@ -2519,6 +2578,10 @@ export const ReblueprintCrmFromDriftResponse = zod.object({
             enumValues: zod.array(zod.string()).optional(),
             sampleValues: zod.array(zod.unknown()).optional(),
             sourceField: zod.string().nullish(),
+            linkTo: zod
+              .string()
+              .nullish()
+              .describe("Name of another entity in the same blueprint that this field references."),
           }),
         ),
       }),

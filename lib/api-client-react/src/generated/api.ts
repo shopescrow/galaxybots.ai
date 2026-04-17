@@ -96,6 +96,7 @@ import type {
   ListCrmSyncRunsParams,
   ListPartnerReferralsParams,
   ListProviderConfigsParams,
+  ListRelatedRecords200Item,
   MakeOutboundCall200,
   MakeOutboundCallBody,
   MemorySearchBody,
@@ -6823,6 +6824,81 @@ export const useDeleteCrmRecord = <TError = ErrorType<unknown>, TContext = unkno
 > => {
   return useMutation(getDeleteCrmRecordMutationOptions(options));
 };
+
+/**
+ * @summary List records in other entities that reference this record
+ */
+export const getListRelatedRecordsUrl = (id: number, entity: string, recordId: number) => {
+  return `/api/liberator/crms/${id}/entities/${entity}/records/${recordId}/related`;
+};
+
+export const listRelatedRecords = async (
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: RequestInit,
+): Promise<ListRelatedRecords200Item[]> => {
+  return customFetch<ListRelatedRecords200Item[]>(getListRelatedRecordsUrl(id, entity, recordId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRelatedRecordsQueryKey = (id: number, entity: string, recordId: number) => {
+  return [`/api/liberator/crms/${id}/entities/${entity}/records/${recordId}/related`] as const;
+};
+
+export const getListRelatedRecordsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRelatedRecords>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listRelatedRecords>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRelatedRecordsQueryKey(id, entity, recordId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listRelatedRecords>>> = ({ signal }) =>
+    listRelatedRecords(id, entity, recordId, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!(id && entity && recordId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRelatedRecords>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRelatedRecordsQueryResult = NonNullable<Awaited<ReturnType<typeof listRelatedRecords>>>;
+export type ListRelatedRecordsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List records in other entities that reference this record
+ */
+
+export function useListRelatedRecords<
+  TData = Awaited<ReturnType<typeof listRelatedRecords>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  entity: string,
+  recordId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listRelatedRecords>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRelatedRecordsQueryOptions(id, entity, recordId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Export entity records as CSV or JSON

@@ -78,10 +78,15 @@ export function validateBlueprint(def: CrmBlueprintDef): void {
   if (!def.entities || def.entities.length === 0) {
     throw new CrmValidationError("Blueprint must define at least one entity");
   }
+  const entityNames = new Set<string>();
   for (const entity of def.entities) {
     if (!entity.name || !entity.name.trim()) {
       throw new CrmValidationError("Entity name is required");
     }
+    if (entityNames.has(entity.name)) {
+      throw new CrmValidationError(`Duplicate entity name '${entity.name}'`);
+    }
+    entityNames.add(entity.name);
     const seen = new Set<string>();
     for (const f of entity.fields) {
       if (!f.name || !f.name.trim()) {
@@ -91,6 +96,22 @@ export function validateBlueprint(def: CrmBlueprintDef): void {
         throw new CrmValidationError(`Entity '${entity.name}' has duplicate field name '${f.name}'`);
       }
       seen.add(f.name);
+    }
+  }
+  // Validate every linkTo references an existing, different entity.
+  for (const entity of def.entities) {
+    for (const f of entity.fields) {
+      if (!f.linkTo) continue;
+      if (!entityNames.has(f.linkTo)) {
+        throw new CrmValidationError(
+          `Field '${entity.name}.${f.name}' links to unknown entity '${f.linkTo}'`,
+        );
+      }
+      if (f.linkTo === entity.name) {
+        throw new CrmValidationError(
+          `Field '${entity.name}.${f.name}' cannot link to its own entity`,
+        );
+      }
     }
   }
 }
@@ -128,6 +149,29 @@ export interface CommitOptions {
   sourceRows: Record<string, unknown>[];
 }
 
+/** Returns the set of entity names that are referenced by a `linkTo` field on
+ * any other entity in the blueprint. Records projected into a referenced
+ * entity get deduplicated by primary display value during commit so that a
+ * shared entity (e.g. Companies) doesn't get one row per source contact. */
+export function linkedTargetEntityNames(def: CrmBlueprintDef): Set<string> {
+  const out = new Set<string>();
+  for (const e of def.entities) {
+    for (const f of e.fields) {
+      if (f.linkTo) out.add(f.linkTo);
+    }
+  }
+  return out;
+}
+
+function entityPrimaryValue(row: Record<string, unknown>, entity: CrmEntityDef): string | null {
+  const key = entity.primaryDisplayField;
+  if (!key) return null;
+  const v = row[key];
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
 export async function commitCrm(crmId: number, opts: CommitOptions) {
   const crm = await getCrm(crmId);
   if (!crm) return null;
@@ -137,32 +181,48 @@ export async function commitCrm(crmId: number, opts: CommitOptions) {
     return { crmId, recordsLoaded: 0, status: crm.status };
   }
 
-  // For v1, all source rows project into the FIRST entity in the blueprint.
-  const entity = def.entities[0]!;
+  const linkedTargets = linkedTargetEntityNames(def);
 
-  // Wrap delete + insert + status update in a single transaction with a
-  // per-CRM advisory lock so concurrent commits are serialized and partial
-  // failures roll back cleanly.
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${42}, ${crmId})`);
 
-    await tx
-      .delete(crmRecordsTable)
-      .where(and(eq(crmRecordsTable.crmId, crmId), eq(crmRecordsTable.entityType, entity.name)));
+    // Replace all entities for this CRM in one shot.
+    for (const entity of def.entities) {
+      await tx
+        .delete(crmRecordsTable)
+        .where(and(eq(crmRecordsTable.crmId, crmId), eq(crmRecordsTable.entityType, entity.name)));
+    }
 
-    let inserted = 0;
-    if (opts.sourceRows.length > 0) {
-      const values = opts.sourceRows.map((row) => ({
-        crmId,
-        entityType: entity.name,
-        data: projectRowToEntity(row, entity),
-      }));
+    let totalInserted = 0;
+    const CHUNK = 500;
 
-      const CHUNK = 500;
+    for (const entity of def.entities) {
+      const projected: Record<string, unknown>[] = [];
+      const seen = new Set<string>();
+      const dedupe = linkedTargets.has(entity.name);
+
+      for (const row of opts.sourceRows) {
+        const data = projectRowToEntity(row, entity);
+        // Skip empty projections (no field on this entity has a value).
+        const hasAny = Object.values(data).some((v) => v !== null && v !== undefined && v !== "");
+        if (!hasAny) continue;
+
+        if (dedupe) {
+          const key = entityPrimaryValue(data, entity);
+          if (key === null) continue;
+          const k = key.toLowerCase();
+          if (seen.has(k)) continue;
+          seen.add(k);
+        }
+
+        projected.push(data);
+      }
+
+      if (projected.length === 0) continue;
+      const values = projected.map((data) => ({ crmId, entityType: entity.name, data }));
       for (let i = 0; i < values.length; i += CHUNK) {
-        const chunk = values.slice(i, i + CHUNK);
-        await tx.insert(crmRecordsTable).values(chunk);
-        inserted += chunk.length;
+        await tx.insert(crmRecordsTable).values(values.slice(i, i + CHUNK));
+        totalInserted += Math.min(CHUNK, values.length - i);
       }
     }
 
@@ -176,8 +236,72 @@ export async function commitCrm(crmId: number, opts: CommitOptions) {
       .set({ status: "committed", recordCount: Number(totalCount[0]?.c ?? 0) })
       .where(eq(crmBlueprintsTable.id, crmId));
 
-    return { crmId, recordsLoaded: inserted, status: "committed" as const };
+    return { crmId, recordsLoaded: totalInserted, status: "committed" as const };
   });
+}
+
+/** Find records in other entities that reference `record` via a `linkTo`
+ * field. The link match is value-based against the target entity's primary
+ * display field (no DB-level FK is used). */
+export async function getRelatedRecords(
+  crmId: number,
+  entityName: string,
+  recordId: number,
+): Promise<{
+  entityType: string;
+  entityLabel: string;
+  fieldName: string;
+  fieldLabel: string;
+  records: typeof crmRecordsTable.$inferSelect[];
+}[]> {
+  const crm = await getCrm(crmId);
+  if (!crm) return [];
+  const def = crm.definition as CrmBlueprintDef;
+  const target = findEntity(def, entityName);
+  if (!target) return [];
+
+  const [rec] = await db
+    .select()
+    .from(crmRecordsTable)
+    .where(and(
+      eq(crmRecordsTable.crmId, crmId),
+      eq(crmRecordsTable.id, recordId),
+      eq(crmRecordsTable.entityType, entityName),
+    ));
+  if (!rec) return [];
+
+  const primary = target.primaryDisplayField;
+  if (!primary) return [];
+  const data = rec.data as Record<string, unknown>;
+  const value = data[primary];
+  if (value === null || value === undefined || String(value).trim() === "") return [];
+  const valueStr = String(value);
+
+  const out: Awaited<ReturnType<typeof getRelatedRecords>> = [];
+  for (const other of def.entities) {
+    if (other.name === entityName) continue;
+    for (const f of other.fields) {
+      if (f.linkTo !== entityName) continue;
+      const records = await db
+        .select()
+        .from(crmRecordsTable)
+        .where(and(
+          eq(crmRecordsTable.crmId, crmId),
+          eq(crmRecordsTable.entityType, other.name),
+          sql`LOWER(${crmRecordsTable.data} ->> ${f.name}) = LOWER(${valueStr})`,
+        ))
+        .orderBy(asc(crmRecordsTable.id))
+        .limit(200);
+      out.push({
+        entityType: other.name,
+        entityLabel: other.label,
+        fieldName: f.name,
+        fieldLabel: f.label,
+        records,
+      });
+    }
+  }
+  return out;
 }
 
 /** Stream-fetch all records for an entity in pages — used by exports. */

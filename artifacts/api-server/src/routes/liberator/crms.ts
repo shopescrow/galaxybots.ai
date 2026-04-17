@@ -18,6 +18,7 @@ import {
   DeleteCrmRecordParams,
   ExportCrmEntityParams,
   ExportCrmEntityQueryParams,
+  ListRelatedRecordsParams,
 } from "@workspace/api-zod";
 import { inferBlueprintFromRows } from "../../services/liberator/schema-inference";
 import {
@@ -34,6 +35,7 @@ import {
   createRecord,
   updateRecord,
   deleteRecord,
+  getRelatedRecords,
   CrmValidationError,
 } from "../../services/liberator/crm-store";
 
@@ -242,6 +244,19 @@ router.delete("/liberator/crms/:id/entities/:entity/records/:recordId", async (r
   await deleteRecord(params.data.id, params.data.recordId);
   res.sendStatus(204);
 });
+
+router.get(
+  "/liberator/crms/:id/entities/:entity/records/:recordId/related",
+  async (req: Request, res: Response): Promise<void> => {
+    const params = ListRelatedRecordsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const groups = await getRelatedRecords(params.data.id, params.data.entity, params.data.recordId);
+    res.json(groups);
+  },
+);
 
 router.get("/liberator/crms/:id/entities/:entity/export", async (req: Request, res: Response): Promise<void> => {
   const params = ExportCrmEntityParams.safeParse(req.params);
