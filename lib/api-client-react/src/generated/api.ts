@@ -44,7 +44,6 @@ import type {
   CreateReceptionistConfigBody,
   CreateTaskSessionBody,
   Crm,
-  CrmCommitResult,
   CrmDetail,
   CrmRecord,
   CrmRecordWriteBody,
@@ -70,6 +69,7 @@ import type {
   GetCallLogsParams,
   GetJournalEntriesParams,
   GetPartnerLinkParams,
+  GetRebuildPipeline200,
   GodaddyWebhook200,
   GodaddyWebhookBody,
   HandleCallStreamBody,
@@ -93,8 +93,10 @@ import type {
   MessageResponse,
   PartnerInfo,
   PartnerRegistration,
+  PipelineCommitResult,
   PlatformComplianceRecord,
   PostBoardroomMessageBody,
+  RebuildJob,
   ReceptionistConfig,
   RecordingStatus200,
   RecordingStatusBody,
@@ -107,11 +109,15 @@ import type {
   TeamProposal,
   TestReceptionistConnection200,
   TestReceptionistConnectionBody,
+  TransformDescriptor,
   UpdateBotAssignmentBody,
   UpdateClientBody,
   UpdateClientComplianceBody,
+  UpdateClustersBody,
   UpdateCrmBody,
+  UpdateLinksBody,
   UpdateReceptionistConfigBody,
+  UpdateRecipeBody,
   UploadKnowledgeBaseDocumentBody,
   UpsertProviderConfig200,
   UpsertProviderConfigBody,
@@ -5916,14 +5922,15 @@ export const useDeleteCrm = <TError = ErrorType<unknown>, TContext = unknown>(op
 };
 
 /**
- * @summary Load extracted rows into the CRM record store
+ * @deprecated
+ * @summary (REMOVED) Direct commit was replaced by the data-quality pipeline. Always returns 410 Gone.
  */
 export const getCommitCrmUrl = (id: number) => {
   return `/api/liberator/crms/${id}/commit`;
 };
 
-export const commitCrm = async (id: number, options?: RequestInit): Promise<CrmCommitResult> => {
-  return customFetch<CrmCommitResult>(getCommitCrmUrl(id), {
+export const commitCrm = async (id: number, options?: RequestInit): Promise<unknown> => {
+  return customFetch<unknown>(getCommitCrmUrl(id), {
     ...options,
     method: "POST",
   });
@@ -5954,13 +5961,467 @@ export type CommitCrmMutationResult = NonNullable<Awaited<ReturnType<typeof comm
 export type CommitCrmMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Load extracted rows into the CRM record store
+ * @deprecated
+ * @summary (REMOVED) Direct commit was replaced by the data-quality pipeline. Always returns 410 Gone.
  */
 export const useCommitCrm = <TError = ErrorType<ErrorResponse>, TContext = unknown>(options?: {
   mutation?: UseMutationOptions<Awaited<ReturnType<typeof commitCrm>>, TError, { id: number }, TContext>;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<Awaited<ReturnType<typeof commitCrm>>, TError, { id: number }, TContext> => {
   return useMutation(getCommitCrmMutationOptions(options));
+};
+
+/**
+ * @summary List built-in transform descriptors for the recipe editor
+ */
+export const getListTransformsUrl = () => {
+  return `/api/liberator/transforms`;
+};
+
+export const listTransforms = async (options?: RequestInit): Promise<TransformDescriptor[]> => {
+  return customFetch<TransformDescriptor[]>(getListTransformsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTransformsQueryKey = () => {
+  return [`/api/liberator/transforms`] as const;
+};
+
+export const getListTransformsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTransforms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listTransforms>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTransformsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTransforms>>> = ({ signal }) =>
+    listTransforms({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTransforms>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTransformsQueryResult = NonNullable<Awaited<ReturnType<typeof listTransforms>>>;
+export type ListTransformsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List built-in transform descriptors for the recipe editor
+ */
+
+export function useListTransforms<
+  TData = Awaited<ReturnType<typeof listTransforms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listTransforms>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTransformsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the latest data-quality pipeline run for this CRM
+ */
+export const getGetRebuildPipelineUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/pipeline`;
+};
+
+export const getRebuildPipeline = async (id: number, options?: RequestInit): Promise<GetRebuildPipeline200> => {
+  return customFetch<GetRebuildPipeline200>(getGetRebuildPipelineUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRebuildPipelineQueryKey = (id: number) => {
+  return [`/api/liberator/crms/${id}/pipeline`] as const;
+};
+
+export const getGetRebuildPipelineQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRebuildPipeline>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRebuildPipeline>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRebuildPipelineQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRebuildPipeline>>> = ({ signal }) =>
+    getRebuildPipeline(id, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRebuildPipeline>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRebuildPipelineQueryResult = NonNullable<Awaited<ReturnType<typeof getRebuildPipeline>>>;
+export type GetRebuildPipelineQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the latest data-quality pipeline run for this CRM
+ */
+
+export function useGetRebuildPipeline<
+  TData = Awaited<ReturnType<typeof getRebuildPipeline>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRebuildPipeline>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRebuildPipelineQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Start (or re-run) the data-quality pipeline through the dry-run review stage
+ */
+export const getStartRebuildPipelineUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/pipeline`;
+};
+
+export const startRebuildPipeline = async (id: number, options?: RequestInit): Promise<RebuildJob> => {
+  return customFetch<RebuildJob>(getStartRebuildPipelineUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getStartRebuildPipelineMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof startRebuildPipeline>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof startRebuildPipeline>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["startRebuildPipeline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof startRebuildPipeline>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+
+    return startRebuildPipeline(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartRebuildPipelineMutationResult = NonNullable<Awaited<ReturnType<typeof startRebuildPipeline>>>;
+
+export type StartRebuildPipelineMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start (or re-run) the data-quality pipeline through the dry-run review stage
+ */
+export const useStartRebuildPipeline = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof startRebuildPipeline>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof startRebuildPipeline>>, TError, { id: number }, TContext> => {
+  return useMutation(getStartRebuildPipelineMutationOptions(options));
+};
+
+/**
+ * @summary Update the per-field transform recipe for the in-flight pipeline
+ */
+export const getUpdateRebuildRecipeUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/pipeline/recipe`;
+};
+
+export const updateRebuildRecipe = async (
+  id: number,
+  updateRecipeBody: UpdateRecipeBody,
+  options?: RequestInit,
+): Promise<RebuildJob> => {
+  return customFetch<RebuildJob>(getUpdateRebuildRecipeUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateRecipeBody),
+  });
+};
+
+export const getUpdateRebuildRecipeMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRebuildRecipe>>,
+    TError,
+    { id: number; data: BodyType<UpdateRecipeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateRebuildRecipe>>,
+  TError,
+  { id: number; data: BodyType<UpdateRecipeBody> },
+  TContext
+> => {
+  const mutationKey = ["updateRebuildRecipe"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateRebuildRecipe>>,
+    { id: number; data: BodyType<UpdateRecipeBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateRebuildRecipe(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateRebuildRecipeMutationResult = NonNullable<Awaited<ReturnType<typeof updateRebuildRecipe>>>;
+export type UpdateRebuildRecipeMutationBody = BodyType<UpdateRecipeBody>;
+export type UpdateRebuildRecipeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update the per-field transform recipe for the in-flight pipeline
+ */
+export const useUpdateRebuildRecipe = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRebuildRecipe>>,
+    TError,
+    { id: number; data: BodyType<UpdateRecipeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateRebuildRecipe>>,
+  TError,
+  { id: number; data: BodyType<UpdateRecipeBody> },
+  TContext
+> => {
+  return useMutation(getUpdateRebuildRecipeMutationOptions(options));
+};
+
+/**
+ * @summary Accept or reject proposed dedup clusters
+ */
+export const getUpdateRebuildClustersUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/pipeline/clusters`;
+};
+
+export const updateRebuildClusters = async (
+  id: number,
+  updateClustersBody: UpdateClustersBody,
+  options?: RequestInit,
+): Promise<RebuildJob> => {
+  return customFetch<RebuildJob>(getUpdateRebuildClustersUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateClustersBody),
+  });
+};
+
+export const getUpdateRebuildClustersMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRebuildClusters>>,
+    TError,
+    { id: number; data: BodyType<UpdateClustersBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateRebuildClusters>>,
+  TError,
+  { id: number; data: BodyType<UpdateClustersBody> },
+  TContext
+> => {
+  const mutationKey = ["updateRebuildClusters"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateRebuildClusters>>,
+    { id: number; data: BodyType<UpdateClustersBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateRebuildClusters(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateRebuildClustersMutationResult = NonNullable<Awaited<ReturnType<typeof updateRebuildClusters>>>;
+export type UpdateRebuildClustersMutationBody = BodyType<UpdateClustersBody>;
+export type UpdateRebuildClustersMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Accept or reject proposed dedup clusters
+ */
+export const useUpdateRebuildClusters = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRebuildClusters>>,
+    TError,
+    { id: number; data: BodyType<UpdateClustersBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateRebuildClusters>>,
+  TError,
+  { id: number; data: BodyType<UpdateClustersBody> },
+  TContext
+> => {
+  return useMutation(getUpdateRebuildClustersMutationOptions(options));
+};
+
+/**
+ * @summary Accept or reject proposed identity links
+ */
+export const getUpdateRebuildLinksUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/pipeline/links`;
+};
+
+export const updateRebuildLinks = async (
+  id: number,
+  updateLinksBody: UpdateLinksBody,
+  options?: RequestInit,
+): Promise<RebuildJob> => {
+  return customFetch<RebuildJob>(getUpdateRebuildLinksUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLinksBody),
+  });
+};
+
+export const getUpdateRebuildLinksMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRebuildLinks>>,
+    TError,
+    { id: number; data: BodyType<UpdateLinksBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateRebuildLinks>>,
+  TError,
+  { id: number; data: BodyType<UpdateLinksBody> },
+  TContext
+> => {
+  const mutationKey = ["updateRebuildLinks"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateRebuildLinks>>,
+    { id: number; data: BodyType<UpdateLinksBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateRebuildLinks(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateRebuildLinksMutationResult = NonNullable<Awaited<ReturnType<typeof updateRebuildLinks>>>;
+export type UpdateRebuildLinksMutationBody = BodyType<UpdateLinksBody>;
+export type UpdateRebuildLinksMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Accept or reject proposed identity links
+ */
+export const useUpdateRebuildLinks = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRebuildLinks>>,
+    TError,
+    { id: number; data: BodyType<UpdateLinksBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateRebuildLinks>>,
+  TError,
+  { id: number; data: BodyType<UpdateLinksBody> },
+  TContext
+> => {
+  return useMutation(getUpdateRebuildLinksMutationOptions(options));
+};
+
+/**
+ * @summary Phase-2 commit — promote the dry-run output into live CRM records
+ */
+export const getCommitRebuildPipelineUrl = (id: number) => {
+  return `/api/liberator/crms/${id}/pipeline/commit`;
+};
+
+export const commitRebuildPipeline = async (id: number, options?: RequestInit): Promise<PipelineCommitResult> => {
+  return customFetch<PipelineCommitResult>(getCommitRebuildPipelineUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCommitRebuildPipelineMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof commitRebuildPipeline>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof commitRebuildPipeline>>, TError, { id: number }, TContext> => {
+  const mutationKey = ["commitRebuildPipeline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitRebuildPipeline>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+
+    return commitRebuildPipeline(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CommitRebuildPipelineMutationResult = NonNullable<Awaited<ReturnType<typeof commitRebuildPipeline>>>;
+
+export type CommitRebuildPipelineMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Phase-2 commit — promote the dry-run output into live CRM records
+ */
+export const useCommitRebuildPipeline = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof commitRebuildPipeline>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof commitRebuildPipeline>>, TError, { id: number }, TContext> => {
+  return useMutation(getCommitRebuildPipelineMutationOptions(options));
 };
 
 /**

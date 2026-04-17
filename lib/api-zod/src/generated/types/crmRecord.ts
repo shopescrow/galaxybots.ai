@@ -6,12 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CrmRecordData } from "./crmRecordData";
+import type { CrmRecordProvenance } from "./crmRecordProvenance";
+import type { RecordWarning } from "./recordWarning";
 
 export interface CrmRecord {
   id: number;
   crmId: number;
   entityType: string;
   data: CrmRecordData;
+  provenance?: CrmRecordProvenance;
+  warnings?: RecordWarning[];
+  needsReview?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

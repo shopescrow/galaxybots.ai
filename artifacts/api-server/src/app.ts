@@ -174,6 +174,7 @@ const PUBLIC_SUFFIXES = [
   "/liberator/stats",
   "/liberator/jobs",
   "/liberator/crms",
+  "/liberator/transforms",
 ];
 
 const PUBLIC_PREFIX_SUFFIXES = [

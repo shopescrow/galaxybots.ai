@@ -25,7 +25,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, ArrowUpDown, Download, Plus, Search, Trash2, Eye } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Download, Plus, Search, Trash2, Eye, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { RecordEditor } from "@/components/crm/RecordEditor";
 
@@ -42,6 +42,7 @@ export function CrmEntity() {
   const [order, setOrder] = useState<"asc" | "desc">("asc");
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const limit = 50;
 
   const { data: crmData, isLoading: crmLoading } = useGetCrm(crmId, {
@@ -54,6 +55,7 @@ export function CrmEntity() {
     order: sort ? order : undefined,
     limit,
     offset: page * limit,
+    needsReview: needsReviewOnly ? true : undefined,
   };
 
   const { data: recordsPage, isLoading } = useListCrmRecords(crmId, entityName, queryParams, {
@@ -152,14 +154,26 @@ export function CrmEntity() {
 
       <Card className="border-border">
         <CardHeader>
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder={`Search ${ent.label.toLowerCase()}...`}
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="pl-9"
-            />
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative max-w-md flex-1 min-w-[240px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={`Search ${ent.label.toLowerCase()}...`}
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                className="pl-9"
+              />
+            </div>
+            <Button
+              type="button"
+              variant={needsReviewOnly ? "default" : "outline"}
+              size="sm"
+              className="gap-2"
+              onClick={() => { setNeedsReviewOnly((v) => !v); setPage(0); }}
+            >
+              <AlertTriangle className="w-3 h-3" />
+              {needsReviewOnly ? "Showing review queue" : "Needs review only"}
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -190,17 +204,25 @@ export function CrmEntity() {
                 <TableBody>
                   {records.map((r) => {
                     const data = r.data as Record<string, unknown>;
+                    const needsReview = (r as { needsReview?: boolean }).needsReview === true;
                     return (
-                      <TableRow key={r.id}>
-                        {displayFields.map((f) => (
+                      <TableRow key={r.id} className={needsReview ? "bg-amber-500/5" : undefined}>
+                        {displayFields.map((f, idx) => (
                           <TableCell key={f.name} className="text-sm max-w-[200px] truncate" title={String(data[f.name] ?? "")}>
-                            {data[f.name] === null || data[f.name] === undefined ? (
-                              <span className="text-muted-foreground italic">null</span>
-                            ) : f.type === "boolean" ? (
-                              <Badge variant="outline">{String(data[f.name])}</Badge>
-                            ) : (
-                              String(data[f.name])
-                            )}
+                            <div className="flex items-center gap-2">
+                              {idx === 0 && needsReview && (
+                                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                              )}
+                              <span className="truncate">
+                                {data[f.name] === null || data[f.name] === undefined ? (
+                                  <span className="text-muted-foreground italic">null</span>
+                                ) : f.type === "boolean" ? (
+                                  <Badge variant="outline">{String(data[f.name])}</Badge>
+                                ) : (
+                                  String(data[f.name])
+                                )}
+                              </span>
+                            </div>
                           </TableCell>
                         ))}
                         <TableCell className="text-right space-x-1">

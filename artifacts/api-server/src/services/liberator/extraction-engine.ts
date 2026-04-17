@@ -53,7 +53,12 @@ Rules:
 - Extract ALL visible rows/items, not just a sample
 - Be precise with text — copy exactly what you see
 - For numeric values, extract as numbers not strings
-- For dates, use ISO 8601 format when possible`;
+- For dates, use ISO 8601 format when possible
+- Each row MUST include a "__meta" object with:
+  - "confidence": numeric scores 0.0-1.0 per field key indicating how certain you are that the value is correctly read from the screenshot.
+  - "region": pixel bounding box {x,y,w,h} for the WHOLE row (origin top-left of the image).
+  - "regions": OPTIONAL per-field bounding boxes keyed by field name, each {x,y,w,h}, when individual cells are clearly delineated.
+  Example: {"name":"Acme","email":"a@b.com","__meta":{"confidence":{"name":0.95,"email":0.7},"region":{"x":12,"y":80,"w":600,"h":40},"regions":{"name":{"x":12,"y":80,"w":180,"h":40},"email":{"x":200,"y":80,"w":280,"h":40}}}}.`;
 
   if (instructions) {
     systemPrompt += `\n\nAdditional instructions: ${instructions}`;
@@ -73,7 +78,7 @@ Rules:
           },
           {
             type: "text",
-            text: "Extract all data rows from this screenshot. Return ONLY a JSON array.",
+            text: "Extract all data rows from this screenshot. Return ONLY a JSON array. Include __meta.confidence per row.",
           },
         ],
       },
@@ -91,7 +96,19 @@ Rules:
   try {
     const parsed = JSON.parse(jsonMatch[0]);
     if (!Array.isArray(parsed)) return [];
-    return parsed as Record<string, unknown>[];
+    // If the model omitted confidence, synthesize a default of 0.7 per non-meta field.
+    return (parsed as Record<string, unknown>[]).map((row) => {
+      const meta = (row.__meta && typeof row.__meta === "object" ? row.__meta : {}) as { confidence?: Record<string, number> };
+      if (!meta.confidence) {
+        const conf: Record<string, number> = {};
+        for (const k of Object.keys(row)) {
+          if (k === "__meta") continue;
+          conf[k] = 0.7;
+        }
+        meta.confidence = conf;
+      }
+      return { ...row, __meta: meta };
+    });
   } catch {
     logger.warn("Failed to parse AI extraction response as JSON");
     return [];

@@ -28,4 +28,8 @@ export type ListCrmRecordsParams = {
    * @nullable
    */
   offset?: number | null;
+  /**
+   * @nullable
+   */
+  needsReview?: boolean | null;
 };

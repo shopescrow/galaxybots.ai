@@ -207,12 +207,17 @@ export interface ListRecordsOptions {
   order?: "asc" | "desc" | null;
   limit?: number | null;
   offset?: number | null;
+  needsReview?: boolean | null;
 }
 
 export async function listRecords(crmId: number, entityType: string, opts: ListRecordsOptions) {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
   const offset = Math.max(opts.offset ?? 0, 0);
-  const whereExpr = and(eq(crmRecordsTable.crmId, crmId), eq(crmRecordsTable.entityType, entityType));
+  const conditions = [eq(crmRecordsTable.crmId, crmId), eq(crmRecordsTable.entityType, entityType)];
+  if (opts.needsReview === true) {
+    conditions.push(eq(crmRecordsTable.needsReview, true));
+  }
+  const whereExpr = and(...conditions);
 
   // Sorting on JSONB field
   let orderExpr;

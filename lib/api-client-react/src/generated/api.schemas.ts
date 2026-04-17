@@ -987,13 +987,237 @@ export interface CrmCommitResult {
 
 export type CrmRecordData = { [key: string]: unknown };
 
+export type CrmRecordProvenance = { [key: string]: unknown };
+
+export type RecordWarningSeverity = (typeof RecordWarningSeverity)[keyof typeof RecordWarningSeverity];
+
+export const RecordWarningSeverity = {
+  info: "info",
+  warn: "warn",
+  error: "error",
+} as const;
+
+export interface RecordWarning {
+  /** @nullable */
+  field?: string | null;
+  code: string;
+  message: string;
+  severity: RecordWarningSeverity;
+}
+
 export interface CrmRecord {
   id: number;
   crmId: number;
   entityType: string;
   data: CrmRecordData;
+  provenance?: CrmRecordProvenance;
+  warnings?: RecordWarning[];
+  needsReview?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type PipelineStageStateStatus = (typeof PipelineStageStateStatus)[keyof typeof PipelineStageStateStatus];
+
+export const PipelineStageStateStatus = {
+  pending: "pending",
+  running: "running",
+  done: "done",
+  failed: "failed",
+  skipped: "skipped",
+} as const;
+
+export interface PipelineStageState {
+  status: PipelineStageStateStatus;
+  /** @nullable */
+  rowsIn?: number | null;
+  /** @nullable */
+  rowsOut?: number | null;
+  /** @nullable */
+  warnings?: number | null;
+  /** @nullable */
+  startedAt?: string | null;
+  /** @nullable */
+  finishedAt?: string | null;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface PipelineFieldRecipe {
+  transforms: string[];
+}
+
+export type PipelineRecipeFields = { [key: string]: PipelineFieldRecipe };
+
+export interface PipelineRecipe {
+  fields: PipelineRecipeFields;
+  confidenceThreshold: number;
+}
+
+export type DedupClusterMethod = (typeof DedupClusterMethod)[keyof typeof DedupClusterMethod];
+
+export const DedupClusterMethod = {
+  exact: "exact",
+  fuzzy: "fuzzy",
+  embedding: "embedding",
+} as const;
+
+export type DedupClusterStatus = (typeof DedupClusterStatus)[keyof typeof DedupClusterStatus];
+
+export const DedupClusterStatus = {
+  proposed: "proposed",
+  accepted: "accepted",
+  rejected: "rejected",
+} as const;
+
+export type DedupClusterPreviewItem = { [key: string]: unknown };
+
+export interface DedupCluster {
+  id: string;
+  entityType: string;
+  rowIds: number[];
+  representativeRowId: number;
+  similarity: number;
+  signal: string;
+  method: DedupClusterMethod;
+  status: DedupClusterStatus;
+  preview: DedupClusterPreviewItem[];
+}
+
+export type IdentityLinkMethod = (typeof IdentityLinkMethod)[keyof typeof IdentityLinkMethod];
+
+export const IdentityLinkMethod = {
+  fk_overlap: "fk_overlap",
+  shared_identifier: "shared_identifier",
+  embedding: "embedding",
+} as const;
+
+export type IdentityLinkStatus = (typeof IdentityLinkStatus)[keyof typeof IdentityLinkStatus];
+
+export const IdentityLinkStatus = {
+  proposed: "proposed",
+  accepted: "accepted",
+  rejected: "rejected",
+} as const;
+
+export interface IdentityLink {
+  id: string;
+  fromEntityType: string;
+  fromRowId: number;
+  toEntityType: string;
+  toRowId: number;
+  signal: string;
+  similarity: number;
+  method: IdentityLinkMethod;
+  status: IdentityLinkStatus;
+}
+
+export type DryRunRowData = { [key: string]: unknown };
+
+export type DryRunRowProvenance = { [key: string]: unknown };
+
+export interface DryRunRow {
+  rowId: number;
+  entityType: string;
+  data: DryRunRowData;
+  provenance: DryRunRowProvenance;
+  warnings: RecordWarning[];
+  needsReview: boolean;
+}
+
+export type RebuildJobStatus = (typeof RebuildJobStatus)[keyof typeof RebuildJobStatus];
+
+export const RebuildJobStatus = {
+  pending: "pending",
+  running: "running",
+  awaiting_review: "awaiting_review",
+  ready_to_commit: "ready_to_commit",
+  committed: "committed",
+  failed: "failed",
+} as const;
+
+export type RebuildJobCurrentStage = (typeof RebuildJobCurrentStage)[keyof typeof RebuildJobCurrentStage];
+
+export const RebuildJobCurrentStage = {
+  normalize: "normalize",
+  dedupe: "dedupe",
+  resolve: "resolve",
+  dryrun: "dryrun",
+  commit: "commit",
+} as const;
+
+export type RebuildJobStages = { [key: string]: PipelineStageState };
+
+export interface RebuildJob {
+  id: number;
+  crmId: number;
+  /** @nullable */
+  sourceJobId?: number | null;
+  status: RebuildJobStatus;
+  currentStage: RebuildJobCurrentStage;
+  stages: RebuildJobStages;
+  recipe: PipelineRecipe;
+  dedupClusters: DedupCluster[];
+  identityLinks: IdentityLink[];
+  dryRunRows: DryRunRow[];
+  warnings: RecordWarning[];
+  rowsIn: number;
+  rowsOut: number;
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateRecipeBody {
+  recipe: PipelineRecipe;
+}
+
+export type ClusterUpdateStatus = (typeof ClusterUpdateStatus)[keyof typeof ClusterUpdateStatus];
+
+export const ClusterUpdateStatus = {
+  accepted: "accepted",
+  rejected: "rejected",
+} as const;
+
+export interface ClusterUpdate {
+  id: string;
+  status: ClusterUpdateStatus;
+}
+
+export interface UpdateClustersBody {
+  clusters: ClusterUpdate[];
+}
+
+export type LinkUpdateStatus = (typeof LinkUpdateStatus)[keyof typeof LinkUpdateStatus];
+
+export const LinkUpdateStatus = {
+  accepted: "accepted",
+  rejected: "rejected",
+} as const;
+
+export interface LinkUpdate {
+  id: string;
+  status: LinkUpdateStatus;
+}
+
+export interface UpdateLinksBody {
+  links: LinkUpdate[];
+}
+
+export interface PipelineCommitResult {
+  jobId: number;
+  crmId: number;
+  recordsLoaded: number;
+  needsReview: number;
+  duplicatesDropped: number;
+}
+
+export interface TransformDescriptor {
+  id: string;
+  label: string;
+  description: string;
+  appliesTo: string[];
 }
 
 export interface CrmRecordsPage {
@@ -1206,6 +1430,13 @@ export const DownloadExtractionDataFormat = {
 
 export type DownloadExtractionData200TwoItem = { [key: string]: unknown };
 
+/**
+ * @nullable
+ */
+export type GetRebuildPipeline200 = {
+  job?: RebuildJob;
+} | null;
+
 export type ListCrmRecordsParams = {
   /**
    * @nullable
@@ -1227,6 +1458,10 @@ export type ListCrmRecordsParams = {
    * @nullable
    */
   offset?: number | null;
+  /**
+   * @nullable
+   */
+  needsReview?: boolean | null;
 };
 
 export type ListCrmRecordsOrder = (typeof ListCrmRecordsOrder)[keyof typeof ListCrmRecordsOrder] | null;

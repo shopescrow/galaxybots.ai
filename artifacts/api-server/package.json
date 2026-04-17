@@ -36,6 +36,7 @@
     "p-retry": "^7.1.1",
     "pdf-parse": "^2.4.5",
     "playwright-core": "^1.59.1",
+    "sharp": "^0.34.5",
     "stripe": "^20.4.1",
     "zod": "catalog:"
   },

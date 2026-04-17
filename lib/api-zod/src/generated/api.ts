@@ -1560,16 +1560,448 @@ export const DeleteCrmParams = zod.object({
 });
 
 /**
- * @summary Load extracted rows into the CRM record store
+ * @deprecated
+ * @summary (REMOVED) Direct commit was replaced by the data-quality pipeline. Always returns 410 Gone.
  */
 export const CommitCrmParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const CommitCrmResponse = zod.object({
+/**
+ * @summary List built-in transform descriptors for the recipe editor
+ */
+export const ListTransformsResponseItem = zod.object({
+  id: zod.string(),
+  label: zod.string(),
+  description: zod.string(),
+  appliesTo: zod.array(zod.string()),
+});
+export const ListTransformsResponse = zod.array(ListTransformsResponseItem);
+
+/**
+ * @summary Get the latest data-quality pipeline run for this CRM
+ */
+export const GetRebuildPipelineParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetRebuildPipelineResponse = zod
+  .object({
+    job: zod
+      .object({
+        id: zod.number(),
+        crmId: zod.number(),
+        sourceJobId: zod.number().nullish(),
+        status: zod.enum(["pending", "running", "awaiting_review", "ready_to_commit", "committed", "failed"]),
+        currentStage: zod.enum(["normalize", "dedupe", "resolve", "dryrun", "commit"]),
+        stages: zod.record(
+          zod.string(),
+          zod.object({
+            status: zod.enum(["pending", "running", "done", "failed", "skipped"]),
+            rowsIn: zod.number().nullish(),
+            rowsOut: zod.number().nullish(),
+            warnings: zod.number().nullish(),
+            startedAt: zod.string().nullish(),
+            finishedAt: zod.string().nullish(),
+            message: zod.string().nullish(),
+          }),
+        ),
+        recipe: zod.object({
+          fields: zod.record(
+            zod.string(),
+            zod.object({
+              transforms: zod.array(zod.string()),
+            }),
+          ),
+          confidenceThreshold: zod.number(),
+        }),
+        dedupClusters: zod.array(
+          zod.object({
+            id: zod.string(),
+            entityType: zod.string(),
+            rowIds: zod.array(zod.number()),
+            representativeRowId: zod.number(),
+            similarity: zod.number(),
+            signal: zod.string(),
+            method: zod.enum(["exact", "fuzzy", "embedding"]),
+            status: zod.enum(["proposed", "accepted", "rejected"]),
+            preview: zod.array(zod.record(zod.string(), zod.unknown())),
+          }),
+        ),
+        identityLinks: zod.array(
+          zod.object({
+            id: zod.string(),
+            fromEntityType: zod.string(),
+            fromRowId: zod.number(),
+            toEntityType: zod.string(),
+            toRowId: zod.number(),
+            signal: zod.string(),
+            similarity: zod.number(),
+            method: zod.enum(["fk_overlap", "shared_identifier", "embedding"]),
+            status: zod.enum(["proposed", "accepted", "rejected"]),
+          }),
+        ),
+        dryRunRows: zod.array(
+          zod.object({
+            rowId: zod.number(),
+            entityType: zod.string(),
+            data: zod.record(zod.string(), zod.unknown()),
+            provenance: zod.record(zod.string(), zod.unknown()),
+            warnings: zod.array(
+              zod.object({
+                field: zod.string().nullish(),
+                code: zod.string(),
+                message: zod.string(),
+                severity: zod.enum(["info", "warn", "error"]),
+              }),
+            ),
+            needsReview: zod.boolean(),
+          }),
+        ),
+        warnings: zod.array(
+          zod.object({
+            field: zod.string().nullish(),
+            code: zod.string(),
+            message: zod.string(),
+            severity: zod.enum(["info", "warn", "error"]),
+          }),
+        ),
+        rowsIn: zod.number(),
+        rowsOut: zod.number(),
+        errorMessage: zod.string().nullish(),
+        createdAt: zod.date(),
+        updatedAt: zod.date(),
+      })
+      .optional(),
+  })
+  .nullable();
+
+/**
+ * @summary Start (or re-run) the data-quality pipeline through the dry-run review stage
+ */
+export const StartRebuildPipelineParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Update the per-field transform recipe for the in-flight pipeline
+ */
+export const UpdateRebuildRecipeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRebuildRecipeBody = zod.object({
+  recipe: zod.object({
+    fields: zod.record(
+      zod.string(),
+      zod.object({
+        transforms: zod.array(zod.string()),
+      }),
+    ),
+    confidenceThreshold: zod.number(),
+  }),
+});
+
+export const UpdateRebuildRecipeResponse = zod.object({
+  id: zod.number(),
+  crmId: zod.number(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["pending", "running", "awaiting_review", "ready_to_commit", "committed", "failed"]),
+  currentStage: zod.enum(["normalize", "dedupe", "resolve", "dryrun", "commit"]),
+  stages: zod.record(
+    zod.string(),
+    zod.object({
+      status: zod.enum(["pending", "running", "done", "failed", "skipped"]),
+      rowsIn: zod.number().nullish(),
+      rowsOut: zod.number().nullish(),
+      warnings: zod.number().nullish(),
+      startedAt: zod.string().nullish(),
+      finishedAt: zod.string().nullish(),
+      message: zod.string().nullish(),
+    }),
+  ),
+  recipe: zod.object({
+    fields: zod.record(
+      zod.string(),
+      zod.object({
+        transforms: zod.array(zod.string()),
+      }),
+    ),
+    confidenceThreshold: zod.number(),
+  }),
+  dedupClusters: zod.array(
+    zod.object({
+      id: zod.string(),
+      entityType: zod.string(),
+      rowIds: zod.array(zod.number()),
+      representativeRowId: zod.number(),
+      similarity: zod.number(),
+      signal: zod.string(),
+      method: zod.enum(["exact", "fuzzy", "embedding"]),
+      status: zod.enum(["proposed", "accepted", "rejected"]),
+      preview: zod.array(zod.record(zod.string(), zod.unknown())),
+    }),
+  ),
+  identityLinks: zod.array(
+    zod.object({
+      id: zod.string(),
+      fromEntityType: zod.string(),
+      fromRowId: zod.number(),
+      toEntityType: zod.string(),
+      toRowId: zod.number(),
+      signal: zod.string(),
+      similarity: zod.number(),
+      method: zod.enum(["fk_overlap", "shared_identifier", "embedding"]),
+      status: zod.enum(["proposed", "accepted", "rejected"]),
+    }),
+  ),
+  dryRunRows: zod.array(
+    zod.object({
+      rowId: zod.number(),
+      entityType: zod.string(),
+      data: zod.record(zod.string(), zod.unknown()),
+      provenance: zod.record(zod.string(), zod.unknown()),
+      warnings: zod.array(
+        zod.object({
+          field: zod.string().nullish(),
+          code: zod.string(),
+          message: zod.string(),
+          severity: zod.enum(["info", "warn", "error"]),
+        }),
+      ),
+      needsReview: zod.boolean(),
+    }),
+  ),
+  warnings: zod.array(
+    zod.object({
+      field: zod.string().nullish(),
+      code: zod.string(),
+      message: zod.string(),
+      severity: zod.enum(["info", "warn", "error"]),
+    }),
+  ),
+  rowsIn: zod.number(),
+  rowsOut: zod.number(),
+  errorMessage: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Accept or reject proposed dedup clusters
+ */
+export const UpdateRebuildClustersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRebuildClustersBody = zod.object({
+  clusters: zod.array(
+    zod.object({
+      id: zod.string(),
+      status: zod.enum(["accepted", "rejected"]),
+    }),
+  ),
+});
+
+export const UpdateRebuildClustersResponse = zod.object({
+  id: zod.number(),
+  crmId: zod.number(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["pending", "running", "awaiting_review", "ready_to_commit", "committed", "failed"]),
+  currentStage: zod.enum(["normalize", "dedupe", "resolve", "dryrun", "commit"]),
+  stages: zod.record(
+    zod.string(),
+    zod.object({
+      status: zod.enum(["pending", "running", "done", "failed", "skipped"]),
+      rowsIn: zod.number().nullish(),
+      rowsOut: zod.number().nullish(),
+      warnings: zod.number().nullish(),
+      startedAt: zod.string().nullish(),
+      finishedAt: zod.string().nullish(),
+      message: zod.string().nullish(),
+    }),
+  ),
+  recipe: zod.object({
+    fields: zod.record(
+      zod.string(),
+      zod.object({
+        transforms: zod.array(zod.string()),
+      }),
+    ),
+    confidenceThreshold: zod.number(),
+  }),
+  dedupClusters: zod.array(
+    zod.object({
+      id: zod.string(),
+      entityType: zod.string(),
+      rowIds: zod.array(zod.number()),
+      representativeRowId: zod.number(),
+      similarity: zod.number(),
+      signal: zod.string(),
+      method: zod.enum(["exact", "fuzzy", "embedding"]),
+      status: zod.enum(["proposed", "accepted", "rejected"]),
+      preview: zod.array(zod.record(zod.string(), zod.unknown())),
+    }),
+  ),
+  identityLinks: zod.array(
+    zod.object({
+      id: zod.string(),
+      fromEntityType: zod.string(),
+      fromRowId: zod.number(),
+      toEntityType: zod.string(),
+      toRowId: zod.number(),
+      signal: zod.string(),
+      similarity: zod.number(),
+      method: zod.enum(["fk_overlap", "shared_identifier", "embedding"]),
+      status: zod.enum(["proposed", "accepted", "rejected"]),
+    }),
+  ),
+  dryRunRows: zod.array(
+    zod.object({
+      rowId: zod.number(),
+      entityType: zod.string(),
+      data: zod.record(zod.string(), zod.unknown()),
+      provenance: zod.record(zod.string(), zod.unknown()),
+      warnings: zod.array(
+        zod.object({
+          field: zod.string().nullish(),
+          code: zod.string(),
+          message: zod.string(),
+          severity: zod.enum(["info", "warn", "error"]),
+        }),
+      ),
+      needsReview: zod.boolean(),
+    }),
+  ),
+  warnings: zod.array(
+    zod.object({
+      field: zod.string().nullish(),
+      code: zod.string(),
+      message: zod.string(),
+      severity: zod.enum(["info", "warn", "error"]),
+    }),
+  ),
+  rowsIn: zod.number(),
+  rowsOut: zod.number(),
+  errorMessage: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Accept or reject proposed identity links
+ */
+export const UpdateRebuildLinksParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRebuildLinksBody = zod.object({
+  links: zod.array(
+    zod.object({
+      id: zod.string(),
+      status: zod.enum(["accepted", "rejected"]),
+    }),
+  ),
+});
+
+export const UpdateRebuildLinksResponse = zod.object({
+  id: zod.number(),
+  crmId: zod.number(),
+  sourceJobId: zod.number().nullish(),
+  status: zod.enum(["pending", "running", "awaiting_review", "ready_to_commit", "committed", "failed"]),
+  currentStage: zod.enum(["normalize", "dedupe", "resolve", "dryrun", "commit"]),
+  stages: zod.record(
+    zod.string(),
+    zod.object({
+      status: zod.enum(["pending", "running", "done", "failed", "skipped"]),
+      rowsIn: zod.number().nullish(),
+      rowsOut: zod.number().nullish(),
+      warnings: zod.number().nullish(),
+      startedAt: zod.string().nullish(),
+      finishedAt: zod.string().nullish(),
+      message: zod.string().nullish(),
+    }),
+  ),
+  recipe: zod.object({
+    fields: zod.record(
+      zod.string(),
+      zod.object({
+        transforms: zod.array(zod.string()),
+      }),
+    ),
+    confidenceThreshold: zod.number(),
+  }),
+  dedupClusters: zod.array(
+    zod.object({
+      id: zod.string(),
+      entityType: zod.string(),
+      rowIds: zod.array(zod.number()),
+      representativeRowId: zod.number(),
+      similarity: zod.number(),
+      signal: zod.string(),
+      method: zod.enum(["exact", "fuzzy", "embedding"]),
+      status: zod.enum(["proposed", "accepted", "rejected"]),
+      preview: zod.array(zod.record(zod.string(), zod.unknown())),
+    }),
+  ),
+  identityLinks: zod.array(
+    zod.object({
+      id: zod.string(),
+      fromEntityType: zod.string(),
+      fromRowId: zod.number(),
+      toEntityType: zod.string(),
+      toRowId: zod.number(),
+      signal: zod.string(),
+      similarity: zod.number(),
+      method: zod.enum(["fk_overlap", "shared_identifier", "embedding"]),
+      status: zod.enum(["proposed", "accepted", "rejected"]),
+    }),
+  ),
+  dryRunRows: zod.array(
+    zod.object({
+      rowId: zod.number(),
+      entityType: zod.string(),
+      data: zod.record(zod.string(), zod.unknown()),
+      provenance: zod.record(zod.string(), zod.unknown()),
+      warnings: zod.array(
+        zod.object({
+          field: zod.string().nullish(),
+          code: zod.string(),
+          message: zod.string(),
+          severity: zod.enum(["info", "warn", "error"]),
+        }),
+      ),
+      needsReview: zod.boolean(),
+    }),
+  ),
+  warnings: zod.array(
+    zod.object({
+      field: zod.string().nullish(),
+      code: zod.string(),
+      message: zod.string(),
+      severity: zod.enum(["info", "warn", "error"]),
+    }),
+  ),
+  rowsIn: zod.number(),
+  rowsOut: zod.number(),
+  errorMessage: zod.string().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Phase-2 commit — promote the dry-run output into live CRM records
+ */
+export const CommitRebuildPipelineParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CommitRebuildPipelineResponse = zod.object({
+  jobId: zod.number(),
   crmId: zod.number(),
   recordsLoaded: zod.number(),
-  status: zod.string(),
+  needsReview: zod.number(),
+  duplicatesDropped: zod.number(),
 });
 
 /**
@@ -1586,6 +2018,7 @@ export const ListCrmRecordsQueryParams = zod.object({
   order: zod.union([zod.literal("asc"), zod.literal("desc"), zod.literal(null)]).nullish(),
   limit: zod.coerce.number().nullish(),
   offset: zod.coerce.number().nullish(),
+  needsReview: zod.coerce.boolean().nullish(),
 });
 
 export const ListCrmRecordsResponse = zod.object({
@@ -1595,6 +2028,18 @@ export const ListCrmRecordsResponse = zod.object({
       crmId: zod.number(),
       entityType: zod.string(),
       data: zod.record(zod.string(), zod.unknown()),
+      provenance: zod.record(zod.string(), zod.unknown()).optional(),
+      warnings: zod
+        .array(
+          zod.object({
+            field: zod.string().nullish(),
+            code: zod.string(),
+            message: zod.string(),
+            severity: zod.enum(["info", "warn", "error"]),
+          }),
+        )
+        .optional(),
+      needsReview: zod.boolean().optional(),
       createdAt: zod.date(),
       updatedAt: zod.date(),
     }),
@@ -1630,6 +2075,18 @@ export const GetCrmRecordResponse = zod.object({
   crmId: zod.number(),
   entityType: zod.string(),
   data: zod.record(zod.string(), zod.unknown()),
+  provenance: zod.record(zod.string(), zod.unknown()).optional(),
+  warnings: zod
+    .array(
+      zod.object({
+        field: zod.string().nullish(),
+        code: zod.string(),
+        message: zod.string(),
+        severity: zod.enum(["info", "warn", "error"]),
+      }),
+    )
+    .optional(),
+  needsReview: zod.boolean().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -1652,6 +2109,18 @@ export const UpdateCrmRecordResponse = zod.object({
   crmId: zod.number(),
   entityType: zod.string(),
   data: zod.record(zod.string(), zod.unknown()),
+  provenance: zod.record(zod.string(), zod.unknown()).optional(),
+  warnings: zod
+    .array(
+      zod.object({
+        field: zod.string().nullish(),
+        code: zod.string(),
+        message: zod.string(),
+        severity: zod.enum(["info", "warn", "error"]),
+      }),
+    )
+    .optional(),
+  needsReview: zod.boolean().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });

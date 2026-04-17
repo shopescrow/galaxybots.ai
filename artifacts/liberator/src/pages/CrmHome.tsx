@@ -52,6 +52,10 @@ export function CrmHome() {
     }
   }, [data?.crm?.id]);
 
+  // For draft CRMs, the data-quality pipeline is the canonical commit path.
+  // CrmHome remains the schema-editor surface; we surface a clear CTA to the pipeline
+  // instead of silently redirecting (so the user can still tweak the blueprint here).
+
   if (!crmId) return <div>Invalid CRM ID</div>;
 
   if (isLoading || !data) {
@@ -128,7 +132,8 @@ export function CrmHome() {
             { id: crmId },
             {
               onSuccess: (result) => {
-                toast({ title: "CRM committed", description: `${result.recordsLoaded} records loaded` });
+                const r = result as { recordsLoaded?: number };
+                toast({ title: "CRM committed", description: `${r.recordsLoaded ?? 0} records loaded` });
                 qc.invalidateQueries({ queryKey: getGetCrmQueryKey(crmId) });
                 qc.invalidateQueries({ queryKey: getListCrmsQueryKey() });
               },
@@ -160,14 +165,24 @@ export function CrmHome() {
               <Button variant="outline" onClick={handleSave} disabled={update.isPending} className="gap-2">
                 <Save className="w-4 h-4" /> Save Draft
               </Button>
-              <Button onClick={handleCommit} disabled={update.isPending || commit.isPending} className="gap-2">
-                <Rocket className="w-4 h-4" /> Commit & Load Data
+              <Button
+                onClick={() => {
+                  // Save edits first so the pipeline reads the latest blueprint.
+                  update.mutate(
+                    { id: crmId, data: { name, description, definition: bp } },
+                    { onSuccess: () => setLocation(`/crms/${crmId}/pipeline`) },
+                  );
+                }}
+                disabled={update.isPending}
+                className="gap-2"
+              >
+                <Rocket className="w-4 h-4" /> Open Data Quality Pipeline
               </Button>
             </>
           )}
           {!isDraft && (
-            <Button variant="outline" onClick={handleCommit} disabled={commit.isPending} className="gap-2">
-              <Rocket className="w-4 h-4" /> Re-commit
+            <Button variant="outline" onClick={() => setLocation(`/crms/${crmId}/pipeline`)} className="gap-2">
+              <Rocket className="w-4 h-4" /> Re-run pipeline
             </Button>
           )}
         </div>

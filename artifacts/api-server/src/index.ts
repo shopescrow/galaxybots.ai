@@ -131,8 +131,33 @@ async function ensureCrmTables() {
         "created_at" timestamp DEFAULT now() NOT NULL,
         "updated_at" timestamp DEFAULT now() NOT NULL
       );
+      ALTER TABLE "crm_records" ADD COLUMN IF NOT EXISTS "provenance" jsonb NOT NULL DEFAULT '{}'::jsonb;
+      ALTER TABLE "crm_records" ADD COLUMN IF NOT EXISTS "warnings" jsonb NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE "crm_records" ADD COLUMN IF NOT EXISTS "needs_review" boolean NOT NULL DEFAULT false;
       CREATE INDEX IF NOT EXISTS "idx_crm_records_crm_entity" ON "crm_records"("crm_id", "entity_type");
       CREATE INDEX IF NOT EXISTS "idx_crm_blueprints_source_job" ON "crm_blueprints"("source_job_id");
+      CREATE INDEX IF NOT EXISTS "idx_crm_records_needs_review" ON "crm_records"("crm_id", "needs_review") WHERE needs_review = true;
+
+      CREATE TABLE IF NOT EXISTS "rebuild_jobs" (
+        "id" serial PRIMARY KEY,
+        "crm_id" integer NOT NULL REFERENCES "crm_blueprints"("id") ON DELETE CASCADE,
+        "source_job_id" integer REFERENCES "extraction_jobs"("id") ON DELETE SET NULL,
+        "status" text NOT NULL DEFAULT 'pending',
+        "current_stage" text NOT NULL DEFAULT 'normalize',
+        "stages" jsonb NOT NULL DEFAULT '{}'::jsonb,
+        "recipe" jsonb NOT NULL DEFAULT '{}'::jsonb,
+        "dedup_clusters" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "identity_links" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "dry_run_rows" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "warnings" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "rows_in" integer NOT NULL DEFAULT 0,
+        "rows_out" integer NOT NULL DEFAULT 0,
+        "error_message" text,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "idx_rebuild_jobs_crm" ON "rebuild_jobs"("crm_id");
+      CREATE INDEX IF NOT EXISTS "idx_rebuild_jobs_status" ON "rebuild_jobs"("status");
     `);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
