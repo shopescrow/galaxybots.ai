@@ -177,7 +177,7 @@ router.post(
     }
 
     const [user] = await db
-      .select({ username: usersTable.username })
+      .select({ username: usersTable.displayName })
       .from(usersTable)
       .where(eq(usersTable.id, req.user!.userId));
 

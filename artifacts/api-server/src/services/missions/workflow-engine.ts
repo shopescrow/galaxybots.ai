@@ -339,7 +339,7 @@ async function dispatchAction(
       if (names.length === 0) {
         return `deploy_team: no bot names specified in config.teamNames`;
       }
-      const bots = await db.select().from(botsTable).where(eq(botsTable.clientId, clientId));
+      const bots = await db.select().from(botsTable).where(eq(botsTable.tenantId, clientId));
       const dispatched: string[] = [];
       for (const name of names) {
         const bot = bots.find((b) => b.name.toLowerCase() === name.toLowerCase());

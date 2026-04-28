@@ -15,6 +15,7 @@ export const partnersTable = pgTable("partners", {
   contractType: text("contract_type").notNull().default("monthly"),
   partnerName: text("partner_name").notNull(),
   partnerLogo: text("partner_logo"),
+  primaryColor: text("primary_color"),
   welcomeMessage: text("welcome_message").notNull(),
   offer: text("offer"),
   adminPasswordHash: text("admin_password_hash"),

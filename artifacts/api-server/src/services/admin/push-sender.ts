@@ -11,7 +11,7 @@ interface ExpoPushMessage {
   priority?: "default" | "normal" | "high";
 }
 
-type NotificationCategory = "prospect" | "aeo" | "competitor" | "cost" | "bot" | "pipeline" | "system";
+type NotificationCategory = "prospect" | "aeo" | "competitor" | "cost" | "bot" | "pipeline" | "system" | "approval";
 
 const CATEGORY_PREF_MAP: Record<string, string> = {
   bot: "notifyBotActions",

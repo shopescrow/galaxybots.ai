@@ -36,7 +36,7 @@ router.get("/mcp-marketing/servers", requireRole("owner", "admin"), async (req, 
       .select({
         id: mcpServersTable.id,
         clientId: mcpServersTable.clientId,
-        clientName: clientsTable.name,
+        clientName: clientsTable.companyName,
         name: mcpServersTable.name,
         description: mcpServersTable.description,
         sseUrl: mcpServersTable.sseUrl,
