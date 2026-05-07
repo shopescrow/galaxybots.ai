@@ -294,7 +294,7 @@ export function CommandPalette({ open, onOpenChange, onOpenAeoScan }: CommandPal
       }
     });
 
-    (clients || []).forEach((client: { id: number; companyName?: string; name?: string; industry?: string | null }) => {
+    (clients?.data || []).forEach((client: { id: number; companyName?: string; name?: string; industry?: string | null }) => {
       const displayName = client.companyName || client.name || "";
       const score = Math.max(
         fuzzyScore(query, displayName),

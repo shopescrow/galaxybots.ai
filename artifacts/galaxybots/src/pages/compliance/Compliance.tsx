@@ -323,7 +323,7 @@ function ClientComplianceSection() {
   const [formData, setFormData] = useState<RequirementFormData>({ ...EMPTY_FORM });
   const [error, setError] = useState<string | null>(null);
 
-  const clientId = selectedClientId ?? (clients?.[0]?.id ?? 0);
+  const clientId = selectedClientId ?? (clients?.data?.[0]?.id ?? 0);
   const { data: requirements, isLoading: reqLoading } = useClientCompliance(clientId);
   const createMutation = useCreateClientComplianceMutation(clientId);
   const updateMutation = useUpdateClientComplianceMutation(clientId);
@@ -431,7 +431,7 @@ function ClientComplianceSection() {
         <div className="flex justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
-      ) : !clients || clients.length === 0 ? (
+      ) : !clients?.data || clients.data.length === 0 ? (
         <Card className="border-dashed border-border/50 bg-transparent shadow-none">
           <CardContent className="p-12 text-center">
             <Building className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
@@ -448,7 +448,7 @@ function ClientComplianceSection() {
                 onChange={(e) => setSelectedClientId(Number(e.target.value))}
                 className="appearance-none flex h-12 rounded-lg border border-border/50 bg-input/50 px-4 pr-10 py-2 text-sm font-tech text-foreground w-full sm:w-auto sm:min-w-[240px]"
               >
-                {clients.map(c => (
+                {clients.data.map(c => (
                   <option key={c.id} value={c.id}>{c.companyName}</option>
                 ))}
               </select>

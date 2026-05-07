@@ -167,7 +167,7 @@ export default function Clients() {
         {/* Tabs */}
         <div className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit max-w-full overflow-x-auto">
           {[
-            { key: "clients", label: "All Clients", count: clients?.length || 0 },
+            { key: "clients", label: "All Clients", count: clients?.data?.length || 0 },
             ...(isPlatformAdmin ? [{ key: "aeo-health", label: "AEO Health", count: null }] : []),
             { key: "partners", label: "Partner Referrals", count: referrals.length },
           ].map((t) => (
@@ -196,14 +196,14 @@ export default function Clients() {
             <div className="flex justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : clients?.length === 0 ? (
+          ) : clients?.data?.length === 0 ? (
             <Card className="text-center py-20 border-dashed border-border/50 bg-transparent shadow-none">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
               <p className="text-muted-foreground">No active deployments found.</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clients?.map((client) => (
+              {clients?.data?.map((client) => (
                 <Card key={client.id} className="hover:border-primary/40 transition-colors">
                   <CardHeader className="pb-3 border-b border-border/30">
                     <div className="flex justify-between items-start">

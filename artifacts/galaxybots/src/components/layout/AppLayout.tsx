@@ -115,7 +115,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       const num = parseInt(e.key);
       if (meta && num >= 1 && num <= 9) {
         e.preventDefault();
-        const clientList = clients as Array<{ id: number; companyName?: string; name?: string }> | undefined;
+        const clientList = (clients as { data?: Array<{ id: number; companyName?: string; name?: string }> } | undefined)?.data;
         if (clientList && clientList.length > 0) {
           const idx = num - 1;
           const client = clientList[idx];
