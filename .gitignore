@@ -1,49 +1,111 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# =============================================================================
+# GalaxyBots.ai — .gitignore
+# =============================================================================
 
-# compiled output
-dist
-tmp
-out-tsc
+# -----------------------------------------------------------------------------
+# Dependencies
+# -----------------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+
+# -----------------------------------------------------------------------------
+# Build outputs
+# -----------------------------------------------------------------------------
+dist/
+out/
+build/
+tmp/
+out-tsc/
 *.tsbuildinfo
-.expo
-.expo-shared
 
-# dependencies
-node_modules
+# Expo / React Native
+.expo/
+.expo-shared/
 
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# -----------------------------------------------------------------------------
+# Environment & secrets
+# Never commit .env files — use Replit Secrets instead.
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
 
-# IDE - VSCode
+# -----------------------------------------------------------------------------
+# Editors & IDEs
+# -----------------------------------------------------------------------------
+.idea/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
 
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
+# -----------------------------------------------------------------------------
+# OS files
+# -----------------------------------------------------------------------------
 .DS_Store
+.DS_Store?
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
+# -----------------------------------------------------------------------------
+# Replit platform internals
+# -----------------------------------------------------------------------------
+.cache/
+.local/
+.config/
+.replit
+.replitignore
+
+# Cursor / GitHub Copilot rule files added by Replit
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
-.cache/
-.local/
+# -----------------------------------------------------------------------------
+# Agent session files
+# Generated each session — must not be committed.
+# -----------------------------------------------------------------------------
+attached_assets/
+.agents/
+
+# -----------------------------------------------------------------------------
+# Generated exports & reports
+# Runtime outputs created by bots/agents — not source code.
+# -----------------------------------------------------------------------------
+exports/
+reports/
+
+# -----------------------------------------------------------------------------
+# Large binary assets
+# Store in cloud/shared drive, not in git history.
+# -----------------------------------------------------------------------------
+*.pdf
+*.pptx
+*.docx
+*.xlsx
+*.zip
+
+# -----------------------------------------------------------------------------
+# Misc / logs / leftover debris
+# -----------------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+/.sass-cache
+/connect.lock
+conflict_block.txt
+resolution.txt
+part1.txt
+part2.txt
