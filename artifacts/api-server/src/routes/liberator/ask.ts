@@ -29,10 +29,22 @@ import {
 
 const router: IRouter = Router();
 
-async function loadCrm(id: number): Promise<{ name: string; def: CrmBlueprintDef } | null> {
-  const [crm] = await db.select().from(crmBlueprintsTable).where(eq(crmBlueprintsTable.id, id));
+async function loadCrm(id: number, ownerUserId: number): Promise<{ name: string; def: CrmBlueprintDef } | null> {
+  const [crm] = await db
+    .select()
+    .from(crmBlueprintsTable)
+    .where(and(eq(crmBlueprintsTable.id, id), eq(crmBlueprintsTable.ownerUserId, ownerUserId)));
   if (!crm) return null;
   return { name: crm.name, def: crm.definition as CrmBlueprintDef };
+}
+
+function getUserId(req: Request, res: Response): number | null {
+  const userId = req.user?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+  return userId;
 }
 
 function audit(action: string, crmId: number, metadata: Record<string, unknown>, req: Request) {
@@ -50,13 +62,15 @@ function audit(action: string, crmId: number, metadata: Record<string, unknown>,
 /* -------------------- Ask -------------------- */
 
 router.post("/liberator/crms/:id/ask", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
   const question = String((req.body as Record<string, unknown> | null)?.question ?? "").trim();
   if (!question) { res.status(400).json({ error: "question is required" }); return; }
   if (question.length > 2000) { res.status(400).json({ error: "question too long" }); return; }
 
-  const crm = await loadCrm(crmId);
+  const crm = await loadCrm(crmId, userId);
   if (!crm) { res.status(404).json({ error: "CRM not found" }); return; }
 
   let dsl: DSL;
@@ -94,10 +108,12 @@ router.post("/liberator/crms/:id/ask", async (req: Request, res: Response): Prom
 /* -------------------- Bulk action confirm -------------------- */
 
 router.post("/liberator/crms/:id/ask/execute", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
   const body = (req.body ?? {}) as { dsl?: unknown; expectedCount?: number };
-  const crm = await loadCrm(crmId);
+  const crm = await loadCrm(crmId, userId);
   if (!crm) { res.status(404).json({ error: "CRM not found" }); return; }
 
   let dsl: DSL;
@@ -132,8 +148,12 @@ router.post("/liberator/crms/:id/ask/execute", async (req: Request, res: Respons
 /* -------------------- Saved views -------------------- */
 
 router.get("/liberator/crms/:id/views", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
+  const owned = await loadCrm(crmId, userId);
+  if (!owned) { res.status(404).json({ error: "CRM not found" }); return; }
   const rows = await db
     .select()
     .from(crmSavedViewsTable)
@@ -143,12 +163,14 @@ router.get("/liberator/crms/:id/views", async (req: Request, res: Response): Pro
 });
 
 router.post("/liberator/crms/:id/views", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
   const body = (req.body ?? {}) as { name?: string; question?: string; dsl?: unknown; pinned?: boolean };
   const name = String(body.name ?? "").trim();
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
-  const crm = await loadCrm(crmId);
+  const crm = await loadCrm(crmId, userId);
   if (!crm) { res.status(404).json({ error: "CRM not found" }); return; }
 
   let dsl: DSL;
@@ -175,10 +197,12 @@ router.post("/liberator/crms/:id/views", async (req: Request, res: Response): Pr
 });
 
 router.post("/liberator/crms/:id/views/:viewId/run", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   const viewId = Number(req.params.viewId);
   if (!Number.isFinite(crmId) || !Number.isFinite(viewId)) { res.status(400).json({ error: "invalid id" }); return; }
-  const crm = await loadCrm(crmId);
+  const crm = await loadCrm(crmId, userId);
   if (!crm) { res.status(404).json({ error: "CRM not found" }); return; }
   const [view] = await db
     .select()
@@ -198,9 +222,13 @@ router.post("/liberator/crms/:id/views/:viewId/run", async (req: Request, res: R
 });
 
 router.delete("/liberator/crms/:id/views/:viewId", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   const viewId = Number(req.params.viewId);
   if (!Number.isFinite(crmId) || !Number.isFinite(viewId)) { res.status(400).json({ error: "invalid id" }); return; }
+  const owned = await loadCrm(crmId, userId);
+  if (!owned) { res.sendStatus(204); return; }
   await db
     .delete(crmSavedViewsTable)
     .where(and(eq(crmSavedViewsTable.id, viewId), eq(crmSavedViewsTable.crmId, crmId)));
@@ -210,30 +238,46 @@ router.delete("/liberator/crms/:id/views/:viewId", async (req: Request, res: Res
 /* -------------------- Insights + steward -------------------- */
 
 router.get("/liberator/crms/:id/insights", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
+  const owned = await loadCrm(crmId, userId);
+  if (!owned) { res.status(404).json({ error: "CRM not found" }); return; }
   const limit = Number(req.query.limit ?? 20);
   const rows = await listInsightsForCrm(crmId, limit);
   res.json(rows);
 });
 
 router.post("/liberator/crms/:id/insights/run", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
+  const owned = await loadCrm(crmId, userId);
+  if (!owned) { res.status(404).json({ error: "CRM not found" }); return; }
   const found = await runAnomalyChecksForCrm(crmId);
   res.json({ found: found.length, anomalies: found });
 });
 
 router.get("/liberator/crms/:id/steward", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
+  const owned = await loadCrm(crmId, userId);
+  if (!owned) { res.status(404).json({ error: "CRM not found" }); return; }
   const bot = await getStewardForCrm(crmId);
   res.json({ bot });
 });
 
 router.post("/liberator/crms/:id/steward/spawn", async (req: Request, res: Response): Promise<void> => {
+  const userId = getUserId(req, res);
+  if (userId === null) return;
   const crmId = Number(req.params.id);
   if (!Number.isFinite(crmId)) { res.status(400).json({ error: "invalid id" }); return; }
+  const owned = await loadCrm(crmId, userId);
+  if (!owned) { res.status(404).json({ error: "CRM not found" }); return; }
   const bot = await spawnStewardForCrm(crmId);
   if (!bot) { res.status(404).json({ error: "CRM not found" }); return; }
   res.status(201).json(bot);

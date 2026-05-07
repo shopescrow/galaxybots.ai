@@ -41,7 +41,18 @@ import {
 
 const router: IRouter = Router();
 
+function requireUserId(req: Request, res: Response): number | null {
+  const userId = req.user?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+  return userId;
+}
+
 router.post("/liberator/jobs/:id/rebuild", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = RebuildJobAsCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -68,6 +79,7 @@ router.post("/liberator/jobs/:id/rebuild", async (req: Request, res: Response): 
       name: `${job.name} CRM`,
       description: `Built from extraction job #${job.id} (${rows.length} rows)`,
       sourceJobId: job.id,
+      ownerUserId: userId,
       status: "draft",
       definition,
     })
@@ -75,18 +87,22 @@ router.post("/liberator/jobs/:id/rebuild", async (req: Request, res: Response): 
   res.status(201).json(crm);
 });
 
-router.get("/liberator/crms", async (_req: Request, res: Response): Promise<void> => {
-  const crms = await listCrms();
+router.get("/liberator/crms", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
+  const crms = await listCrms(userId);
   res.json(crms);
 });
 
 router.get("/liberator/crms/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const crm = await getCrm(params.data.id);
+  const crm = await getCrm(params.data.id, userId);
   if (!crm) {
     res.status(404).json({ error: "CRM not found" });
     return;
@@ -96,6 +112,8 @@ router.get("/liberator/crms/:id", async (req: Request, res: Response): Promise<v
 });
 
 router.patch("/liberator/crms/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = UpdateCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -107,7 +125,7 @@ router.patch("/liberator/crms/:id", async (req: Request, res: Response): Promise
     return;
   }
   try {
-    const updated = await updateCrm(params.data.id, body.data as { name?: string | null; description?: string | null; definition?: CrmBlueprintDef });
+    const updated = await updateCrm(params.data.id, userId, body.data as { name?: string | null; description?: string | null; definition?: CrmBlueprintDef });
     if (!updated) {
       res.status(404).json({ error: "CRM not found" });
       return;
@@ -123,12 +141,19 @@ router.patch("/liberator/crms/:id", async (req: Request, res: Response): Promise
 });
 
 router.delete("/liberator/crms/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = DeleteCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  await deleteCrm(params.data.id);
+  const existing = await getCrm(params.data.id, userId);
+  if (!existing) {
+    res.sendStatus(204);
+    return;
+  }
+  await deleteCrm(params.data.id, userId);
   res.sendStatus(204);
 });
 
@@ -136,9 +161,16 @@ router.post("/liberator/crms/:id/commit", async (req: Request, res: Response): P
   // Deprecated: the synchronous direct commit has been replaced by the
   // job-based data-quality pipeline. This endpoint now returns 410 Gone
   // and points clients at the new pipeline endpoints.
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = CommitCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   res.status(410).json({
@@ -152,13 +184,15 @@ router.post("/liberator/crms/:id/commit", async (req: Request, res: Response): P
 });
 
 router.get("/liberator/crms/:id/entities/:entity/records", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = ListCrmRecordsParams.safeParse(req.params);
   const query = ListCrmRecordsQueryParams.safeParse(req.query);
   if (!params.success || !query.success) {
     res.status(400).json({ error: (params.success ? query : params).error?.message ?? "bad request" });
     return;
   }
-  const crm = await getCrm(params.data.id);
+  const crm = await getCrm(params.data.id, userId);
   if (!crm) {
     res.status(404).json({ error: "CRM not found" });
     return;
@@ -180,13 +214,15 @@ router.get("/liberator/crms/:id/entities/:entity/records", async (req: Request, 
 });
 
 router.post("/liberator/crms/:id/entities/:entity/records", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = CreateCrmRecordParams.safeParse(req.params);
   const body = CreateCrmRecordBody.safeParse(req.body);
   if (!params.success || !body.success) {
     res.status(400).json({ error: (params.success ? body : params).error?.message ?? "bad request" });
     return;
   }
-  const crm = await getCrm(params.data.id);
+  const crm = await getCrm(params.data.id, userId);
   if (!crm) {
     res.status(404).json({ error: "CRM not found" });
     return;
@@ -201,9 +237,16 @@ router.post("/liberator/crms/:id/entities/:entity/records", async (req: Request,
 });
 
 router.get("/liberator/crms/:id/entities/:entity/records/:recordId", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmRecordParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const r = await getRecord(params.data.id, params.data.recordId);
@@ -215,10 +258,17 @@ router.get("/liberator/crms/:id/entities/:entity/records/:recordId", async (req:
 });
 
 router.patch("/liberator/crms/:id/entities/:entity/records/:recordId", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = UpdateCrmRecordParams.safeParse(req.params);
   const body = UpdateCrmRecordBody.safeParse(req.body);
   if (!params.success || !body.success) {
     res.status(400).json({ error: (params.success ? body : params).error?.message ?? "bad request" });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const existing = await getRecord(params.data.id, params.data.recordId);
@@ -231,9 +281,16 @@ router.patch("/liberator/crms/:id/entities/:entity/records/:recordId", async (re
 });
 
 router.delete("/liberator/crms/:id/entities/:entity/records/:recordId", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = DeleteCrmRecordParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.sendStatus(204);
     return;
   }
   const existing = await getRecord(params.data.id, params.data.recordId);
@@ -248,9 +305,16 @@ router.delete("/liberator/crms/:id/entities/:entity/records/:recordId", async (r
 router.get(
   "/liberator/crms/:id/entities/:entity/records/:recordId/related",
   async (req: Request, res: Response): Promise<void> => {
+    const userId = requireUserId(req, res);
+    if (userId === null) return;
     const params = ListRelatedRecordsParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const crm = await getCrm(params.data.id, userId);
+    if (!crm) {
+      res.status(404).json({ error: "CRM not found" });
       return;
     }
     const groups = await getRelatedRecords(params.data.id, params.data.entity, params.data.recordId);
@@ -259,6 +323,8 @@ router.get(
 );
 
 router.get("/liberator/crms/:id/entities/:entity/export", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = ExportCrmEntityParams.safeParse(req.params);
   const query = ExportCrmEntityQueryParams.safeParse(req.query);
   if (!params.success) {
@@ -266,7 +332,7 @@ router.get("/liberator/crms/:id/entities/:entity/export", async (req: Request, r
     return;
   }
   const format = (query.success ? query.data.format : "csv") ?? "csv";
-  const crm = await getCrm(params.data.id);
+  const crm = await getCrm(params.data.id, userId);
   if (!crm) {
     res.status(404).json({ error: "CRM not found" });
     return;
@@ -333,12 +399,19 @@ router.get("/liberator/transforms", async (_req: Request, res: Response): Promis
 router.get(
   "/liberator/crms/:id/entities/:entity/records/:recordId/cells/:field/thumb",
   async (req: Request, res: Response): Promise<void> => {
+    const userId = requireUserId(req, res);
+    if (userId === null) return;
     const crmId = Number(req.params.id);
     const recordId = Number(req.params.recordId);
     const entity = req.params.entity;
     const field = req.params.field;
     if (!Number.isFinite(crmId) || !Number.isFinite(recordId)) {
       res.status(400).json({ error: "invalid id" });
+      return;
+    }
+    const ownedCrm = await getCrm(crmId, userId);
+    if (!ownedCrm) {
+      res.status(404).json({ error: "CRM not found" });
       return;
     }
     const [rec] = await db
@@ -390,9 +463,16 @@ router.get(
 );
 
 router.get("/liberator/crms/:id/pipeline", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const job = await getLatestRebuildJobForCrm(params.data.id);
@@ -400,12 +480,14 @@ router.get("/liberator/crms/:id/pipeline", async (req: Request, res: Response): 
 });
 
 router.post("/liberator/crms/:id/pipeline", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const crm = await getCrm(params.data.id);
+  const crm = await getCrm(params.data.id, userId);
   if (!crm) {
     res.status(404).json({ error: "CRM not found" });
     return;
@@ -421,6 +503,8 @@ router.post("/liberator/crms/:id/pipeline", async (req: Request, res: Response):
 });
 
 router.patch("/liberator/crms/:id/pipeline/recipe", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -429,6 +513,11 @@ router.patch("/liberator/crms/:id/pipeline/recipe", async (req: Request, res: Re
   const recipe = req.body?.recipe;
   if (!recipe || typeof recipe !== "object") {
     res.status(400).json({ error: "recipe is required" });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const job = await getLatestRebuildJobForCrm(params.data.id);
@@ -447,6 +536,8 @@ router.patch("/liberator/crms/:id/pipeline/recipe", async (req: Request, res: Re
 });
 
 router.patch("/liberator/crms/:id/pipeline/links", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -455,6 +546,11 @@ router.patch("/liberator/crms/:id/pipeline/links", async (req: Request, res: Res
   const links = req.body?.links;
   if (!Array.isArray(links)) {
     res.status(400).json({ error: "links[] is required" });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const job = await getLatestRebuildJobForCrm(params.data.id);
@@ -468,6 +564,8 @@ router.patch("/liberator/crms/:id/pipeline/links", async (req: Request, res: Res
 });
 
 router.patch("/liberator/crms/:id/pipeline/clusters", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -476,6 +574,11 @@ router.patch("/liberator/crms/:id/pipeline/clusters", async (req: Request, res: 
   const clusters = req.body?.clusters;
   if (!Array.isArray(clusters)) {
     res.status(400).json({ error: "clusters[] is required" });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const job = await getLatestRebuildJobForCrm(params.data.id);
@@ -489,9 +592,16 @@ router.patch("/liberator/crms/:id/pipeline/clusters", async (req: Request, res: 
 });
 
 router.post("/liberator/crms/:id/pipeline/commit", async (req: Request, res: Response): Promise<void> => {
+  const userId = requireUserId(req, res);
+  if (userId === null) return;
   const params = GetCrmParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const crm = await getCrm(params.data.id, userId);
+  if (!crm) {
+    res.status(404).json({ error: "CRM not found" });
     return;
   }
   const job = await getLatestRebuildJobForCrm(params.data.id);

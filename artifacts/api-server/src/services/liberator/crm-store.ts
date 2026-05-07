@@ -50,12 +50,20 @@ export function projectRowToEntity(
   return out;
 }
 
-export async function listCrms() {
-  return db.select().from(crmBlueprintsTable).orderBy(desc(crmBlueprintsTable.createdAt));
+export async function listCrms(ownerUserId: number) {
+  return db
+    .select()
+    .from(crmBlueprintsTable)
+    .where(eq(crmBlueprintsTable.ownerUserId, ownerUserId))
+    .orderBy(desc(crmBlueprintsTable.createdAt));
 }
 
-export async function getCrm(id: number) {
-  const [crm] = await db.select().from(crmBlueprintsTable).where(eq(crmBlueprintsTable.id, id));
+export async function getCrm(id: number, ownerUserId?: number) {
+  const conditions = [eq(crmBlueprintsTable.id, id)];
+  if (ownerUserId !== undefined) {
+    conditions.push(eq(crmBlueprintsTable.ownerUserId, ownerUserId));
+  }
+  const [crm] = await db.select().from(crmBlueprintsTable).where(and(...conditions));
   return crm;
 }
 
@@ -68,8 +76,10 @@ export async function getEntityCounts(crmId: number) {
   return rows.map((r) => ({ entity: r.entity, count: Number(r.c) }));
 }
 
-export async function deleteCrm(id: number) {
-  await db.delete(crmBlueprintsTable).where(eq(crmBlueprintsTable.id, id));
+export async function deleteCrm(id: number, ownerUserId: number) {
+  await db
+    .delete(crmBlueprintsTable)
+    .where(and(eq(crmBlueprintsTable.id, id), eq(crmBlueprintsTable.ownerUserId, ownerUserId)));
 }
 
 export class CrmValidationError extends Error {}
@@ -118,9 +128,10 @@ export function validateBlueprint(def: CrmBlueprintDef): void {
 
 export async function updateCrm(
   id: number,
+  ownerUserId: number,
   patch: { name?: string | null; description?: string | null; definition?: CrmBlueprintDef }
 ) {
-  const existing = await getCrm(id);
+  const existing = await getCrm(id, ownerUserId);
   if (!existing) return null;
 
   if (patch.definition) {
@@ -140,7 +151,7 @@ export async function updateCrm(
   const [updated] = await db
     .update(crmBlueprintsTable)
     .set(set)
-    .where(eq(crmBlueprintsTable.id, id))
+    .where(and(eq(crmBlueprintsTable.id, id), eq(crmBlueprintsTable.ownerUserId, ownerUserId)))
     .returning();
   return updated;
 }

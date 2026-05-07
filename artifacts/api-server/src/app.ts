@@ -173,7 +173,6 @@ const PUBLIC_SUFFIXES = [
   "/data-export",
   "/liberator/stats",
   "/liberator/jobs",
-  "/liberator/crms",
   "/liberator/transforms",
 ];
 
@@ -192,7 +191,6 @@ const PUBLIC_PREFIX_SUFFIXES = [
   "/sso/oidc/",
   "/scim/v2/",
   "/liberator/jobs/",
-  "/liberator/crms/",
   "/proposals/shared/",
   "/roi/shared/",
 ];

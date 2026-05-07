@@ -1,5 +1,6 @@
 import { pgTable, serial, text, timestamp, integer, jsonb, boolean, index } from "drizzle-orm/pg-core";
 import { extractionJobsTable } from "./extraction-jobs";
+import { usersTable } from "./users";
 
 export interface CellProvenance {
   sourceJobId?: number;
@@ -67,6 +68,7 @@ export const crmBlueprintsTable = pgTable("crm_blueprints", {
   name: text("name").notNull(),
   description: text("description"),
   sourceJobId: integer("source_job_id").references(() => extractionJobsTable.id, { onDelete: "set null" }),
+  ownerUserId: integer("owner_user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   status: text("status", { enum: ["draft", "committed"] }).notNull().default("draft"),
   definition: jsonb("definition").$type<CrmBlueprintDef>().notNull().default({ entities: [] } as CrmBlueprintDef),
   recordCount: integer("record_count").notNull().default(0),
@@ -82,6 +84,7 @@ export const crmBlueprintsTable = pgTable("crm_blueprints", {
   index("crm_blueprints_status_idx").on(table.status),
   index("crm_blueprints_source_job_idx").on(table.sourceJobId),
   index("crm_blueprints_sync_due_idx").on(table.syncEnabled, table.lastSyncAt),
+  index("crm_blueprints_owner_idx").on(table.ownerUserId),
 ]);
 
 export const crmRecordsTable = pgTable("crm_records", {
