@@ -270,7 +270,7 @@ export function CommandPalette({ open, onOpenChange, onOpenAeoScan }: CommandPal
       }
     });
 
-    (bots || []).forEach((bot) => {
+    (bots?.data || []).forEach((bot) => {
       const score = Math.max(
         fuzzyScore(query, bot.name),
         fuzzyScore(query, bot.title || ""),

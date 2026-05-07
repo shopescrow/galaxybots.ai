@@ -15,14 +15,14 @@ export default function BotRoster() {
   const prefersReducedMotion = useReducedMotion();
 
   const categories = useMemo(() => {
-    if (!bots) return [];
-    const cats = new Set(bots.map(b => b.category));
+    if (!bots?.data) return [];
+    const cats = new Set(bots.data.map(b => b.category));
     return Array.from(cats).sort();
   }, [bots]);
 
   const filteredBots = useMemo(() => {
-    if (!bots) return [];
-    return bots.filter(bot => {
+    if (!bots?.data) return [];
+    return bots.data.filter(bot => {
       const matchesSearch = bot.name.toLowerCase().includes(search.toLowerCase()) || 
                             bot.title.toLowerCase().includes(search.toLowerCase());
       const matchesCat = categoryFilter ? bot.category === categoryFilter : true;

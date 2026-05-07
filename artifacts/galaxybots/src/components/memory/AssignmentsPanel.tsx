@@ -163,7 +163,7 @@ export function AssignmentsPanel() {
                 onChange={(e) => setSelectedBotId(Number(e.target.value))}
               >
                 <option value={0}>Select a bot...</option>
-                {bots?.map((bot) => (
+                {bots?.data?.map((bot) => (
                   <option key={bot.id} value={bot.id}>
                     {bot.name} - {bot.title}
                   </option>
