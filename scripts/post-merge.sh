@@ -45,4 +45,35 @@ fi
 echo "[post-merge] Running smoke tests..."
 pnpm test:smoke
 
+# -----------------------------------------------------------------------------
+# Push to GitHub
+# Requires the GITHUB_TOKEN secret to be set in Replit Secrets.
+# Target: github.com/shopescrow/galaxybots.ai  (main branch)
+# Binaries and gitignored files are excluded by .gitignore — nothing extra needed.
+#
+# Credential note: the token is supplied via a transient credential helper so
+# it does not appear in the git remote URL, process listings, or log output.
+# -----------------------------------------------------------------------------
+if [ -z "${GITHUB_TOKEN}" ]; then
+  echo "[post-merge] WARNING: GITHUB_TOKEN is not set — skipping GitHub push." >&2
+else
+  CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")
+  if [ "${CURRENT_BRANCH}" != "main" ] && [ "${CURRENT_BRANCH}" != "master" ]; then
+    echo "[post-merge] WARNING: current branch is '${CURRENT_BRANCH}', not main/master — skipping GitHub push to avoid accidental wrong-branch push." >&2
+  else
+    echo "[post-merge] Pushing to GitHub (shopescrow/galaxybots.ai, branch: ${CURRENT_BRANCH})..."
+    # Use a credential helper that reads from the environment rather than
+    # embedding the token in the remote URL (prevents token exposure in
+    # process tables and git error messages).
+    GIT_ASKPASS_SCRIPT=$(mktemp)
+    chmod 700 "${GIT_ASKPASS_SCRIPT}"
+    printf '#!/bin/sh\necho "${GITHUB_TOKEN}"\n' > "${GIT_ASKPASS_SCRIPT}"
+    GIT_ASKPASS="${GIT_ASKPASS_SCRIPT}" \
+      git -c "credential.username=x-access-token" \
+      push "https://github.com/shopescrow/galaxybots.ai.git" "HEAD:${CURRENT_BRANCH}"
+    rm -f "${GIT_ASKPASS_SCRIPT}"
+    echo "[post-merge] GitHub push complete."
+  fi
+fi
+
 echo "[post-merge] Post-merge setup complete."
