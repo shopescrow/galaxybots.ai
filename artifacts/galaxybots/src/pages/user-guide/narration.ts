@@ -1,0 +1,15 @@
+export const narration: string[] = [
+  "Welcome to GalaxyBots dot A-I — Fortune 500 intelligence, at your command.",
+  "Start by navigating to your GalaxyBots URL. Enter your email and password, then click Sign In. SSO is automatic.",
+  "The Command Center is your operations hub. Activity Feed, Pending Approvals, Company Status — everything in one place.",
+  "GalaxyBots comes pre-loaded with a full corporate roster — explore the full Bots section to see your entire team.",
+  "In the left sidebar, navigate to Bots. Select your specialist and click Open Channel — your direct line is live.",
+  "Your bots understand plain language. Be specific, be direct, and your bots will deliver.",
+  "Deep Thinking Mode synthesizes 10 independent AI perspectives in parallel — designed for decisions that demand depth.",
+  "Deploy Team assembles a coordinated group of specialists around a single goal — four stages from objective to execution.",
+  "Optima Prime doesn't just pick bots — it analyzes your goal to understand which expertise is actually required.",
+  "The Boardroom is where strategy becomes execution — assign, redirect, add specialists, track everything in real time.",
+  "For consequential actions, bots request your approval. You stay in full control with a complete audit trail.",
+  "You now know how to connect with bots, deploy teams, collaborate in the Boardroom, and govern through the Command Center.",
+  "Your go-to reference for all 8 steps and key navigation locations.",
+];

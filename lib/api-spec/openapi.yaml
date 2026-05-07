@@ -1,0 +1,4525 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: GalaxyBots.ai API - AI-powered corporate bot platform
+servers:
+  - url: /api/v1
+    description: Versioned API path (v1)
+  - url: /api
+    description: Legacy API path (deprecated — sunset 2026-10-05)
+tags:
+  - name: health
+    description: Health operations
+  - name: bots
+    description: Bot personality operations
+  - name: conversations
+    description: Conversation and chat operations
+  - name: boardroom
+    description: Internal board room communications
+  - name: clients
+    description: Client operations
+  - name: journal
+    description: Daily journal operations
+  - name: blog
+    description: Blog post operations
+  - name: partner
+    description: Partner integration operations
+  - name: task-sessions
+    description: Task-based bot team deployment operations
+  - name: compliance
+    description: Compliance management operations
+  - name: webhooks
+    description: Webhook endpoints for external integrations
+  - name: receptionist
+    description: AI Receptionist voice call operations
+  - name: knowledge-base
+    description: Company knowledge base document management
+  - name: liberator
+    description: Data extraction bot — visual scraping with AI vision
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /bots:
+    get:
+      operationId: listBots
+      tags: [bots]
+      summary: List all bots
+      responses:
+        "200":
+          description: List of bots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bot"
+
+  /bots/{id}:
+    get:
+      operationId: getBot
+      tags: [bots]
+      summary: Get a bot by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bot details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+        "404":
+          description: Bot not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List conversations
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: botId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Start a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationBody"
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}/messages:
+    get:
+      operationId: getConversationMessages
+      tags: [conversations]
+      summary: Get messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendMessage
+      tags: [conversations]
+      summary: Send a message in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "201":
+          description: Message sent and bot responds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /boardroom/messages:
+    get:
+      operationId: getBoardroomMessages
+      tags: [boardroom]
+      summary: Get board room messages
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of board room messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardroomMessage"
+    post:
+      operationId: postBoardroomMessage
+      tags: [boardroom]
+      summary: Post a message to the board room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostBoardroomMessageBody"
+      responses:
+        "201":
+          description: Message posted
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardroomMessage"
+
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List all clients
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Create a new client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientBody"
+      responses:
+        "201":
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get a client by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update client business profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientBody"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /webhooks/lead/{clientId}:
+    post:
+      operationId: ingestLead
+      tags: [webhooks]
+      summary: Ingest a lead from a client website
+      description: Accepts a lead payload and triggers a bot qualification mission. Auth uses a per-client webhook secret as Bearer token (not JWT user auth).
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadWebhookBody"
+      responses:
+        "201":
+          description: Lead ingested and mission triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadWebhookResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /clients/{id}/bots:
+    get:
+      operationId: getClientBots
+      tags: [clients]
+      summary: Get bots hired by a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bots hired
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bot"
+    post:
+      operationId: hireBot
+      tags: [clients]
+      summary: Hire a bot for a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HireBotBody"
+      responses:
+        "201":
+          description: Bot hired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientBot"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /journal:
+    get:
+      operationId: getJournalEntries
+      tags: [journal]
+      summary: Get daily journal entries
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalEntry"
+
+  /blog:
+    get:
+      operationId: listBlogPosts
+      tags: [blog]
+      summary: List all published blog posts
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of blog posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlogPost"
+
+  /blog/{slug}:
+    get:
+      operationId: getBlogPost
+      tags: [blog]
+      summary: Get a blog post by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Blog post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner/link:
+    get:
+      operationId: getPartnerLink
+      tags: [partner]
+      summary: Resolve a partner referral link
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Partner info resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerInfo"
+        "404":
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner/register:
+    post:
+      operationId: registerPartnerUser
+      tags: [partner]
+      summary: Register a user referred from a partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPartnerUserBody"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerRegistration"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /partner/referrals:
+    get:
+      operationId: listPartnerReferrals
+      tags: [partner]
+      summary: List all partner referrals (admin/CEO only)
+      parameters:
+        - name: partnerRef
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Partner referrals list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartnerRegistration"
+
+  /task-sessions/analyze:
+    post:
+      operationId: analyzeTask
+      tags: [task-sessions]
+      summary: Analyze a task and propose a bot team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeTaskBody"
+      responses:
+        "200":
+          description: Team proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamProposal"
+
+  /task-sessions:
+    get:
+      operationId: listTaskSessions
+      tags: [task-sessions]
+      summary: List all task sessions
+      responses:
+        "200":
+          description: List of task sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSession"
+    post:
+      operationId: createTaskSession
+      tags: [task-sessions]
+      summary: Create a new task session with approved team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskSessionBody"
+      responses:
+        "201":
+          description: Task session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSession"
+
+  /task-sessions/{id}:
+    get:
+      operationId: getTaskSession
+      tags: [task-sessions]
+      summary: Get a task session by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /task-sessions/{id}/messages:
+    get:
+      operationId: getTaskSessionMessages
+      tags: [task-sessions]
+      summary: Get messages in a task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of task session messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSessionMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendTaskSessionMessage
+      tags: [task-sessions]
+      summary: Send a message in a task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendTaskSessionMessageBody"
+      responses:
+        "201":
+          description: Message sent and bots respond
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSessionMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /task-sessions/{id}/messages/stream:
+    post:
+      operationId: streamTaskSessionMessage
+      tags: [task-sessions]
+      summary: Send a message and stream bot responses via SSE
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendTaskSessionMessageBody"
+      responses:
+        "200":
+          description: SSE stream of agentic events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /conversations/{id}/messages/stream:
+    post:
+      operationId: streamConversationMessage
+      tags: [conversations]
+      summary: Send a message and stream bot response via SSE
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "200":
+          description: SSE stream of agentic events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /task-sessions/{id}/alerts:
+    get:
+      operationId: getTaskSessionAlerts
+      tags: [task-sessions]
+      summary: Get missing-role alerts for a task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskSessionAlert"
+
+  /task-sessions/{id}/expand:
+    post:
+      operationId: expandTaskSession
+      tags: [task-sessions]
+      summary: Add bots to an active task session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpandTaskSessionBody"
+      responses:
+        "200":
+          description: Session expanded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bots/fabricate:
+    post:
+      operationId: fabricateBot
+      tags: [bots]
+      summary: Fabricate a new AI-generated bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FabricateBotBody"
+      responses:
+        "201":
+          description: Bot fabricated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+
+  /bots/{botId}/memories:
+    get:
+      operationId: getBotMemories
+      tags: [memory]
+      summary: Get memories for a bot
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotMemory"
+
+  /bots/{botId}/memories/search:
+    post:
+      operationId: searchBotMemories
+      tags: [memory]
+      summary: Search bot memories semantically
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemorySearchBody"
+      responses:
+        "200":
+          description: Matching memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotMemory"
+
+  /memories/{id}:
+    delete:
+      operationId: deleteMemory
+      tags: [memory]
+      summary: Delete a specific memory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /task-sessions/{id}/consolidate:
+    post:
+      operationId: consolidateSession
+      tags: [memory]
+      summary: Consolidate a task session into long-term memory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Consolidation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsolidationResult"
+
+  /bot-assignments:
+    get:
+      operationId: listBotAssignments
+      tags: [assignments]
+      summary: List all bot assignments
+      responses:
+        "200":
+          description: List of assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotAssignment"
+    post:
+      operationId: createBotAssignment
+      tags: [assignments]
+      summary: Create a new bot assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBotAssignmentBody"
+      responses:
+        "201":
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotAssignment"
+
+  /bot-assignments/{id}:
+    patch:
+      operationId: updateBotAssignment
+      tags: [assignments]
+      summary: Update a bot assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBotAssignmentBody"
+      responses:
+        "200":
+          description: Assignment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotAssignment"
+    delete:
+      operationId: deleteBotAssignment
+      tags: [assignments]
+      summary: Delete a bot assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assignment deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /bot-assignments/{id}/run:
+    post:
+      operationId: runBotAssignment
+      tags: [assignments]
+      summary: Manually run a bot assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackgroundReport"
+
+  /background-reports:
+    get:
+      operationId: listBackgroundReports
+      tags: [assignments]
+      summary: List background reports
+      parameters:
+        - name: botId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BackgroundReport"
+
+  /compliance/inbound:
+    post:
+      operationId: pushComplianceInbound
+      tags: [compliance]
+      summary: Push compliance data from external app
+      parameters:
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComplianceInboundBody"
+      responses:
+        "201":
+          description: Compliance record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformComplianceRecord"
+        "401":
+          description: Unauthorized
+
+  /compliance/platform:
+    get:
+      operationId: getPlatformCompliance
+      tags: [compliance]
+      summary: Get platform compliance status
+      responses:
+        "200":
+          description: List of compliance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformComplianceRecord"
+
+  /compliance/platform/config:
+    get:
+      operationId: getPlatformComplianceConfig
+      tags: [compliance]
+      summary: Get compliance API configuration
+      responses:
+        "200":
+          description: API configuration details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceConfig"
+
+  /compliance/client/{clientId}:
+    get:
+      operationId: listClientCompliance
+      tags: [compliance]
+      summary: List client compliance requirements
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of client compliance requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClientComplianceRequirement"
+    post:
+      operationId: createClientCompliance
+      tags: [compliance]
+      summary: Create a client compliance requirement
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientComplianceBody"
+      responses:
+        "201":
+          description: Client compliance requirement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientComplianceRequirement"
+
+  /compliance/client/{clientId}/{id}:
+    put:
+      operationId: updateClientCompliance
+      tags: [compliance]
+      summary: Update a client compliance requirement
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientComplianceBody"
+      responses:
+        "200":
+          description: Updated client compliance requirement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientComplianceRequirement"
+    delete:
+      operationId: deleteClientCompliance
+      tags: [compliance]
+      summary: Delete a client compliance requirement
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /receptionist/config:
+    post:
+      operationId: createReceptionistConfig
+      tags: [receptionist]
+      summary: Create receptionist configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceptionistConfigBody"
+      responses:
+        "201":
+          description: Created config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceptionistConfig"
+
+  /receptionist/config/{clientId}:
+    get:
+      operationId: getReceptionistConfig
+      tags: [receptionist]
+      summary: Get receptionist configuration for a client
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Receptionist config (or null if none exists)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ReceptionistConfig"
+                  - type: "null"
+    put:
+      operationId: updateReceptionistConfig
+      tags: [receptionist]
+      summary: Update receptionist configuration
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReceptionistConfigBody"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceptionistConfig"
+
+  /receptionist/config/test:
+    post:
+      operationId: testReceptionistConnection
+      tags: [receptionist]
+      summary: Test ElevenLabs agent ID and webhook connectivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                elevenlabsAgentId:
+                  type: string
+                crmType:
+                  type: string
+                crmWebhookUrl:
+                  type: string
+      responses:
+        "200":
+          description: Test results
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /receptionist/outbound-call:
+    post:
+      operationId: makeOutboundCall
+      tags: [receptionist]
+      summary: Initiate an outbound call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phoneNumber:
+                  type: string
+                configId:
+                  type: integer
+                contextNotes:
+                  type: string
+              required: [phoneNumber]
+      responses:
+        "200":
+          description: Call initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  callLog:
+                    $ref: "#/components/schemas/CallLog"
+
+  /receptionist/call-logs:
+    get:
+      operationId: getCallLogs
+      tags: [receptionist]
+      summary: Get paginated call logs with filters
+      parameters:
+        - name: configId
+          in: query
+          schema:
+            type: integer
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+          description: Client ID for tenant scoping (required if configId not provided)
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [inbound, outbound]
+        - name: crmSynced
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated call logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLogListResponse"
+
+  /receptionist/improvement-history/{configId}:
+    get:
+      operationId: getImprovementHistory
+      tags: [receptionist]
+      summary: Get self-improvement run history
+      parameters:
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Improvement history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallImprovementRun"
+
+  /receptionist/incoming-call:
+    post:
+      operationId: incomingCall
+      tags: [receptionist]
+      summary: Twilio webhook for incoming calls
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                CallSid:
+                  type: string
+                From:
+                  type: string
+                To:
+                  type: string
+                CallStatus:
+                  type: string
+      responses:
+        "200":
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /receptionist/handle-call-stream:
+    post:
+      operationId: handleCallStream
+      tags: [receptionist]
+      summary: Twilio webhook for maintaining call stream loop
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /receptionist/call-status:
+    post:
+      operationId: callStatus
+      tags: [receptionist]
+      summary: Twilio webhook for call status updates
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                CallSid:
+                  type: string
+                CallStatus:
+                  type: string
+                CallDuration:
+                  type: string
+      responses:
+        "200":
+          description: Status acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /receptionist/recording-status:
+    post:
+      operationId: recordingStatus
+      tags: [receptionist]
+      summary: Twilio webhook for recording completion
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                CallSid:
+                  type: string
+                RecordingUrl:
+                  type: string
+                RecordingStatus:
+                  type: string
+      responses:
+        "200":
+          description: Status acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /knowledge-base/documents:
+    get:
+      operationId: listKnowledgeBaseDocuments
+      tags: [knowledge-base]
+      summary: List all knowledge base documents for the authenticated client
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeBaseDocument"
+    post:
+      operationId: uploadKnowledgeBaseDocument
+      tags: [knowledge-base]
+      summary: Upload a document to the knowledge base
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+              required: [file]
+      responses:
+        "201":
+          description: Document uploaded and indexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseDocument"
+
+  /knowledge-base/documents/{id}:
+    delete:
+      operationId: deleteKnowledgeBaseDocument
+      tags: [knowledge-base]
+      summary: Delete a knowledge base document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /billing/provider-config:
+    get:
+      operationId: listProviderConfigs
+      tags: [billing]
+      summary: List billing provider payment link configurations
+      description: Platform admin endpoint to retrieve all configured payment link URLs. Requires bypassPayment privilege.
+      parameters:
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider configurations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillingProviderConfig"
+        "403":
+          description: Platform admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertProviderConfig
+      tags: [billing]
+      summary: Create or update a billing provider payment link configuration
+      description: Platform admin endpoint to configure payment link URLs per tier. Currently supports GoDaddy provider. Requires bypassPayment privilege.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [godaddy]
+                tier:
+                  type: string
+                  enum: [single, team, enterprise]
+                paymentLinkUrl:
+                  type: string
+              required: [provider, tier, paymentLinkUrl]
+      responses:
+        "200":
+          description: Configuration saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  config:
+                    $ref: "#/components/schemas/BillingProviderConfig"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /billing/godaddy/webhook:
+    post:
+      operationId: godaddyWebhook
+      tags: [billing]
+      summary: GoDaddy Payments webhook
+      description: Receives GoDaddy payment confirmations. Verifies HMAC signature via x-godaddy-signature header.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+        "400":
+          description: Invalid signature or payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-export/{clientId}:
+    get:
+      operationId: startDataExport
+      tags: [compliance]
+      summary: Initiate GDPR Subject Access Request data export
+      description: Starts an asynchronous export of all client data. Restricted to organization owners and platform admins. Returns a job ID to track progress.
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Export job initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataExportJobResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-export/{clientId}/status/{jobId}:
+    get:
+      operationId: getDataExportStatus
+      tags: [compliance]
+      summary: Check data export job status
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataExportJobResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-export/{clientId}/download/{jobId}:
+    get:
+      operationId: downloadDataExport
+      tags: [compliance]
+      summary: Download completed data export
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to download URL
+        "409":
+          description: Export not yet completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: Download link expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/jobs:
+    get:
+      operationId: listExtractionJobs
+      tags: [liberator]
+      summary: List all extraction jobs
+      responses:
+        "200":
+          description: List of extraction jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExtractionJob"
+    post:
+      operationId: createExtractionJob
+      tags: [liberator]
+      summary: Create a new extraction job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExtractionJobBody"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionJob"
+
+  /liberator/jobs/{id}:
+    get:
+      operationId: getExtractionJob
+      tags: [liberator]
+      summary: Get extraction job details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job details with pages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionJobDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteExtractionJob
+      tags: [liberator]
+      summary: Delete an extraction job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /liberator/jobs/{id}/run:
+    post:
+      operationId: runExtractionJob
+      tags: [liberator]
+      summary: Start or resume an extraction job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionJob"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/jobs/{id}/download:
+    get:
+      operationId: downloadExtractionData
+      tags: [liberator]
+      summary: Download extracted data as CSV or JSON
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, json]
+            default: csv
+      responses:
+        "200":
+          description: Extracted data file
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/jobs/{id}/preview:
+    get:
+      operationId: previewExtractionData
+      tags: [liberator]
+      summary: Preview extracted data (first 50 rows)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Preview data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionPreview"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/stats:
+    get:
+      operationId: getExtractionStats
+      tags: [liberator]
+      summary: Get extraction dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionStats"
+
+  /liberator/jobs/{id}/rebuild:
+    post:
+      operationId: rebuildJobAsCrm
+      tags: [liberator]
+      summary: Infer a CRM blueprint from an extraction job (creates a draft CRM)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Draft CRM created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+        "400":
+          description: Job not completed or has no rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms:
+    get:
+      operationId: listCrms
+      tags: [liberator]
+      summary: List all CRMs
+      responses:
+        "200":
+          description: List of CRMs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Crm"
+
+  /liberator/crms/{id}:
+    get:
+      operationId: getCrm
+      tags: [liberator]
+      summary: Get a CRM with its blueprint
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: CRM details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCrm
+      tags: [liberator]
+      summary: Update a CRM (rename or edit blueprint while in draft)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCrmBody"
+      responses:
+        "200":
+          description: Updated CRM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+    delete:
+      operationId: deleteCrm
+      tags: [liberator]
+      summary: Delete a CRM and all of its records
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /liberator/crms/{id}/commit:
+    post:
+      operationId: commitCrm
+      tags: [liberator]
+      deprecated: true
+      summary: (REMOVED) Direct commit was replaced by the data-quality pipeline. Always returns 410 Gone.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "410":
+          description: Endpoint removed. Use POST /liberator/crms/{id}/pipeline → POST /liberator/crms/{id}/pipeline/commit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/transforms:
+    get:
+      operationId: listTransforms
+      tags: [liberator]
+      summary: List built-in transform descriptors for the recipe editor
+      responses:
+        "200":
+          description: Transforms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TransformDescriptor"
+
+  /liberator/crms/{id}/pipeline:
+    get:
+      operationId: getRebuildPipeline
+      tags: [liberator]
+      summary: Get the latest data-quality pipeline run for this CRM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Latest rebuild job (or null if none has been started)
+          content:
+            application/json:
+              schema:
+                type: ["object", "null"]
+                properties:
+                  job:
+                    $ref: "#/components/schemas/RebuildJob"
+    post:
+      operationId: startRebuildPipeline
+      tags: [liberator]
+      summary: Start (or re-run) the data-quality pipeline through the dry-run review stage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Pipeline kicked off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebuildJob"
+
+  /liberator/crms/{id}/pipeline/recipe:
+    patch:
+      operationId: updateRebuildRecipe
+      tags: [liberator]
+      summary: Update the per-field transform recipe for the in-flight pipeline
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRecipeBody"
+      responses:
+        "200":
+          description: Updated rebuild job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebuildJob"
+
+  /liberator/crms/{id}/pipeline/clusters:
+    patch:
+      operationId: updateRebuildClusters
+      tags: [liberator]
+      summary: Accept or reject proposed dedup clusters
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClustersBody"
+      responses:
+        "200":
+          description: Updated rebuild job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebuildJob"
+
+  /liberator/crms/{id}/pipeline/links:
+    patch:
+      operationId: updateRebuildLinks
+      tags: [liberator]
+      summary: Accept or reject proposed identity links
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLinksBody"
+      responses:
+        "200":
+          description: Updated rebuild job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebuildJob"
+
+  /liberator/crms/{id}/pipeline/commit:
+    post:
+      operationId: commitRebuildPipeline
+      tags: [liberator]
+      summary: Phase-2 commit — promote the dry-run output into live CRM records
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Commit result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineCommitResult"
+
+  /liberator/crms/{id}/entities/{entity}/records:
+    get:
+      operationId: listCrmRecords
+      tags: [liberator]
+      summary: List records in a CRM entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [asc, desc, null]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: needsReview
+          in: query
+          required: false
+          schema:
+            type: ["boolean", "null"]
+      responses:
+        "200":
+          description: Records page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecordsPage"
+    post:
+      operationId: createCrmRecord
+      tags: [liberator]
+      summary: Create a new record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrmRecordWriteBody"
+      responses:
+        "201":
+          description: Created record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecord"
+
+  /liberator/crms/{id}/entities/{entity}/records/{recordId}:
+    get:
+      operationId: getCrmRecord
+      tags: [liberator]
+      summary: Get a single record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecord"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCrmRecord
+      tags: [liberator]
+      summary: Update a record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrmRecordWriteBody"
+      responses:
+        "200":
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmRecord"
+    delete:
+      operationId: deleteCrmRecord
+      tags: [liberator]
+      summary: Delete a record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /liberator/crms/{id}/entities/{entity}/records/{recordId}/related:
+    get:
+      operationId: listRelatedRecords
+      tags: [liberator]
+      summary: List records in other entities that reference this record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Related record groups, one per (entity, link field)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    entityType:
+                      type: string
+                    entityLabel:
+                      type: string
+                    fieldName:
+                      type: string
+                    fieldLabel:
+                      type: string
+                    records:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/CrmRecord"
+                  required: [entityType, entityLabel, fieldName, fieldLabel, records]
+
+  /liberator/crms/{id}/entities/{entity}/export:
+    get:
+      operationId: exportCrmEntity
+      tags: [liberator]
+      summary: Export entity records as CSV or JSON
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [csv, json, null]
+      responses:
+        "200":
+          description: Export file
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+            text/csv:
+              schema:
+                type: string
+
+  /liberator/crms/{id}/sync-config:
+    patch:
+      operationId: updateCrmSyncConfig
+      tags: [liberator]
+      summary: Update auto-sync configuration for a CRM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCrmSyncConfigBody"
+      responses:
+        "200":
+          description: Updated CRM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+
+  /liberator/crms/{id}/sync:
+    post:
+      operationId: triggerCrmSync
+      tags: [liberator]
+      summary: Trigger an immediate sync for this CRM (manual run)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Sync started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRun"
+        "400":
+          description: Bad request (CRM not committed, no source job, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms/{id}/syncs:
+    get:
+      operationId: listCrmSyncRuns
+      tags: [liberator]
+      summary: List sync runs for a CRM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Sync runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRunsPage"
+
+  /liberator/crms/{id}/syncs/{runId}:
+    get:
+      operationId: getCrmSyncRun
+      tags: [liberator]
+      summary: Get a single sync run with summary totals
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sync run detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRun"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /liberator/crms/{id}/syncs/{runId}/changes:
+    get:
+      operationId: listCrmSyncChanges
+      tags: [liberator]
+      summary: List per-record changes for a sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: changeType
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [new, changed, unchanged, removed, null]
+        - name: decision
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+            enum: [pending, approved, rejected, auto_applied, null]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Changes page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncChangesPage"
+
+  /liberator/crms/{id}/syncs/{runId}/changes/{changeId}:
+    patch:
+      operationId: decideCrmSyncChange
+      tags: [liberator]
+      summary: Approve or reject a single sync change
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: changeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideCrmSyncChangeBody"
+      responses:
+        "200":
+          description: Updated change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncChange"
+
+  /liberator/crms/{id}/syncs/{runId}/apply:
+    post:
+      operationId: applyAllCrmSyncChanges
+      tags: [liberator]
+      summary: Approve and apply all pending changes in a sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncApplyResult"
+
+  /liberator/crms/{id}/syncs/{runId}/reject:
+    post:
+      operationId: rejectAllCrmSyncChanges
+      tags: [liberator]
+      summary: Reject all pending changes in a sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reject result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRejectResult"
+
+  /liberator/crms/{id}/syncs/{runId}/rollback:
+    post:
+      operationId: rollbackCrmSyncRun
+      tags: [liberator]
+      summary: Roll back the merges applied by this sync run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rollback result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmSyncRollbackResult"
+
+  /liberator/crms/{id}/syncs/{runId}/reblueprint:
+    post:
+      operationId: reblueprintCrmFromDrift
+      tags: [liberator]
+      summary: Adopt the drifted source schema into the active blueprint
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated CRM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Crm"
+
+components:
+  schemas:
+    DataExportJobResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        clientId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        downloadUrl:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+        error:
+          type: string
+      required: [jobId, status]
+
+    BillingProviderConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+        tier:
+          type: string
+        paymentLinkUrl:
+          type: string
+        updatedBy:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, provider, tier, paymentLinkUrl]
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    Bot:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        personality:
+          type: string
+        avatar:
+          type: ["string", "null"]
+        addonType:
+          type: ["string", "null"]
+        isAvailable:
+          type: boolean
+        isAiGenerated:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, title, department, category, description, responsibilities, personality, isAvailable, isAiGenerated, createdAt]
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: ["integer", "null"]
+        botId:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, botId, title, status, createdAt, updatedAt]
+
+    CreateConversationBody:
+      type: object
+      properties:
+        clientId:
+          type: ["integer", "null"]
+        botId:
+          type: integer
+        title:
+          type: string
+      required: [botId, title]
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+          enum: [user, bot, system]
+        content:
+          type: string
+        senderName:
+          type: ["string", "null"]
+        messageType:
+          type: string
+          enum: [text, tool_call, tool_result]
+          default: text
+        toolData:
+          type: ["object", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, conversationId, role, content, createdAt]
+
+    SendMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+        senderName:
+          type: ["string", "null"]
+      required: [content]
+
+    MessageResponse:
+      type: object
+      properties:
+        userMessage:
+          $ref: "#/components/schemas/Message"
+        botResponse:
+          $ref: "#/components/schemas/Message"
+      required: [userMessage, botResponse]
+
+    BoardroomMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: ["integer", "null"]
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [bot, ceo, system]
+        contentEncoded:
+          type: string
+        contentEnglish:
+          type: string
+        topic:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, role, contentEncoded, contentEnglish, createdAt]
+
+    PostBoardroomMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+        senderName:
+          type: string
+      required: [content, senderName]
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+          enum: [single, team, enterprise]
+        status:
+          type: string
+          enum: [active, inactive, trial]
+        websiteUrl:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        servicesList:
+          type: array
+          items:
+            type: string
+          nullable: true
+        targetMarket:
+          type: string
+          nullable: true
+        businessContext:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyName, contactName, contactEmail, plan, status, createdAt]
+
+    CreateClientBody:
+      type: object
+      properties:
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+          enum: [single, team, enterprise]
+      required: [companyName, contactName, contactEmail, plan]
+
+    UpdateClientBody:
+      type: object
+      properties:
+        websiteUrl:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        servicesList:
+          type: array
+          items:
+            type: string
+          nullable: true
+        targetMarket:
+          type: string
+          nullable: true
+        businessContext:
+          type: string
+          nullable: true
+
+    LeadWebhookBody:
+      type: object
+      properties:
+        name:
+          type: string
+        contact:
+          type: string
+        serviceInterest:
+          type: string
+        message:
+          type: string
+      required: [name, contact]
+
+    LeadWebhookResponse:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+        objective:
+          type: string
+        assignedBots:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              title:
+                type: string
+        message:
+          type: string
+      required: [sessionId, objective, assignedBots, message]
+
+    ClientBot:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        botId:
+          type: integer
+        hiredAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, inactive]
+      required: [id, clientId, botId, hiredAt, status]
+
+    HireBotBody:
+      type: object
+      properties:
+        botId:
+          type: integer
+      required: [botId]
+
+    JournalEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        boardroomHighlights:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, date, title, summary, boardroomHighlights, createdAt]
+
+    BlogPost:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+        content:
+          type: string
+        author:
+          type: string
+        category:
+          type: string
+        coverImage:
+          type: ["string", "null"]
+        publishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, slug, excerpt, content, author, category, publishedAt, createdAt]
+
+    PartnerInfo:
+      type: object
+      properties:
+        ref:
+          type: string
+        partnerName:
+          type: string
+        partnerLogo:
+          type: ["string", "null"]
+        welcomeMessage:
+          type: string
+        offer:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+      required: [ref, partnerName, welcomeMessage, isActive]
+
+    RegisterPartnerUserBody:
+      type: object
+      properties:
+        partnerRef:
+          type: string
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+          enum: [single, team, enterprise]
+        source:
+          type: ["string", "null"]
+      required: [partnerRef, companyName, contactName, contactEmail, plan]
+
+    PartnerRegistration:
+      type: object
+      properties:
+        id:
+          type: integer
+        partnerRef:
+          type: string
+        clientId:
+          type: integer
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        plan:
+          type: string
+        source:
+          type: ["string", "null"]
+        status:
+          type: string
+        registeredAt:
+          type: string
+          format: date-time
+      required: [id, partnerRef, clientId, companyName, contactName, contactEmail, plan, status, registeredAt]
+
+    AnalyzeTaskBody:
+      type: object
+      properties:
+        objective:
+          type: string
+      required: [objective]
+
+    ProposedBot:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        personality:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+      required: [name, title, department, personality, responsibilities]
+
+    TeamProposal:
+      type: object
+      properties:
+        objective:
+          type: string
+        matchedBots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bot"
+        proposedBots:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposedBot"
+        reasoning:
+          type: string
+      required: [objective, matchedBots, proposedBots, reasoning]
+
+    TaskSessionBot:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        botId:
+          type: integer
+        role:
+          type: string
+        addedAt:
+          type: string
+          format: date-time
+      required: [id, sessionId, botId, role, addedAt]
+
+    TaskSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        objective:
+          type: string
+        status:
+          type: string
+        teamBots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bot"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, objective, status, teamBots, createdAt, updatedAt]
+
+    CreateTaskSessionBody:
+      type: object
+      properties:
+        objective:
+          type: string
+        botIds:
+          type: array
+          items:
+            type: integer
+      required: [objective, botIds]
+
+    TaskSessionMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        botId:
+          type: ["integer", "null"]
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+        role:
+          type: string
+        content:
+          type: string
+        messageType:
+          type: string
+          enum: [text, tool_call, tool_result]
+          default: text
+        toolData:
+          type: ["object", "null"]
+        flaggedRoles:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, sessionId, role, content, createdAt]
+
+    SendTaskSessionMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+        senderName:
+          type: ["string", "null"]
+      required: [content]
+
+    TaskSessionAlert:
+      type: object
+      properties:
+        role:
+          type: string
+        suggestedBy:
+          type: string
+        messageId:
+          type: integer
+      required: [role, suggestedBy, messageId]
+
+    ExpandTaskSessionBody:
+      type: object
+      properties:
+        botIds:
+          type: array
+          items:
+            type: integer
+      required: [botIds]
+
+    FabricateBotBody:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        personality:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        category:
+          type: string
+      required: [name, title, department, personality, responsibilities, description, category]
+
+    BotMemory:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        sourceType:
+          type: string
+        sourceId:
+          type: ["integer", "null"]
+        sessionId:
+          type: ["integer", "null"]
+        content:
+          type: string
+        summary:
+          type: string
+        topic:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, botId, sourceType, content, summary, createdAt]
+
+    BotAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        objective:
+          type: string
+        schedule:
+          type: string
+        isActive:
+          type: string
+        actionMode:
+          type: string
+          enum: [passive, active]
+        actionPrompt:
+          type: ["string", "null"]
+        lastRunAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+      required: [id, botId, objective, schedule, isActive, actionMode, createdAt]
+
+    CreateBotAssignmentBody:
+      type: object
+      properties:
+        botId:
+          type: integer
+        objective:
+          type: string
+        schedule:
+          type: string
+          enum: [hourly, daily, weekly]
+        actionMode:
+          type: string
+          enum: [passive, active]
+        actionPrompt:
+          type: string
+      required: [botId, objective]
+
+    UpdateBotAssignmentBody:
+      type: object
+      properties:
+        isActive:
+          type: string
+        actionMode:
+          type: string
+          enum: [passive, active]
+        actionPrompt:
+          type: ["string", "null"]
+        schedule:
+          type: string
+          enum: [hourly, daily, weekly]
+
+    BackgroundReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        assignmentId:
+          type: integer
+        botId:
+          type: integer
+        content:
+          type: string
+        summary:
+          type: string
+        runStatus:
+          type: string
+          enum: [success, partial, failed]
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        botName:
+          type: ["string", "null"]
+        botTitle:
+          type: ["string", "null"]
+        objective:
+          type: ["string", "null"]
+      required: [id, assignmentId, botId, content, summary, runStatus, createdAt]
+
+    MemorySearchBody:
+      type: object
+      properties:
+        query:
+          type: string
+        limit:
+          type: integer
+      required: [query]
+
+    ConsolidationResult:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            decisions:
+              type: array
+              items:
+                type: string
+            findings:
+              type: array
+              items:
+                type: string
+            actionItems:
+              type: array
+              items:
+                type: string
+            keyContext:
+              type: string
+        memories:
+          type: array
+          items:
+            $ref: "#/components/schemas/BotMemory"
+
+    ComplianceInboundBody:
+      type: object
+      properties:
+        standardName:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [compliant, non_compliant, pending, expired]
+        certificationId:
+          type: string
+        issuedBy:
+          type: string
+        details:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required: [standardName, category, status]
+
+    PlatformComplianceRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        standardName:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+        certificationId:
+          type: ["string", "null"]
+        issuedBy:
+          type: ["string", "null"]
+        details:
+          type: ["string", "null"]
+        receivedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, standardName, category, status, receivedAt, createdAt]
+
+    ComplianceConfig:
+      type: object
+      properties:
+        endpointUrl:
+          type: string
+        method:
+          type: string
+        apiKeyHeader:
+          type: string
+        apiKeyConfigured:
+          type: boolean
+        payloadExample:
+          type: object
+
+    ClientComplianceRequirement:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, clientId, name, category, status, createdAt, updatedAt]
+
+    CreateClientComplianceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [met, pending, not_applicable]
+        notes:
+          type: string
+      required: [name, category]
+
+    UpdateClientComplianceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [met, pending, not_applicable]
+        notes:
+          type: string
+
+    ReceptionistConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        elevenlabsAgentId:
+          type: ["string", "null"]
+        twilioPhoneNumber:
+          type: ["string", "null"]
+        businessName:
+          type: ["string", "null"]
+        businessHoursJson:
+          type: ["object", "null"]
+        knowledgeBasePrompt:
+          type: ["string", "null"]
+        notificationEmail:
+          type: ["string", "null"]
+        crmType:
+          type: string
+          enum: [hubspot, salesforce, custom_webhook, none]
+        crmWebhookUrl:
+          type: ["string", "null"]
+        crmFieldMapJson:
+          type: ["object", "null"]
+        isActive:
+          type: boolean
+        improvementCallCount:
+          type: integer
+        lastImprovedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, clientId, crmType, isActive, improvementCallCount, createdAt, updatedAt]
+
+    CreateReceptionistConfigBody:
+      type: object
+      properties:
+        clientId:
+          type: integer
+        elevenlabsAgentId:
+          type: string
+        twilioPhoneNumber:
+          type: string
+        businessName:
+          type: string
+        businessHoursJson:
+          type: object
+        knowledgeBasePrompt:
+          type: string
+        notificationEmail:
+          type: string
+        crmType:
+          type: string
+          enum: [hubspot, salesforce, custom_webhook, none]
+        crmWebhookUrl:
+          type: string
+        crmFieldMapJson:
+          type: object
+        isActive:
+          type: boolean
+      required: [clientId]
+
+    UpdateReceptionistConfigBody:
+      type: object
+      properties:
+        elevenlabsAgentId:
+          type: string
+        twilioPhoneNumber:
+          type: string
+        businessName:
+          type: string
+        businessHoursJson:
+          type: object
+        knowledgeBasePrompt:
+          type: string
+        notificationEmail:
+          type: string
+        crmType:
+          type: string
+          enum: [hubspot, salesforce, custom_webhook, none]
+        crmWebhookUrl:
+          type: string
+        crmFieldMapJson:
+          type: object
+        isActive:
+          type: boolean
+
+    CallLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        configId:
+          type: integer
+        twilioCallSid:
+          type: ["string", "null"]
+        twilioRecordingUrl:
+          type: ["string", "null"]
+        direction:
+          type: string
+        fromNumber:
+          type: ["string", "null"]
+        toNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+        durationSeconds:
+          type: ["integer", "null"]
+        transcriptText:
+          type: ["string", "null"]
+        transcriptSummary:
+          type: ["string", "null"]
+        crmSynced:
+          type: boolean
+        crmSyncError:
+          type: ["string", "null"]
+        emailSent:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, configId, direction, status, crmSynced, emailSent, createdAt]
+
+    CallLogListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallLog"
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+      required: [data, pagination]
+
+    CallImprovementRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        configId:
+          type: integer
+        callsAnalyzed:
+          type: integer
+        oldPromptSnapshot:
+          type: ["string", "null"]
+        newPrompt:
+          type: ["string", "null"]
+        improvementNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, configId, callsAnalyzed, createdAt]
+
+    KnowledgeBaseDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: integer
+        title:
+          type: string
+        sourceFilename:
+          type: string
+        fileType:
+          type: string
+        chunkCount:
+          type: integer
+        uploadedAt:
+          type: string
+          format: date-time
+      required: [id, clientId, title, sourceFilename, fileType, chunkCount, uploadedAt]
+
+    ExtractionJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sourceUrl:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, paused, completed, failed]
+        extractionType:
+          type: string
+          enum: [table, list, contacts, custom]
+        totalPages:
+          type: integer
+        pagesCompleted:
+          type: integer
+        rowsExtracted:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, sourceUrl, status, extractionType, totalPages, pagesCompleted, rowsExtracted, createdAt, updatedAt]
+
+    CreateExtractionJobBody:
+      type: object
+      properties:
+        name:
+          type: string
+        sourceUrl:
+          type: string
+        extractionType:
+          type: string
+          enum: [table, list, contacts, custom]
+        fields:
+          type: array
+          items:
+            type: string
+        instructions:
+          type: ["string", "null"]
+      required: [name, sourceUrl]
+
+    ExtractionPage:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        pageUrl:
+          type: string
+        pageNumber:
+          type: integer
+        status:
+          type: string
+          enum: [pending, captured, extracted, failed]
+        extractedRows:
+          type: array
+          items:
+            type: object
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, jobId, pageUrl, pageNumber, status, extractedRows, createdAt]
+
+    ExtractionJobDetail:
+      type: object
+      properties:
+        job:
+          $ref: "#/components/schemas/ExtractionJob"
+        pages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractionPage"
+        fieldMapping:
+          type: object
+          properties:
+            fields:
+              type: array
+              items:
+                type: string
+            instructions:
+              type: ["string", "null"]
+      required: [job, pages, fieldMapping]
+
+    ExtractionPreview:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: object
+        totalRows:
+          type: integer
+      required: [columns, rows, totalRows]
+
+    ExtractionStats:
+      type: object
+      properties:
+        totalJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        totalRowsExtracted:
+          type: integer
+        recentJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractionJob"
+      required: [totalJobs, completedJobs, totalRowsExtracted, recentJobs]
+
+    CrmFieldDef:
+      type: object
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        type:
+          type: string
+          enum: [string, text, number, boolean, date, email, url, phone, enum]
+        required:
+          type: boolean
+        enumValues:
+          type: array
+          items:
+            type: string
+        sampleValues:
+          type: array
+          items: {}
+        sourceField:
+          type: ["string", "null"]
+        linkTo:
+          type: ["string", "null"]
+          description: Name of another entity in the same blueprint that this field references.
+      required: [name, label, type, required]
+
+    CrmEntityDef:
+      type: object
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        primaryDisplayField:
+          type: ["string", "null"]
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmFieldDef"
+      required: [name, label, fields]
+
+    CrmBlueprintDef:
+      type: object
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmEntityDef"
+      required: [entities]
+
+    Crm:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        sourceJobId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [draft, committed]
+        recordCount:
+          type: integer
+        definition:
+          $ref: "#/components/schemas/CrmBlueprintDef"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        syncEnabled:
+          type: boolean
+        syncCadence:
+          type: string
+          enum: [manual, hourly, daily, weekly]
+        syncConflictPolicy:
+          type: string
+          enum: [local_wins, source_wins, ask]
+        syncIdentityFields:
+          type: array
+          items:
+            type: string
+        lastSyncAt:
+          type: ["string", "null"]
+          format: date-time
+        lastSyncStatus:
+          type: ["string", "null"]
+      required: [id, name, status, recordCount, definition, createdAt, updatedAt, syncEnabled, syncCadence, syncConflictPolicy, syncIdentityFields]
+
+    CrmEntityCount:
+      type: object
+      properties:
+        entity:
+          type: string
+        count:
+          type: integer
+      required: [entity, count]
+
+    CrmDetail:
+      type: object
+      properties:
+        crm:
+          $ref: "#/components/schemas/Crm"
+        entityCounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmEntityCount"
+      required: [crm, entityCounts]
+
+    UpdateCrmBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        definition:
+          $ref: "#/components/schemas/CrmBlueprintDef"
+
+    CrmCommitResult:
+      type: object
+      properties:
+        crmId:
+          type: integer
+        recordsLoaded:
+          type: integer
+        status:
+          type: string
+      required: [crmId, recordsLoaded, status]
+
+    CrmRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        crmId:
+          type: integer
+        entityType:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        provenance:
+          type: object
+          additionalProperties: true
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordWarning"
+        needsReview:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, crmId, entityType, data, createdAt, updatedAt]
+
+    RecordWarning:
+      type: object
+      properties:
+        field:
+          type: ["string", "null"]
+        code:
+          type: string
+        message:
+          type: string
+        severity:
+          type: string
+          enum: [info, warn, error]
+      required: [code, message, severity]
+
+    PipelineStageState:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, running, done, failed, skipped]
+        rowsIn:
+          type: ["integer", "null"]
+        rowsOut:
+          type: ["integer", "null"]
+        warnings:
+          type: ["integer", "null"]
+        startedAt:
+          type: ["string", "null"]
+        finishedAt:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
+      required: [status]
+
+    PipelineFieldRecipe:
+      type: object
+      properties:
+        transforms:
+          type: array
+          items:
+            type: string
+      required: [transforms]
+
+    PipelineRecipe:
+      type: object
+      properties:
+        fields:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PipelineFieldRecipe"
+        confidenceThreshold:
+          type: number
+      required: [fields, confidenceThreshold]
+
+    DedupCluster:
+      type: object
+      properties:
+        id:
+          type: string
+        entityType:
+          type: string
+        rowIds:
+          type: array
+          items:
+            type: integer
+        representativeRowId:
+          type: integer
+        similarity:
+          type: number
+        signal:
+          type: string
+        method:
+          type: string
+          enum: [exact, fuzzy, embedding]
+        status:
+          type: string
+          enum: [proposed, accepted, rejected]
+        preview:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [id, entityType, rowIds, representativeRowId, similarity, signal, method, status, preview]
+
+    IdentityLink:
+      type: object
+      properties:
+        id:
+          type: string
+        fromEntityType:
+          type: string
+        fromRowId:
+          type: integer
+        toEntityType:
+          type: string
+        toRowId:
+          type: integer
+        signal:
+          type: string
+        similarity:
+          type: number
+        method:
+          type: string
+          enum: [fk_overlap, shared_identifier, embedding]
+        status:
+          type: string
+          enum: [proposed, accepted, rejected]
+      required: [id, fromEntityType, fromRowId, toEntityType, toRowId, signal, similarity, method, status]
+
+    DryRunRow:
+      type: object
+      properties:
+        rowId:
+          type: integer
+        entityType:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        provenance:
+          type: object
+          additionalProperties: true
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordWarning"
+        needsReview:
+          type: boolean
+      required: [rowId, entityType, data, provenance, warnings, needsReview]
+
+    RebuildJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        crmId:
+          type: integer
+        sourceJobId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, running, awaiting_review, ready_to_commit, committed, failed]
+        currentStage:
+          type: string
+          enum: [normalize, dedupe, resolve, dryrun, commit]
+        stages:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PipelineStageState"
+        recipe:
+          $ref: "#/components/schemas/PipelineRecipe"
+        dedupClusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/DedupCluster"
+        identityLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/IdentityLink"
+        dryRunRows:
+          type: array
+          items:
+            $ref: "#/components/schemas/DryRunRow"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordWarning"
+        rowsIn:
+          type: integer
+        rowsOut:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, crmId, status, currentStage, stages, recipe, dedupClusters, identityLinks, dryRunRows, warnings, rowsIn, rowsOut, createdAt, updatedAt]
+
+    UpdateRecipeBody:
+      type: object
+      properties:
+        recipe:
+          $ref: "#/components/schemas/PipelineRecipe"
+      required: [recipe]
+
+    ClusterUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [accepted, rejected]
+      required: [id, status]
+
+    UpdateClustersBody:
+      type: object
+      properties:
+        clusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterUpdate"
+      required: [clusters]
+
+    LinkUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [accepted, rejected]
+      required: [id, status]
+
+    UpdateLinksBody:
+      type: object
+      properties:
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/LinkUpdate"
+      required: [links]
+
+    PipelineCommitResult:
+      type: object
+      properties:
+        jobId:
+          type: integer
+        crmId:
+          type: integer
+        recordsLoaded:
+          type: integer
+        needsReview:
+          type: integer
+        duplicatesDropped:
+          type: integer
+      required: [jobId, crmId, recordsLoaded, needsReview, duplicatesDropped]
+
+    TransformDescriptor:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        appliesTo:
+          type: array
+          items:
+            type: string
+      required: [id, label, description, appliesTo]
+
+    CrmRecordsPage:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmRecord"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [records, total, limit, offset]
+
+    CrmRecordWriteBody:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+      required: [data]
+
+    UpdateCrmSyncConfigBody:
+      type: object
+      properties:
+        enabled:
+          type: ["boolean", "null"]
+        cadence:
+          type: ["string", "null"]
+          enum: [manual, hourly, daily, weekly, null]
+        conflictPolicy:
+          type: ["string", "null"]
+          enum: [local_wins, source_wins, ask, null]
+        identityFields:
+          type: ["array", "null"]
+          items:
+            type: string
+
+    CrmSchemaDrift:
+      type: object
+      properties:
+        added:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string }
+            required: [name, type]
+        removed:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string }
+            required: [name, type]
+        changed:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              oldType: { type: string }
+              newType: { type: string }
+            required: [name, oldType, newType]
+      required: [added, removed, changed]
+
+    CrmSyncTotals:
+      type: object
+      properties:
+        new: { type: integer }
+        changed: { type: integer }
+        unchanged: { type: integer }
+        removed: { type: integer }
+        conflicts: { type: integer }
+      required: [new, changed, unchanged, removed, conflicts]
+
+    CrmSyncRun:
+      type: object
+      properties:
+        id: { type: integer }
+        crmId: { type: integer }
+        status:
+          type: string
+          enum: [pending, running, completed, failed, drift_paused, rolled_back]
+        triggeredBy:
+          type: string
+          enum: [manual, scheduler]
+        conflictPolicy:
+          type: string
+          enum: [local_wins, source_wins, ask]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        totals:
+          $ref: "#/components/schemas/CrmSyncTotals"
+        schemaDrift:
+          oneOf:
+            - $ref: "#/components/schemas/CrmSchemaDrift"
+            - type: "null"
+        errorMessage:
+          type: ["string", "null"]
+      required: [id, crmId, status, triggeredBy, conflictPolicy, startedAt, totals]
+
+    CrmSyncRunsPage:
+      type: object
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmSyncRun"
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+      required: [runs, total, limit, offset]
+
+    CrmFieldDiff:
+      type: object
+      properties:
+        field: { type: string }
+        oldValue: {}
+        newValue: {}
+        conflictWithLocal:
+          type: ["boolean", "null"]
+        localValue: {}
+      required: [field]
+
+    CrmSyncChange:
+      type: object
+      properties:
+        id: { type: integer }
+        syncRunId: { type: integer }
+        crmId: { type: integer }
+        entityType: { type: string }
+        changeType:
+          type: string
+          enum: [new, changed, unchanged, removed]
+        identityKey:
+          type: ["string", "null"]
+        recordId:
+          type: ["integer", "null"]
+        oldData:
+          type: ["object", "null"]
+          additionalProperties: true
+        newData:
+          type: ["object", "null"]
+          additionalProperties: true
+        fieldDiffs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmFieldDiff"
+        hasConflicts: { type: boolean }
+        decision:
+          type: string
+          enum: [pending, approved, rejected, auto_applied]
+        decidedAt:
+          type: ["string", "null"]
+          format: date-time
+        appliedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, syncRunId, crmId, entityType, changeType, fieldDiffs, hasConflicts, decision, createdAt]
+
+    CrmSyncChangesPage:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmSyncChange"
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+      required: [changes, total, limit, offset]
+
+    DecideCrmSyncChangeBody:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+      required: [decision]
+
+    CrmSyncApplyResult:
+      type: object
+      properties:
+        applied: { type: integer }
+      required: [applied]
+
+    CrmSyncRejectResult:
+      type: object
+      properties:
+        rejected: { type: integer }
+      required: [rejected]
+
+    CrmSyncRollbackResult:
+      type: object
+      properties:
+        reversed: { type: integer }
+      required: [reversed]

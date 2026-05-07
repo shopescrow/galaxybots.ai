@@ -1,0 +1,35 @@
+{
+  "name": "galaxybots-ai-directors",
+  "version": "1.0.0",
+  "description": "GalaxyBots AI Directors — Claude Desktop Extension (.mcpb). Fortune 500 Intelligence. For Everyone.",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "install": "node scripts/install.js",
+    "postinstall": "node scripts/postinstall.js",
+    "build": "mcpb build",
+    "dev": "node server/index.js"
+  },
+  "files": [
+    "manifest.json",
+    "README.md",
+    "config/",
+    "scripts/",
+    "server/",
+    "assets/"
+  ],
+  "keywords": ["mcp", "claude", "desktop-extension", "ai-directors", "galaxybots", "executive", "aeo"],
+  "author": {
+    "name": "GalaxyBots.ai",
+    "url": "https://galaxybots.ai",
+    "email": "support@galaxybots.ai"
+  },
+  "license": "UNLICENSED",
+  "homepage": "https://galaxybots.ai/claude-extension",
+  "bugs": {
+    "url": "https://galaxybots.ai/support",
+    "email": "support@galaxybots.ai"
+  }
+}

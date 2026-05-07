@@ -1,0 +1,233 @@
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Chakra+Petch:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --font-display: 'Michroma', sans-serif;
+  --font-tech: 'Chakra Petch', sans-serif;
+  --font-sans: 'Outfit', sans-serif;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  
+  --color-gold: hsl(var(--gold));
+  --color-cyan: hsl(var(--cyan));
+  --color-purple: hsl(var(--purple));
+
+  --animate-fade-in: fade-in 0.5s ease-out forwards;
+  --animate-fade-up: fade-up 0.5s ease-out forwards;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-glitch: glitch 3s infinite;
+}
+
+:root {
+  color-scheme: dark;
+  --background: 230 45% 4%;
+  --foreground: 210 40% 98%;
+  
+  --card: 230 40% 7%;
+  --card-foreground: 210 40% 98%;
+  
+  --popover: 230 40% 6%;
+  --popover-foreground: 210 40% 98%;
+  
+  --primary: 270 80% 60%;
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 230 30% 15%;
+  --secondary-foreground: 210 40% 98%;
+  
+  --muted: 230 25% 12%;
+  --muted-foreground: 215 20% 65%;
+  
+  --accent: 190 90% 50%;
+  --accent-foreground: 0 0% 10%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  
+  --border: 230 30% 18%;
+  --input: 230 30% 12%;
+  --ring: 270 80% 60%;
+
+  --gold: 45 100% 55%;
+  --cyan: 190 90% 50%;
+  --purple: 270 80% 60%;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased font-sans selection:bg-primary/30 selection:text-primary-foreground;
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(123, 97, 255, 0.05), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(0, 240, 255, 0.05), transparent 25%);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-wide uppercase;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glitch {
+  0% { transform: translate(0) }
+  20% { transform: translate(-2px, 1px) }
+  40% { transform: translate(-1px, -1px) }
+  60% { transform: translate(2px, 1px) }
+  80% { transform: translate(1px, -1px) }
+  100% { transform: translate(0) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.glass-panel {
+  @apply bg-card/60 border border-border/50 shadow-2xl;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .glass-panel {
+    @apply backdrop-blur-xl;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-panel {
+    @apply bg-card/95;
+  }
+}
+
+.neon-border {
+  position: relative;
+}
+.neon-border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--cyan)));
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.neon-border:hover::after {
+  opacity: 0.5;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-purple to-cyan;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.text-scale-sm {
+  font-size: 14px;
+}
+.text-scale-md {
+  font-size: 16px;
+}
+.text-scale-lg {
+  font-size: 18px;
+}
+.text-scale-xl {
+  font-size: 20px;
+}
+
+.text-scale-lg .content-scroll,
+.text-scale-xl .content-scroll {
+  overflow: auto;
+}
+
+.text-scale-lg [data-card-content],
+.text-scale-xl [data-card-content] {
+  overflow-x: auto;
+}
+
+.text-scale-lg table,
+.text-scale-xl table {
+  min-width: max-content;
+}
+
+.quote-panel {
+  background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(245,158,11,0.05));
+  border-left: 0.3vw solid #f59e0b;
+  padding: 2vh 2vw;
+}
+
+.stat-card {
+  background: rgba(17, 24, 41, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  padding: 2vh 1.5vw;
+}
+
+.stars-bg {
+  background-image:
+    radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 35% 60%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 15%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 45%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 75%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 80%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 48% 88%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 62% 35%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 25% 40%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 100%);
+}
+
+.blue-rule {
+  height: 0.2vh;
+}

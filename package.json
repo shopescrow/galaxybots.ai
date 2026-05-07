@@ -1,0 +1,37 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "docs": "pnpm --filter @workspace/scripts run generate-whitepaper",
+    "test:smoke": "pnpm --filter @workspace/api-server run test:smoke && pnpm --filter @workspace/mcp-server run test:smoke",
+    "format:check": "prettier --check \"artifacts/**/*.{ts,tsx,js,jsx,json}\" \"lib/**/*.{ts,tsx,js,jsx,json}\" \"scripts/**/*.{ts,tsx,js,jsx,json}\""
+  },
+  "private": true,
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": "5.5.6",
+      "@xmldom/xmldom": "^0.8.12",
+      "lodash": "^4.18.0",
+      "node-forge": "^1.4.0",
+      "path-to-regexp": "^8.4.0",
+      "picomatch@^2": "^2.3.2",
+      "picomatch@^3": "^3.0.2",
+      "picomatch@^4": "^4.0.4"
+    }
+  },
+  "devDependencies": {
+    "pdfkit": "^0.18.0",
+    "playwright-chromium": "^1.58.2",
+    "pptxgenjs": "^4.0.1",
+    "prettier": "^3.8.1",
+    "puppeteer": "^24.39.1",
+    "puppeteer-core": "^24.39.1",
+    "tsx": "catalog:",
+    "typescript": "~5.9.2"
+  }
+}

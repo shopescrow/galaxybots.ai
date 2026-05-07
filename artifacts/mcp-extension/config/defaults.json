@@ -1,0 +1,28 @@
+{
+  "default_department": "Executive",
+  "log_level": "info",
+  "telemetry": true,
+  "trial_mode": true,
+  "max_retry_attempts": 3,
+  "request_timeout_ms": 30000,
+  "sse_reconnect_delay_ms": 5000,
+  "config_dir": "~/.gifted-productions",
+  "logs_dir": "~/.gifted-productions/logs",
+  "cache_ttl_seconds": 86400,
+  "server": {
+    "remote_url": "https://galaxybots.ai/__mcp/sse",
+    "health_url": "https://galaxybots.ai/__mcp/health",
+    "local_port": 3847
+  },
+  "departments": [
+    "Executive",
+    "Finance",
+    "Marketing",
+    "Operations",
+    "Legal",
+    "HR",
+    "Sales",
+    "Technology",
+    "Strategy"
+  ]
+}

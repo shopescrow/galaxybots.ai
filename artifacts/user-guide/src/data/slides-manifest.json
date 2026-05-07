@@ -1,0 +1,106 @@
+[
+	{
+		"id": "ug-001-title",
+		"position": 1,
+		"filepath": "src/pages/slides/Slide01Title.tsx",
+		"title": "Your AI Executive Team Starts Here",
+		"description": "Welcome slide introducing GalaxyBots.ai and what the guide covers — log in, connect with bots, deploy a team, and stay in control through the Command Center.",
+		"speakerNotes": "Welcome to GalaxyBots dot A-I — Fortune 500 intelligence, at your command."
+	},
+	{
+		"id": "ug-002-login",
+		"position": 2,
+		"filepath": "src/pages/slides/Slide02Login.tsx",
+		"title": "Step 1: Log In",
+		"description": "Navigate to your GalaxyBots URL. Enter email and password. SSO auto-detection for company domains.",
+		"speakerNotes": "Start by navigating to your GalaxyBots URL. Enter your email and password, then click Sign In. SSO is automatic."
+	},
+	{
+		"id": "ug-003-command-center",
+		"position": 3,
+		"filepath": "src/pages/slides/Slide03CommandCenter.tsx",
+		"title": "Step 2: Your Command Center",
+		"description": "Activity Feed — live bot action log. Pending Approvals — actions awaiting sign-off. Company Status — real-time fleet health. Mission control for your AI team.",
+		"speakerNotes": "The Command Center is your operations hub. Activity Feed, Pending Approvals, Company Status — everything in one place."
+	},
+	{
+		"id": "ug-004-bot-team",
+		"position": 4,
+		"filepath": "src/pages/slides/Slide04BotTeam.tsx",
+		"title": "Step 3: Meet Your Bot Team",
+		"description": "CFO Bot: financial analysis, P&L, budgeting. Marketing Director: campaign strategy, brand, competitive intel. CMO Bot: GTM strategy, lead gen, Prospector pipeline. Full corporate roster of AI executives.",
+		"speakerNotes": "GalaxyBots comes pre-loaded with a full corporate roster — explore the full Bots section to see your entire team."
+	},
+	{
+		"id": "ug-005-open-channel",
+		"position": 5,
+		"filepath": "src/pages/slides/Slide05OpenChannel.tsx",
+		"title": "Step 4: Open a Channel",
+		"description": "Navigate to Bots in left sidebar. Browse roster, select specialist (e.g., CMO Bot). Click Open Channel. Private, dedicated line to that executive.",
+		"speakerNotes": "In the left sidebar, navigate to Bots. Select your specialist and click Open Channel — your direct line is live."
+	},
+	{
+		"id": "ug-006-directive",
+		"position": 6,
+		"filepath": "src/pages/slides/Slide06Directive.tsx",
+		"title": "Step 5: Send Your Directive",
+		"description": "Plain language instructions — no special commands. Example: Analyze our Q2 revenue and flag areas of concern. CFO Bot pulls data, identifies margin compression, flags cost centers.",
+		"speakerNotes": "Your bots understand plain language. Be specific, be direct, and your bots will deliver."
+	},
+	{
+		"id": "ug-007-deep-thinking",
+		"position": 7,
+		"filepath": "src/pages/slides/Slide07DeepThinking.tsx",
+		"title": "Pro Tip: Enable Deep Thinking Mode",
+		"description": "10 parallel AI perspectives synthesized before response. Use for: market entry analysis, risk assessment, competitive strategy. Enable when stakes are high.",
+		"speakerNotes": "Deep Thinking Mode synthesizes 10 independent AI perspectives in parallel — designed for decisions that demand depth."
+	},
+	{
+		"id": "ug-008-deploy-team",
+		"position": 8,
+		"filepath": "src/pages/slides/Slide08DeployTeam.tsx",
+		"title": "Step 6: Deploy a Team",
+		"description": "4 stages: Define objective → Optima Prime analyzes → Specialists selected → Task Room launched. Multi-department coordination for complex goals.",
+		"speakerNotes": "Deploy Team assembles a coordinated group of specialists around a single goal — four stages from objective to execution."
+	},
+	{
+		"id": "ug-009-optima-prime",
+		"position": 9,
+		"filepath": "src/pages/slides/Slide09OptimaPrime.tsx",
+		"title": "Optima Prime: Your AI Commander",
+		"description": "Analyzes objective across all departments. Proposes the right specialists for the specific task. Suggests new bots if capability gaps exist. Every team precisely matched to the mission.",
+		"speakerNotes": "Optima Prime doesn't just pick bots — it analyzes your goal to understand which expertise is actually required."
+	},
+	{
+		"id": "ug-010-boardroom",
+		"position": 10,
+		"filepath": "src/pages/slides/Slide10Boardroom.tsx",
+		"title": "Step 7: Lead Your Task Boardroom",
+		"description": "Shared workspace for the full deployed team. Assign tasks, set priorities, redirect focus. Add specialists mid-session without interruption. Real-time tracking of every bot action.",
+		"speakerNotes": "The Boardroom is where strategy becomes execution — assign, redirect, add specialists, track everything in real time."
+	},
+	{
+		"id": "ug-011-approvals",
+		"position": 11,
+		"filepath": "src/pages/slides/Slide11Approvals.tsx",
+		"title": "Step 8: Managing Approvals",
+		"description": "Bot surfaces action request → Review in Pending Approvals → Approve (bot proceeds) or Reject (action stopped). Full audit trail of every decision.",
+		"speakerNotes": "For consequential actions, bots request your approval. You stay in full control with a complete audit trail."
+	},
+	{
+		"id": "ug-012-closing",
+		"position": 12,
+		"filepath": "src/pages/slides/Slide12Closing.tsx",
+		"title": "You're Ready to Lead",
+		"description": "3 core tools: Bots (direct conversations), Deploy Team (coordinated missions), Command Center (oversight). GalaxyBots.ai: Fortune 500 intelligence, at your command.",
+		"speakerNotes": "You now know how to connect with bots, deploy teams, collaborate in the Boardroom, and govern through the Command Center."
+	},
+	{
+		"id": "ug-013-quickstart",
+		"position": 13,
+		"filepath": "src/pages/slides/Slide13QuickStart.tsx",
+		"title": "Quick Start Reference Card",
+		"description": "8 steps: Log in → Command Center → Explore Bots → Open Channel → Send Directive → Deploy Team → Lead Boardroom → Manage Approvals. Key locations: Command Center, Bots, Deploy Team, Boardroom, Approvals.",
+		"speakerNotes": "Your go-to reference for all 8 steps and key navigation locations."
+	}
+]

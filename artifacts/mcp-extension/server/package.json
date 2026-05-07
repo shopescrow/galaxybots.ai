@@ -1,0 +1,20 @@
+{
+  "name": "galaxybots-mcp-server",
+  "version": "1.0.0",
+  "description": "GalaxyBots AI Directors — bundled MCP server for local stdio mode",
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.0",
+    "zod": "^3.23.8",
+    "dotenv": "^16.4.5"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": ["mcp", "galaxybots", "ai-directors", "claude", "desktop-extension"]
+}

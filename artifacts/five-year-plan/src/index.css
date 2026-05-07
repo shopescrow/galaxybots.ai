@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #0a0e1a;
+  --navy-mid: #0d1225;
+  --navy-card: #111829;
+  --navy-border: #1a2240;
+  --blue: #3b82f6;
+  --blue-light: #60a5fa;
+  --blue-glow: rgba(59, 130, 246, 0.15);
+  --gold: #f59e0b;
+  --gold-light: #fbbf24;
+  --gold-dim: rgba(245, 158, 11, 0.2);
+  --text-primary: #f0f4ff;
+  --text-secondary: #94a3b8;
+  --text-muted: #4a5568;
+
+  font-family: "Inter", system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0a0e1a;
+  color: #f0f4ff;
+}
+
+.font-display {
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.gold-rule {
+  height: 0.2vh;
+  background: linear-gradient(90deg, #f59e0b, transparent);
+}
+
+.blue-rule {
+  height: 0.2vh;
+  background: linear-gradient(90deg, #3b82f6, transparent);
+}
+
+.director-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6vw;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 4px;
+  padding: 0.4vh 1vw;
+}
+
+.quote-panel {
+  background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(245,158,11,0.05));
+  border-left: 0.3vw solid #f59e0b;
+  padding: 2vh 2vw;
+}
+
+.stat-card {
+  background: rgba(17, 24, 41, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  padding: 2vh 1.5vw;
+}
+
+.stars-bg {
+  background-image:
+    radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 35% 60%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 15%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 45%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 75%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 80%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 48% 88%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 62% 35%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 25% 40%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 100%);
+}

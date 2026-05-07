@@ -1,0 +1,249 @@
+{
+  "mcpb_version": "0.2",
+  "id": "com.galaxybots.ai.mcp-extension",
+  "name": "GalaxyBots AI Directors",
+  "version": "1.0.0",
+  "description": "Fortune 500 Intelligence. For Everyone. Deploy an entire AI executive team — CFO, CMO, COO, Legal, HR, and more — directly in Claude Desktop.",
+  "author": {
+    "name": "GalaxyBots.ai",
+    "url": "https://galaxybots.ai",
+    "email": "support@galaxybots.ai"
+  },
+  "license": "Proprietary",
+  "keywords": ["AI", "executive", "directors", "business", "automation", "AEO", "analytics"],
+
+  "server": {
+    "type": "remote_http",
+    "url": "https://galaxybots.ai/__mcp/sse",
+    "transport": "sse",
+    "auth": {
+      "type": "bearer",
+      "token_source": "user_config",
+      "token_field": "api_key"
+    }
+  },
+
+  "dev_server": {
+    "type": "stdio",
+    "command": "node",
+    "args": ["server/index.js"],
+    "env": {
+      "MCP_API_KEY": "${user_config.api_key}",
+      "DEFAULT_DEPARTMENT": "${user_config.default_department}",
+      "NODE_ENV": "development"
+    }
+  },
+
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true,
+    "logging": true,
+    "streaming": true
+  },
+
+  "tools": [
+    {
+      "name": "list_bots",
+      "description": "List all GalaxyBots AI Directors with their department, title, and description.",
+      "tags": ["bots", "directory"]
+    },
+    {
+      "name": "get_bot",
+      "description": "Get the full profile of a specific AI Director by name or ID.",
+      "tags": ["bots"]
+    },
+    {
+      "name": "send_message_to_bot",
+      "description": "Send a message to any AI Director and receive their expert response.",
+      "tags": ["messaging", "core"]
+    },
+    {
+      "name": "analyze_task",
+      "description": "Submit a business objective to Optima Prime — receive a full team proposal with recommended Directors.",
+      "tags": ["analysis", "orchestration"]
+    },
+    {
+      "name": "create_task_session",
+      "description": "Launch a Task Room with a defined objective and a selected team of AI Directors.",
+      "tags": ["sessions", "orchestration"]
+    },
+    {
+      "name": "list_task_sessions",
+      "description": "View recent task sessions with status, team size, and objective.",
+      "tags": ["sessions"]
+    },
+    {
+      "name": "memory_search",
+      "description": "Search AI Director memory for past conversations, decisions, and context.",
+      "tags": ["memory", "search"]
+    },
+    {
+      "name": "pm_get_score",
+      "description": "Get the Cloud 9 AEO score for any URL across 9 AI engines.",
+      "tags": ["aeo", "analytics"]
+    },
+    {
+      "name": "pm_request_scan",
+      "description": "Request a new AEO scan for a URL with real-time progress.",
+      "tags": ["aeo", "analytics"]
+    },
+    {
+      "name": "pm_get_recommendations",
+      "description": "Retrieve AI-powered AEO improvement recommendations for a URL.",
+      "tags": ["aeo", "recommendations"]
+    },
+    {
+      "name": "pm_compare_urls",
+      "description": "Compare AEO scores for 2-5 URLs side by side.",
+      "tags": ["aeo", "analytics"]
+    },
+    {
+      "name": "calculate_roi",
+      "description": "Calculate ROI of GalaxyBots AI Directors versus human executive salaries.",
+      "tags": ["roi", "gtm"]
+    },
+    {
+      "name": "get_pricing_recommendation",
+      "description": "Get the right GalaxyBots subscription tier for your company.",
+      "tags": ["pricing", "gtm"]
+    },
+    {
+      "name": "generate_roi_report",
+      "description": "Generate a shareable one-page ROI report for your board.",
+      "tags": ["roi", "reporting", "gtm"]
+    },
+    {
+      "name": "request_demo",
+      "description": "Book a live demo with the GalaxyBots team.",
+      "tags": ["sales", "gtm"]
+    }
+  ],
+
+  "resources": [
+    {
+      "uri": "gifted://social-proof",
+      "name": "GalaxyBots Social Proof",
+      "description": "Customer testimonials, case studies, and results data for GalaxyBots AI Directors.",
+      "mime_type": "application/json"
+    }
+  ],
+
+  "prompts": [
+    {
+      "name": "executive_briefing",
+      "description": "Generate an executive briefing using your AI Directors team.",
+      "arguments": [
+        { "name": "topic", "description": "The business topic or challenge to brief on", "required": true }
+      ]
+    },
+    {
+      "name": "aeo_audit",
+      "description": "Run a full AEO audit for a website and get prioritized recommendations.",
+      "arguments": [
+        { "name": "url", "description": "Website URL to audit", "required": true }
+      ]
+    },
+    {
+      "name": "roi_analysis",
+      "description": "Calculate and explain the ROI of deploying GalaxyBots AI Directors.",
+      "arguments": [
+        { "name": "num_directors", "description": "Number of AI Directors needed", "required": true },
+        { "name": "company_name", "description": "Your company name", "required": false }
+      ]
+    }
+  ],
+
+  "user_config": {
+    "fields": [
+      {
+        "key": "api_key",
+        "type": "secret",
+        "label": "GalaxyBots API Key",
+        "description": "Your GalaxyBots API key. Get one at https://galaxybots.ai/api-access",
+        "placeholder": "gb_live_...",
+        "required": false,
+        "help_url": "https://galaxybots.ai/api-access"
+      },
+      {
+        "key": "default_department",
+        "type": "enum",
+        "label": "Default Department",
+        "description": "The AI Director department to engage by default when starting a new session.",
+        "required": false,
+        "default": "Executive",
+        "options": [
+          { "value": "Executive", "label": "Executive — Optima Prime (CEO)" },
+          { "value": "Finance", "label": "Finance — FinBot Forte (CFO)" },
+          { "value": "Marketing", "label": "Marketing — MarketMind Max (CMO)" },
+          { "value": "Operations", "label": "Operations — OpsBot Olivia (COO)" },
+          { "value": "Legal", "label": "Legal — LexBot Lara (CLO)" },
+          { "value": "HR", "label": "HR — HRBot Hana (CHRO)" },
+          { "value": "Sales", "label": "Sales — SalesBot Sterling (CRO)" },
+          { "value": "Technology", "label": "Technology — TechBot Tara (CTO)" },
+          { "value": "Strategy", "label": "Strategy — StratBot Shaw (CSO)" }
+        ]
+      },
+      {
+        "key": "telemetry",
+        "type": "boolean",
+        "label": "Enable Usage Telemetry",
+        "description": "Share anonymous usage data to help improve GalaxyBots AI Directors.",
+        "required": false,
+        "default": true
+      }
+    ]
+  },
+
+  "presentation": {
+    "display_name": "GalaxyBots AI Directors",
+    "tagline": "Fortune 500 Intelligence. For Everyone.",
+    "icon": "assets/icon.png",
+    "banner": "assets/banner.png",
+    "colors": {
+      "primary": "#1E2B4F",
+      "secondary": "#D4AF37",
+      "background": "#0A0F1E",
+      "text": "#FFFFFF"
+    },
+    "featured_tools": [
+      {
+        "name": "send_message_to_bot",
+        "title": "Consult Your AI CFO",
+        "description": "Ask FinBot Forte to analyze your Q3 financials and recommend a cost reduction strategy.",
+        "example_prompt": "Ask FinBot Forte to review my Q3 budget and identify three areas where we can reduce overhead without impacting growth."
+      },
+      {
+        "name": "pm_get_score",
+        "title": "Check Your AI Visibility Score",
+        "description": "See how your website ranks across 9 AI search engines with the Cloud 9 AEO score.",
+        "example_prompt": "What is the AEO score for example.com? How does it compare to our competitors?"
+      },
+      {
+        "name": "analyze_task",
+        "title": "Build Your Executive Team",
+        "description": "Describe a business challenge and Optima Prime will assemble the right team of AI Directors to tackle it.",
+        "example_prompt": "We are expanding into the EU market next quarter. Which AI Directors should lead this initiative?"
+      }
+    ],
+    "screenshots": [
+      "assets/screenshots/directors-list.png",
+      "assets/screenshots/task-room.png",
+      "assets/screenshots/aeo-score.png"
+    ],
+    "links": {
+      "homepage": "https://galaxybots.ai",
+      "docs": "https://galaxybots.ai/docs",
+      "support": "https://galaxybots.ai/support",
+      "privacy": "https://galaxybots.ai/privacy",
+      "terms": "https://galaxybots.ai/terms"
+    }
+  },
+
+  "trial": {
+    "enabled": true,
+    "free_calls": 3,
+    "trial_tools": ["request_demo", "calculate_roi", "get_pricing_recommendation", "generate_roi_report"],
+    "upgrade_url": "https://galaxybots.ai/api-access"
+  }
+}
