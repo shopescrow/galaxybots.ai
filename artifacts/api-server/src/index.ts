@@ -8,6 +8,7 @@ import { closeAllSSEClients } from "./services/platform/sse";
 import { getAllTools } from "./tools";
 import { seedDefaultOutreachTemplates } from "./services/prospecting/seed-outreach-templates";
 import { seedDefaultPartners } from "./services/admin/seed-partners";
+import { seedAdminUser } from "./services/admin/seed-admin-user";
 import { seedMissionTemplates } from "./services/missions/seed-mission-templates";
 import { seedPlaybooks } from "./services/missions/seed-playbooks";
 import { seedApiVersioningChangelog } from "./services/platform/seed-changelog";
@@ -408,6 +409,9 @@ const server = app.listen(port, async () => {
   });
   seedDefaultPartners().catch((err) => {
     console.error("[seed] Partner seeding failed:", err);
+  });
+  seedAdminUser().catch((err) => {
+    console.error("[seed] Admin user seeding failed:", err);
   });
   seedMissionTemplates().catch((err) => {
     console.error("[seed] Mission template seeding failed:", err);
