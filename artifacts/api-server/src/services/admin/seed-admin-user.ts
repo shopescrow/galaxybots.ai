@@ -39,14 +39,32 @@ export async function seedAdminUser(): Promise<void> {
   }
 
   const existing = await db
-    .select({ id: usersTable.id, email: usersTable.email })
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      passwordHash: usersTable.passwordHash,
+    })
     .from(usersTable)
     .where(or(eq(usersTable.email, email), ilike(usersTable.displayName, username)))
     .limit(1);
 
   if (existing.length > 0) {
+    const found = existing[0];
+    const passwordMatches = await bcrypt.compare(password, found.passwordHash);
+    if (passwordMatches) {
+      console.log(
+        `[seed:admin] Admin user already present (id=${found.id}, email=${found.email}); password matches — no changes.`
+      );
+      return;
+    }
+
+    const newHash = await bcrypt.hash(password, 12);
+    await db
+      .update(usersTable)
+      .set({ passwordHash: newHash, isActive: true, role: "owner" })
+      .where(eq(usersTable.id, found.id));
     console.log(
-      `[seed:admin] Admin user already present (id=${existing[0].id}, email=${existing[0].email}); leaving untouched.`
+      `[seed:admin] Admin user already present (id=${found.id}, email=${found.email}); rotated password to match ADMIN_PASSWORD.`
     );
     return;
   }
