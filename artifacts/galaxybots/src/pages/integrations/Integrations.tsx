@@ -20,20 +20,21 @@ function TabFallback() {
 export default function Integrations() {
   const [clientId, setClientId] = useState<number>(1);
 
-  const { data: clients } = useQuery<Array<{ id: number; companyName: string }>>({
+  const { data: clients } = useQuery<{ data?: Array<{ id: number; companyName: string }> } | Array<{ id: number; companyName: string }>>({
     queryKey: ["clients"],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/clients`);
-      const json = await res.json();
-      return Array.isArray(json) ? json : (json.data ?? []);
+      return res.json();
     },
   });
 
+  const clientList = Array.isArray(clients) ? clients : (clients?.data ?? []);
+
   useEffect(() => {
-    if (clients && clients.length > 0 && !clients.find((c) => c.id === clientId)) {
-      setClientId(clients[0].id);
+    if (clientList.length > 0 && !clientList.find((c) => c.id === clientId)) {
+      setClientId(clientList[0].id);
     }
-  }, [clients, clientId]);
+  }, [clientList, clientId]);
 
   return (
     <AppLayout>
@@ -45,7 +46,7 @@ export default function Integrations() {
           </p>
         </div>
 
-        {clients && clients.length > 1 && (
+        {clientList.length > 1 && (
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium">Client:</label>
             <select
@@ -53,7 +54,7 @@ export default function Integrations() {
               value={clientId}
               onChange={(e) => setClientId(Number(e.target.value))}
             >
-              {clients.map((c) => (
+              {clientList.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.companyName}
                 </option>
