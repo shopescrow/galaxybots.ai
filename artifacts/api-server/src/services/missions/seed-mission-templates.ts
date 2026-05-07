@@ -145,7 +145,7 @@ export async function seedMissionTemplates(): Promise<void> {
         ...t,
         isBuiltIn: true,
         createdBy: null,
-        recommendedBots: t.recommendedBots as string[],
+        recommendedBots: [...t.recommendedBots] as string[],
       }))
     );
 

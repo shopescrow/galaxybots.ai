@@ -348,7 +348,7 @@ export async function getAllClientHealthScores() {
   `);
 
   const scoresMap = new Map<number, LatestScoreRow>();
-  for (const row of latestScores.rows as LatestScoreRow[]) {
+  for (const row of latestScores.rows as unknown as LatestScoreRow[]) {
     scoresMap.set(row.clientId, row);
   }
 
