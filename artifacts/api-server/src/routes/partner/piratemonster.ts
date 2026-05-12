@@ -48,7 +48,7 @@ const PirateMonsterProspectSchema = z.object({
   domain: z.string(),
   email: z.string().email().optional().nullable(),
   phone: z.string().optional().nullable(),
-  socialLinks: z.record(z.string().url()).optional().nullable(),
+  socialLinks: z.record(z.string(), z.string().url()).optional().nullable(),
 });
 
 const PirateMonsterBatchWebhookSchema = z.object({
@@ -82,15 +82,36 @@ function requireInboundSecret(req: Request, res: Response, next: NextFunction) {
     .update(bodyBytes)
     .digest("hex")}`;
 
+  const fireSignatureIncident = (reason: string, remoteIp: string) => {
+    import("../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle: _rc }) => {
+      const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+      const fp = `piratemonster:sig_fail:${reason}:${remoteIp}`.slice(0, 32);
+      await gdb.insert(guardianIncidentsTable).values({
+        domain: "webhook_auth",
+        title: `PirateMonster HMAC Signature Failure (${reason})`,
+        description: `Inbound webhook rejected: ${reason}. Remote IP: ${remoteIp}. This may indicate a replay attack, misconfigured secret, or unauthorised caller.`,
+        severity: 82,
+        blastRadius: 70,
+        status: "open",
+        affectedComponent: "PirateMonster inbound webhook",
+        errorFingerprint: fp,
+        sourcePayload: { reason, remoteIp, at: new Date().toISOString() },
+      });
+      await _rc();
+    }).catch(() => {});
+  };
+
   try {
     if (
       signature.length !== expected.length ||
       !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
     ) {
+      fireSignatureIncident("hmac_mismatch", req.ip ?? "unknown");
       res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
       return;
     }
   } catch {
+    fireSignatureIncident("comparison_error", req.ip ?? "unknown");
     res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
     return;
   }
@@ -367,12 +388,47 @@ router.post("/prospecting/jobs/dispatch", async (req: Request, res: Response): P
         const errText = await pmResponse.text();
         console.error(`[PM] Prospecting job dispatch failed: HTTP ${pmResponse.status} — ${errText}`);
         await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+        import("../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle: _rc }) => {
+          const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+          const crypto = await import("node:crypto");
+          const fp = crypto.default.createHash("sha256").update(`piratemonster:prospecting_stall:${clientId}`).digest("hex").slice(0, 32);
+          await gdb.insert(guardianIncidentsTable).values({
+            domain: "performance",
+            title: `Prospecting Job Stalled: HTTP ${pmResponse.status} from PirateMonster`,
+            description: `Prospecting dispatch failed for client ${clientId}. PirateMonster returned HTTP ${pmResponse.status}: ${errText.slice(0, 500)}`,
+            severity: 72,
+            blastRadius: 55,
+            status: "open",
+            affectedComponent: "PirateMonster prospecting API",
+            errorFingerprint: fp,
+            sourcePayload: { clientId, jobId: job.id, statusCode: pmResponse.status, type: "prospecting_stall" },
+          });
+          await _rc();
+        }).catch(() => {});
         res.status(502).json({ error: `PirateMonster returned HTTP ${pmResponse.status}. Job recorded locally.` });
         return;
       }
     } catch (pmErr) {
+      const pmErrMsg = pmErr instanceof Error ? pmErr.message : String(pmErr);
       console.error("[PM] Prospecting job dispatch error:", pmErr);
       await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+      import("../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle: _rc }) => {
+        const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+        const crypto = await import("node:crypto");
+        const fp = crypto.default.createHash("sha256").update(`piratemonster:prospecting_stall:network:${clientId}`).digest("hex").slice(0, 32);
+        await gdb.insert(guardianIncidentsTable).values({
+          domain: "performance",
+          title: `Prospecting Network Failure: PirateMonster unreachable`,
+          description: `Could not reach PirateMonster API for prospecting job dispatch. Client: ${clientId}. Error: ${pmErrMsg.slice(0, 500)}`,
+          severity: 75,
+          blastRadius: 60,
+          status: "open",
+          affectedComponent: "PirateMonster prospecting API",
+          errorFingerprint: fp,
+          sourcePayload: { clientId, jobId: job.id, error: pmErrMsg, type: "prospecting_stall_network" },
+        });
+        await _rc();
+      }).catch(() => {});
       res.status(502).json({ error: "Failed to reach PirateMonster API. Job recorded locally." });
       return;
     }
@@ -538,6 +594,62 @@ router.post("/integrations/piratemonster/webhook", (req, res, next) => requireIn
     }
 
     await updateScanRequests(sourceUrl, record.id);
+
+    const AEO_SCORE_DROP_THRESHOLD = 10;
+    if (previousScore && (previousScore.overallScore - overallScore) >= AEO_SCORE_DROP_THRESHOLD) {
+      const scoreDrop = previousScore.overallScore - overallScore;
+      import("../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle: _runSwarmCycle }) => {
+        const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+        const crypto = await import("node:crypto");
+        const fp = crypto.default.createHash("sha256").update(`aeo:${sourceUrl}:score_drop`).digest("hex").slice(0, 32);
+        await gdb.insert(guardianIncidentsTable).values({
+          domain: "aeo",
+          title: `AEO Score Drop: ${sourceUrl} (${previousScore.overallScore} → ${overallScore})`,
+          description: `AEO score dropped by ${scoreDrop} points. Threshold: ${AEO_SCORE_DROP_THRESHOLD}. Client: ${clientId ?? "unknown"}.`,
+          severity: Math.min(100, 60 + scoreDrop),
+          blastRadius: 65,
+          status: "open",
+          affectedComponent: sourceUrl,
+          errorFingerprint: fp,
+          sourcePayload: { sourceUrl, previousScore: previousScore.overallScore, overallScore, scoreDrop, clientId, compliancePlatform: "piratemonster" },
+        });
+        await _runSwarmCycle();
+      }).catch((err) => console.error("[PirateMonster Bridge] Guardian AEO drop failed:", err));
+    }
+
+    if (isCompetitorScan && clientId) {
+      const OVERTAKE_THRESHOLD = 5;
+      const [clientBaseline] = await db
+        .select({ overallScore: aeoScoresTable.overallScore, sourceUrl: aeoScoresTable.sourceUrl })
+        .from(aeoScoresTable)
+        .where(and(
+          eq(aeoScoresTable.clientId, clientId),
+          eq(aeoScoresTable.scanType, "client"),
+        ))
+        .orderBy(desc(aeoScoresTable.scannedAt))
+        .limit(1);
+
+      if (clientBaseline && overallScore > clientBaseline.overallScore + OVERTAKE_THRESHOLD) {
+        const gap = overallScore - clientBaseline.overallScore;
+        import("../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle: _runSwarmCycle }) => {
+          const { db: gdb, guardianIncidentsTable: git } = await import("@workspace/db");
+          const crypto = await import("node:crypto");
+          const fp = crypto.default.createHash("sha256").update(`piratemonster:competitor_overtake:${sourceUrl}:${clientId}`).digest("hex").slice(0, 32);
+          await gdb.insert(git).values({
+            domain: "piratemonster",
+            title: `Competitor Overtake: ${sourceUrl} (${overallScore}) beat client baseline (${clientBaseline.overallScore}) by ${gap} pts`,
+            description: `Competitor URL "${sourceUrl}" now scores ${overallScore}, surpassing client "${clientBaseline.sourceUrl}" (${clientBaseline.overallScore}) by ${gap} points — exceeding the ${OVERTAKE_THRESHOLD}-point overtake threshold. Client: ${clientId}.`,
+            severity: Math.min(100, 55 + gap),
+            blastRadius: 65,
+            status: "open",
+            affectedComponent: sourceUrl,
+            errorFingerprint: fp,
+            sourcePayload: { competitorUrl: sourceUrl, competitorScore: overallScore, clientUrl: clientBaseline.sourceUrl, clientScore: clientBaseline.overallScore, gap, clientId, type: "competitor_overtake" },
+          });
+          await _runSwarmCycle();
+        }).catch((err) => console.error("[PirateMonster Bridge] Competitor overtake guardian trigger failed:", err));
+      }
+    }
 
     res.status(200).json(record);
   } catch (err) {

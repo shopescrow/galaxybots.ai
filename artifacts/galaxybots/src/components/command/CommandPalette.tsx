@@ -111,6 +111,7 @@ const STATIC_ROUTES: Array<{ href: string; label: string; description?: string; 
   { href: "/journal", label: "Journal", description: "Activity journal" },
   { href: "/scenarios", label: "Scenarios", description: "Scenario planning" },
   { href: "/roi", label: "ROI Dashboard", description: "Return on investment overview", keywords: ["roi", "revenue"] },
+  { href: "/guardian-hive", label: "Guardian Hive", description: "Sovereign AI platform intelligence — immortal Queen colony", keywords: ["guardian", "queen", "hive", "threats", "security", "monitoring", "bees", "incidents", "postmortem"] },
 ];
 
 interface CommandPaletteProps {
@@ -270,7 +271,8 @@ export function CommandPalette({ open, onOpenChange, onOpenAeoScan }: CommandPal
       }
     });
 
-    (bots?.data || []).forEach((bot) => {
+    const botList = Array.isArray(bots) ? bots : Array.isArray((bots as { data?: unknown[] } | undefined)?.data) ? (bots as { data: { id: number; name: string; title?: string; department?: string }[] }).data : [];
+    botList.forEach((bot) => {
       const score = Math.max(
         fuzzyScore(query, bot.name),
         fuzzyScore(query, bot.title || ""),
@@ -294,7 +296,8 @@ export function CommandPalette({ open, onOpenChange, onOpenAeoScan }: CommandPal
       }
     });
 
-    (clients?.data || []).forEach((client: { id: number; companyName?: string; name?: string; industry?: string | null }) => {
+    const clientList = Array.isArray(clients) ? clients : Array.isArray((clients as { data?: unknown[] } | undefined)?.data) ? (clients as { data: { id: number; companyName?: string; name?: string; industry?: string | null }[] }).data : [];
+    clientList.forEach((client: { id: number; companyName?: string; name?: string; industry?: string | null }) => {
       const displayName = client.companyName || client.name || "";
       const score = Math.max(
         fuzzyScore(query, displayName),

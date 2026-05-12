@@ -95,6 +95,7 @@ const McpGrowthHub        = lazy(() => import("@/pages/mcp-marketing/McpGrowthHu
 const McpLaunch           = lazy(() => import("@/pages/mcp-marketing/McpLaunch"));
 const McpDocs             = lazy(() => import("@/pages/mcp-marketing/McpDocs"));
 const SlaWalkthrough      = lazy(() => import("@/pages/sla-walkthrough/SlaWalkthrough"));
+const GuardianHive        = lazy(() => import("@/pages/guardian/GuardianHive"));
 
 // ─── Minimal inline fallback — zero external deps ───────────────────────────
 function PageLoader() {
@@ -204,6 +205,7 @@ function AuthenticatedRoutes() {
         <Route path="/activity"               component={ActivityStream} />
         <Route path="/mcp-growth-hub"         component={McpGrowthHub} />
         <Route path="/sla-walkthrough"        component={SlaWalkthrough} />
+        <Route path="/guardian-hive"          component={GuardianHive} />
         <Route component={NotFound} />
       </Switch>
     </>

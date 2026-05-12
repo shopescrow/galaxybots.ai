@@ -27,15 +27,36 @@ export function requireInboundSecret(req: Request, res: Response, next: NextFunc
     .update(bodyBytes)
     .digest("hex")}`;
 
+  const fireSignatureIncident = (reason: string, remoteIp: string) => {
+    import("../../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle }) => {
+      const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+      const fp = `piratemonster:sig_fail:${remoteIp}`.slice(0, 32);
+      await gdb.insert(guardianIncidentsTable).values({
+        domain: "webhook_auth",
+        title: `PirateMonster HMAC Signature Failure (${reason})`,
+        description: `Inbound webhook rejected: ${reason}. Remote IP: ${remoteIp}. This may indicate a replay attack, misconfigured secret, or an unauthorised caller attempting to inject data.`,
+        severity: 82,
+        blastRadius: 70,
+        status: "open",
+        affectedComponent: "PirateMonster inbound webhook",
+        errorFingerprint: fp,
+        sourcePayload: { reason, remoteIp, at: new Date().toISOString() },
+      });
+      await runSwarmCycle();
+    }).catch(() => {});
+  };
+
   try {
     if (
       signature.length !== expected.length ||
       !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
     ) {
+      fireSignatureIncident("hmac_mismatch", req.ip ?? "unknown");
       res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
       return;
     }
   } catch {
+    fireSignatureIncident("comparison_error", req.ip ?? "unknown");
     res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
     return;
   }

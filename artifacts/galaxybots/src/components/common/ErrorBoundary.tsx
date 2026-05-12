@@ -1,9 +1,11 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { reportReactError } from "@/services/guardian-reporter";
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  componentName?: string;
 }
 
 interface State {
@@ -23,6 +25,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary] Caught error:", error, info.componentStack);
+    try {
+      const route = typeof window !== "undefined" ? window.location.pathname : "unknown";
+      reportReactError(error, this.props.componentName ?? info.componentStack?.split("\n")[1]?.trim() ?? "unknown", route);
+    } catch {
+      // reporter must never throw
+    }
   }
 
   render() {

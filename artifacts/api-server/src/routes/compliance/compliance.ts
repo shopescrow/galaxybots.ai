@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, platformComplianceTable, clientComplianceRequirementsTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
+import { classifyThreat } from "../../services/guardian/threat-classifier";
+import { broadcastSSEToAll } from "../../services/platform/sse";
 import { z } from "zod/v4";
 import {
   CreateClientComplianceBody,
@@ -64,6 +66,30 @@ router.post("/compliance/inbound", requireApiKey, async (req, res): Promise<void
       details: details ?? null,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
     }).returning();
+
+    if (status === "non_compliant" || status === "expired") {
+      const { severity, blastRadius } = classifyThreat("compliance", standardName, details ?? `KiloPro status: ${status}`);
+      import("../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle }) => {
+        const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+        const crypto = await import("node:crypto");
+        const fp = crypto.default.createHash("sha256").update(`compliance:${standardName}:kilopro`).digest("hex").slice(0, 32);
+        await gdb.insert(guardianIncidentsTable).values({
+          domain: "compliance",
+          title: `KiloPro: ${standardName} — ${status}`,
+          description: details ?? `KiloPro reported ${status} for ${standardName}`,
+          severity,
+          blastRadius,
+          status: "open",
+          affectedComponent: "KiloPro compliance channel",
+          errorFingerprint: fp,
+          kiloProAuditTag: `kilopro:${status}:${record.id}`,
+          sourcePayload: { compliancePlatform: "kilopro", standardName, category, status, certificationId },
+        });
+        await runSwarmCycle();
+      }).catch((err) => console.error("[KiloPro Bridge] Guardian ingestion failed:", err));
+
+      broadcastSSEToAll("kilopro_compliance_update", { standardName, status, recordId: record.id, at: new Date().toISOString() });
+    }
 
     res.status(201).json(record);
   } catch (err) {

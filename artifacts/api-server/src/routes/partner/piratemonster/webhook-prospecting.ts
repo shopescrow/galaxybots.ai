@@ -169,12 +169,47 @@ router.post("/prospecting/jobs/dispatch", async (req: Request, res: Response): P
         const errText = await pmResponse.text();
         console.error(`[PM] Prospecting job dispatch failed: HTTP ${pmResponse.status} — ${errText}`);
         await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+        import("../../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle }) => {
+          const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+          const crypto = await import("node:crypto");
+          const fp = crypto.default.createHash("sha256").update(`piratemonster:prospecting_stall:${clientId}`).digest("hex").slice(0, 32);
+          await gdb.insert(guardianIncidentsTable).values({
+            domain: "performance",
+            title: `Prospecting Job Stalled: HTTP ${pmResponse.status} from PirateMonster`,
+            description: `Prospecting dispatch failed for client ${clientId}. PirateMonster returned HTTP ${pmResponse.status}: ${errText.slice(0, 500)}`,
+            severity: 72,
+            blastRadius: 55,
+            status: "open",
+            affectedComponent: "PirateMonster prospecting API",
+            errorFingerprint: fp,
+            sourcePayload: { clientId, jobId: job.id, statusCode: pmResponse.status, type: "prospecting_stall" },
+          });
+          await runSwarmCycle();
+        }).catch(() => {});
         res.status(502).json({ error: `PirateMonster returned HTTP ${pmResponse.status}. Job recorded locally.` });
         return;
       }
     } catch (pmErr) {
+      const pmErrMsg = pmErr instanceof Error ? pmErr.message : String(pmErr);
       console.error("[PM] Prospecting job dispatch error:", pmErr);
       await db.update(prospectingJobsTable).set({ status: "failed" }).where(eq(prospectingJobsTable.id, job.id));
+      import("../../../services/guardian/queen-orchestrator").then(async ({ runSwarmCycle }) => {
+        const { db: gdb, guardianIncidentsTable } = await import("@workspace/db");
+        const crypto = await import("node:crypto");
+        const fp = crypto.default.createHash("sha256").update(`piratemonster:prospecting_stall:network:${clientId}`).digest("hex").slice(0, 32);
+        await gdb.insert(guardianIncidentsTable).values({
+          domain: "performance",
+          title: `Prospecting Network Failure: PirateMonster unreachable`,
+          description: `Could not reach PirateMonster API for prospecting job dispatch. Client: ${clientId}. Error: ${pmErrMsg.slice(0, 500)}`,
+          severity: 75,
+          blastRadius: 60,
+          status: "open",
+          affectedComponent: "PirateMonster prospecting API",
+          errorFingerprint: fp,
+          sourcePayload: { clientId, jobId: job.id, error: pmErrMsg, type: "prospecting_stall_network" },
+        });
+        await runSwarmCycle();
+      }).catch(() => {});
       res.status(502).json({ error: "Failed to reach PirateMonster API. Job recorded locally." });
       return;
     }

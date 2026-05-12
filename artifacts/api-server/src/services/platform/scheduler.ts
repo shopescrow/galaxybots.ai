@@ -20,6 +20,10 @@ import { resumePausedWorkflows } from "./jobs/check-scheduled-workflows";
 import { checkActivationNurture } from "./jobs/check-activation-nurture";
 import { checkLiberatorSyncs } from "../liberator/sync-engine";
 import { checkCrmAnomalies } from "./jobs/check-crm-anomalies";
+import { runGuardianHeartbeat } from "./jobs/guardian-heartbeat";
+import { runGuardianPatrols } from "./jobs/guardian-patrol-runner";
+import { runDependencyVulnerabilityWatcher } from "./jobs/dependency-vulnerability-watcher";
+import { runGuardianInternalWatchers } from "./jobs/guardian-internal-watchers";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -36,6 +40,7 @@ const highFreqJobs: Job[] = [
   { name: "SLA breach check", fn: checkSlaBreaches },
   { name: "approval SLAs", fn: checkApprovalSLAs },
   { name: "AEO scan queue", fn: checkAeoScanQueue },
+  { name: "guardian-heartbeat", fn: runGuardianHeartbeat },
 ];
 
 const mediumFreqJobs: Job[] = [
@@ -49,6 +54,9 @@ const mediumFreqJobs: Job[] = [
   { name: "weekly briefings", fn: checkWeeklyBriefings },
   { name: "weekly pulse", fn: checkWeeklyPulse },
   { name: "Liberator continuous sync", fn: async () => { await checkLiberatorSyncs(); } },
+  { name: "guardian-patrols", fn: runGuardianPatrols },
+  { name: "dependency-vulnerability-watcher", fn: runDependencyVulnerabilityWatcher },
+  { name: "guardian-internal-watchers", fn: runGuardianInternalWatchers },
 ];
 
 const lowFreqJobs: Job[] = [
