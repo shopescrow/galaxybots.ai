@@ -70,7 +70,7 @@ else
     printf '#!/bin/sh\necho "${GITHUB_TOKEN}"\n' > "${GIT_ASKPASS_SCRIPT}"
     if GIT_ASKPASS="${GIT_ASKPASS_SCRIPT}" \
         git -c "credential.username=x-access-token" \
-        push --force-with-lease "https://github.com/shopescrow/galaxybots.ai.git" "HEAD:${CURRENT_BRANCH}" 2>&1; then
+        push --force "https://github.com/shopescrow/galaxybots.ai.git" "HEAD:${CURRENT_BRANCH}" 2>&1; then
       echo "[post-merge] GitHub push complete."
     else
       echo "[post-merge] WARNING: GitHub push failed (non-fatal — may be a concurrent push or token issue). Check GitHub manually." >&2
