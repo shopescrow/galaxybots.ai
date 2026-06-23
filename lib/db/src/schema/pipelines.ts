@@ -33,6 +33,7 @@ export const pipelineRunsTable = pgTable("pipeline_runs", {
   status: text("status").notNull().default("pending"),
   triggerType: text("trigger_type").notNull().default("manual"),
   triggerData: jsonb("trigger_data").default({}),
+  coordinatorTrace: jsonb("coordinator_trace").$type<Record<string, unknown>>(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
