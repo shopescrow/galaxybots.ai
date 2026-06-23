@@ -33,6 +33,13 @@ import { runCounterfactualAttribution } from "./jobs/counterfactual-attribution"
 import { runOpportunityDetection } from "./jobs/opportunity-detection";
 import { checkUncertaintySchedules } from "./jobs/uncertainty-scheduler";
 import { runSyntheticControlScan } from "./jobs/synthetic-control-builder";
+import { runCalibrationPipeline } from "./jobs/calibration-pipeline";
+import { runPromptEvolution, runPromptShadowPromotion } from "./jobs/prompt-evolution";
+import { runToolHeuristicsUpdate } from "./jobs/tool-heuristics";
+import { runAlignmentPatternExtraction } from "./jobs/alignment-pattern-extraction";
+import { runExperimentMeasurement } from "./jobs/experiment-measurement";
+import { runAlignmentHarvester } from "./jobs/alignment-harvester";
+import { runCommunicationStyleAdaptation } from "./jobs/communication-style";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -87,6 +94,14 @@ const lowFreqJobs: Job[] = [
   { name: "belief-decay", fn: checkBeliefDecay },
   { name: "stale-belief-updates", fn: checkStaleBeliefUpdates },
   { name: "synthetic-control-scan", fn: runSyntheticControlScan },
+  { name: "calibration-pipeline", fn: runCalibrationPipeline },
+  { name: "prompt-evolution", fn: runPromptEvolution },
+  { name: "prompt-shadow-promotion", fn: runPromptShadowPromotion },
+  { name: "tool-heuristics-update", fn: runToolHeuristicsUpdate },
+  { name: "alignment-harvester", fn: runAlignmentHarvester },
+  { name: "communication-style-adaptation", fn: runCommunicationStyleAdaptation },
+  { name: "alignment-pattern-extraction", fn: runAlignmentPatternExtraction },
+  { name: "experiment-measurement", fn: runExperimentMeasurement },
 ];
 
 const running = new Set<string>();

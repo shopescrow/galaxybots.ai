@@ -82,6 +82,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/knowledge-base", label: "Knowledge Base", description: "Knowledge repository" },
       { href: "/documents", label: "Documents", description: "Document management" },
       { href: "/bots/ai-receptionist", label: "AI Receptionist", description: "Front-desk automation" },
+      { href: "/self-improvement", label: "Self-Improvement", description: "Calibration, prompt evolution & alignment" },
+      { href: "/experiments", label: "Experiments", description: "A/B hypothesis testing" },
+      { href: "/alignment-audit", label: "Alignment Audit", description: "Multi-stakeholder learned preferences" },
+      { href: "/prompt-versions", label: "Prompt Versions", description: "System prompt evolution history" },
     ],
   },
   {

@@ -15,6 +15,7 @@ import { registerPlatformRoutes } from "./platform";
 import { registerLiberatorRoutes } from "./liberator";
 import { registerGuardianRoutes } from "./guardian";
 import { registerCoordinatorRoutes } from "./coordinator";
+import { registerSelfImprovementRoutes } from "./self-improvement";
 
 const router: IRouter = Router();
 
@@ -33,5 +34,6 @@ registerAdminRoutes(router);
 registerLiberatorRoutes(router);
 registerGuardianRoutes(router);
 registerCoordinatorRoutes(router);
+registerSelfImprovementRoutes(router);
 
 export default router;

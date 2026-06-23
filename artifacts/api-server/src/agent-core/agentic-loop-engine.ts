@@ -16,7 +16,11 @@ import {
 } from "./value-objects/index.js";
 import type { AgentLoopConfig, ConfigProvider, FailureCategory, FailureLogStore, LLMProvider, MemoryStore, SessionStore, ToolRegistry } from "./ports/index.js";
 import { DEFAULT_LOOP_CONFIG } from "./ports/index.js";
-import { DbConfigProvider, DbFailureLogStore, DbSessionStore, logConfidencePrediction } from "./db-adapters.js";
+import { DbConfigProvider, DbFailureLogStore, DbSessionStore, logConfidencePrediction, getTemperatureScaleFactor, applyTemperatureScaling } from "./db-adapters.js";
+import { resolvePromptWithShadowSplit, recordShadowOutcome } from "../services/platform/jobs/prompt-evolution.js";
+import { getTopToolHeuristics } from "../services/platform/jobs/tool-heuristics.js";
+import { assignSessionToExperiments } from "../services/platform/jobs/experiment-assignment.js";
+import { getClientStyleBeliefs } from "../services/platform/jobs/communication-style.js";
 import { isCircuitOpen, recordCircuitFailure, recordCircuitSuccess } from "./circuit-breaker.js";
 import { agentMetrics } from "./metrics.js";
 import type { AgenticEvent, AgenticLoopResult } from "../tools/agentic-loop.js";
@@ -267,8 +271,40 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
     }
   }
 
+  // Assign this session to any running experiments at loop start.
+  // Returns variant assignments so they can be injected as pipeline tags,
+  // enabling downstream filtering of tool calls and outcomes by experiment cohort.
+  let experimentTags: Array<{ experimentId: number; cohort: string }> = [];
+  try {
+    experimentTags = await assignSessionToExperiments({
+      sessionId: context.sessionId,
+      conversationId: context.conversationId,
+    });
+  } catch {
+    // Non-fatal
+  }
+
+  // Resolve active vs shadow prompt — 20% of calls deterministically receive the
+  // shadow prompt version (if one exists for this bot) so we can measure its impact
+  // against real session outcomes before promoting it to active.
+  let resolvedSystemPrompt = systemPrompt;
+  let shadowPromptVersionId: number | null = null;
+  let servingShadow = false;
+
+  if (context.botId) {
+    const shadowResult = await resolvePromptWithShadowSplit({
+      botId: context.botId,
+      fallbackPrompt: systemPrompt,
+      conversationId: context.conversationId,
+      sessionId: context.sessionId,
+    }).catch(() => ({ prompt: systemPrompt, promptVersionId: null, isShadow: false }));
+    resolvedSystemPrompt = shadowResult.prompt;
+    shadowPromptVersionId = shadowResult.promptVersionId;
+    servingShadow = shadowResult.isShadow;
+  }
+
   const loopMessages: ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: resolvedSystemPrompt },
     ...initialMessages,
   ];
 
@@ -290,6 +326,46 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
       loopMessages.push({
         role: "system",
         content: `[Governance Update]\n${summaries.join("\n")}`,
+      });
+    }
+  }
+
+  // Experiment variant pipeline tagging — inject experiment cohort assignments as
+  // a system context tag. This allows downstream steps (tool calls, outcome logging,
+  // analytics) to filter and segment by experiment variant deterministically.
+  if (experimentTags.length > 0) {
+    const tagLines = experimentTags.map((t) => `Experiment #${t.experimentId}: cohort ${t.cohort}`);
+    loopMessages.push({
+      role: "system",
+      content: `[Experiment Tags — active A/B variants for this session]\n${tagLines.join("\n")}`,
+    });
+  }
+
+  // Communication style adaptation — inject learned client style beliefs so every
+  // response automatically adapts tone, formality, and detail level to what has
+  // historically produced the best outcomes for this client.
+  if (context.clientId) {
+    const styleBeliefs = await getClientStyleBeliefs(context.clientId).catch(() => []);
+    if (styleBeliefs.length > 0) {
+      loopMessages.push({
+        role: "system",
+        content: `[Communication Style — learned from client history]\n${styleBeliefs.map((b) => `- ${b}`).join("\n")}`,
+      });
+    }
+  }
+
+  // Tool heuristics — inject top-3 highest-success-rate tools for this context
+  // so the planner can prefer proven tools over untested ones.
+  if (context.botId) {
+    const contextType = "general";
+    const heuristics = await getTopToolHeuristics(contextType, 3).catch(() => []);
+    if (heuristics.length > 0) {
+      const heuristicLines = heuristics.map(
+        (h, i) => `${i + 1}. ${h.toolName} (${(h.successRate * 100).toFixed(0)}% success rate in ${contextType} context)`,
+      );
+      loopMessages.push({
+        role: "system",
+        content: `[Tool Heuristics — empirically ranked for this context]\nPrefer these tools when applicable:\n${heuristicLines.join("\n")}`,
       });
     }
   }
@@ -478,7 +554,14 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
           config.qualityThreshold,
         );
         evaluations.push(evaluation);
-        agentMetrics.selfEvaluationScore.observe(evaluation.overallScore, {
+
+        // Apply temperature scaling to the raw confidence score so that
+        // calibrated confidence drives gate decisions and downstream logging.
+        const tempScale = await getTemperatureScaleFactor(context.botId).catch(() => 1.0);
+        const calibratedScore = applyTemperatureScaling(evaluation.overallScore, tempScale);
+        const calibratedPassedGate = calibratedScore >= (config.qualityThreshold ?? 0.7);
+
+        agentMetrics.selfEvaluationScore.observe(calibratedScore, {
           bot: String(context.botId ?? "unknown"),
         });
 
@@ -488,14 +571,14 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
           botId: context.botId,
           clientId: context.clientId,
           iteration,
-          predictedConfidence: evaluation.overallScore,
+          predictedConfidence: evaluation.overallScore,  // raw score stored immutably
           completenessScore: evaluation.completeness,
           accuracyScore: evaluation.accuracy,
           relevanceScore: evaluation.relevance,
-          terminationReason: evaluation.passedGate ? "quality_gate_pass" : "quality_gate_retry",
+          terminationReason: calibratedPassedGate ? "quality_gate_pass" : "quality_gate_retry",
         }).catch(() => {});
 
-        if (!evaluation.passedGate && evaluation.critique) {
+        if (!calibratedPassedGate && evaluation.critique) {
           retryCount++;
           agentMetrics.qualityGateRetries.inc({ bot: String(context.botId ?? "unknown") });
           console.log(`[AgenticLoopEngine] Quality gate failed (${(evaluation.overallScore * 100).toFixed(0)}%), retrying with critique (attempt ${retryCount})`);
@@ -751,6 +834,19 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
       terminationReason, finalContent,
       sessionStore: resolvedSessionStore,
     });
+  }
+
+  // Shadow prompt outcome recording — track BOTH shadow and control arms concurrently
+  // so the promotion job compares live cohorts rather than a stale static baseline.
+  // When serving the shadow prompt (20% of sessions), tag succeeded=true/false for the shadow arm.
+  // When serving the active/control prompt (80%), tag the control arm on the same shadow version
+  // so concurrent A/B rates are available at promotion time.
+  if (shadowPromptVersionId !== null) {
+    recordShadowOutcome({
+      promptVersionId: shadowPromptVersionId,
+      succeeded: !isFailure,
+      isShadow: servingShadow,
+    }).catch(() => {});
   }
 
   // MemoryStore — write the final response as a memory entry for future sessions

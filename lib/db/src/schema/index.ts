@@ -77,3 +77,4 @@ export * from "./uncertainty-schedules";
 export * from "./opportunity-signals";
 export * from "./bot-handoff-requests";
 export * from "./coordinator";
+export * from "./self-improvement";

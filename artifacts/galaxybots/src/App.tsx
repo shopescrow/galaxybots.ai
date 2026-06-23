@@ -100,6 +100,10 @@ const BeliefBrowser       = lazy(() => import("@/pages/beliefs/BeliefBrowser"));
 const SecurityEventLog    = lazy(() => import("@/pages/beliefs/SecurityEventLog"));
 const AnomalyQueue        = lazy(() => import("@/pages/beliefs/AnomalyQueue"));
 const CausalModelDashboard = lazy(() => import("@/pages/causal/CausalModelDashboard"));
+const SelfImprovementDashboard = lazy(() => import("@/pages/self-improvement/SelfImprovementDashboard"));
+const ExperimentsPage     = lazy(() => import("@/pages/self-improvement/ExperimentsPage"));
+const AlignmentAuditPage  = lazy(() => import("@/pages/self-improvement/AlignmentAuditPage"));
+const PromptVersionsPage  = lazy(() => import("@/pages/self-improvement/PromptVersionsPage"));
 
 // ─── Minimal inline fallback — zero external deps ───────────────────────────
 function PageLoader() {
@@ -214,6 +218,10 @@ function AuthenticatedRoutes() {
         <Route path="/security-events"        component={() => <AdminOnly component={SecurityEventLog} />} />
         <Route path="/anomaly-queue"          component={() => <AdminOnly component={AnomalyQueue} />} />
         <Route path="/causal-model"           component={() => <AdminOnly component={CausalModelDashboard} />} />
+        <Route path="/self-improvement"       component={SelfImprovementDashboard} />
+        <Route path="/experiments"            component={ExperimentsPage} />
+        <Route path="/alignment-audit"        component={AlignmentAuditPage} />
+        <Route path="/prompt-versions"        component={PromptVersionsPage} />
         <Route component={NotFound} />
       </Switch>
     </>

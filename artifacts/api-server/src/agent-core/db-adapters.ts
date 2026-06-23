@@ -1,5 +1,5 @@
-import { db, botLoopConfigTable, botFailureLogTable, confidencePredictionsTable, sessionOutcomesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, botLoopConfigTable, botFailureLogTable, confidencePredictionsTable, sessionOutcomesTable, calibrationCheckpointsTable } from "@workspace/db";
+import { eq, and, desc } from "drizzle-orm";
 import type {
   ConfigProvider,
   AgentLoopConfig,
@@ -8,6 +8,47 @@ import type {
   SessionStore,
 } from "./ports/index.js";
 import { DEFAULT_LOOP_CONFIG } from "./ports/index.js";
+
+// In-memory cache of temperature scale factors per bot (refreshed hourly).
+// Temperature scaling is applied at USE time (decisions/display), NOT at storage time,
+// so that calibration can always read immutable raw model-output confidence values.
+const tempScaleCache = new Map<number, { factor: number; expiresAt: number }>();
+const TEMP_SCALE_CACHE_TTL_MS = 60 * 60 * 1000;
+
+export async function getTemperatureScaleFactor(botId: number): Promise<number> {
+  const now = Date.now();
+  const cached = tempScaleCache.get(botId);
+  if (cached && cached.expiresAt > now) return cached.factor;
+
+  try {
+    const [checkpoint] = await db
+      .select({ temperatureScaleFactor: calibrationCheckpointsTable.temperatureScaleFactor })
+      .from(calibrationCheckpointsTable)
+      .where(eq(calibrationCheckpointsTable.botId, botId))
+      .orderBy(desc(calibrationCheckpointsTable.periodEnd))
+      .limit(1);
+
+    const factor = checkpoint?.temperatureScaleFactor ?? 1.0;
+    tempScaleCache.set(botId, { factor, expiresAt: now + TEMP_SCALE_CACHE_TTL_MS });
+    return factor;
+  } catch {
+    return 1.0;
+  }
+}
+
+/**
+ * Applies Platt temperature scaling via log-odds rescaling.
+ * Called at decision/display time — NOT at storage time — so that calibration
+ * always reads immutable raw model-output confidence values from the DB.
+ */
+export function applyTemperatureScaling(rawConfidence: number, scaleFactor: number): number {
+  if (scaleFactor === 1.0) return rawConfidence;
+  const clipped = Math.max(0.001, Math.min(0.999, rawConfidence));
+  const logOdds = Math.log(clipped / (1 - clipped));
+  const scaledLogOdds = logOdds / scaleFactor;
+  const scaled = 1 / (1 + Math.exp(-scaledLogOdds));
+  return Math.max(0, Math.min(1, scaled));
+}
 
 export class DbConfigProvider implements ConfigProvider {
   async getLoopConfig(botId: number, clientId?: number): Promise<AgentLoopConfig> {
@@ -90,6 +131,14 @@ export class DbSessionStore implements SessionStore {
   }
 }
 
+/**
+ * Records a raw (pre-scaling) confidence prediction from the model evaluation step.
+ * Stores the IMMUTABLE model-output confidence so the calibration pipeline can compare
+ * it against actual session outcomes and derive the temperature scale factor.
+ *
+ * Temperature scaling is applied at USE time (call applyTemperatureScaling()),
+ * never at storage time — preserving calibration integrity.
+ */
 export async function logConfidencePrediction(opts: {
   sessionId?: number;
   conversationId?: number;
@@ -104,6 +153,9 @@ export async function logConfidencePrediction(opts: {
   outcome?: string;
 }): Promise<void> {
   try {
+    // Store RAW (unscaled) confidence — calibration needs immutable model-output values.
+    // Downstream consumers that need calibrated predictions should call
+    // applyTemperatureScaling(value, await getTemperatureScaleFactor(botId)).
     await db.insert(confidencePredictionsTable).values({
       sessionId: opts.sessionId ?? null,
       conversationId: opts.conversationId ?? null,
