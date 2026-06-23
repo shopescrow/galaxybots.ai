@@ -24,6 +24,10 @@ import { runGuardianHeartbeat } from "./jobs/guardian-heartbeat";
 import { runGuardianPatrols } from "./jobs/guardian-patrol-runner";
 import { runDependencyVulnerabilityWatcher } from "./jobs/dependency-vulnerability-watcher";
 import { runGuardianInternalWatchers } from "./jobs/guardian-internal-watchers";
+import { checkMemoryConsolidation } from "./jobs/consolidate-memories";
+import { checkEpisodicMemory } from "./jobs/episodic-memory";
+import { checkBeliefDecay } from "./jobs/belief-decay";
+import { checkStaleBeliefUpdates } from "../../services/ai-safety/belief-anomaly";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -66,6 +70,10 @@ const lowFreqJobs: Job[] = [
   { name: "partner tier review", fn: checkPartnerTierCompliance },
   { name: "activation nurture", fn: checkActivationNurture },
   { name: "CRM anomaly checks", fn: checkCrmAnomalies },
+  { name: "memory-consolidation", fn: checkMemoryConsolidation },
+  { name: "episodic-memory", fn: checkEpisodicMemory },
+  { name: "belief-decay", fn: checkBeliefDecay },
+  { name: "stale-belief-updates", fn: checkStaleBeliefUpdates },
 ];
 
 const running = new Set<string>();

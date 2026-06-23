@@ -15,6 +15,8 @@ export const botMemoriesTable = pgTable("bot_memories", {
   summary: text("summary").notNull(),
   topic: text("topic"),
   embedding: vector("embedding", { dimensions: 1536 }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  supersededByBeliefId: integer("superseded_by_belief_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("bot_memories_bot_id_idx").on(table.botId),

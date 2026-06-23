@@ -1,3 +1,22 @@
+export type BeliefCategory =
+  | "market_conditions"
+  | "client_facts"
+  | "competitor_intel"
+  | "product_knowledge"
+  | "relationship_dynamics"
+  | "operational";
+
+export const CATEGORY_HALF_LIFE_DAYS: Record<BeliefCategory, number> = {
+  market_conditions: 14,
+  client_facts: 365,
+  competitor_intel: 30,
+  product_knowledge: 90,
+  relationship_dynamics: 60,
+  operational: 7,
+};
+
+export const CONFIDENCE_FLOOR = 0.01;
+
 export class Confidence {
   private readonly _value: number;
 
@@ -24,12 +43,34 @@ export class Confidence {
     return this._value;
   }
 
+  /** Simple multiplicative decay by a factor 0–1. */
   decay(factor = 0.1): Confidence {
     return Confidence.of(this._value * (1 - factor));
   }
 
-  reinforce(boost = 0.1): Confidence {
-    return Confidence.of(Math.min(1, this._value + boost * (1 - this._value)));
+  /**
+   * Temporal exponential decay using the half-life formula:
+   *   C(t) = C0 * exp(-ln(2) / halfLife * daysElapsed)
+   * Floors at CONFIDENCE_FLOOR (1%) so beliefs never fully vanish.
+   */
+  decayByHalfLife(halfLifeDays: number, daysElapsed: number): Confidence {
+    if (daysElapsed <= 0) return this;
+    const decayFactor = Math.exp((-Math.LN2 / halfLifeDays) * daysElapsed);
+    const decayed = this._value * decayFactor;
+    return Confidence.of(Math.max(CONFIDENCE_FLOOR, decayed));
+  }
+
+  /** Decay using a named belief category's preset half-life. */
+  decayForCategory(category: BeliefCategory, daysElapsed: number): Confidence {
+    return this.decayByHalfLife(CATEGORY_HALF_LIFE_DAYS[category], daysElapsed);
+  }
+
+  /**
+   * Reinforce belief with new evidence.
+   * evidenceStrength: 0.0–1.0; pulls the value toward 1.0 proportionally.
+   */
+  reinforce(evidenceStrength = 0.1): Confidence {
+    return Confidence.of(Math.min(1, this._value + evidenceStrength * (1 - this._value)));
   }
 
   meetsThreshold(threshold: number): boolean {
@@ -38,6 +79,15 @@ export class Confidence {
 
   toNumber(): number {
     return this._value;
+  }
+
+  toPercent(): number {
+    return Math.round(this._value * 100);
+  }
+
+  /** Returns the absolute delta between this value and another. */
+  deltaTo(next: Confidence): number {
+    return Math.abs(next._value - this._value);
   }
 
   toString(): string {

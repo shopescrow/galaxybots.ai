@@ -306,6 +306,23 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
     }
   }
 
+  // Belief Context — inject top beliefs ranked by relevance × confidence with
+  // phrasing "Based on my last confirmed understanding (confidence: 72%, 18 days ago)…"
+  if (context.botId && context.clientId) {
+    try {
+      const { getBotBeliefContext } = await import("../services/beliefs/context-injector.js");
+      const beliefContext = await getBotBeliefContext(context.botId, context.clientId);
+      if (beliefContext) {
+        loopMessages.push({
+          role: "system",
+          content: `Based on my last confirmed understanding:\n${beliefContext}`,
+        });
+      }
+    } catch {
+      // Non-fatal — belief context is best-effort
+    }
+  }
+
   // ToolRegistry port — when injected, its schemas are merged with built-in tools
   const resolvedToolRegistry = options.deps?.toolRegistry;
   const tools = resolvedToolRegistry

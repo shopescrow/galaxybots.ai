@@ -6,6 +6,7 @@ import notificationsRouter from "./notifications";
 import pushTokensRouter from "./push-tokens";
 import storageRouter from "./storage";
 import modelCostsRouter from "./model-costs";
+import beliefsAdminRouter from "./beliefs";
 
 export function registerAdminRoutes(router: IRouter) {
   router.use(orgAdminRouter);
@@ -15,4 +16,5 @@ export function registerAdminRoutes(router: IRouter) {
   router.use(pushTokensRouter);
   router.use(storageRouter);
   router.use(modelCostsRouter);
+  router.use(beliefsAdminRouter);
 }

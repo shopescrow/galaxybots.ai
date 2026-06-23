@@ -70,3 +70,4 @@ export * from "./extraction-jobs";
 export * from "./crm-blueprints";
 export * from "./guardian";
 export * from "./agent-loop";
+export * from "./beliefs";
