@@ -12,6 +12,7 @@ import { seedAdminUser } from "./services/admin/seed-admin-user";
 import { seedMissionTemplates } from "./services/missions/seed-mission-templates";
 import { seedPlaybooks } from "./services/missions/seed-playbooks";
 import { seedApiVersioningChangelog } from "./services/platform/seed-changelog";
+import { seedAgiBlogPost } from "./services/platform/seed-blog-agi-post";
 import { startQueenSwarmLoop } from "./services/guardian/queen-orchestrator";
 import { seedGuardianQueenBot } from "./services/guardian/seed-guardian-queen-bot";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
@@ -426,6 +427,9 @@ const server = app.listen(port, async () => {
   });
   seedApiVersioningChangelog().catch((err) => {
     console.error("[seed] API versioning changelog seeding failed:", err);
+  });
+  seedAgiBlogPost().catch((err) => {
+    console.error("[seed] AGI blog post seeding failed:", err);
   });
   seedGuardianQueenBot().catch((err) => {
     console.error("[GuardianQueen] Bot seeding failed:", err);
