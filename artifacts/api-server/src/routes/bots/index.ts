@@ -8,6 +8,7 @@ import ttsRouter from "./tts";
 import receptionistRouter from "./receptionist";
 import receptionistWebhooksRouter from "./receptionist-webhooks";
 import receptionistLogsRouter from "./receptionist-logs";
+import loopConfigRouter from "./loop-config";
 
 export function registerBotRoutes(router: IRouter) {
   router.use(botsRouter);
@@ -19,4 +20,5 @@ export function registerBotRoutes(router: IRouter) {
   router.use(receptionistRouter);
   router.use(receptionistWebhooksRouter);
   router.use(receptionistLogsRouter);
+  router.use(loopConfigRouter);
 }

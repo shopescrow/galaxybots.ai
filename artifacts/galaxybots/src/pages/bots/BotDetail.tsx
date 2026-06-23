@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store, BarChart3, Volume2 } from "lucide-react";
+import { Loader2, Send, BotIcon, User, Terminal, Brain, MessageSquare, Phone, ChevronDown, ChevronUp, Sparkles, Lock, Shield, Store, BarChart3, Volume2, Settings2 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { PublishModal } from "@/components/marketplace/PublishModal";
 import { BotSlaPerformance } from "@/components/sla/BotSlaPerformance";
+import { BotLoopConfigPanel } from "@/components/bots/BotLoopConfigPanel";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`.replace(/\/\//g, "/");
 
@@ -49,7 +50,7 @@ export default function BotDetail() {
   
   const startConvo = useStartConversation();
   const [isStarting, setIsStarting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "memory" | "governance" | "performance">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "memory" | "governance" | "performance" | "loop-config">("chat");
   const [publishOpen, setPublishOpen] = useState(false);
   const isAdmin = user?.role === "owner" || user?.role === "admin";
 
@@ -249,6 +250,17 @@ export default function BotDetail() {
                   <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
                   Performance
                 </Button>
+                {isAdmin && (
+                  <Button
+                    variant={activeTab === "loop-config" ? "glow" : "ghost"}
+                    size="sm"
+                    className="font-tech text-xs"
+                    onClick={() => setActiveTab("loop-config")}
+                  >
+                    <Settings2 className="w-3.5 h-3.5 mr-1.5" />
+                    Agent Config
+                  </Button>
+                )}
               </div>
 
               {activeTab === "chat" ? (
@@ -289,6 +301,10 @@ export default function BotDetail() {
               ) : activeTab === "performance" ? (
                 <div className="flex-1 overflow-y-auto pb-10">
                   <BotSlaPerformance botId={botId} isAdmin={isAdmin} />
+                </div>
+              ) : activeTab === "loop-config" ? (
+                <div className="flex-1 overflow-y-auto pb-10">
+                  <BotLoopConfigPanel botId={botId} botName={bot.name} />
                 </div>
               ) : null}
             </div>
