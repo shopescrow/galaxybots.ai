@@ -17,6 +17,7 @@ export const botLoopConfigTable = pgTable("bot_loop_config", {
   model: text("model").notNull().default("gpt-4o-mini"),
   fallbackModel: text("fallback_model"),
   networkAllowList: text("network_allow_list").array().default([]),
+  autoApproveGoalImpactThreshold: integer("auto_approve_goal_impact_threshold").notNull().default(40),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

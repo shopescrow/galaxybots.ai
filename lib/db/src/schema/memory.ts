@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, vector, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, vector, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { botsTable } from "./bots";
@@ -33,6 +33,34 @@ export const botAssignmentsTable = pgTable("bot_assignments", {
   actionMode: text("action_mode").notNull().default("passive"),
   actionPrompt: text("action_prompt"),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  parentGoalId: integer("parent_goal_id"),
+  horizon: text("horizon").notNull().default("weekly"),
+  subTasks: jsonb("sub_tasks")
+    .$type<Array<{
+      id: string;
+      title: string;
+      dependsOn: string[];
+      status: "pending" | "running" | "done" | "blocked";
+      completedAt?: string;
+    }>>()
+    .default([]),
+  progressScore: integer("progress_score").notNull().default(0),
+  blockingOn: jsonb("blocking_on")
+    .$type<Array<{ reason: string; since: string }>>()
+    .default([]),
+  resourceRequirements: jsonb("resource_requirements")
+    .$type<{
+      timeBudgetMinutes: number;
+      costBudgetCents: number;
+      clientAttentionUnits: number;
+    }>()
+    .default({ timeBudgetMinutes: 60, costBudgetCents: 500, clientAttentionUnits: 1 }),
+  priorityTier: integer("priority_tier").notNull().default(2),
+  generatedBy: text("generated_by").notNull().default("human"),
+  impactScore: integer("impact_score"),
+  feasibilityScore: integer("feasibility_score"),
+  evidenceChain: jsonb("evidence_chain").$type<string[]>().default([]),
+  autoApproveThreshold: integer("auto_approve_threshold"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

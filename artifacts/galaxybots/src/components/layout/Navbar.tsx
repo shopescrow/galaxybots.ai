@@ -115,6 +115,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/proposals", label: "Proposals" },
       { href: "/pipelines", label: "Pipelines" },
       { href: "/analytics", label: "Analytics" },
+      { href: "/causal-model", label: "Causal Model" },
       { href: "/billing", label: "Billing" },
     ],
   },

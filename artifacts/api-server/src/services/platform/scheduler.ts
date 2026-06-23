@@ -28,10 +28,18 @@ import { checkMemoryConsolidation } from "./jobs/consolidate-memories";
 import { checkEpisodicMemory } from "./jobs/episodic-memory";
 import { checkBeliefDecay } from "./jobs/belief-decay";
 import { checkStaleBeliefUpdates } from "../../services/ai-safety/belief-anomaly";
+import { runGoalGeneration } from "./jobs/goal-generation";
+import { runCounterfactualAttribution } from "./jobs/counterfactual-attribution";
+import { runOpportunityDetection } from "./jobs/opportunity-detection";
+import { checkUncertaintySchedules } from "./jobs/uncertainty-scheduler";
+import { runSyntheticControlScan } from "./jobs/synthetic-control-builder";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
 export { checkDueAssignments };
+export { runGoalGeneration };
+export { runCounterfactualAttribution };
+export { runOpportunityDetection };
 
 const SCHEDULER_LOCK_ID = 999999;
 
@@ -70,10 +78,15 @@ const lowFreqJobs: Job[] = [
   { name: "partner tier review", fn: checkPartnerTierCompliance },
   { name: "activation nurture", fn: checkActivationNurture },
   { name: "CRM anomaly checks", fn: checkCrmAnomalies },
+  { name: "goal-generation", fn: runGoalGeneration },
+  { name: "counterfactual-attribution", fn: runCounterfactualAttribution },
+  { name: "opportunity-detection", fn: runOpportunityDetection },
+  { name: "uncertainty-schedules", fn: checkUncertaintySchedules },
   { name: "memory-consolidation", fn: checkMemoryConsolidation },
   { name: "episodic-memory", fn: checkEpisodicMemory },
   { name: "belief-decay", fn: checkBeliefDecay },
   { name: "stale-belief-updates", fn: checkStaleBeliefUpdates },
+  { name: "synthetic-control-scan", fn: runSyntheticControlScan },
 ];
 
 const running = new Set<string>();

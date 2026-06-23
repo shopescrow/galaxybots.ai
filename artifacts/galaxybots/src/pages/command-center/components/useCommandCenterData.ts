@@ -75,5 +75,24 @@ export function useCommandCenterData() {
     refetchInterval: 60000,
   });
 
-  return { activity, approvals, alerts, companies, slaOverview, governanceMode, autonomyScore };
+  const opportunitySignals = useQuery<Array<{
+    id: number;
+    signalType: string;
+    title: string;
+    description: string;
+    suggestedAction: string;
+    probabilityOfSuccess: number | null;
+    status: string;
+    detectedAt: string;
+  }>>({
+    queryKey: ["command-center", "opportunity-signals"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/opportunity-signals?status=pending`, { headers });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  return { activity, approvals, alerts, companies, slaOverview, governanceMode, autonomyScore, opportunitySignals };
 }

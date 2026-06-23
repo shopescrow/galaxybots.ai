@@ -112,6 +112,7 @@ const STATIC_ROUTES: Array<{ href: string; label: string; description?: string; 
   { href: "/scenarios", label: "Scenarios", description: "Scenario planning" },
   { href: "/roi", label: "ROI Dashboard", description: "Return on investment overview", keywords: ["roi", "revenue"] },
   { href: "/guardian-hive", label: "Guardian Hive", description: "Sovereign AI platform intelligence — immortal Queen colony", keywords: ["guardian", "queen", "hive", "threats", "security", "monitoring", "bees", "incidents", "postmortem"] },
+  { href: "/causal-model", label: "Causal Model Dashboard", description: "Control-adjusted attribution, opportunity signals, and autonomous goal intelligence", keywords: ["causal", "counterfactual", "attribution", "opportunity", "goals", "autonomous", "agi"] },
 ];
 
 interface CommandPaletteProps {

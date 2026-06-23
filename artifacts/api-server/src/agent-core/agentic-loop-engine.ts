@@ -20,6 +20,7 @@ import { DbConfigProvider, DbFailureLogStore, DbSessionStore, logConfidencePredi
 import { isCircuitOpen, recordCircuitFailure, recordCircuitSuccess } from "./circuit-breaker.js";
 import { agentMetrics } from "./metrics.js";
 import type { AgenticEvent, AgenticLoopResult } from "../tools/agentic-loop.js";
+import { emitBotHandoffRequest } from "../services/platform/jobs/bot-handoff.js";
 
 const CIRCUIT_KEY = "llm-primary";
 
@@ -757,6 +758,26 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
     await resolvedMemoryStore.store(context.sessionId, [
       { key: "last_response", value: finalContent.slice(0, 1000) },
     ]).catch(() => {});
+  }
+
+  // Cross-bot handoff: automatically emit a handoff request when termination indicates a
+  // capability gap (information_gap or tool_limitation) so a specialist bot can continue.
+  if (
+    (terminationReason === "information_gap" || terminationReason === "tool_limitation") &&
+    context.botId &&
+    context.clientId
+  ) {
+    emitBotHandoffRequest({
+      sourceBotId: context.botId,
+      clientId: context.clientId,
+      sessionId: context.sessionId,
+      assignmentId: undefined,
+      reason: `Loop terminated due to ${terminationReason}: ${finalContent?.slice(0, 200) ?? ""}`,
+      terminationReason,
+      context: { thoughts: thoughts.length, actions: actions.length, finalContent: finalContent?.slice(0, 500) },
+    }).catch((err) =>
+      console.error(`[loop] emitBotHandoffRequest error (${terminationReason}):`, err),
+    );
   }
 
   return { finalContent, events, totalTokensConsumed: cumulativeTokens };

@@ -15,9 +15,13 @@ import {
   ArrowRight,
   Building,
   BarChart3,
+  Lightbulb,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useEffect } from "react";
 import { Redirect, useSearch } from "wouter";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 import { DashboardNotificationFeed } from "@/components/notifications/DashboardNotificationFeed";
 import { useCommandCenterData } from "./components/useCommandCenterData";
@@ -28,10 +32,13 @@ import { AlertsSection } from "./components/AlertsSection";
 import { CompanyStatusCards } from "./components/CompanyStatusCards";
 import { SlaSettingsPanel } from "./components/SlaSettingsPanel";
 import { SlaHealthSection } from "./components/SlaHealthSection";
+import { BASE } from "./components/types";
 
 export default function CommandCenter() {
   const { user } = useAuth();
-  const { activity, approvals, alerts, companies, slaOverview, governanceMode, autonomyScore } = useCommandCenterData();
+  const { token } = useAuth();
+  const { activity, approvals, alerts, companies, slaOverview, governanceMode, autonomyScore, opportunitySignals } = useCommandCenterData();
+  const queryClient = useQueryClient();
   const searchString = useSearch();
 
   useEffect(() => {
@@ -53,11 +60,36 @@ export default function CommandCenter() {
     return <Redirect to="/" />;
   }
 
+  const approveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${BASE}/api/opportunity-signals/${id}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["command-center", "opportunity-signals"] }),
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${BASE}/api/opportunity-signals/${id}/dismiss`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["command-center", "opportunity-signals"] }),
+  });
+
   const isLoading =
     activity.isLoading || approvals.isLoading || alerts.isLoading || companies.isLoading;
 
   const pendingCount = approvals.data?.length || 0;
   const alertCount = alerts.data?.length || 0;
+  const pendingSignals = opportunitySignals.data ?? [];
   const currentMode = governanceMode.data?.governanceMode ?? "approval_all";
   const modeStyle = GOVERNANCE_MODE_STYLES[currentMode] ?? GOVERNANCE_MODE_STYLES.approval_all;
   const ModeIcon = modeStyle.Icon;
@@ -213,6 +245,70 @@ export default function CommandCenter() {
                 </CardContent>
               </Card>
             </div>
+
+            {pendingSignals.length > 0 && (
+              <Card className="border-amber-500/30 bg-amber-500/5">
+                <CardHeader className="pb-3 border-b border-amber-500/20">
+                  <CardTitle className="text-lg flex items-center gap-2 font-tech">
+                    <Lightbulb className="w-5 h-5 text-amber-400" />
+                    Proactive Opportunity Signals
+                    <Badge className="ml-1 bg-amber-500/20 text-amber-400 text-xs">
+                      {pendingSignals.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-3">
+                  {pendingSignals.map((signal) => {
+                    const pct = Math.round((signal.probabilityOfSuccess ?? 0) * 100);
+                    return (
+                      <div key={signal.id} className="p-4 rounded-xl border border-amber-500/20 bg-card/60">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-[9px] uppercase font-tech border-amber-500/30 text-amber-400">
+                                {signal.signalType.replace(/_/g, " ")}
+                              </Badge>
+                              <span className="text-sm font-medium truncate">{signal.title}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">{signal.description}</p>
+                            <div className="text-xs font-tech text-primary/80 bg-primary/5 border border-primary/20 rounded-lg p-2">
+                              <span className="text-muted-foreground">Based on causal history (control-adjusted): </span>
+                              {signal.suggestedAction}
+                              {pct > 0 && (
+                                <span className="ml-2 text-green-400 font-semibold">
+                                  {pct}% probability of reversing this decline.
+                                </span>
+                              )}
+                              <span className="ml-1 text-muted-foreground">Approve?</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5 shrink-0">
+                            <Button
+                              size="sm"
+                              className="text-xs h-7 bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+                              variant="ghost"
+                              onClick={() => approveMutation.mutate(signal.id)}
+                              disabled={approveMutation.isPending}
+                            >
+                              <CheckCircle2 className="w-3 h-3 mr-1" /> Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="text-xs h-7"
+                              variant="ghost"
+                              onClick={() => dismissMutation.mutate(signal.id)}
+                              disabled={dismissMutation.isPending}
+                            >
+                              <XCircle className="w-3 h-3 mr-1" /> Dismiss
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
 
             <ErrorBoundary><SlaSettingsPanel /></ErrorBoundary>
 

@@ -99,6 +99,7 @@ const GuardianHive        = lazy(() => import("@/pages/guardian/GuardianHive"));
 const BeliefBrowser       = lazy(() => import("@/pages/beliefs/BeliefBrowser"));
 const SecurityEventLog    = lazy(() => import("@/pages/beliefs/SecurityEventLog"));
 const AnomalyQueue        = lazy(() => import("@/pages/beliefs/AnomalyQueue"));
+const CausalModelDashboard = lazy(() => import("@/pages/causal/CausalModelDashboard"));
 
 // ─── Minimal inline fallback — zero external deps ───────────────────────────
 function PageLoader() {
@@ -212,6 +213,7 @@ function AuthenticatedRoutes() {
         <Route path="/belief-browser"         component={() => <AdminOnly component={BeliefBrowser} />} />
         <Route path="/security-events"        component={() => <AdminOnly component={SecurityEventLog} />} />
         <Route path="/anomaly-queue"          component={() => <AdminOnly component={AnomalyQueue} />} />
+        <Route path="/causal-model"           component={() => <AdminOnly component={CausalModelDashboard} />} />
         <Route component={NotFound} />
       </Switch>
     </>
