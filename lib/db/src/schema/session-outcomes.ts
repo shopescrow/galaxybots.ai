@@ -14,6 +14,11 @@ export const sessionOutcomesTable = pgTable("session_outcomes", {
   estimatedHoursSaved: numeric("estimated_hours_saved").notNull().default("0"),
   outcomeSummary: text("outcome_summary").notNull().default(""),
   department: text("department"),
+  loopIterations: integer("loop_iterations"),
+  costCents: integer("cost_cents"),
+  terminationReason: text("termination_reason"),
+  failureCategory: text("failure_category"),
+  loopTrace: jsonb("loop_trace").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

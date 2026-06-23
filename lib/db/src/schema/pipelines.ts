@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, jsonb, boolean, varchar } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb, boolean, varchar, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clientsTable } from "./clients";
@@ -21,6 +21,9 @@ export const pipelineStepsTable = pgTable("pipeline_steps", {
   stepOrder: integer("step_order").notNull(),
   botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
   instruction: text("instruction").notNull(),
+  stepType: text("step_type").notNull().default("generative"),
+  qualityThreshold: numeric("quality_threshold"),
+  maxGateRetries: integer("max_gate_retries").notNull().default(2),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -7,9 +7,11 @@ import developerRouter from "./developer";
 import pdfRouter from "./pdf";
 import mcpMarketingRouter from "./mcp-marketing";
 import pipelinesRouter from "./pipelines";
+import metricsRouter from "./metrics";
 
 export function registerPlatformRoutes(router: IRouter) {
   router.use(healthRouter);
+  router.use(metricsRouter);
   router.use(translateRouter);
   router.use(demoRouter);
   router.use(webhooksRouter);

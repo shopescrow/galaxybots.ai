@@ -11,6 +11,10 @@ import { runAgenticLoop } from "../../tools";
 import { buildClientContext } from "../clients/client-context";
 import { getPackOverlayForBot } from "../billing/pack-overlays";
 import { createNotification } from "../admin/notifications";
+import { agentMetrics } from "../../agent-core/metrics";
+
+const DEFAULT_QUALITY_THRESHOLD = 0.7;
+const DEFAULT_MAX_GATE_RETRIES = 2;
 
 export async function executePipelineRun(pipelineId: number, triggerType: string, triggerData: Record<string, unknown> = {}) {
   const [pipeline] = await db
@@ -54,7 +58,7 @@ export async function executePipelineRun(pipelineId: number, triggerType: string
     )
     .returning();
 
-  executeRunSteps(pipeline, run.id, runStepRows, triggerData).catch((err) => {
+  executeRunSteps(pipeline, run.id, runStepRows, steps, triggerData).catch((err) => {
     console.error(`Pipeline run ${run.id} execution error:`, err);
     db.update(pipelineRunsTable)
       .set({ status: "failed", completedAt: new Date() })
@@ -65,17 +69,75 @@ export async function executePipelineRun(pipelineId: number, triggerType: string
   return run;
 }
 
+async function evaluateStepOutput(
+  content: string,
+  instruction: string,
+  model: string,
+  threshold: number,
+): Promise<{ passed: boolean; score: number; critique?: string }> {
+  const { openai } = await import("@workspace/integrations-openai-ai-server");
+
+  const evalPrompt = `Evaluate this pipeline step output against the instruction.
+
+INSTRUCTION: ${instruction.slice(0, 400)}
+OUTPUT: ${content.slice(0, 1200)}
+
+Return JSON with fields:
+{
+  "completeness": <0.0-1.0>,
+  "accuracy": <0.0-1.0>,
+  "relevance": <0.0-1.0>,
+  "critique": "<brief critique if score below ${threshold}, else empty>"
+}`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: "You are a strict JSON-only pipeline quality evaluator." },
+        { role: "user", content: evalPrompt },
+      ],
+      max_completion_tokens: 150,
+    });
+
+    const raw = completion.choices[0]?.message?.content ?? "{}";
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]) as Record<string, unknown>; } catch { parsed = {}; } }
+    }
+
+    const c = Math.min(1, Math.max(0, Number(parsed.completeness ?? 0.7)));
+    const a = Math.min(1, Math.max(0, Number(parsed.accuracy ?? 0.7)));
+    const r = Math.min(1, Math.max(0, Number(parsed.relevance ?? 0.7)));
+    const score = (c + a + r) / 3;
+    const critique = typeof parsed.critique === "string" && parsed.critique.length > 0 ? parsed.critique : undefined;
+
+    agentMetrics.selfEvaluationScore.observe(score, { context: "pipeline_quality_gate" });
+
+    return { passed: score >= threshold, score, critique };
+  } catch {
+    return { passed: true, score: 0.7 };
+  }
+}
+
 async function executeRunSteps(
   pipeline: { id: number; clientId: number; name: string },
   runId: number,
   runSteps: Array<{ id: number; botId: number; stepOrder: number; instruction: string }>,
+  stepDefs: Array<{ id: number; stepType: string; qualityThreshold: string | null; maxGateRetries: number }>,
   triggerData: Record<string, unknown>,
 ) {
   let previousOutput = triggerData ? JSON.stringify(triggerData) : "";
   const clientContext = await buildClientContext(pipeline.clientId);
   let allSucceeded = true;
 
-  for (const runStep of runSteps) {
+  for (let i = 0; i < runSteps.length; i++) {
+    const runStep = runSteps[i];
+    const stepDef = stepDefs[i];
+
     const [bot] = await db
       .select()
       .from(botsTable)
@@ -100,7 +162,13 @@ async function executeRunSteps(
       packOverlay = await getPackOverlayForBot(pipeline.clientId, bot.title);
     } catch (_e) {}
 
-    const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
+    const isQualityGate = stepDef?.stepType === "quality_gate";
+    const qualityThreshold = stepDef?.qualityThreshold
+      ? parseFloat(String(stepDef.qualityThreshold))
+      : DEFAULT_QUALITY_THRESHOLD;
+    const maxGateRetries = stepDef?.maxGateRetries ?? DEFAULT_MAX_GATE_RETRIES;
+
+    const buildSystemPrompt = (extraContext = "") => `You are ${bot.name}, ${bot.title} in the ${bot.department} department.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 ${clientContext}${packOverlay}
@@ -109,31 +177,72 @@ You are executing step ${runStep.stepOrder} of the "${pipeline.name}" pipeline.
 Your instruction for this step: ${runStep.instruction}
 
 ${previousOutput ? `Context from previous step:\n${previousOutput}` : "This is the first step in the pipeline."}
+${extraContext}
 
 Complete your assigned task thoroughly and provide a clear summary of what you accomplished. Your output will be passed as context to the next step in the pipeline.`;
 
-    try {
-      const { finalContent } = await runAgenticLoop({
-        model: "gpt-4o-mini",
-        maxIterations: 10,
-        maxTokens: 1000,
-        systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: runStep.instruction,
-          },
-        ],
-        context: {
-          sessionId: runId,
-          botId: bot.id,
-          botName: bot.name,
-          clientId: pipeline.clientId,
-          depth: 0,
-        },
-      });
+    const stepContext = {
+        sessionId: runId,
+        botId: bot.id,
+        botName: bot.name,
+        clientId: pipeline.clientId,
+        depth: 0,
+      };
 
-      const output = finalContent || "Step completed without output.";
+    try {
+      let output = "";
+
+      if (!isQualityGate) {
+        // Standard generative step — execute exactly once
+        const { finalContent } = await runAgenticLoop({
+          model: "gpt-4o-mini",
+          maxIterations: 10,
+          maxTokens: 1000,
+          systemPrompt: buildSystemPrompt(),
+          messages: [{ role: "user", content: runStep.instruction }],
+          context: stepContext,
+        });
+        output = finalContent || "Step completed without output.";
+      } else {
+        // Quality-gate step — execute with retry loop; hard-fail after maxGateRetries
+        let gatePassed = false;
+        let gateRetryCount = 0;
+
+        while (!gatePassed) {
+          const critiqueContext = gateRetryCount > 0
+            ? `\n[Quality Gate Retry ${gateRetryCount}/${maxGateRetries}]: Previous response was insufficient. Please provide a more complete and accurate response addressing these quality concerns.`
+            : "";
+
+          const { finalContent } = await runAgenticLoop({
+            model: "gpt-4o-mini",
+            maxIterations: 10,
+            maxTokens: 1000,
+            systemPrompt: buildSystemPrompt(critiqueContext),
+            messages: [{ role: "user", content: runStep.instruction }],
+            context: stepContext,
+          });
+
+          output = finalContent || "Step completed without output.";
+          const evaluation = await evaluateStepOutput(output, runStep.instruction, "gpt-4o-mini", qualityThreshold);
+
+          if (evaluation.passed) {
+            gatePassed = true;
+            console.log(`[PipelineEngine] Quality gate passed (score: ${evaluation.score.toFixed(2)}) for step ${runStep.stepOrder}`);
+          } else {
+            gateRetryCount++;
+            agentMetrics.qualityGateRetries.inc({ context: "pipeline_step" });
+            console.log(`[PipelineEngine] Quality gate failed (score: ${evaluation.score.toFixed(2)}) for step ${runStep.stepOrder}, retry ${gateRetryCount}/${maxGateRetries}`);
+            if (gateRetryCount >= maxGateRetries) {
+              throw new Error(
+                `Quality gate failed for step ${runStep.stepOrder} after ${maxGateRetries} retr${maxGateRetries === 1 ? "y" : "ies"}. ` +
+                `Final score: ${evaluation.score.toFixed(2)} (threshold: ${qualityThreshold}). ` +
+                `Pipeline step marked as failed.`
+              );
+            }
+          }
+        }
+      }
+
       previousOutput = output;
 
       await db
