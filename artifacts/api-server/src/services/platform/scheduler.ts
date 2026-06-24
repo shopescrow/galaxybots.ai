@@ -51,6 +51,8 @@ import { runWeeklyIntelligenceCycles } from "./jobs/run-intelligence-cycle";
 import { runPendingRegressionChecks } from "../intelligence/intelligence-cycle";
 import { computeAndStoreGlobalPriors } from "../intelligence/global-priors";
 import { runMonthlyComplianceReports } from "./jobs/monthly-compliance-report";
+import { runGaaTick } from "./jobs/gaa-cycle";
+import { runConstitutionDriftCheck } from "./jobs/gaa-constitution-drift";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -74,6 +76,7 @@ const highFreqJobs: Job[] = [
 ];
 
 const mediumFreqJobs: Job[] = [
+  { name: "gaa-cycle", fn: runGaaTick },
   { name: "assignments", fn: checkDueAssignments },
   { name: "KB sync", fn: checkKnowledgeBaseSyncs },
   { name: "scheduled workflows", fn: checkScheduledWorkflows },
@@ -90,6 +93,7 @@ const mediumFreqJobs: Job[] = [
 ];
 
 const lowFreqJobs: Job[] = [
+  { name: "gaa-constitution-drift", fn: runConstitutionDriftCheck },
   { name: "competitor alerts", fn: checkCompetitorAlerts },
   { name: "BingoLingo auto-content", fn: checkBingolingoAutoContent },
   { name: "content AEO re-scans", fn: checkContentAeoRescans },

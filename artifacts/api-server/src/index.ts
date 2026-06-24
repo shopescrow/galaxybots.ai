@@ -14,6 +14,7 @@ import { seedPlaybooks } from "./services/missions/seed-playbooks";
 import { seedApiVersioningChangelog } from "./services/platform/seed-changelog";
 import { seedAgiBlogPost } from "./services/platform/seed-blog-agi-post";
 import { startQueenSwarmLoop } from "./services/guardian/queen-orchestrator";
+import { bootstrapGaa } from "./services/gaa/bootstrap";
 import { loadOllamaConfigFromDb } from "./routes/admin/ollama";
 import { seedGuardianQueenBot } from "./services/guardian/seed-guardian-queen-bot";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
@@ -51,6 +52,13 @@ const EXPECTED_TABLES = [
   "competitor_urls",
   "conversations",
   "documents",
+  "gaa_action_ledger",
+  "gaa_audit_events",
+  "gaa_constitution",
+  "gaa_escalations",
+  "gaa_goals",
+  "gaa_journal",
+  "gaa_memory",
   "guest_sessions",
   "installed_packs",
   "journal_entries",
@@ -454,6 +462,9 @@ const server = app.listen(port, async () => {
   });
   seedGuardianQueenBot().catch((err) => {
     console.error("[GuardianQueen] Bot seeding failed:", err);
+  });
+  bootstrapGaa().catch((err) => {
+    console.error("[gaa] Bootstrap failed:", err);
   });
   loadOllamaConfigFromDb().catch((err) => {
     console.error("[Ollama] Config load failed:", err);

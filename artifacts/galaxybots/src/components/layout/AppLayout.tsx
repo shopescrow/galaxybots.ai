@@ -38,6 +38,7 @@ const PATH_LABELS: Record<string, string> = {
   "/journal": "Journal",
   "/scenarios": "Scenarios",
   "/roi": "ROI Dashboard",
+  "/gaa": "Autonomous Agent",
 };
 
 function getPageLabel(path: string): string {

@@ -57,6 +57,7 @@ const Prospects           = lazy(() => import("@/pages/prospects/Prospects"));
 const Prospector          = lazy(() => import("@/pages/prospects/Prospector"));
 
 const Governance          = lazy(() => import("@/pages/governance/Governance"));
+const GaaConsole          = lazy(() => import("@/pages/gaa/GaaConsole"));
 const KnowledgeBase       = lazy(() => import("@/pages/knowledge-base/KnowledgeBase"));
 const DocumentStudio      = lazy(() => import("@/pages/documents/DocumentStudio"));
 const ProposalStudio      = lazy(() => import("@/pages/proposals/ProposalStudio"));
@@ -135,6 +136,14 @@ function AdminOnly({ component: Component }: { component: React.ComponentType })
   return <Component />;
 }
 
+function OwnerOnly({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <PageLoader />;
+  if (!user) return <Redirect to="/login" />;
+  if (user.role !== "owner") return <Redirect to="/boardroom" />;
+  return <Component />;
+}
+
 // ─── Route groups ─────────────────────────────────────────────────────────────
 function SmartHome() {
   const { user, isLoading } = useAuth();
@@ -199,6 +208,7 @@ function AuthenticatedRoutes() {
         <Route path="/prospector"             component={Prospector} />
         <Route path="/settings"               component={Settings} />
         <Route path="/governance"             component={Governance} />
+        <Route path="/gaa"                    component={() => <OwnerOnly component={GaaConsole} />} />
         <Route path="/knowledge-base"         component={KnowledgeBase} />
         <Route path="/documents"              component={DocumentStudio} />
         <Route path="/proposals"              component={ProposalStudio} />

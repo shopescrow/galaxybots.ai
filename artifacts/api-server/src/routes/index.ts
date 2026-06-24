@@ -17,6 +17,7 @@ import { registerGuardianRoutes } from "./guardian";
 import { registerCoordinatorRoutes } from "./coordinator";
 import { registerSelfImprovementRoutes } from "./self-improvement";
 import { registerIntelligenceRoutes } from "./intelligence";
+import { registerGaaRoutes } from "./gaa";
 
 const router: IRouter = Router();
 
@@ -37,5 +38,6 @@ registerGuardianRoutes(router);
 registerCoordinatorRoutes(router);
 registerSelfImprovementRoutes(router);
 registerIntelligenceRoutes(router);
+registerGaaRoutes(router);
 
 export default router;
