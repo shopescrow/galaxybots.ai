@@ -5,8 +5,9 @@ import {
   pipelineRunsTable,
   pipelineRunStepsTable,
   botsTable,
+  llmUsageLogTable,
 } from "@workspace/db";
-import { eq, asc, and, inArray } from "drizzle-orm";
+import { eq, asc, and, inArray, gte, sql } from "drizzle-orm";
 import { runAgenticLoop } from "../../tools";
 import { buildClientContext } from "../clients/client-context";
 import { getPackOverlayForBot } from "../billing/pack-overlays";
@@ -19,9 +20,13 @@ import {
   writeCoordinatorTrace,
   COORDINATOR_QUALITY_THRESHOLD,
 } from "../coordinator/galaxy-coordinator";
+import { deriveModelTier } from "../conductor/galaxy-conductor";
+import { resolveSplit } from "../intelligence/ab-experiment";
+import { getConfoundCoefficients, computeResidualQuality } from "../intelligence/intelligence-cycle";
 import type { CoordinatorPlan } from "@workspace/db";
 
 const DEFAULT_MAX_GATE_RETRIES = 2;
+const PIPELINE_EXECUTION_MODEL = process.env.LLM_MODEL_VERSION ?? "gpt-4o-mini";
 
 export async function executePipelineRun(pipelineId: number, triggerType: string, triggerData: Record<string, unknown> = {}) {
   const [pipeline] = await db
@@ -159,7 +164,7 @@ async function executeRunSteps(
         botDepartment: bot?.department ?? "",
       };
     });
-    coordinatorPlan = await assignRoles(taskDescription, steps);
+    coordinatorPlan = await assignRoles(taskDescription, steps, undefined, pipeline.clientId, String(runId));
     coordinatorPlan.runId = runId;
     console.log(
       `[GalaxyCoordinator] Run ${runId} role assignments: ` +
@@ -405,10 +410,65 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
       coordinatorPlan.qualityScores = qualityScoresForTrace;
     }
 
+    // ── Derive per-run actual model from llmUsageLogTable ────────────────────────
+    // Query the most-used LLM model for the bots that participated in this run,
+    // within the run's execution window, rather than relying on a static env var.
+    let pipelineModelVersion = PIPELINE_EXECUTION_MODEL;
+    try {
+      const runStartWindow = new Date(Date.now() - 30 * 60 * 1000);
+      const usedModels = await db
+        .select({ model: llmUsageLogTable.model, cnt: sql<number>`count(*)::int` })
+        .from(llmUsageLogTable)
+        .where(
+          and(
+            inArray(llmUsageLogTable.botId, uniqueBotIds),
+            gte(llmUsageLogTable.calledAt, runStartWindow),
+          ),
+        )
+        .groupBy(llmUsageLogTable.model)
+        .orderBy(sql`count(*) DESC`)
+        .limit(1);
+      if (usedModels[0]?.model) {
+        pipelineModelVersion = usedModels[0].model;
+      }
+    } catch {
+      // Non-fatal: fall back to env-var model
+    }
+
+    const pipelineModelTier = deriveModelTier(pipelineModelVersion);
+
+    let pipelineAbVariant: "control" | "treatment" | undefined;
+    if (pipeline.clientId) {
+      pipelineAbVariant = await resolveSplit(pipeline.clientId, String(runId)).catch(() => undefined);
+    }
+
+    // ── Confound-controlled residualized quality ──────────────────────────────────
+    // Estimate task difficulty from step count (lightweight proxy available at
+    // pipeline time; the true confound scores are computed later in outcome-capture).
+    // Prompt quality is set to the neutral prior (0.5) here; outcome-capture records
+    // the LLM-scored value separately for retrospective intelligence-cycle corrections.
+    let pipelineResidualizedQuality: number | undefined;
+    try {
+      const olsSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const roughDifficulty = Math.min(1, runSteps.length / 10);
+      const coeffs = await getConfoundCoefficients(olsSince, pipeline.clientId ?? undefined);
+      pipelineResidualizedQuality = computeResidualQuality(finalQualityScore, roughDifficulty, 0.5, coeffs);
+    } catch {
+      // Non-fatal: updateRoutingWeights falls back to raw quality when residual is undefined
+    }
+
     updateRoutingWeights(
       coordinatorPlan.roleAssignments,
       coordinatorPlan.taskCategory,
       finalQualityScore,
+      undefined,
+      undefined,
+      undefined,
+      pipelineModelVersion,
+      pipeline.clientId,
+      pipelineAbVariant,
+      pipelineModelTier,
+      pipelineResidualizedQuality,
     ).catch((err) => console.error("[GalaxyCoordinator] Weight update error:", err));
 
     writeCoordinatorTrace(runId, coordinatorPlan).catch((err) =>

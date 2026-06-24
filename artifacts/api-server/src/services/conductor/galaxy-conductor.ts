@@ -1,7 +1,14 @@
 import { db, conductorStrategiesTable } from "@workspace/db";
-import { eq, and, avg, sql } from "drizzle-orm";
+import { eq, and, avg, sql, lt } from "drizzle-orm";
 import type { CommunicationStrategy, ConductorMeta } from "@workspace/db";
 import { callWithFallback, ModelTier } from "../../services/ai-safety/model-fallback.js";
+
+export function deriveModelTier(model: string): string {
+  if (!model) return ModelTier.EFFICIENT;
+  if (model.startsWith("llama") || model.startsWith("mistral") || model === "ollama") return ModelTier.LOCAL;
+  if (model.startsWith("gpt-4o-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
+  return ModelTier.FRONTIER;
+}
 
 export const CONDUCTOR_TASK_CATEGORIES = [
   "research",
@@ -16,6 +23,9 @@ export const CONDUCTOR_TASK_CATEGORIES = [
 ] as const;
 
 export type ConductorTaskCategory = (typeof CONDUCTOR_TASK_CATEGORIES)[number];
+
+const UCB1_EXPLORATION_CONSTANT = 0.3;
+const MIN_SAMPLES_FOR_UCB1_DECISION = 5;
 
 const STRATEGY_DESCRIPTIONS: Record<CommunicationStrategy, string> = {
   parallel_synthesis:
@@ -38,10 +48,42 @@ export interface PriorScore {
   strategy: CommunicationStrategy;
   avgScore: number;
   runCount: number;
+  ucb1Score?: number;
 }
 
-export async function getCategoryPriors(taskCategory: string): Promise<PriorScore[]> {
+function computeUcb1(avgScore: number, runCount: number, totalTrials: number): number {
+  const explorationBonus = UCB1_EXPLORATION_CONSTANT * Math.sqrt(Math.log(totalTrials + 1) / (runCount + 1));
+  return avgScore + explorationBonus;
+}
+
+const ALL_STRATEGIES: CommunicationStrategy[] = [
+  "parallel_synthesis",
+  "sequential_debate",
+  "hierarchical_delegation",
+  "round_robin_review",
+];
+
+export async function getCategoryPriors(
+  taskCategory: string,
+  modelVersion?: string,
+  modelTier?: string,
+  until?: Date,
+): Promise<PriorScore[]> {
   try {
+    const filterClauses = [
+      eq(conductorStrategiesTable.taskCategory, taskCategory),
+      sql`${conductorStrategiesTable.qualityScore} IS NOT NULL`,
+    ];
+    if (modelVersion) {
+      filterClauses.push(eq(conductorStrategiesTable.modelVersion, modelVersion));
+    }
+    if (modelTier) {
+      filterClauses.push(eq(conductorStrategiesTable.modelTier, modelTier));
+    }
+    if (until) {
+      filterClauses.push(lt(conductorStrategiesTable.createdAt, until));
+    }
+
     const rows = await db
       .select({
         strategy: conductorStrategiesTable.strategyChosen,
@@ -49,21 +91,43 @@ export async function getCategoryPriors(taskCategory: string): Promise<PriorScor
         runCount: sql<number>`count(*)`,
       })
       .from(conductorStrategiesTable)
-      .where(
-        and(
-          eq(conductorStrategiesTable.taskCategory, taskCategory),
-          sql`${conductorStrategiesTable.qualityScore} IS NOT NULL`,
-        ),
-      )
+      .where(and(...filterClauses))
       .groupBy(conductorStrategiesTable.strategyChosen);
 
-    return rows.map((r) => ({
+    const totalTrials = rows.reduce((s, r) => s + Number(r.runCount), 0);
+
+    const result: PriorScore[] = rows.map((r) => ({
       strategy: r.strategy as CommunicationStrategy,
       avgScore: Number(r.avgScore ?? 0),
       runCount: Number(r.runCount),
+      ucb1Score: computeUcb1(Number(r.avgScore ?? 0), Number(r.runCount), totalTrials),
     }));
+
+    // Ensure every strategy is represented, even unseen ones.
+    // Unseen strategies receive an optimistic neutral prior (avgScore=0.5, runCount=0)
+    // which yields a high exploration bonus via the UCB1 formula, guaranteeing they
+    // are periodically selected and never permanently excluded.
+    const seenStrategies = new Set(result.map((r) => r.strategy));
+    for (const strategy of ALL_STRATEGIES) {
+      if (!seenStrategies.has(strategy)) {
+        result.push({
+          strategy,
+          avgScore: 0.5,
+          runCount: 0,
+          ucb1Score: computeUcb1(0.5, 0, totalTrials),
+        });
+      }
+    }
+
+    return result;
   } catch {
-    return [];
+    // Return all strategies with optimistic priors on error.
+    return ALL_STRATEGIES.map((strategy) => ({
+      strategy,
+      avgScore: 0.5,
+      runCount: 0,
+      ucb1Score: computeUcb1(0.5, 0, 1),
+    }));
   }
 }
 
@@ -85,18 +149,59 @@ export async function selectStrategy(
   availableAgents: Array<{ name: string }>,
   taskCategoryOverride?: string,
   priorScoresOverride?: PriorScore[],
+  modelVersion?: string,
+  modelTier?: string,
+  controlCapturedAt?: Date,
 ): Promise<StrategySelection> {
   const taskCategory = (taskCategoryOverride as ConductorTaskCategory | undefined) ?? inferTaskCategory(taskDescription);
-  const priors = priorScoresOverride ?? await getCategoryPriors(taskCategory);
+  const priors = priorScoresOverride ?? await getCategoryPriors(taskCategory, modelVersion, modelTier, controlCapturedAt);
 
   const agentCount = availableAgents.length;
+
+  if (priors.length > 0) {
+    // True UCB1 selection: softmax-sample over UCB1 scores across ALL strategies
+    // (including unseen ones with high exploration bonus). Never deterministically
+    // lock-in to the top arm — this prevents strategy monopolization and ensures
+    // under-sampled strategies are periodically explored.
+    const temperature = 0.5;
+    const scores = priors.map((p) => p.ucb1Score ?? p.avgScore);
+    const maxScore = Math.max(...scores);
+    const expScores = scores.map((s) => Math.exp((s - maxScore) / temperature));
+    const sumExp = expScores.reduce((a, b) => a + b, 0);
+    const probabilities = expScores.map((e) => e / sumExp);
+
+    let rand = Math.random();
+    let selectedPrior = priors[priors.length - 1];
+    for (let i = 0; i < priors.length; i++) {
+      rand -= probabilities[i];
+      if (rand <= 0) {
+        selectedPrior = priors[i];
+        break;
+      }
+    }
+
+    console.log(
+      `[GalaxyConductor] UCB1 softmax selection: ${selectedPrior.strategy} ` +
+      `(ucb1=${selectedPrior.ucb1Score?.toFixed(3)}, avg=${(selectedPrior.avgScore * 100).toFixed(1)}%, n=${selectedPrior.runCount}) ` +
+      `from ${priors.length} strategies`,
+    );
+    return {
+      strategy: selectedPrior.strategy,
+      rationale: `UCB1 exploration policy selected ${selectedPrior.strategy} for ${taskCategory} task (ucb1Score=${selectedPrior.ucb1Score?.toFixed(3)}, n=${selectedPrior.runCount} runs)`,
+      taskCategory,
+    };
+  }
 
   const priorSummary =
     priors.length === 0
       ? "No prior runs for this task category — no performance history available yet."
       : priors
-          .sort((a, b) => b.avgScore - a.avgScore)
-          .map((p) => `- ${p.strategy}: avg score ${(p.avgScore * 100).toFixed(1)}% over ${p.runCount} run(s)`)
+          .sort((a, b) => (b.ucb1Score ?? b.avgScore) - (a.ucb1Score ?? a.avgScore))
+          .map(
+            (p) =>
+              `- ${p.strategy}: avg score ${(p.avgScore * 100).toFixed(1)}% over ${p.runCount} run(s)` +
+              (p.ucb1Score !== undefined ? ` [UCB1: ${p.ucb1Score.toFixed(3)}]` : ""),
+          )
           .join("\n");
 
   const prompt = `You are GalaxyConductor — the orchestration brain of the GalaxyBots AI platform. Your job is to select the optimal communication strategy for a multi-agent task.
@@ -111,7 +216,7 @@ Description: ${taskDescription.slice(0, 600)}
 Available agents: ${agentCount} agent(s) — ${availableAgents.map((a) => a.name).join(", ")}
 Task category: ${taskCategory}
 
-## Historical Performance for "${taskCategory}" Tasks
+## Historical Performance for "${taskCategory}" Tasks (sorted by UCB1 exploration score)
 
 ${priorSummary}
 
@@ -120,7 +225,7 @@ ${priorSummary}
 Select the single best strategy for this task given:
 1. The task's nature and complexity
 2. The number of available agents (${agentCount})
-3. Historical performance data (if available — bias toward higher-scoring strategies)
+3. Historical performance data (if available — bias toward UCB1-sorted strategies, which balance performance and exploration)
 4. For very short tasks or single-agent situations, prefer parallel_synthesis
 
 Return a JSON object with exactly:
@@ -180,6 +285,10 @@ export async function recordStrategyRun(
   costUsd?: number,
   sessionId?: string,
   contextType = "conversation",
+  clientId?: number,
+  modelVersion?: string,
+  modelTier?: string,
+  abVariant?: "control" | "treatment",
 ): Promise<number> {
   try {
     const [row] = await db
@@ -193,6 +302,11 @@ export async function recordStrategyRun(
         costUsd: costUsd ?? null,
         sessionId: sessionId ?? null,
         contextType,
+        ...(clientId != null ? { clientId } : {}),
+        modelVersion: modelVersion ?? null,
+        modelTier: modelTier ?? null,
+        abVariant: abVariant ?? null,
+        sampleCount: 0,
       })
       .returning({ id: conductorStrategiesTable.id });
     return row.id;
@@ -204,15 +318,60 @@ export async function recordStrategyRun(
 export async function recordStrategyOutcome(
   strategyId: number,
   qualityScore: number,
+  bayesianUpdate = true,
+): Promise<void> {
+  if (strategyId < 0) return;
+  try {
+    const [existing] = await db
+      .select({ sampleCount: conductorStrategiesTable.sampleCount, qualityScore: conductorStrategiesTable.qualityScore })
+      .from(conductorStrategiesTable)
+      .where(eq(conductorStrategiesTable.id, strategyId));
+
+    const currentSampleCount = existing?.sampleCount ?? 0;
+    const newSampleCount = currentSampleCount + 1;
+
+    // Bayesian moving-average update: blend the running score toward the new observation.
+    // Learning rate shrinks as evidence accumulates: lr = 0.1 / sqrt(n+1).
+    const bayesianLR = 0.1 / Math.sqrt(newSampleCount);
+    const currentScore = existing?.qualityScore != null ? Number(existing.qualityScore) : qualityScore;
+    const blendedScore = bayesianUpdate
+      ? Math.min(1, Math.max(0, currentScore * (1 - bayesianLR) + qualityScore * bayesianLR))
+      : Math.min(1, Math.max(0, qualityScore));
+
+    await db
+      .update(conductorStrategiesTable)
+      .set({
+        qualityScore: blendedScore,
+        sampleCount: newSampleCount,
+      })
+      .where(eq(conductorStrategiesTable.id, strategyId));
+
+    if (bayesianUpdate) {
+      console.log(
+        `[GalaxyConductor] Strategy outcome: id=${strategyId} rawScore=${qualityScore.toFixed(3)} blendedScore=${blendedScore.toFixed(3)} n=${newSampleCount} bayesianLR=${bayesianLR.toFixed(4)}`,
+      );
+    }
+  } catch (err) {
+    console.error("[GalaxyConductor] recordStrategyOutcome failed:", err);
+  }
+}
+
+export async function setStrategyConfoundScores(
+  strategyId: number,
+  taskDifficultyScore: number,
+  promptQualityScore: number,
 ): Promise<void> {
   if (strategyId < 0) return;
   try {
     await db
       .update(conductorStrategiesTable)
-      .set({ qualityScore: Math.min(1, Math.max(0, qualityScore)) })
+      .set({
+        taskDifficultyScore: Math.min(1, Math.max(0, taskDifficultyScore)),
+        promptQualityScore: Math.min(1, Math.max(0, promptQualityScore)),
+      })
       .where(eq(conductorStrategiesTable.id, strategyId));
   } catch (err) {
-    console.error("[GalaxyConductor] recordStrategyOutcome failed:", err);
+    console.error("[GalaxyConductor] setStrategyConfoundScores failed:", err);
   }
 }
 

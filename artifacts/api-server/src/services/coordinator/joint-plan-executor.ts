@@ -1,5 +1,6 @@
 import { assignRoles } from "./galaxy-coordinator";
-import { selectStrategy, recordStrategyRun, recordStrategyOutcome } from "../conductor/galaxy-conductor";
+import { selectStrategy, recordStrategyRun, recordStrategyOutcome, deriveModelTier } from "../conductor/galaxy-conductor";
+import { resolveSplit } from "../intelligence/ab-experiment";
 import { arbitrate } from "./galaxy-arbitrator";
 import { distillForRole } from "./context-distiller";
 import { distillBeliefBriefing } from "./belief-distiller";
@@ -19,6 +20,8 @@ import {
   type StrategyInput,
 } from "../conductor/strategies/index";
 import type { JointCoordinationPlan } from "./joint-coordination-plan";
+import { db, abExperimentsTable, weightSnapshotsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import type { TaskCategory } from "@workspace/db";
 import type { ConversationTurn, MemoryEntry } from "./context-distiller";
 
@@ -81,7 +84,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     botDepartment: agent.botDepartment ?? "",
   }));
 
-  let coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride, clientId).catch((err) => {
+  let coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride, clientId, sessionKey).catch((err) => {
     console.error("[JointPlanExecutor] GalaxyCoordinator.assignRoles failed:", err);
     return null;
   });
@@ -94,7 +97,36 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 
     if (!validationResult.valid) {
       console.warn(`[JointPlanExecutor] Coordinator output invalid (${validationResult.reason}) — retrying with EFFICIENT tier`);
-      coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride, clientId).catch(() => null);
+      coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride, clientId, sessionKey).catch(() => null);
+    }
+  }
+
+  // Resolve A/B variant early (before conductor selection) so both coordinator and
+  // conductor use the same control/treatment regime for the session.
+  let earlyAbVariant: "control" | "treatment" | undefined;
+  let controlCapturedAt: Date | undefined;
+  if (clientId) {
+    earlyAbVariant = await resolveSplit(clientId, sessionKey).catch(() => undefined);
+    if (earlyAbVariant === "control") {
+      try {
+        const [experiment] = await db
+          .select({ controlSnapshotId: abExperimentsTable.controlSnapshotId })
+          .from(abExperimentsTable)
+          .where(and(eq(abExperimentsTable.clientId, clientId), eq(abExperimentsTable.status, "running")))
+          .limit(1);
+        if (experiment?.controlSnapshotId) {
+          const [snap] = await db
+            .select({ data: weightSnapshotsTable.data })
+            .from(weightSnapshotsTable)
+            .where(eq(weightSnapshotsTable.id, experiment.controlSnapshotId))
+            .limit(1);
+          const snapData = snap?.data as { capturedAt?: string } | null;
+          if (snapData?.capturedAt) {
+            controlCapturedAt = new Date(snapData.capturedAt);
+          }
+        }
+      } catch {
+      }
     }
   }
 
@@ -104,6 +136,10 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     taskDescription,
     conductorAgents,
     taskCategoryOverride,
+    undefined,
+    undefined,
+    undefined,
+    controlCapturedAt,
   ).catch((err) => {
     console.error("[JointPlanExecutor] GalaxyConductor.selectStrategy failed:", err);
     return {
@@ -189,7 +225,12 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     }),
   );
 
-  // ── Step 5: Record strategy run ───────────────────────────────────────────────
+  // ── Step 5: Record strategy run (with persisted A/B variant to avoid recomputation drift) ──
+  let resolvedAbVariant: "control" | "treatment" | undefined;
+  if (clientId) {
+    resolvedAbVariant = await resolveSplit(clientId, sessionKey).catch(() => undefined);
+  }
+
   const strategyId = await recordStrategyRun(
     conductorStrategy,
     distilledAgents.map((a) => a.name),
@@ -197,6 +238,10 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     undefined,
     sessionKey,
     "joint_plan_executor",
+    clientId,
+    targetModel,
+    deriveModelTier(targetModel),
+    resolvedAbVariant,
   ).catch(() => -1);
 
   // ── Step 6: Execute strategy with AgentRelaySanitizer + StrategyCircuitBreaker ─
@@ -252,7 +297,6 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 
   const durationMs = Date.now() - start;
 
-  recordStrategyOutcome(strategyId, 0.7).catch(() => {});
   clearStrategyBreakerSession(sessionKey);
 
   return {

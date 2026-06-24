@@ -20,10 +20,16 @@ export const conductorStrategiesTable = pgTable("conductor_strategies", {
   rationale: text("rationale").notNull(),
   agentsUsed: jsonb("agents_used").notNull().default([]),
   qualityScore: real("quality_score"),
+  taskDifficultyScore: real("task_difficulty_score"),
+  promptQualityScore: real("prompt_quality_score"),
   costUsd: real("cost_usd"),
   durationMs: integer("duration_ms"),
   sessionId: text("session_id"),
   contextType: text("context_type").notNull().default("conversation"),
+  sampleCount: integer("sample_count").notNull().default(0),
+  modelVersion: text("model_version"),
+  modelTier: text("model_tier"),
+  abVariant: text("ab_variant"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -5,12 +5,55 @@ import {
   taskSessionBotsTable,
   botsTable,
   conductorStrategiesTable,
+  llmUsageLogTable,
 } from "@workspace/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { estimateHoursSaved } from "./roi";
 import { createNotification } from "../admin/notifications";
-import { recordStrategyOutcome } from "../conductor/galaxy-conductor";
+import { recordStrategyOutcome, setStrategyConfoundScores } from "../conductor/galaxy-conductor";
+import { recordExperimentResult } from "../intelligence/ab-experiment";
+
+const MAX_EXPECTED_TOOLS = 20;
+const MAX_ITERATIONS = 10;
+
+function computeTaskDifficultyScore(params: {
+  toolCallCount: number;
+  iterationCount: number;
+  inputTokenCount: number;
+}): number {
+  const toolComponent = Math.min(1, params.toolCallCount / MAX_EXPECTED_TOOLS);
+  const iterComponent = Math.min(1, params.iterationCount / MAX_ITERATIONS);
+  const tokenComponent = Math.min(1, params.inputTokenCount / 128000);
+  return (toolComponent + iterComponent + tokenComponent) / 3;
+}
+
+async function scorePromptQuality(
+  objective: string,
+): Promise<number> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 60,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a prompt quality evaluator. Score the following user prompt on clarity, specificity, and completeness on a scale from 0.0 to 1.0. Return ONLY a decimal number like 0.75.",
+        },
+        {
+          role: "user",
+          content: `Prompt: "${objective}"`,
+        },
+      ],
+    });
+    const raw = (completion.choices[0]?.message?.content ?? "0.5").trim();
+    const score = parseFloat(raw);
+    return isNaN(score) ? 0.5 : Math.min(1, Math.max(0, score));
+  } catch {
+    return 0.5;
+  }
+}
 
 export async function captureSessionOutcome(
   sessionId: number,
@@ -58,6 +101,32 @@ export async function captureSessionOutcome(
       )
     : 0;
 
+  const loopIterationMessages = messages.filter((m) => m.messageType === "loop_start" || m.messageType === "iteration");
+  const iterationCount = Math.max(1, loopIterationMessages.length);
+
+  let inputTokenCount = 0;
+  try {
+    const usageRows = await db
+      .select({ promptTokens: llmUsageLogTable.promptTokens })
+      .from(llmUsageLogTable)
+      .where(
+        eq(llmUsageLogTable.sessionId, sessionId),
+      );
+    inputTokenCount = usageRows.reduce((s, r) => s + (r.promptTokens ?? 0), 0);
+  } catch {
+    inputTokenCount = messages.length * 200;
+  }
+
+  const taskDifficultyScore = computeTaskDifficultyScore({
+    toolCallCount: toolsExecutedTotal,
+    iterationCount,
+    inputTokenCount,
+  });
+
+  const [promptQualityScore] = await Promise.all([
+    scorePromptQuality(objective),
+  ]);
+
   const botMessages = messages
     .filter((m) => m.role === "bot" && m.messageType === "text")
     .slice(-5);
@@ -97,6 +166,9 @@ export async function captureSessionOutcome(
     estimatedHoursSaved: String(estimatedHours),
     outcomeSummary,
     department: primaryDepartment,
+    taskDifficultyScore,
+    promptQualityScore,
+    inputTokenCount,
   };
 
   const [outcome] = await db
@@ -112,22 +184,43 @@ export async function captureSessionOutcome(
         estimatedHoursSaved: sql`excluded.estimated_hours_saved`,
         outcomeSummary: sql`excluded.outcome_summary`,
         department: sql`excluded.department`,
+        taskDifficultyScore: sql`excluded.task_difficulty_score`,
+        promptQualityScore: sql`excluded.prompt_quality_score`,
+        inputTokenCount: sql`excluded.input_token_count`,
       },
     })
     .returning();
 
   try {
     const conductorRow = await db
-      .select({ id: conductorStrategiesTable.id, qualityScore: conductorStrategiesTable.qualityScore })
+      .select({
+        id: conductorStrategiesTable.id,
+        qualityScore: conductorStrategiesTable.qualityScore,
+        abVariant: conductorStrategiesTable.abVariant,
+      })
       .from(conductorStrategiesTable)
       .where(eq(conductorStrategiesTable.sessionId, String(sessionId)))
       .limit(1);
 
-    if (conductorRow.length > 0 && conductorRow[0].qualityScore === null) {
-      const completeness = toolsExecutedTotal > 0 ? Math.min(1, toolsExecutedTotal / 10) : 0.5;
-      const durationScore = durationMinutes > 0 ? Math.max(0, 1 - durationMinutes / 60) : 0.7;
-      const qualityScore = (completeness + durationScore) / 2;
-      recordStrategyOutcome(conductorRow[0].id, qualityScore).catch(() => {});
+    if (conductorRow.length > 0) {
+      const strategyId = conductorRow[0].id;
+
+      await setStrategyConfoundScores(strategyId, taskDifficultyScore, promptQualityScore).catch(() => {});
+
+      let finalQuality: number;
+      if (conductorRow[0].qualityScore === null) {
+        const completeness = toolsExecutedTotal > 0 ? Math.min(1, toolsExecutedTotal / 10) : 0.5;
+        const durationScore = durationMinutes > 0 ? Math.max(0, 1 - durationMinutes / 60) : 0.7;
+        finalQuality = (completeness + durationScore) / 2;
+        recordStrategyOutcome(strategyId, finalQuality).catch(() => {});
+      } else {
+        finalQuality = Number(conductorRow[0].qualityScore);
+      }
+
+      if (clientId) {
+        const storedVariant = conductorRow[0].abVariant as "control" | "treatment" | null;
+        recordExperimentResult(clientId, String(sessionId), finalQuality, storedVariant ?? undefined).catch(() => {});
+      }
     }
   } catch {
   }
@@ -141,7 +234,13 @@ export async function captureSessionOutcome(
       title: "Mission Complete",
       body: outcomeSummary || `"${objective}" completed by ${botNames || "your team"}.`,
       link: "/(tabs)",
-      metadata: { sessionId, toolsUsed: toolsExecutedTotal, hoursSaved: estimatedHours },
+      metadata: {
+        sessionId,
+        toolsUsed: toolsExecutedTotal,
+        hoursSaved: estimatedHours,
+        taskDifficulty: taskDifficultyScore,
+        promptQuality: promptQualityScore,
+      },
     }).catch(() => {});
   }
 

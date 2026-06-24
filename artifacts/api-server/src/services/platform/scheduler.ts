@@ -48,6 +48,8 @@ import { runConsequenceModelTrainer } from "./jobs/consequence-model-trainer";
 import { runCollectiveAnomalyDetection } from "./jobs/collective-anomaly-detection";
 import { runPlatformIntelligenceScore } from "./jobs/platform-intelligence-score";
 import { runWeeklyIntelligenceCycles } from "./jobs/run-intelligence-cycle";
+import { runPendingRegressionChecks } from "../intelligence/intelligence-cycle";
+import { computeAndStoreGlobalPriors } from "../intelligence/global-priors";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -118,6 +120,8 @@ const lowFreqJobs: Job[] = [
   { name: "collective-anomaly-detection", fn: runCollectiveAnomalyDetection },
   { name: "platform-intelligence-score", fn: runPlatformIntelligenceScore },
   { name: "intelligence-cycle", fn: runWeeklyIntelligenceCycles },
+  { name: "regression-checks", fn: runPendingRegressionChecks },
+  { name: "global-priors-nightly", fn: async () => { await computeAndStoreGlobalPriors(); } },
 ];
 
 const running = new Set<string>();

@@ -12,6 +12,10 @@ export const intelligenceCycleRunsTable = pgTable("intelligence_cycle_runs", {
   loserCategories: jsonb("loser_categories").notNull().default([]),
   summary: text("summary"),
   triggeredBy: text("triggered_by").notNull().default("scheduled"),
+  cycleStatus: text("cycle_status").notNull().default("completed"),
+  preAvgQuality: real("pre_avg_quality"),
+  postAvgQuality: real("post_avg_quality"),
+  snapshotId: integer("snapshot_id"),
 });
 
 export type IntelligenceCycleRun = typeof intelligenceCycleRunsTable.$inferSelect;

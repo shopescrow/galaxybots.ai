@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, numeric, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, numeric, jsonb, uniqueIndex, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { taskSessionsTable } from "./task-sessions";
@@ -19,6 +19,9 @@ export const sessionOutcomesTable = pgTable("session_outcomes", {
   terminationReason: text("termination_reason"),
   failureCategory: text("failure_category"),
   loopTrace: jsonb("loop_trace").$type<Record<string, unknown>>(),
+  taskDifficultyScore: real("task_difficulty_score"),
+  promptQualityScore: real("prompt_quality_score"),
+  inputTokenCount: integer("input_token_count"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
