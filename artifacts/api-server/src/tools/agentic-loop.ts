@@ -56,7 +56,7 @@ function auditToolExecution(
 }
 
 export interface AgenticEvent {
-  type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done" | "tool_blocked" | "tool_pending_approval" | "moa_progress" | "moa_synthesizing";
+  type: "tool_call" | "tool_result" | "message" | "bot_complete" | "error" | "done" | "tool_blocked" | "tool_pending_approval" | "moa_progress" | "moa_synthesizing" | "conductor_strategy" | "conductor_progress" | "conductor_synthesizing";
   botId?: number;
   botName?: string;
   toolName?: string;

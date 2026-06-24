@@ -1,11 +1,12 @@
 import { db, guardianStateTable, guardianIncidentsTable, guardianWorkersTable, guardianPostmortemsTable, guardianPatrolsTable } from "@workspace/db";
 import { eq, and, isNull, lt, gt, inArray, sql, desc } from "drizzle-orm";
-import { dispatchSwarm } from "./worker-bees";
+import { dispatchSwarm, dispatchBee } from "./worker-bees";
 import { getBeesForDomain } from "./bee-types";
-import type { ThreatBrief, BeeFinding } from "./bee-types";
+import type { BeeType, ThreatBrief, BeeFinding } from "./bee-types";
 import { broadcastSSEToAll } from "../platform/sse";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { registerDynamicJob } from "../platform/guardian-dynamic-jobs";
+import { selectStrategy, recordStrategyRun } from "../conductor/galaxy-conductor";
 
 let swarmLoopInterval: ReturnType<typeof setInterval> | null = null;
 let lastSwarmCycleAt: Date | null = null;
@@ -254,7 +255,59 @@ export async function runSwarmCycle(): Promise<void> {
 
       broadcastSSEToAll("guardian_bees_dispatched", { incidentId: incident.id, beeTypes, at: new Date().toISOString() });
 
-      const findings = await dispatchSwarm(beeTypes, brief);
+      const conductorAgents = beeTypes.map((bt) => ({ name: bt }));
+      const conductorSelection = await selectStrategy(
+        `incident_response: ${incident.title} — ${incident.description.slice(0, 300)}`,
+        conductorAgents,
+        "incident_response",
+      ).catch(() => null);
+
+      let orderedBeeTypes = beeTypes;
+      let conductorStrategyId = -1;
+
+      if (conductorSelection) {
+        conductorStrategyId = await recordStrategyRun(
+          conductorSelection,
+          beeTypes,
+          0,
+          undefined,
+          `incident:${incident.id}`,
+          "guardian_swarm",
+        );
+
+        broadcastSSEToAll("guardian_conductor_strategy", {
+          incidentId: incident.id,
+          strategy: conductorSelection.strategy,
+          rationale: conductorSelection.rationale,
+          at: new Date().toISOString(),
+        });
+
+        if (conductorSelection.strategy === "sequential_debate") {
+          const priority: BeeType[] = ["debug", "security", "compliance", "performance", "ai_safety", "data_integrity", "client_health", "dependency", "prediction"];
+          orderedBeeTypes = [
+            ...priority.filter((p) => beeTypes.includes(p)),
+            ...beeTypes.filter((b) => !priority.includes(b as BeeType)),
+          ];
+        } else if (conductorSelection.strategy === "hierarchical_delegation") {
+          const leadBee = beeTypes.includes("debug") ? "debug"
+            : beeTypes.includes("security") ? "security"
+            : beeTypes[0];
+          if (leadBee) {
+            orderedBeeTypes = [leadBee, ...beeTypes.filter((b) => b !== leadBee)];
+          }
+        }
+      }
+
+      const findings = await dispatchSwarm(orderedBeeTypes, brief);
+
+      const avgConfidence = findings.length > 0
+        ? findings.reduce((sum, f) => sum + f.confidenceScore, 0) / findings.length
+        : 0;
+
+      if (conductorSelection && conductorStrategyId >= 0) {
+        const { recordStrategyOutcome } = await import("../conductor/galaxy-conductor");
+        recordStrategyOutcome(conductorStrategyId, avgConfidence).catch(() => {});
+      }
 
       for (let i = 0; i < findings.length; i++) {
         const f = findings[i];

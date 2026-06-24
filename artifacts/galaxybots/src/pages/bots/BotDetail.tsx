@@ -316,11 +316,49 @@ export default function BotDetail() {
 }
 
 function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botName: string }) {
+  const conductorStrategyEvent = events.find(e => e.type === "conductor_strategy") as (AgenticEvent & { strategy?: string; rationale?: string }) | undefined;
+  const conductorProgressEvents = events.filter(e => e.type === "conductor_progress");
+  const isConductorSynthesizing = events.some(e => e.type === "conductor_synthesizing");
   const progressEvents = events.filter(e => e.type === "moa_progress");
   const isSynthesizing = events.some(e => e.type === "moa_synthesizing");
-  const latest = progressEvents[progressEvents.length - 1];
-  const completed = latest?.moaIndex ?? 0;
-  const total = latest?.moaTotal ?? 10;
+  const latest = conductorProgressEvents[conductorProgressEvents.length - 1] ?? progressEvents[progressEvents.length - 1];
+  const completed = (latest as AgenticEvent & { moaIndex?: number })?.moaIndex ?? conductorProgressEvents.length;
+  const total = (latest as AgenticEvent & { moaTotal?: number })?.moaTotal ?? 10;
+
+  if (conductorStrategyEvent || conductorProgressEvents.length > 0 || isConductorSynthesizing) {
+    const strategyLabel = conductorStrategyEvent?.strategy
+      ? (conductorStrategyEvent.strategy as string).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : "Thinking";
+    const latestMsg = conductorProgressEvents[conductorProgressEvents.length - 1]?.content ?? conductorStrategyEvent?.content ?? "";
+
+    if (isConductorSynthesizing) {
+      return (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
+          <Sparkles className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
+          <div className="flex flex-col gap-1 flex-1 min-w-0">
+            <span className="text-xs font-tech text-violet-300">GalaxyMind — finalizing response…</span>
+            <div className="w-full bg-violet-500/20 rounded-full h-1">
+              <div className="bg-violet-400 h-1 rounded-full w-full animate-pulse" />
+            </div>
+          </div>
+          <span className="text-[10px] font-tech text-violet-400 shrink-0 border border-violet-500/30 px-1 rounded">{strategyLabel}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
+        <Brain className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-tech text-violet-300">GalaxyMind</span>
+            <span className="text-[10px] font-tech text-violet-400 border border-violet-500/30 px-1 rounded">{strategyLabel}</span>
+          </div>
+          <span className="text-xs text-violet-400/70 truncate">{latestMsg}</span>
+        </div>
+      </div>
+    );
+  }
 
   if (isSynthesizing) {
     return (
@@ -418,7 +456,10 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
     onComplete: onStreamComplete,
   });
 
-  const hasMoaEvents = streamEvents.some(e => e.type === "moa_progress" || e.type === "moa_synthesizing");
+  const hasMoaEvents = streamEvents.some(e =>
+    e.type === "moa_progress" || e.type === "moa_synthesizing" ||
+    e.type === "conductor_strategy" || e.type === "conductor_progress" || e.type === "conductor_synthesizing"
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -460,6 +501,11 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
             const msgType = (msg as { messageType?: string }).messageType || "text";
             const toolData = (msg as { toolData?: unknown }).toolData as Record<string, unknown> | null | undefined;
             const isMoaResponse = !isUser && toolData?.moa === true;
+            const conductorData = toolData?.conductor as { strategy?: string; rationale?: string; taskCategory?: string } | null | undefined;
+            const hasConductor = isMoaResponse && !!conductorData?.strategy;
+            const strategyLabel = conductorData?.strategy
+              ? conductorData.strategy.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+              : null;
 
             if (msgType === "tool_call" || msgType === "tool_result") {
               return (
@@ -505,10 +551,19 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
                       <span className="text-xs text-muted-foreground font-tech">
                         {isUser ? msg.senderName || "CEO" : botName} • {format(new Date(msg.createdAt), 'HH:mm')}
                       </span>
-                      {isMoaResponse && (
+                      {isMoaResponse && !hasConductor && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-tech">
                           <Sparkles className="w-2.5 h-2.5" />
                           DEEP THINKING
+                        </span>
+                      )}
+                      {hasConductor && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-500/40 text-violet-300 text-[10px] font-tech cursor-default"
+                          title={conductorData?.rationale ?? ""}
+                        >
+                          <Sparkles className="w-2.5 h-2.5" />
+                          GALAXYMIND · {strategyLabel}
                         </span>
                       )}
                     </div>
@@ -516,9 +571,11 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
                       "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
                       isUser 
                         ? "bg-cyan/10 border border-cyan/20 text-foreground rounded-tr-sm" 
-                        : isMoaResponse
-                          ? "bg-purple-500/5 border border-purple-500/20 text-foreground rounded-tl-sm shadow-md shadow-purple-500/5"
-                          : "bg-secondary border border-border/50 text-foreground rounded-tl-sm shadow-md"
+                        : hasConductor
+                          ? "bg-violet-500/5 border border-violet-500/20 text-foreground rounded-tl-sm shadow-md shadow-violet-500/5"
+                          : isMoaResponse
+                            ? "bg-purple-500/5 border border-purple-500/20 text-foreground rounded-tl-sm shadow-md shadow-purple-500/5"
+                            : "bg-secondary border border-border/50 text-foreground rounded-tl-sm shadow-md"
                     )}>
                       {msg.content}
                     </div>

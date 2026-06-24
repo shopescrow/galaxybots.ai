@@ -21,6 +21,8 @@ import { screenForInjection, wrapWithSafetyReinforcement, validateInputLength } 
 import { checkCostCapAlerts } from "../../services/analytics/cost-caps";
 import { applySlidingWindow, trimToFitContextWindow } from "../../services/ai-safety/context-window";
 import { callWithFallback } from "../../services/ai-safety/model-fallback";
+import { selectStrategy, recordStrategyRun, buildConductorMeta } from "../../services/conductor/galaxy-conductor";
+import { executeStrategy } from "../../services/conductor/strategies/index";
 
 const router: IRouter = Router();
 
@@ -455,86 +457,53 @@ You have access to tools that allow you to search the web, read/write shared sta
     }
 
     let botResponseContent: string;
+    let conductorStrategyId: number | undefined;
+    let conductorSelection: Awaited<ReturnType<typeof selectStrategy>> | undefined;
 
     if (isMoA && !moaDowngraded) {
       const DEFAULT_MOA_COUNT = 5;
       const MAX_MOA_COUNT = 10;
       const MOA_COUNT = moaComplexity ? Math.min(moaComplexity, MAX_MOA_COUNT) : DEFAULT_MOA_COUNT;
-      const temperatures = Array.from({ length: MOA_COUNT }, (_, i) =>
-        parseFloat((0.3 + i * (0.6 / Math.max(MOA_COUNT - 1, 1))).toFixed(2))
+
+      const agentVariants = Array.from({ length: MOA_COUNT }, (_, i) => ({
+        name: `${bot.name} (perspective ${i + 1})`,
+        systemPrompt: `${systemPrompt}${langInstruction}`,
+      }));
+
+      conductorSelection = await selectStrategy(
+        streamSafeContent,
+        agentVariants,
       );
+      const selection = conductorSelection;
 
-      const userTurn = [
-        ...chatMessages,
-        { role: "user" as const, content: streamSafeContent },
-      ];
+      sendSSE({
+        type: "conductor_strategy",
+        strategy: selection.strategy,
+        rationale: selection.rationale,
+        taskCategory: selection.taskCategory,
+        content: `GalaxyMind — ${selection.strategy.replace(/_/g, " ")} selected: ${selection.rationale}`,
+      });
 
-      const perspectives: string[] = new Array(MOA_COUNT).fill("");
-      let completed = 0;
-
-      sendSSE({ type: "moa_progress", moaIndex: 0, moaTotal: MOA_COUNT, content: `Spawning ${MOA_COUNT} parallel perspectives…` });
-
-      await Promise.all(
-        temperatures.map(async (temp, i) => {
-          try {
-            const moaMessages = trimToFitContextWindow([
-              { role: "system", content: systemPrompt },
-              ...userTurn,
-            ], "gpt-5.4");
-            const moaResult = await callWithFallback({
-              model: "gpt-5.4",
-              messages: moaMessages,
-              temperature: temp,
-              clientId: req.user!.clientId,
-              botId: bot.id,
-              conversationId: params.data.id,
-            });
-            perspectives[i] = moaResult.completion.choices[0]?.message?.content ?? "";
-          } catch (err) {
-            perspectives[i] = "";
-            console.error(`[MoA] Perspective ${i} failed:`, err instanceof Error ? err.message : err);
-          }
-          completed++;
-          sendSSE({
-            type: "moa_progress",
-            moaIndex: completed,
-            moaTotal: MOA_COUNT,
-            content: `Perspective ${completed}/${MOA_COUNT} captured`,
-          });
-        })
-      );
-
-      sendSSE({ type: "moa_synthesizing", content: `Synthesizing all ${MOA_COUNT} perspectives into one definitive response…` });
-
-      const synthesisPrompt = `You are ${bot.name}, ${bot.title}. You have just produced ${MOA_COUNT} independent analytical perspectives on the same question, each at a different creative temperature. Your task is to synthesize them into a single, definitive, authoritative response.
-
-Rules:
-- Integrate the strongest reasoning from all perspectives
-- Resolve any contradictions by choosing the most defensible position
-- Capture edge cases or nuances raised in multiple perspectives
-- Eliminate redundancy and write as a single unified voice
-- The output should feel like your single best possible answer, not a summary of drafts
-- Stay fully in character as ${bot.name}${langInstruction}
-
-The ${MOA_COUNT} perspectives follow, delimited by ---:
-
-${perspectives.filter(Boolean).map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
-
-Now write the single definitive synthesized response:`;
-
-      const synthMessages = trimToFitContextWindow([
-        { role: "system", content: synthesisPrompt },
-        { role: "user", content: streamSafeContent },
-      ], "gpt-5.4");
-      const synthResult = await callWithFallback({
-        model: "gpt-5.4",
-        messages: synthMessages,
+      const strategyResult = await executeStrategy(selection.strategy, {
+        taskDescription: streamSafeContent,
+        userContent: streamSafeContent,
+        agents: agentVariants,
         clientId: req.user!.clientId,
         botId: bot.id,
         conversationId: params.data.id,
+        onProgress: (event) => sendSSE({ ...event, moaIndex: 0, moaTotal: MOA_COUNT } as AgenticEvent),
       });
 
-      botResponseContent = synthResult.completion.choices[0]?.message?.content
+      conductorStrategyId = await recordStrategyRun(
+        selection,
+        strategyResult.agentsUsed,
+        strategyResult.durationMs,
+        undefined,
+        String(params.data.id),
+        "conversation",
+      );
+
+      botResponseContent = strategyResult.content
         ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";
     } else {
       const { finalContent, events } = await runAgenticLoop({
@@ -594,16 +563,23 @@ Now write the single definitive synthesized response:`;
       botResponseContent = await applyBrandVoiceGuardrails(req.user!.clientId, botResponseContent);
     }
 
+    const conductorMeta =
+      isMoA && !moaDowngraded && conductorStrategyId !== undefined && conductorSelection !== undefined
+        ? buildConductorMeta(conductorStrategyId, conductorSelection)
+        : undefined;
+
     await db.insert(messages).values({
       conversationId: params.data.id,
       role: "bot",
       content: botResponseContent,
       senderName: bot.name,
       messageType: "text",
-      toolData: isMoA && !moaDowngraded ? { moa: true } : undefined,
+      toolData: isMoA && !moaDowngraded
+        ? { moa: true, conductor: conductorMeta ?? null }
+        : undefined,
     });
 
-    sendSSE({ type: "done", content: botResponseContent });
+    sendSSE({ type: "done", content: botResponseContent, conductor: conductorMeta ?? null });
   } catch (err) {
     sendSSE({ type: "error", content: err instanceof Error ? err.message : "Stream error" });
   } finally {

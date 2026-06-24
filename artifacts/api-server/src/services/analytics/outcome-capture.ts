@@ -4,11 +4,13 @@ import {
   taskSessionMessagesTable,
   taskSessionBotsTable,
   botsTable,
+  conductorStrategiesTable,
 } from "@workspace/db";
 import { eq, inArray, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { estimateHoursSaved } from "./roi";
 import { createNotification } from "../admin/notifications";
+import { recordStrategyOutcome } from "../conductor/galaxy-conductor";
 
 export async function captureSessionOutcome(
   sessionId: number,
@@ -113,6 +115,22 @@ export async function captureSessionOutcome(
       },
     })
     .returning();
+
+  try {
+    const conductorRow = await db
+      .select({ id: conductorStrategiesTable.id, qualityScore: conductorStrategiesTable.qualityScore })
+      .from(conductorStrategiesTable)
+      .where(eq(conductorStrategiesTable.sessionId, String(sessionId)))
+      .limit(1);
+
+    if (conductorRow.length > 0 && conductorRow[0].qualityScore === null) {
+      const completeness = toolsExecutedTotal > 0 ? Math.min(1, toolsExecutedTotal / 10) : 0.5;
+      const durationScore = durationMinutes > 0 ? Math.max(0, 1 - durationMinutes / 60) : 0.7;
+      const qualityScore = (completeness + durationScore) / 2;
+      recordStrategyOutcome(conductorRow[0].id, qualityScore).catch(() => {});
+    }
+  } catch {
+  }
 
   if (clientId) {
     const botNames = teamBots.map((b) => b.name).join(", ");

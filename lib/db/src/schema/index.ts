@@ -78,3 +78,4 @@ export * from "./opportunity-signals";
 export * from "./bot-handoff-requests";
 export * from "./coordinator";
 export * from "./self-improvement";
+export * from "./conductor";
