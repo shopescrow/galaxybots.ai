@@ -10,6 +10,7 @@ import {
   Workflow,
   Activity,
   Radio,
+  Brain,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -87,6 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/alignment-audit", label: "Alignment Audit", description: "Multi-stakeholder learned preferences" },
       { href: "/prompt-versions", label: "Prompt Versions", description: "System prompt evolution history" },
       { href: "/platform-intelligence", label: "Platform Intelligence", description: "Oracle reports, AGI dimensions & consequence alignment" },
+      { href: "/galaxy-intelligence", label: "Galaxy Intelligence", description: "Self-optimization dashboard — routing weights, strategy win rates & quality trends" },
     ],
   },
   {

@@ -1,6 +1,7 @@
 import { pgTable, serial, text, timestamp, real, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { clientsTable } from "./clients";
 
 export const COMMUNICATION_STRATEGIES = [
   "parallel_synthesis",
@@ -13,6 +14,7 @@ export type CommunicationStrategy = (typeof COMMUNICATION_STRATEGIES)[number];
 
 export const conductorStrategiesTable = pgTable("conductor_strategies", {
   id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
   taskCategory: text("task_category").notNull(),
   strategyChosen: text("strategy_chosen").notNull(),
   rationale: text("rationale").notNull(),

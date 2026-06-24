@@ -47,6 +47,7 @@ import { runOracleReportGenerator } from "./jobs/oracle-report-generator";
 import { runConsequenceModelTrainer } from "./jobs/consequence-model-trainer";
 import { runCollectiveAnomalyDetection } from "./jobs/collective-anomaly-detection";
 import { runPlatformIntelligenceScore } from "./jobs/platform-intelligence-score";
+import { runWeeklyIntelligenceCycles } from "./jobs/run-intelligence-cycle";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -116,6 +117,7 @@ const lowFreqJobs: Job[] = [
   { name: "consequence-model-trainer", fn: runConsequenceModelTrainer },
   { name: "collective-anomaly-detection", fn: runCollectiveAnomalyDetection },
   { name: "platform-intelligence-score", fn: runPlatformIntelligenceScore },
+  { name: "intelligence-cycle", fn: runWeeklyIntelligenceCycles },
 ];
 
 const running = new Set<string>();

@@ -2,6 +2,7 @@ import { pgTable, serial, text, timestamp, integer, jsonb, numeric, uniqueIndex 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
 
 export const TASK_CATEGORIES = ["research", "analysis", "execution", "review", "legal", "financial"] as const;
 export const COORDINATOR_ROLES = ["thinker", "worker", "verifier"] as const;
@@ -14,6 +15,7 @@ export const coordinatorWeightsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
     taskCategory: text("task_category").notNull(),
     role: text("role").notNull(),
     weight: numeric("weight", { precision: 10, scale: 6 }).notNull().default("1.0"),

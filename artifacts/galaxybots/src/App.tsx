@@ -105,6 +105,7 @@ const ExperimentsPage     = lazy(() => import("@/pages/self-improvement/Experime
 const AlignmentAuditPage  = lazy(() => import("@/pages/self-improvement/AlignmentAuditPage"));
 const PromptVersionsPage  = lazy(() => import("@/pages/self-improvement/PromptVersionsPage"));
 const PlatformIntelligence = lazy(() => import("@/pages/platform-intelligence/PlatformIntelligence"));
+const GalaxyIntelligence  = lazy(() => import("@/pages/intelligence/GalaxyIntelligence"));
 
 // ─── Minimal inline fallback — zero external deps ───────────────────────────
 function PageLoader() {
@@ -224,6 +225,7 @@ function AuthenticatedRoutes() {
         <Route path="/alignment-audit"        component={AlignmentAuditPage} />
         <Route path="/prompt-versions"        component={PromptVersionsPage} />
         <Route path="/platform-intelligence"  component={() => <AdminOnly component={PlatformIntelligence} />} />
+        <Route path="/galaxy-intelligence"    component={() => <AdminOnly component={GalaxyIntelligence} />} />
         <Route component={NotFound} />
       </Switch>
     </>
