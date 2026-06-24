@@ -87,3 +87,4 @@ export * from "./coordinator";
 export * from "./self-improvement";
 export * from "./conductor";
 export * from "./ollama-config";
+export * from "./belief-intelligence";

@@ -1,6 +1,7 @@
 import { db, coordinatorWeightsTable, botsTable, clientBotsTable, pipelineRunsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
-import type { CoordinatorPlan, CoordinatorRole, RoleAssignment, TaskCategory } from "@workspace/db";
+import type { CoordinatorPlan, CoordinatorRole, RoleAssignment, TaskCategory, BeliefSuppression } from "@workspace/db";
+import { getDomainConfidence } from "./belief-confidence-resolver";
 
 const TASK_CATEGORIES = ["research", "analysis", "execution", "review", "legal", "financial"] as const;
 const COORDINATOR_ROLES: CoordinatorRole[] = ["thinker", "worker", "verifier"];
@@ -9,6 +10,8 @@ const DEFAULT_LEARNING_RATE = 0.1;
 const DEFAULT_WEIGHT_FLOOR = 0.1;
 const DEFAULT_WEIGHT_CEILING = 10.0;
 export const COORDINATOR_QUALITY_THRESHOLD = 0.7;
+
+const BELIEF_BLEND_ALPHA = 0.6;
 
 export const ROLE_PROMPTS: Record<CoordinatorRole, string> = {
   thinker:
@@ -108,11 +111,16 @@ async function getOrSeedWeights(
  *
  * The thinker/worker/verifier fields on the plan identify the BEST bot (by
  * weight) for each role — used for system-prompt context and weight updates.
+ *
+ * Belief confidence from the Belief System modulates effective weights:
+ *   effectiveWeight = historicalWeight * beliefBlendAlpha + beliefConfidence * (1 - beliefBlendAlpha)
+ * Bots with active contradictions in the task domain are suppressed from the Thinker role.
  */
 export async function assignRoles(
   taskDescription: string,
   steps: Array<{ stepIndex: number; botId: number; botName: string; botTitle: string; botDepartment: string }>,
   taskCategoryOverride?: TaskCategory,
+  clientId?: number,
 ): Promise<CoordinatorPlan> {
   if (steps.length === 0) throw new Error("No steps provided for role assignment");
 
@@ -120,11 +128,81 @@ export async function assignRoles(
   const uniqueBotIds = [...new Set(steps.map((s) => s.botId))];
   const weightMap = await getOrSeedWeights(uniqueBotIds, taskCategory);
 
+  // ── Belief confidence resolution ─────────────────────────────────────────────
+  const beliefResults = await Promise.all(
+    uniqueBotIds.map(async (botId) => {
+      const result = await getDomainConfidence(botId, taskCategory, clientId).catch((err) => {
+        console.warn(`[GalaxyCoordinator] Belief confidence fetch failed for bot ${botId}:`, err);
+        return null;
+      });
+      return { botId, result };
+    }),
+  );
+
+  const beliefConfidenceMap = new Map<number, number>();
+  const beliefSuppressions: BeliefSuppression[] = [];
+
+  for (const { botId, result } of beliefResults) {
+    const confidence = result?.averageConfidence ?? 0.5;
+    beliefConfidenceMap.set(botId, confidence);
+
+    if (result?.hasActiveContradiction && result.contradictionRef) {
+      beliefSuppressions.push({
+        botId,
+        role: "thinker",
+        reason: "active_contradiction",
+        contradictionRef: result.contradictionRef,
+      });
+      console.log(
+        `[GalaxyCoordinator] Bot ${botId} suppressed from Thinker role — active contradiction: ${result.contradictionRef}`,
+      );
+    }
+  }
+
+  const suppressedFromThinker = new Set(beliefSuppressions.map((s) => s.botId));
+
+  // ── Apply belief blending to historical weights ───────────────────────────────
+  const effectiveWeightMap = new Map<number, Record<CoordinatorRole, number>>();
+  for (const [botId, roles] of weightMap.entries()) {
+    const beliefConf = beliefConfidenceMap.get(botId) ?? 0.5;
+    const isSuppressed = suppressedFromThinker.has(botId);
+
+    const effectiveThinker = isSuppressed
+      ? 0
+      : roles.thinker * BELIEF_BLEND_ALPHA + beliefConf * (1 - BELIEF_BLEND_ALPHA);
+    const effectiveWorker = roles.worker * BELIEF_BLEND_ALPHA + beliefConf * (1 - BELIEF_BLEND_ALPHA);
+    const effectiveVerifier = roles.verifier * BELIEF_BLEND_ALPHA + beliefConf * (1 - BELIEF_BLEND_ALPHA);
+
+    effectiveWeightMap.set(botId, {
+      thinker: effectiveThinker,
+      worker: effectiveWorker,
+      verifier: effectiveVerifier,
+    });
+
+    const step = steps.find((s) => s.botId === botId);
+    if (step) {
+      console.log(
+        `[GalaxyCoordinator] Belief blend: bot=${step.botName}(${botId}) beliefConf=${beliefConf.toFixed(3)} ` +
+        `effectiveThinker=${effectiveThinker.toFixed(4)} effectiveWorker=${effectiveWorker.toFixed(4)} ` +
+        `effectiveVerifier=${effectiveVerifier.toFixed(4)}${isSuppressed ? " [THINKER SUPPRESSED]" : ""}`,
+      );
+    }
+  }
+
   const weightsSnapshot: Record<string, Record<string, number>> = {};
   for (const [botId, roles] of weightMap.entries()) {
     const step = steps.find((s) => s.botId === botId);
     if (step) {
-      weightsSnapshot[`${step.botName}(${botId})`] = { ...roles };
+      const effective = effectiveWeightMap.get(botId) ?? roles;
+      weightsSnapshot[`${step.botName}(${botId})`] = {
+        thinker: roles.thinker,
+        worker: roles.worker,
+        verifier: roles.verifier,
+        effectiveThinker: effective.thinker,
+        effectiveWorker: effective.worker,
+        effectiveVerifier: effective.verifier,
+        beliefConfidence: beliefConfidenceMap.get(botId) ?? 0.5,
+      };
     }
   }
 
@@ -143,21 +221,21 @@ export async function assignRoles(
     roleByStepIndex[n - 1] = "verifier";
   }
 
-  // ── Identify best bot for each canonical role (for prompting & weight updates) ─
+  // ── Identify best bot for each canonical role (using effective weights) ───────
   const makeBestCandidates = (
     role: CoordinatorRole,
     botsForRole: typeof steps,
   ) => botsForRole.map((s) => ({
     botId: s.botId,
     botName: s.botName,
-    weight: weightMap.get(s.botId)?.[role] ?? 1.0,
+    weight: effectiveWeightMap.get(s.botId)?.[role] ?? weightMap.get(s.botId)?.[role] ?? 1.0,
   }));
 
   // Thinker: bot assigned to the Thinker step (step 0 when N≥3; otherwise first Worker)
   const thinkerStep = steps.find((s) => roleByStepIndex[s.stepIndex] === "thinker")
     ?? steps[0];
 
-  // Worker: pick the Worker step with highest weight (last one if multiple workers)
+  // Worker: pick the Worker step with highest effective weight
   const workerSteps = steps.filter((s) => roleByStepIndex[s.stepIndex] === "worker");
   const workerSelected = softmaxSample(
     makeBestCandidates("worker", workerSteps.length > 0 ? workerSteps : steps),
@@ -165,7 +243,11 @@ export async function assignRoles(
 
   // Verifier: bot assigned to the last step (always the Verifier step when N≥2)
   const verifierStep = steps[n - 1];
-  const verifierSelected = { botId: verifierStep.botId, botName: verifierStep.botName, weight: weightMap.get(verifierStep.botId)?.verifier ?? 1.0 };
+  const verifierSelected = {
+    botId: verifierStep.botId,
+    botName: verifierStep.botName,
+    weight: effectiveWeightMap.get(verifierStep.botId)?.verifier ?? weightMap.get(verifierStep.botId)?.verifier ?? 1.0,
+  };
 
   const makeAssignment = (
     selected: { botId: number; botName: string; weight: number },
@@ -176,11 +258,15 @@ export async function assignRoles(
     botName: selected.botName,
     role,
     weight: selected.weight,
-    reasoning: `Step ${stepIdx} — ${selected.botName} assigned ${role} for ${taskCategory} task (weight: ${selected.weight.toFixed(4)})`,
+    reasoning: `Step ${stepIdx} — ${selected.botName} assigned ${role} for ${taskCategory} task (effectiveWeight: ${selected.weight.toFixed(4)}, beliefConf: ${(beliefConfidenceMap.get(selected.botId) ?? 0.5).toFixed(3)})`,
   });
 
   const thinker = makeAssignment(
-    { botId: thinkerStep.botId, botName: thinkerStep.botName, weight: weightMap.get(thinkerStep.botId)?.thinker ?? 1.0 },
+    {
+      botId: thinkerStep.botId,
+      botName: thinkerStep.botName,
+      weight: effectiveWeightMap.get(thinkerStep.botId)?.thinker ?? weightMap.get(thinkerStep.botId)?.thinker ?? 1.0,
+    },
     "thinker",
     thinkerStep.stepIndex,
   );
@@ -199,6 +285,7 @@ export async function assignRoles(
     roleByStepIndex,
     timestamp: Date.now(),
     weightsSnapshot,
+    beliefSuppressions: beliefSuppressions.length > 0 ? beliefSuppressions : undefined,
   };
 }
 

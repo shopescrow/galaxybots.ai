@@ -45,6 +45,13 @@ export interface RoleAssignment {
   reasoning: string;
 }
 
+export interface BeliefSuppression {
+  botId: number;
+  role: "thinker";
+  reason: "active_contradiction";
+  contradictionRef: string;
+}
+
 export interface CoordinatorPlan {
   runId?: number;
   taskCategory: TaskCategory;
@@ -63,4 +70,9 @@ export interface CoordinatorPlan {
   weightsSnapshot: Record<string, Record<string, number>>;
   /** Quality scores recorded per step, populated during execution. */
   qualityScores?: Record<string, number>;
+  /**
+   * Bots excluded from the Thinker role due to active belief contradictions.
+   * Each entry records which bot was suppressed and why.
+   */
+  beliefSuppressions?: BeliefSuppression[];
 }

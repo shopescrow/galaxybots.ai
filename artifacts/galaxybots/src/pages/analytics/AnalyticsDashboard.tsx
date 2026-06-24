@@ -17,6 +17,7 @@ import { ApiKeysPanel } from "./components/ApiKeysPanel";
 import { ClientHealthAnalyticsPanel } from "./components/ClientHealthAnalyticsPanel";
 import { VoiceAnalyticsPanel } from "./components/VoiceAnalyticsPanel";
 import { DataExportPanel } from "./components/DataExportPanel";
+import { BeliefHealthPanel } from "./components/BeliefHealthPanel";
 import { useAnalyticsData } from "./components/useAnalyticsData";
 
 export default function AnalyticsDashboard() {
@@ -100,6 +101,10 @@ export default function AnalyticsDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <ErrorBoundary><ClientHealthAnalyticsPanel /></ErrorBoundary>
           <ErrorBoundary><VoiceAnalyticsPanel /></ErrorBoundary>
+        </div>
+
+        <div className="grid grid-cols-1 mb-8">
+          <ErrorBoundary><BeliefHealthPanel /></ErrorBoundary>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

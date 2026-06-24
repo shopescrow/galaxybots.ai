@@ -2,6 +2,7 @@ import { assignRoles } from "./galaxy-coordinator";
 import { selectStrategy, recordStrategyRun, recordStrategyOutcome } from "../conductor/galaxy-conductor";
 import { arbitrate } from "./galaxy-arbitrator";
 import { distillForRole } from "./context-distiller";
+import { distillBeliefBriefing } from "./belief-distiller";
 import { validateCoordinatorOutput } from "./coordination-output-validator";
 import {
   checkMidStrategyQuality,
@@ -80,7 +81,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     botDepartment: agent.botDepartment ?? "",
   }));
 
-  let coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride).catch((err) => {
+  let coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride, clientId).catch((err) => {
     console.error("[JointPlanExecutor] GalaxyCoordinator.assignRoles failed:", err);
     return null;
   });
@@ -93,7 +94,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 
     if (!validationResult.valid) {
       console.warn(`[JointPlanExecutor] Coordinator output invalid (${validationResult.reason}) — retrying with EFFICIENT tier`);
-      coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride).catch(() => null);
+      coordinatorPlan = await assignRoles(taskDescription, steps, taskCategoryOverride, clientId).catch(() => null);
     }
   }
 
@@ -150,25 +151,38 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     console.log(`[JointPlanExecutor] Arbitration reconciled conflict for session ${sessionId}: ${jointPlan.arbitrationNotes.join(" | ")}`);
   }
 
-  // ── Step 4: ContextDistiller — build role-specific briefings per agent ────────
+  // ── Step 4: ContextDistiller + BeliefDistiller — build role-specific briefings ─
   const distilledAgents: StrategyAgent[] = await Promise.all(
     jointPlan.agentSequence.map(async (seqStep, idx) => {
       const agent = agents[seqStep.agentIndex] ?? agents[idx] ?? agents[0];
       if (!agent) return { name: "unknown", systemPrompt: "" };
 
-      const distilled = await distillForRole(
-        seqStep.role,
-        livingMemory,
-        priorContext,
-        targetModel,
-        agents.length,
-      ).catch(() => null);
+      const [distilled, beliefBriefing] = await Promise.all([
+        distillForRole(
+          seqStep.role,
+          livingMemory,
+          priorContext,
+          targetModel,
+          agents.length,
+        ).catch(() => null),
+        distillBeliefBriefing(
+          agent.botId,
+          seqStep.role,
+          coordinatorPlan?.taskCategory ?? (taskCategoryOverride ?? "execution"),
+          clientId,
+        ).catch(() => null),
+      ]);
 
       const briefAddition = distilled?.systemBrief ? `\n\n${distilled.systemBrief}` : "";
-      const systemPrompt = `${agent.systemPrompt}${briefAddition}`;
+      const beliefAddition =
+        beliefBriefing?.briefingText ? `\n\n${beliefBriefing.briefingText}` : "";
+      const systemPrompt = `${agent.systemPrompt}${briefAddition}${beliefAddition}`;
 
       if (distilled?.truncated) {
         console.log(`[JointPlanExecutor] Context distilled for agent ${agent.botName} (role=${seqStep.role}): ${distilled.tokenBudgetUsed}/${distilled.tokenBudgetAllotted} tokens (truncated)`);
+      }
+      if (beliefBriefing?.beliefCount) {
+        console.log(`[JointPlanExecutor] Belief briefing injected for agent ${agent.botName} (role=${seqStep.role}): ${beliefBriefing.beliefCount} beliefs`);
       }
 
       return { name: agent.botName, systemPrompt };
