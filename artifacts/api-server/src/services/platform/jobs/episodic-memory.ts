@@ -71,7 +71,7 @@ Return ONLY valid JSON:
   ]
 }`;
 
-  const messages: ChatCompletionMessageParam[] = [
+  const chatMessages: ChatCompletionMessageParam[] = [
     {
       role: "user",
       content: `Period: ${periodStart.toISOString()} to ${periodEnd.toISOString()}\nBot: ${botId} / Client: ${clientId}\n\n${sessionLog.slice(0, 900_000)}`,
@@ -85,13 +85,16 @@ Return ONLY valid JSON:
   }
 
   try {
-    const result = await glm.complete({ model: "glm-5.2-long", messages, maxTokens: 2000 });
+    const result = await glm.complete({ model: "glm-5.2-long", messages: chatMessages, maxTokens: 2000 });
+
+    const rawContent = result.content;
+    if (!rawContent) return null;
 
     let parsed: EpisodicNarrative | null = null;
     try {
-      parsed = JSON.parse(result.content) as EpisodicNarrative;
+      parsed = JSON.parse(rawContent) as EpisodicNarrative;
     } catch {
-      const match = result.content.match(/\{[\s\S]*\}/);
+      const match = rawContent.match(/\{[\s\S]*\}/);
       if (match) { try { parsed = JSON.parse(match[0]) as EpisodicNarrative; } catch { return null; } }
     }
     return parsed;
