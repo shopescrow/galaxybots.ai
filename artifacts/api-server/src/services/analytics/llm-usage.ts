@@ -5,7 +5,7 @@ import type { ModelTier } from "../ai-safety/model-fallback.js";
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-5.4": { input: 5 / 1_000_000, output: 15 / 1_000_000 },
   "gpt-4o": { input: 2.5 / 1_000_000, output: 10 / 1_000_000 },
-  "gpt-4o-mini": { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
+  "gpt-5-mini": { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
   "gpt-4-turbo": { input: 10 / 1_000_000, output: 30 / 1_000_000 },
   "gpt-3.5-turbo": { input: 0.5 / 1_000_000, output: 1.5 / 1_000_000 },
   "claude-sonnet-4-6": { input: 3 / 1_000_000, output: 15 / 1_000_000 },
@@ -39,7 +39,7 @@ function getCosts(model: string): { input: number; output: number } {
   if (cachedDbCosts && cachedDbCosts[model]) {
     return cachedDbCosts[model];
   }
-  return MODEL_COSTS[model] ?? MODEL_COSTS["gpt-4o-mini"]!;
+  return MODEL_COSTS[model] ?? MODEL_COSTS["gpt-5-mini"]!;
 }
 
 export function estimateCost(model: string, promptTokens: number, completionTokens: number): number {

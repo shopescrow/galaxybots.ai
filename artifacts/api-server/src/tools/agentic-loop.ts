@@ -138,7 +138,7 @@ export interface AgenticLoopResult {
 
 export async function runAgenticLoop(options: AgenticLoopOptions): Promise<AgenticLoopResult> {
   const {
-    model = "gpt-4o-mini",
+    model = "gpt-5-mini",
     maxIterations = 10,
     maxTokens = 1000,
     tokenBudget = DEFAULT_TOKEN_BUDGET,

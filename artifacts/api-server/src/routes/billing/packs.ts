@@ -42,7 +42,7 @@ async function generatePersonalizedObjective(
     ].filter(Boolean).join("\n");
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // high-volume pack onboarding, cost-efficient
+      model: "gpt-5-mini", // high-volume pack onboarding, cost-efficient
       max_completion_tokens: 300,
       messages: [
         {

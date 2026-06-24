@@ -309,7 +309,7 @@ async function findStrategyWinners(
 }
 
 function getActiveModelVersion(): string {
-  return process.env.LLM_MODEL_VERSION ?? "gpt-4o-mini";
+  return process.env.LLM_MODEL_VERSION ?? "gpt-5-mini";
 }
 
 async function computeAvgQuality(since: Date, until: Date, clientId?: number): Promise<number | null> {

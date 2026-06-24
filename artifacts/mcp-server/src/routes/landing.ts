@@ -133,7 +133,7 @@ export function buildLandingRoute(basePath: string): Router {
         label: "Analyze PDF", method: "TOOL", path: `${basePath}/messages`, group: "PDF Intelligence",
         noLink: true,
         purpose: "Analyze a PDF document from a public URL using GalaxyBots AI intelligence. Returns document type classification, a 2-4 sentence summary, key insights, action items, extracted entities (people, organizations, dates, amounts, locations), compliance risk flags, sentiment, and a recommended GalaxyBots director to own the document.",
-        params: ["url (string, required) — Public HTTPS URL of the PDF to analyze", "depth ('standard' | 'deep', optional, default: 'standard') — standard uses gpt-4o-mini for speed; deep uses gpt-4o for thorough analysis of complex documents"],
+        params: ["url (string, required) — Public HTTPS URL of the PDF to analyze", "depth ('standard' | 'deep', optional, default: 'standard') — standard uses gpt-5-mini for speed; deep uses gpt-4o for thorough analysis of complex documents"],
         returns: "JSON with documentType, title, summary, keyInsights[], actionItems[], entities{people,organizations,dates,amounts,locations}, riskFlags[], sentiment, confidenceScore, metadata{numPages,characterCount}, directorRouting{director,department,reason}, analyzedAt",
         access: "Bearer token or OAuth 2.0 — any authenticated GalaxyBots user",
         useWhen: "A client shares a document that needs intelligent review — contract, invoice, report, or any file requiring executive attention",

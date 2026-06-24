@@ -166,7 +166,7 @@ export async function checkActivationNurture() {
         if (websiteIntel?.summary || client.industry) {
           try {
             const insightCompletion = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
+              model: "gpt-5-mini",
               max_completion_tokens: 150,
               messages: [
                 {

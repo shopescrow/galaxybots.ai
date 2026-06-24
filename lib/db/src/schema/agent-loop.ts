@@ -14,7 +14,7 @@ export const botLoopConfigTable = pgTable("bot_loop_config", {
   qualityThreshold: numeric("quality_threshold").notNull().default("0.7"),
   enableSelfEvaluation: boolean("enable_self_evaluation").notNull().default(true),
   enableBrowserAgent: boolean("enable_browser_agent").notNull().default(false),
-  model: text("model").notNull().default("gpt-4o-mini"),
+  model: text("model").notNull().default("gpt-5-mini"),
   fallbackModel: text("fallback_model"),
   networkAllowList: text("network_allow_list").array().default([]),
   autoApproveGoalImpactThreshold: integer("auto_approve_goal_impact_threshold").notNull().default(40),

@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 
 const CREDITS_PER_CALL: Record<string, number> = {
   "gpt-4o": 10,
-  "gpt-4o-mini": 3,
+  "gpt-5-mini": 3,
   "gpt-5.2": 15,
   "default": 5,
 };
@@ -33,7 +33,7 @@ async function getSubscription(clientId: number) {
   return sub ?? null;
 }
 
-export function creditMeter(modelHint = "gpt-4o-mini") {
+export function creditMeter(modelHint = "gpt-5-mini") {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user?.clientId) {
       next();

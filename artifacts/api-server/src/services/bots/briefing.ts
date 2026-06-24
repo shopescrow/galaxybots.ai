@@ -360,7 +360,7 @@ export async function generateBriefForClient(clientId: number, briefType: "morni
   const prompt = buildBriefPrompt(ctx, briefType);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     max_completion_tokens: 1500,
     messages: [
       { role: "system", content: "You are a professional executive briefing AI. Be concise, specific, and actionable. Return plain text only — no HTML or markdown formatting." },

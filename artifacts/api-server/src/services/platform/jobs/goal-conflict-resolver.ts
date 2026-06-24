@@ -41,7 +41,7 @@ Respond with JSON:
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 300,
       messages: [
         { role: "system", content: "You detect conflicts between AI agent goals. Respond only with valid JSON." },

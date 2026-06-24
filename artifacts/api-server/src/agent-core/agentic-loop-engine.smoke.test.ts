@@ -215,7 +215,7 @@ describe("Value Objects", () => {
 describe("Ports (mock implementations)", () => {
   it("LLMProvider mock completes successfully", async () => {
     const result = await mockLLMProvider.complete({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [{ role: "user", content: "hello", tool_call_id: undefined }],
     });
     expect(result.content).toBeTruthy();
@@ -359,7 +359,7 @@ describe("DEFAULT_LOOP_CONFIG", () => {
     expect(DEFAULT_LOOP_CONFIG.costBudgetCents).toBe(500);
     expect(DEFAULT_LOOP_CONFIG.qualityThreshold).toBe(0.7);
     expect(DEFAULT_LOOP_CONFIG.enableSelfEvaluation).toBe(true);
-    expect(DEFAULT_LOOP_CONFIG.model).toBe("gpt-4o-mini");
+    expect(DEFAULT_LOOP_CONFIG.model).toBe("gpt-5-mini");
   });
 });
 
@@ -405,7 +405,7 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
     const { runAgenticLoopEngine } = await import("./agentic-loop-engine");
 
     const result = await runAgenticLoopEngine({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       maxIterations: 5,
       maxTokens: 200,
       systemPrompt: "You are a helpful assistant.",
@@ -416,7 +416,7 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
         llmProvider: {
           isAvailable: () => true,
           async complete() {
-            return { content: "Hello! How can I help you?", promptTokens: 50, completionTokens: 20, costCents: 1, model: "gpt-4o-mini" };
+            return { content: "Hello! How can I help you?", promptTokens: 50, completionTokens: 20, costCents: 1, model: "gpt-5-mini" };
           },
         },
         toolRegistry: mockToolRegistry,
@@ -457,11 +457,11 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
             promptTokens: 60,
             completionTokens: 30,
             costCents: 1,
-            model: "gpt-4o-mini",
+            model: "gpt-5-mini",
           };
         }
         // Second: return final text
-        return { content: "Cats are great!", promptTokens: 70, completionTokens: 20, costCents: 1, model: "gpt-4o-mini" };
+        return { content: "Cats are great!", promptTokens: 70, completionTokens: 20, costCents: 1, model: "gpt-5-mini" };
       },
     };
 
@@ -474,7 +474,7 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
     };
 
     const result = await runAgenticLoopEngine({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       maxIterations: 5,
       maxTokens: 200,
       systemPrompt: "You are a helpful assistant.",
@@ -509,7 +509,7 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
     };
 
     const result = await runAgenticLoopEngine({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       maxIterations: 3,
       maxTokens: 200,
       systemPrompt: "You are a helpful assistant.",
@@ -544,7 +544,7 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
       isAvailable: () => true,
       async complete(opts) {
         capturedMessages.push(...opts.messages.map((m) => (m.content ?? "")));
-        return { content: "Using memory context.", promptTokens: 80, completionTokens: 25, costCents: 1, model: "gpt-4o-mini" };
+        return { content: "Using memory context.", promptTokens: 80, completionTokens: 25, costCents: 1, model: "gpt-5-mini" };
       },
     };
 
@@ -556,7 +556,7 @@ describe("runAgenticLoopEngine — integrated PARO loop (all 6 ports mocked)", (
     };
 
     await runAgenticLoopEngine({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       maxIterations: 2,
       maxTokens: 200,
       systemPrompt: "You are a helpful assistant.",

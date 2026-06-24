@@ -199,7 +199,7 @@ export async function generateWeeklyBriefing(clientId: number) {
   }
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     max_completion_tokens: 1000,
     messages: [
       {
@@ -267,7 +267,7 @@ export async function createShareableReport(
   if (roi.totalSessions > 0) {
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5-mini",
         max_completion_tokens: 300,
         messages: [
           {

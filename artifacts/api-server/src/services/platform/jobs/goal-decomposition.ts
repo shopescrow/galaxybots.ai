@@ -47,7 +47,7 @@ Respond with JSON array:
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 800,
       messages: [
         {

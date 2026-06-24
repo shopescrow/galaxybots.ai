@@ -45,7 +45,7 @@ router.get("/bots/:id/loop-config", async (req, res): Promise<void> => {
         qualityThreshold: 0.7,
         enableSelfEvaluation: true,
         enableBrowserAgent: false,
-        model: "gpt-4o-mini",
+        model: "gpt-5-mini",
         fallbackModel: null,
         networkAllowList: [],
       });
@@ -151,7 +151,7 @@ router.put("/bots/:id/loop-config", async (req, res): Promise<void> => {
           qualityThreshold: data.qualityThreshold !== undefined ? String(data.qualityThreshold) : "0.7",
           enableSelfEvaluation: data.enableSelfEvaluation ?? true,
           enableBrowserAgent: data.enableBrowserAgent ?? false,
-          model: data.model ?? "gpt-4o-mini",
+          model: data.model ?? "gpt-5-mini",
           fallbackModel: data.fallbackModel ?? null,
           networkAllowList: data.networkAllowList ?? [],
         })

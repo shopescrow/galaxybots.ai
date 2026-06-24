@@ -71,7 +71,7 @@ const DIRECTOR_ROUTING: Record<string, { director: string; department: string; r
 
 async function llmAnalyze(text: string, depth: "standard" | "deep" = "standard"): Promise<Record<string, unknown>> {
   const truncated = text.slice(0, depth === "deep" ? 12000 : 6000);
-  const model = depth === "deep" ? "gpt-4o" : "gpt-4o-mini";
+  const model = depth === "deep" ? "gpt-4o" : "gpt-5-mini";
 
   const completion = await openai.chat.completions.create({
     model,
@@ -191,7 +191,7 @@ router.post("/pdf/extract", authenticate, async (req, res): Promise<void> => {
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
@@ -244,7 +244,7 @@ router.post("/pdf/classify", authenticate, async (req, res): Promise<void> => {
     const { text, numPages } = await extractText({ url, base64 });
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
@@ -330,7 +330,7 @@ router.get("/pdf/health", (_req, res) => {
     version: "1.0.0",
     capabilities: ["analyze", "extract", "classify", "batch"],
     cacheSize: ANALYSIS_CACHE.size,
-    models: { standard: "gpt-4o-mini", deep: "gpt-4o" },
+    models: { standard: "gpt-5-mini", deep: "gpt-4o" },
   });
 });
 

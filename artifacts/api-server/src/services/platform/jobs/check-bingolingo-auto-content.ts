@@ -24,7 +24,7 @@ export async function checkBingolingoAutoContent() {
     for (const client of clients) {
       try {
         const topicCompletion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-5-mini",
           max_completion_tokens: 200,
           messages: [
             {
@@ -38,7 +38,7 @@ export async function checkBingolingoAutoContent() {
 
         const systemPrompt = `You are an expert SEO content writer. Generate a well-structured blog post with an engaging H1 title, clear H2/H3 subheadings, SEO-optimized content, and a strong conclusion. Return in markdown format.`;
         const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-5-mini",
           max_completion_tokens: 3000,
           messages: [
             { role: "system", content: systemPrompt },

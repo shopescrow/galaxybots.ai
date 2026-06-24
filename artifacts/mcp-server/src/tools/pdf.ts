@@ -30,7 +30,7 @@ export function registerPdfTools(server: McpServer): void {
         .enum(["standard", "deep"])
         .optional()
         .default("standard")
-        .describe("Analysis depth: standard (faster, gpt-4o-mini) or deep (thorough, gpt-4o)"),
+        .describe("Analysis depth: standard (faster, gpt-5-mini) or deep (thorough, gpt-4o)"),
     },
     async ({ url, depth }) => {
       console.log(`[MCP] analyze_pdf: url="${url}", depth=${depth}`);

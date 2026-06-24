@@ -55,7 +55,7 @@ export interface JointPlanExecutorResult {
   strategyId: number;
 }
 
-const DEFAULT_TARGET_MODEL = "gpt-4o-mini";
+const DEFAULT_TARGET_MODEL = "gpt-5-mini";
 
 export async function execute(input: JointPlanExecutorInput): Promise<JointPlanExecutorResult> {
   const start = Date.now();

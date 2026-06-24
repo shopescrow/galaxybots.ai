@@ -23,7 +23,7 @@ const INJECTION_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: "jailbreak_prefix", pattern: /(?:DAN mode|developer mode|unrestricted mode|god mode)/gi },
 ];
 
-const SUMMARY_MODEL = "gpt-4o-mini";
+const SUMMARY_MODEL = "gpt-5-mini";
 
 async function summarizeIfOverBudget(content: string, fromAgent: string): Promise<{ content: string; summarized: boolean }> {
   if (content.length <= MAX_RELAY_CHARS) {

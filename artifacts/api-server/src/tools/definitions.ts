@@ -311,7 +311,7 @@ You have been asked by a teammate to handle a specific sub-task. Provide a focus
 
     const { runAgenticLoop } = await import("./agentic-loop");
     const result = await runAgenticLoop({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       maxIterations: 5,
       maxTokens: 500,
       systemPrompt,
@@ -408,7 +408,7 @@ Report your results to: ${input.reportTo ?? callerBot.name}
 Provide a focused, expert response addressing the delegated objective.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 800,
       messages: [
         { role: "system", content: systemPrompt },

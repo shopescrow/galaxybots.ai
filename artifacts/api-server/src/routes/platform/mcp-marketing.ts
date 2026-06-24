@@ -195,7 +195,7 @@ router.post("/mcp-marketing/servers/:id/generate-listing", requireRole("owner", 
     const dir = DIRECTORIES.find(d => d.slug === directorySlug) ?? DIRECTORIES[0];
     const tagsArr = Array.isArray(server.tags) ? (server.tags as string[]) : [];
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // high-volume listing generation, cost-efficient
+      model: "gpt-5-mini", // high-volume listing generation, cost-efficient
       messages: [
         {
           role: "system",
@@ -244,7 +244,7 @@ router.post("/mcp-marketing/servers/:id/generate-content", requireRole("owner", 
     if (!server) { res.status(404).json({ error: "Server not found" }); return; }
     const tagsArr = Array.isArray(server.tags) ? (server.tags as string[]) : [];
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // high-volume marketing content, cost-efficient
+      model: "gpt-5-mini", // high-volume marketing content, cost-efficient
       messages: [
         {
           role: "system",

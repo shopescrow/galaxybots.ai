@@ -5,7 +5,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-5.4": 128_000,
   "gpt-4o": 128_000,
-  "gpt-4o-mini": 128_000,
+  "gpt-5-mini": 128_000,
   "gpt-4-turbo": 128_000,
   "gpt-3.5-turbo": 16_385,
   "claude-sonnet-4-6": 200_000,
@@ -68,7 +68,7 @@ export async function summarizeOlderMessages(
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 400,
       messages: [
         {

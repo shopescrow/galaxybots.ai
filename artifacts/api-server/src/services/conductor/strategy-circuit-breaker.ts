@@ -21,7 +21,7 @@ const sessionConsecutiveFailures = new Map<string, number>();
 
 const MID_STRATEGY_FLOOR = 0.45;
 const CONSECUTIVE_FAIL_THRESHOLD = 2;
-const EVALUATION_MODEL = "gpt-4o-mini";
+const EVALUATION_MODEL = "gpt-5-mini";
 
 async function scoreRelevance(content: string, taskDescription: string): Promise<number> {
   if (!content || content.trim().length === 0) return 0;

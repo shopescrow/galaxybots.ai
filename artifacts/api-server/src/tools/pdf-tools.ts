@@ -22,13 +22,13 @@ registerTool({
       .enum(["standard", "deep"])
       .optional()
       .default("standard")
-      .describe("Analysis depth — standard is faster (gpt-4o-mini), deep is thorough (gpt-4o)"),
+      .describe("Analysis depth — standard is faster (gpt-5-mini), deep is thorough (gpt-4o)"),
   }),
   execute: async (input, _ctx: ToolContext) => {
     const { text, numPages } = await fetchAndParse(input.url);
     if (!text) return { error: "No extractable text — PDF may be scanned/image-only" };
 
-    const model = input.depth === "deep" ? "gpt-4o" : "gpt-4o-mini";
+    const model = input.depth === "deep" ? "gpt-4o" : "gpt-5-mini";
     const truncated = text.slice(0, input.depth === "deep" ? 12000 : 6000);
 
     const completion = await openai.chat.completions.create({
@@ -89,7 +89,7 @@ registerTool({
     if (!text) return { error: "No extractable text — PDF may be scanned/image-only" };
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
@@ -125,7 +125,7 @@ registerTool({
     const { text, numPages } = await fetchAndParse(input.url);
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [

@@ -100,7 +100,7 @@ Return [] if no clear opportunities exist. Only flag genuine signals with eviden
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 1200,
       messages: [
         {

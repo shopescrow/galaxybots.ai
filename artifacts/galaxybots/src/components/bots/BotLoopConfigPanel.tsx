@@ -301,7 +301,7 @@ export function BotLoopConfigPanel({ botId, botName }: { botId: number; botName:
               <Label className="text-xs font-tech">Primary Model</Label>
               <Input
                 type="text"
-                placeholder="gpt-4o-mini"
+                placeholder="gpt-5-mini"
                 value={form.model}
                 onChange={(e) => update("model", e.target.value)}
                 className="bg-secondary/50 border-border font-tech text-sm h-9"

@@ -112,7 +112,7 @@ Return a JSON object:
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: "You are a strict JSON-only responder." },
         { role: "user", content: prompt },

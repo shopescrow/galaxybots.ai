@@ -121,7 +121,7 @@ Generate 1-3 autonomous goal proposals. Respond with a JSON array:
 Only propose goals with clear evidence support. Focus on high-impact, achievable objectives.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     max_completion_tokens: 1500,
     messages: [
       { role: "system", content: "You generate autonomous goal proposals for AI agents. Respond only with valid JSON." },

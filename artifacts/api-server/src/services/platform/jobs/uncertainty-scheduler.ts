@@ -41,7 +41,7 @@ Return empty array [] if the goal has no critical belief dependencies.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 800,
       messages: [
         { role: "system", content: "Identify belief dependencies for AI agent goals. Respond only with valid JSON." },

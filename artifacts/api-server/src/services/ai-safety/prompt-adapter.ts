@@ -73,7 +73,7 @@ export function getModelContextLimit(model: string): number {
   const limits: Record<string, number> = {
     "gpt-5.4": 128_000,
     "gpt-4o": 128_000,
-    "gpt-4o-mini": 128_000,
+    "gpt-5-mini": 128_000,
     "claude-sonnet-4-6": 200_000,
   };
   return limits[model] ?? 128_000;

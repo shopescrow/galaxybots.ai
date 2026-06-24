@@ -25,7 +25,7 @@ export interface DistilledContext {
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-5.4": 128_000,
   "gpt-4o": 128_000,
-  "gpt-4o-mini": 128_000,
+  "gpt-5-mini": 128_000,
   "claude-sonnet-4-6": 200_000,
   "claude-3-5-sonnet": 200_000,
   "claude-3-haiku": 200_000,
@@ -34,7 +34,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 const DEFAULT_CONTEXT_WINDOW = 32_000;
 const CONTEXT_BUDGET_RATIO = 0.60;
 const APPROX_CHARS_PER_TOKEN = 4;
-const SUMMARY_MODEL = "gpt-4o-mini";
+const SUMMARY_MODEL = "gpt-5-mini";
 
 const ROLE_MEMORY_TAGS: Record<CoordinatorRole, string[]> = {
   thinker: ["strategic", "analytical", "research", "planning", "hypothesis", "insight"],

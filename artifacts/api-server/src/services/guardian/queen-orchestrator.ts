@@ -99,7 +99,7 @@ Return a JSON object with exactly these keys:
 Format for KiloPro SOC 2 / GDPR audit compatibility. Be precise and technical.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 800,
       messages: [
         { role: "system", content: "You are the Guardian Queen's post-mortem analyst. Return only valid JSON." },

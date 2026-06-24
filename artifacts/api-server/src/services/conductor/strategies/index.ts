@@ -24,7 +24,7 @@ export interface StrategyResult {
 }
 
 const MODEL = "gpt-5.4";
-const FALLBACK_MODEL = "gpt-4o-mini";
+const FALLBACK_MODEL = "gpt-5-mini";
 
 async function callAgent(
   systemPrompt: string,

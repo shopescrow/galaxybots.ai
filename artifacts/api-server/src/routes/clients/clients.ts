@@ -349,7 +349,7 @@ router.post("/clients/:id/scrape-website", requireRole("owner", "admin"), async 
       if (!rawContent || rawContent.length < 50) return;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini", // high-volume website intel extraction, cost-efficient
+        model: "gpt-5-mini", // high-volume website intel extraction, cost-efficient
         max_completion_tokens: 500,
         messages: [
           {

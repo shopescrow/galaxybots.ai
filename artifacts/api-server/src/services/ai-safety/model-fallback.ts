@@ -22,7 +22,7 @@ import { logLlmUsage } from "../analytics/llm-usage";
 /**
  * ModelTier defines which cost/capability tier a call should use:
  *  - LOCAL     : Ollama self-hosted (cost $0). Used for coordinator/conductor reasoning.
- *  - EFFICIENT : Cheaper cloud models (gpt-4o-mini / claude-haiku). Fallback from LOCAL.
+ *  - EFFICIENT : Cheaper cloud models (gpt-5-mini / claude-haiku). Fallback from LOCAL.
  *  - FRONTIER  : Best cloud models (gpt-4o / claude-sonnet). Reserved for actual agent work.
  */
 export enum ModelTier {
@@ -31,7 +31,7 @@ export enum ModelTier {
   FRONTIER = "frontier",
 }
 
-const TIER_EFFICIENT_MODELS = ["gpt-4o-mini", "claude-haiku-4-6"];
+const TIER_EFFICIENT_MODELS = ["gpt-5-mini", "claude-haiku-4-6"];
 const TIER_FRONTIER_MODELS = ["gpt-4o", "claude-sonnet-4-6"];
 
 export interface CompletionResult {
@@ -58,8 +58,8 @@ function toCompletionResult(raw: Awaited<ReturnType<typeof openai.chat.completio
 
 const FALLBACK_CHAINS: Record<string, string[]> = {
   "gpt-5.4": ["gpt-5.4", "gpt-4o", "claude-sonnet-4-6"],
-  "gpt-4o": ["gpt-4o", "gpt-4o-mini", "claude-sonnet-4-6"],
-  "gpt-4o-mini": ["gpt-4o-mini", "gpt-4o", "claude-sonnet-4-6"],
+  "gpt-4o": ["gpt-4o", "gpt-5-mini", "claude-sonnet-4-6"],
+  "gpt-5-mini": ["gpt-5-mini", "gpt-4o", "claude-sonnet-4-6"],
   "claude-sonnet-4-6": ["claude-sonnet-4-6", "gpt-4o"],
 };
 
@@ -83,7 +83,7 @@ function isRetryableError(err: unknown): boolean {
 function inferTierForModel(model: string): ModelTier {
   if (TIER_EFFICIENT_MODELS.some((m) => model.startsWith(m.split("-").slice(0, 2).join("-")))) return ModelTier.EFFICIENT;
   if (TIER_FRONTIER_MODELS.some((m) => model.startsWith(m.split("-").slice(0, 2).join("-")))) return ModelTier.FRONTIER;
-  if (model.startsWith("gpt-4o-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
+  if (model.startsWith("gpt-5-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
   return ModelTier.FRONTIER;
 }
 
@@ -162,7 +162,7 @@ export async function callWithFallback(options: {
       console.log("[ModelFallback] LOCAL tier requested but Ollama unavailable — falling back to EFFICIENT tier");
     }
 
-    const efficientModel = TIER_EFFICIENT_MODELS[0] ?? "gpt-4o-mini";
+    const efficientModel = TIER_EFFICIENT_MODELS[0] ?? "gpt-5-mini";
     const result = await callWithFallback({ ...options, model: efficientModel, preferredTier: ModelTier.EFFICIENT });
     return { ...result, fallbackUsed: true, degraded: true, tier: ModelTier.EFFICIENT };
   }

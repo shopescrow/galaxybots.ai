@@ -121,7 +121,7 @@ Return ONLY a valid JSON object with keys: finding, rootCause, proposedFix, conf
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 600,
       messages: [
         { role: "system", content: systemPrompt },

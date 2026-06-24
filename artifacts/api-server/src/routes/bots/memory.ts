@@ -311,7 +311,7 @@ Your responsibilities: ${bot.responsibilities.join("; ")}
 You are executing a standing order autonomously. Use your available tools to complete the mission objective below. Take real actions — post messages, send emails, create documents, look up data — whatever is needed to fulfill the order. When done, provide a concise summary of what you accomplished.`;
 
     const result = await runAgenticLoop({
-      model: "gpt-4o-mini", // high-volume memory extraction, cost-efficient
+      model: "gpt-5-mini", // high-volume memory extraction, cost-efficient
       maxIterations: 10,
       maxTokens: 1500,
       systemPrompt,
@@ -340,7 +340,7 @@ You are executing a standing order autonomously. Use your available tools to com
     content = result.finalContent || "Active execution completed but produced no output.";
 
     const summaryCompletion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // high-volume summarization, cost-efficient
+      model: "gpt-5-mini", // high-volume summarization, cost-efficient
       max_completion_tokens: 200,
       messages: [
         { role: "system", content: "Summarize the following execution report in one concise sentence." },
@@ -350,7 +350,7 @@ You are executing a standing order autonomously. Use your available tools to com
     summary = summaryCompletion.choices[0]?.message?.content ?? content.substring(0, 200);
   } else {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // high-volume memory extraction, cost-efficient
+      model: "gpt-5-mini", // high-volume memory extraction, cost-efficient
       max_completion_tokens: 2000,
       messages: [
         {
@@ -371,7 +371,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
     content = completion.choices[0]?.message?.content ?? "Report generation failed.";
 
     const summaryCompletion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // high-volume summarization, cost-efficient
+      model: "gpt-5-mini", // high-volume summarization, cost-efficient
       max_completion_tokens: 200,
       messages: [
         { role: "system", content: "Summarize the following report in one concise sentence." },

@@ -6,7 +6,7 @@ import { callWithFallback, ModelTier } from "../../services/ai-safety/model-fall
 export function deriveModelTier(model: string): string {
   if (!model) return ModelTier.EFFICIENT;
   if (model.startsWith("llama") || model.startsWith("mistral") || model === "ollama") return ModelTier.LOCAL;
-  if (model.startsWith("gpt-4o-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
+  if (model.startsWith("gpt-5-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
   return ModelTier.FRONTIER;
 }
 
@@ -236,7 +236,7 @@ Return a JSON object with exactly:
 
   try {
     const result = await callWithFallback({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: "You are GalaxyConductor. Return only valid JSON." },
         { role: "user", content: prompt },

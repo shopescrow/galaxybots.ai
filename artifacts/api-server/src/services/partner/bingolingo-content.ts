@@ -95,7 +95,7 @@ ${keywordList ? `Keywords to incorporate: ${keywordList}` : ""}
 Generate the content now.`;
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     max_completion_tokens: 3000,
     messages: [
       { role: "system", content: systemPrompt },

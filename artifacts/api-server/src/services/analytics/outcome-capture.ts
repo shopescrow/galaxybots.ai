@@ -33,7 +33,7 @@ async function scorePromptQuality(
 ): Promise<number> {
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 60,
       messages: [
         {
@@ -135,7 +135,7 @@ export async function captureSessionOutcome(
   let outcomeSummary = "";
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       max_completion_tokens: 200,
       messages: [
         {

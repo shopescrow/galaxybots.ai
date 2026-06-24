@@ -128,6 +128,6 @@ export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   qualityThreshold: 0.7,
   enableSelfEvaluation: true,
   enableBrowserAgent: false,
-  model: "gpt-4o-mini",
+  model: "gpt-5-mini",
   networkAllowList: [],
 };
