@@ -9,6 +9,7 @@ export const llmUsageLogTable = pgTable("llm_usage_log", {
   sessionId: integer("session_id"),
   conversationId: integer("conversation_id"),
   model: text("model").notNull(),
+  modelTier: text("model_tier"),
   promptTokens: integer("prompt_tokens").notNull().default(0),
   completionTokens: integer("completion_tokens").notNull().default(0),
   estimatedCostUsd: numeric("estimated_cost_usd").notNull().default("0"),

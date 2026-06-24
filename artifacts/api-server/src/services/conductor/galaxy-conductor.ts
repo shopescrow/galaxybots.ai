@@ -1,7 +1,7 @@
 import { db, conductorStrategiesTable } from "@workspace/db";
 import { eq, and, avg, sql } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
 import type { CommunicationStrategy, ConductorMeta } from "@workspace/db";
+import { callWithFallback, ModelTier } from "../../services/ai-safety/model-fallback.js";
 
 export const CONDUCTOR_TASK_CATEGORIES = [
   "research",
@@ -130,17 +130,24 @@ Return a JSON object with exactly:
 }`;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const result = await callWithFallback({
       model: "gpt-4o-mini",
-      max_completion_tokens: 200,
       messages: [
         { role: "system", content: "You are GalaxyConductor. Return only valid JSON." },
         { role: "user", content: prompt },
       ],
-      response_format: { type: "json_object" },
+      maxCompletionTokens: 200,
+      preferredTier: ModelTier.LOCAL,
     });
 
-    const raw = completion.choices[0]?.message?.content ?? "{}";
+    let raw = result.completion.choices[0]?.message?.content ?? "{}";
+
+    raw = raw.trim();
+    if (raw.startsWith("```json")) raw = raw.slice(7);
+    if (raw.startsWith("```")) raw = raw.slice(3);
+    if (raw.endsWith("```")) raw = raw.slice(0, -3);
+    raw = raw.trim();
+
     const parsed = JSON.parse(raw) as { strategy?: string; rationale?: string };
 
     const validStrategies: CommunicationStrategy[] = [

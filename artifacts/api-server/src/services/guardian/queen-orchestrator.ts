@@ -432,8 +432,36 @@ async function rehydratePatrolJobs(): Promise<void> {
   }
 }
 
+async function checkOllamaHealthAndAlert(): Promise<void> {
+  try {
+    const { checkOllamaHealth, getOllamaConfig } = await import("../../agent-core/adapters/ollama-adapter.js");
+    const config = getOllamaConfig();
+    if (!config.enabled) return;
+
+    const healthy = await checkOllamaHealth();
+    if (!healthy) {
+      console.warn("[GuardianQueen] Ollama health check failed — local model tier degraded, falling back to EFFICIENT tier");
+      await db.insert(guardianIncidentsTable).values({
+        title: "Local Model Router (Ollama) Unreachable",
+        description: `The Ollama local model server at ${config.host} is not responding. Coordinator and conductor calls are falling back to the EFFICIENT cloud tier. To restore local routing, ensure Ollama is running with the ${config.model} model loaded.`,
+        domain: "ai_infrastructure",
+        severity: 35,
+        blastRadius: 20,
+        status: "open",
+        affectedComponent: "ollama_adapter",
+        errorFingerprint: "ollama_health_check_failed",
+        recurrenceRate: 0,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("[GuardianQueen] Ollama health check error:", err);
+  }
+}
+
 export async function startQueenSwarmLoop(): Promise<void> {
   if (swarmLoopInterval) return;
+
+  checkOllamaHealthAndAlert().catch(() => {});
 
   const { mode } = await getQueenState();
   if (mode === "shutdown") {

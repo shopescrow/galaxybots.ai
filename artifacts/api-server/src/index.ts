@@ -14,6 +14,7 @@ import { seedPlaybooks } from "./services/missions/seed-playbooks";
 import { seedApiVersioningChangelog } from "./services/platform/seed-changelog";
 import { seedAgiBlogPost } from "./services/platform/seed-blog-agi-post";
 import { startQueenSwarmLoop } from "./services/guardian/queen-orchestrator";
+import { loadOllamaConfigFromDb } from "./routes/admin/ollama";
 import { seedGuardianQueenBot } from "./services/guardian/seed-guardian-queen-bot";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -112,6 +113,25 @@ const EXPECTED_TABLES = [
   "crm_sync_runs",
   "crm_sync_changes",
 ];
+
+async function ensureOllamaTables() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "ollama_config" (
+        "id" serial PRIMARY KEY,
+        "enabled" boolean NOT NULL DEFAULT true,
+        "model" text NOT NULL DEFAULT 'llama3.2:3b',
+        "host" text NOT NULL DEFAULT 'localhost:11434',
+        "updated_at" timestamp with time zone NOT NULL DEFAULT now()
+      );
+      ALTER TABLE "llm_usage_log" ADD COLUMN IF NOT EXISTS "model_tier" text;
+    `);
+    console.log("[startup] Ollama tables ensured");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[startup] ensureOllamaTables failed: ${msg}`);
+  }
+}
 
 async function ensureCrmTables() {
   // Idempotent DDL for Task #112 CRM tables. Mirrors lib/db/migrations/0027_add_crm_blueprints.sql.
@@ -401,6 +421,7 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
 
 const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
+  await ensureOllamaTables();
   await ensureCrmTables();
   await validateDatabaseTables();
   await ensurePirateMonsterPartnerRegistered();
@@ -433,6 +454,9 @@ const server = app.listen(port, async () => {
   });
   seedGuardianQueenBot().catch((err) => {
     console.error("[GuardianQueen] Bot seeding failed:", err);
+  });
+  loadOllamaConfigFromDb().catch((err) => {
+    console.error("[Ollama] Config load failed:", err);
   });
   startQueenSwarmLoop().catch((err) => {
     console.error("[GuardianQueen] Startup failed:", err);

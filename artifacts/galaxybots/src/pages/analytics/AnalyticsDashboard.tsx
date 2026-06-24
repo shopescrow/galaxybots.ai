@@ -6,6 +6,7 @@ import { StatCard } from "./components/StatCard";
 import { SpendOverTimeChart } from "./components/SpendOverTimeChart";
 import { TokensByModelChart } from "./components/TokensByModelChart";
 import { SpendByModelChart } from "./components/SpendByModelChart";
+import { SpendByTierChart } from "./components/SpendByTierChart";
 import { PipelineHealthChart } from "./components/PipelineHealthChart";
 import { SchedulerHealthPanel } from "./components/SchedulerHealthPanel";
 import { ToolCallFrequencyChart } from "./components/ToolCallFrequencyChart";
@@ -83,8 +84,9 @@ export default function AnalyticsDashboard() {
           <ErrorBoundary><TokensByModelChart tokens={tokens.data} /></ErrorBoundary>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
           <ErrorBoundary><SpendByModelChart spend={spend.data} /></ErrorBoundary>
+          <ErrorBoundary><SpendByTierChart /></ErrorBoundary>
           <ErrorBoundary><PipelineHealthChart pipelines={pipelines.data} /></ErrorBoundary>
           <ErrorBoundary><SchedulerHealthPanel scheduler={scheduler.data} /></ErrorBoundary>
         </div>

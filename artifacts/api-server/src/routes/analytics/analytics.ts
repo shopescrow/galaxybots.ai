@@ -622,4 +622,18 @@ router.get("/analytics/sla-overview", async (req, res): Promise<void> => {
   }
 });
 
+router.get("/analytics/spend-by-tier", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  try {
+    const { getLlmUsageByTier } = await import("../../services/analytics/llm-usage.js");
+    const data = await getLlmUsageByTier(clientId);
+    res.json(data);
+  } catch (err) {
+    console.error("Spend by tier error:", err);
+    res.status(500).json({ error: "Failed to fetch tier spend analytics" });
+  }
+});
+
 export default router;

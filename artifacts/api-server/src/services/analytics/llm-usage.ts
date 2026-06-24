@@ -1,5 +1,6 @@
 import { db, llmUsageLogTable, modelCostsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import type { ModelTier } from "../ai-safety/model-fallback.js";
 
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-5.4": { input: 5 / 1_000_000, output: 15 / 1_000_000 },
@@ -61,9 +62,12 @@ export async function logLlmUsage(params: {
   promptTokens: number;
   completionTokens: number;
   latencyMs: number;
+  modelTier?: ModelTier | null;
 }): Promise<void> {
   await ensureCostCacheLoaded();
-  const cost = estimateCost(params.model, params.promptTokens, params.completionTokens);
+  const cost = params.model === "ollama" || params.modelTier === "local"
+    ? 0
+    : estimateCost(params.model, params.promptTokens, params.completionTokens);
 
   try {
     await db.insert(llmUsageLogTable).values({
@@ -72,6 +76,7 @@ export async function logLlmUsage(params: {
       sessionId: params.sessionId ?? null,
       conversationId: params.conversationId ?? null,
       model: params.model,
+      modelTier: params.modelTier ?? null,
       promptTokens: params.promptTokens,
       completionTokens: params.completionTokens,
       estimatedCostUsd: String(cost),
@@ -111,4 +116,44 @@ export async function getAllModelCosts(): Promise<Array<{ model: string; inputCo
     outputCostPerToken: String(costs.output),
     contextWindow: "128000",
   }));
+}
+
+export async function getLlmUsageByTier(clientId?: number): Promise<{
+  tiers: Array<{ tier: string; callCount: number; totalCostUsd: number; totalTokens: number }>;
+  coordinatorCallCount: number;
+  projectedMonthlySavingsUsd: number;
+}> {
+  try {
+    const tierRows = await db
+      .select({
+        tier: llmUsageLogTable.modelTier,
+        callCount: sql<number>`count(*)`,
+        totalCostUsd: sql<number>`sum(${llmUsageLogTable.estimatedCostUsd}::numeric)`,
+        totalTokens: sql<number>`sum(${llmUsageLogTable.promptTokens} + ${llmUsageLogTable.completionTokens})`,
+      })
+      .from(llmUsageLogTable)
+      .where(clientId != null ? eq(llmUsageLogTable.clientId, clientId) : sql`1=1`)
+      .groupBy(llmUsageLogTable.modelTier);
+
+    const tiers = tierRows.map((r) => ({
+      tier: r.tier ?? "frontier",
+      callCount: Number(r.callCount),
+      totalCostUsd: Number(r.totalCostUsd ?? 0),
+      totalTokens: Number(r.totalTokens ?? 0),
+    }));
+
+    const localTier = tiers.find((t) => t.tier === "local");
+    const coordinatorCallCount = localTier?.callCount ?? 0;
+
+    const frontierTier = tiers.find((t) => t.tier === "frontier") ?? { totalCostUsd: 0, callCount: 0 };
+    const avgFrontierCostPerCall = frontierTier.callCount > 0
+      ? frontierTier.totalCostUsd / frontierTier.callCount
+      : 0.002;
+
+    const projectedMonthlySavingsUsd = coordinatorCallCount * avgFrontierCostPerCall;
+
+    return { tiers, coordinatorCallCount, projectedMonthlySavingsUsd };
+  } catch {
+    return { tiers: [], coordinatorCallCount: 0, projectedMonthlySavingsUsd: 0 };
+  }
 }

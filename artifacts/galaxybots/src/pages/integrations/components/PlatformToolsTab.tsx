@@ -6,6 +6,7 @@ import { PirateMonsterMcpPanel } from "./PirateMonsterMcpPanel";
 import { PirateMonsterPanel } from "./PirateMonsterPanel";
 import { KiloProCard } from "./KiloProCard";
 import { PirateMonsterProspectorCard } from "./PirateMonsterProspectorCard";
+import { OllamaAdminCard } from "./OllamaAdminCard";
 import { API_BASE, type AuditEvent, type ProspectorStats } from "./types";
 
 export function PlatformToolsTab() {
@@ -44,6 +45,7 @@ export function PlatformToolsTab() {
 
   return (
     <div className="space-y-6">
+      <ErrorBoundary><OllamaAdminCard /></ErrorBoundary>
       <ErrorBoundary><BingoLingoPanel /></ErrorBoundary>
       <ErrorBoundary><PirateMonsterOnboardingCard /></ErrorBoundary>
       <ErrorBoundary><PirateMonsterMcpPanel /></ErrorBoundary>

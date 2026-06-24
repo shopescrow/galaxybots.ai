@@ -19,6 +19,21 @@ import { logLlmUsage } from "../analytics/llm-usage";
  * same proxy.
  */
 
+/**
+ * ModelTier defines which cost/capability tier a call should use:
+ *  - LOCAL     : Ollama self-hosted (cost $0). Used for coordinator/conductor reasoning.
+ *  - EFFICIENT : Cheaper cloud models (gpt-4o-mini / claude-haiku). Fallback from LOCAL.
+ *  - FRONTIER  : Best cloud models (gpt-4o / claude-sonnet). Reserved for actual agent work.
+ */
+export enum ModelTier {
+  LOCAL = "local",
+  EFFICIENT = "efficient",
+  FRONTIER = "frontier",
+}
+
+const TIER_EFFICIENT_MODELS = ["gpt-4o-mini", "claude-haiku-4-6"];
+const TIER_FRONTIER_MODELS = ["gpt-4o", "claude-sonnet-4-6"];
+
 export interface CompletionResult {
   choices: Array<{
     message: {
@@ -35,7 +50,7 @@ export interface CompletionResult {
 }
 
 function toCompletionResult(raw: Awaited<ReturnType<typeof openai.chat.completions.create>>): CompletionResult {
-  const obj = raw as Record<string, unknown>;
+  const obj = raw as unknown as Record<string, unknown>;
   const choices = (obj.choices ?? []) as CompletionResult["choices"];
   const usage = obj.usage as CompletionResult["usage"] | undefined;
   return { choices, usage };
@@ -65,12 +80,20 @@ function isRetryableError(err: unknown): boolean {
   return false;
 }
 
+function inferTierForModel(model: string): ModelTier {
+  if (TIER_EFFICIENT_MODELS.some((m) => model.startsWith(m.split("-").slice(0, 2).join("-")))) return ModelTier.EFFICIENT;
+  if (TIER_FRONTIER_MODELS.some((m) => model.startsWith(m.split("-").slice(0, 2).join("-")))) return ModelTier.FRONTIER;
+  if (model.startsWith("gpt-4o-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
+  return ModelTier.FRONTIER;
+}
+
 export interface FallbackCallResult {
   completion: CompletionResult;
   model: string;
   provider: string;
   fallbackUsed: boolean;
   degraded: boolean;
+  tier: ModelTier;
 }
 
 export async function callWithFallback(options: {
@@ -83,7 +106,67 @@ export async function callWithFallback(options: {
   botId?: number;
   sessionId?: number;
   conversationId?: number;
+  preferredTier?: ModelTier;
 }): Promise<FallbackCallResult> {
+  const { preferredTier } = options;
+
+  if (preferredTier === ModelTier.LOCAL) {
+    const { checkOllamaHealth, ollamaAdapter, OLLAMA_CIRCUIT_KEY } = await import("../../agent-core/adapters/ollama-adapter.js");
+    const { isCircuitOpen: cbOpen } = await import("./circuit-breaker.js");
+
+    const localAvailable = !cbOpen(OLLAMA_CIRCUIT_KEY) && await checkOllamaHealth();
+
+    if (localAvailable) {
+      try {
+        const portMessages = options.messages.map((m) => ({
+          role: m.role as "system" | "user" | "assistant" | "tool",
+          content: typeof m.content === "string" ? m.content : (m.content == null ? "" : String(m.content)),
+          ...(("tool_calls" in m && m.tool_calls) ? { tool_calls: m.tool_calls as Array<{ id: string; type: string; function: { name: string; arguments: string } }> } : {}),
+          ...(("tool_call_id" in m && m.tool_call_id) ? { tool_call_id: m.tool_call_id as string } : {}),
+        }));
+
+        const result = await ollamaAdapter.complete({
+          model: options.model,
+          messages: portMessages,
+          maxTokens: options.maxCompletionTokens,
+          tools: options.tools as Array<{ type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }> | undefined,
+          clientId: options.clientId,
+          botId: options.botId,
+          sessionId: options.sessionId,
+          conversationId: options.conversationId,
+        });
+
+        return {
+          completion: {
+            choices: [{
+              message: {
+                content: result.content,
+                tool_calls: result.tool_calls,
+              },
+              finish_reason: "stop",
+            }],
+            usage: { prompt_tokens: result.promptTokens, completion_tokens: result.completionTokens, total_tokens: result.promptTokens + result.completionTokens },
+          },
+          model: result.model,
+          provider: "ollama",
+          fallbackUsed: false,
+          degraded: false,
+          tier: ModelTier.LOCAL,
+        };
+      } catch (err) {
+        const { recordError } = await import("./circuit-breaker.js");
+        recordError(OLLAMA_CIRCUIT_KEY);
+        console.warn("[ModelFallback] LOCAL tier (Ollama) failed, falling back to EFFICIENT:", err instanceof Error ? err.message : err);
+      }
+    } else {
+      console.log("[ModelFallback] LOCAL tier requested but Ollama unavailable — falling back to EFFICIENT tier");
+    }
+
+    const efficientModel = TIER_EFFICIENT_MODELS[0] ?? "gpt-4o-mini";
+    const result = await callWithFallback({ ...options, model: efficientModel, preferredTier: ModelTier.EFFICIENT });
+    return { ...result, fallbackUsed: true, degraded: true, tier: ModelTier.EFFICIENT };
+  }
+
   const chain = FALLBACK_CHAINS[options.model] ?? [options.model];
   let lastError: unknown;
 
@@ -135,6 +218,8 @@ export async function callWithFallback(options: {
       const latencyMs = Date.now() - callStart;
       recordSuccess(provider);
 
+      const tier = preferredTier ?? inferTierForModel(model);
+
       if (completion.usage && options.clientId) {
         logLlmUsage({
           clientId: options.clientId,
@@ -145,6 +230,7 @@ export async function callWithFallback(options: {
           promptTokens: completion.usage.prompt_tokens ?? 0,
           completionTokens: completion.usage.completion_tokens ?? 0,
           latencyMs,
+          modelTier: tier,
         });
       }
 
@@ -154,6 +240,7 @@ export async function callWithFallback(options: {
         provider,
         fallbackUsed: i > 0,
         degraded: false,
+        tier,
       };
     } catch (err) {
       lastError = err;
