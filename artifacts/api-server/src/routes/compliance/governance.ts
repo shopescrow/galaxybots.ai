@@ -9,16 +9,19 @@ import {
   messages,
   taskSessionMessagesTable,
   clientsTable,
+  coordinatorClientSettingsTable,
 } from "@workspace/db";
 import { eq, and, sql, gte } from "drizzle-orm";
 import { requireRole } from "../../middleware/auth";
 import { getAllTools, getTool, type ToolContext } from "../../tools";
 import { SENSITIVE_TOOLS, SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS, READ_ONLY_ANALYST_TOOLS, applyBrandVoiceGuardrails } from "../../services/platform/governance";
 import { resumeAgenticLoop, resumeAgenticLoopWithRejection } from "../../tools/agentic-loop";
+import { execute as executeJointPlan, type JointPlanExecutorInput } from "../../services/coordinator/joint-plan-executor";
 import { sendPushToClient } from "../../services/admin/push-sender";
 import { checkWorkflowTriggers } from "../../services/missions/workflow-engine";
 import { emitActivityEvent } from "../../services/analytics/activity-events";
 import { createNotification } from "../../services/admin/notifications";
+import { getAuditHealth, writeAuditEntry } from "../../services/audit/audit-ledger";
 
 async function persistResumedOutput(
   approval: { conversationId: number | null; sessionId: number | null; botId: number; botName: string | null },
@@ -242,23 +245,90 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
   const approval = claimed;
 
   let toolResult: unknown = null;
-  const tool = getTool(approval.toolName);
-  if (tool) {
-    try {
-      const validated = tool.inputSchema.safeParse(approval.toolInput);
-      if (validated.success) {
-        toolResult = await tool.execute(validated.data, {
+  let resumeResult: { finalContent?: string; error?: string } | null = null;
+
+  if (approval.toolName === "galaxy_mind_strategy") {
+    // ── GalaxyMind Strategy Resume ─────────────────────────────────────────────
+    // The paused execution context stored when the human gate fired contains the
+    // full JointPlanExecutorInput with humanApprovalOverridden=true.  Re-run the
+    // pipeline from scratch (gate is bypassed on second pass) and persist the
+    // resulting content as a conversation/session message.
+    const resumeCtx = approval.pausedLoopContext as Omit<JointPlanExecutorInput, "onProgress"> | null;
+    if (resumeCtx) {
+      try {
+        const planResult = await executeJointPlan({ ...resumeCtx });
+        const finalContent = planResult.content || "(No response generated)";
+        const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, finalContent).catch(() => finalContent);
+        await persistResumedOutput(approval, guardedContent);
+        toolResult = { strategy: planResult.plan.communicationStrategy, agentsUsed: planResult.agentsUsed };
+        resumeResult = { finalContent: guardedContent };
+      } catch (err) {
+        console.error("[governance] Failed to resume GalaxyMind pipeline after approval:", err);
+        toolResult = { error: err instanceof Error ? err.message : "Pipeline resume failed" };
+        resumeResult = { error: "Pipeline resume failed" };
+      }
+    } else {
+      toolResult = { error: "No execution context stored — cannot resume pipeline" };
+      resumeResult = { error: "Missing pausedLoopContext" };
+    }
+  } else {
+    // ── Standard agentic-loop tool approval ────────────────────────────────────
+    const tool = getTool(approval.toolName);
+    if (tool) {
+      try {
+        const validated = tool.inputSchema.safeParse(approval.toolInput);
+        if (validated.success) {
+          toolResult = await tool.execute(validated.data, {
+            clientId: approval.clientId,
+            botId: approval.botId,
+            botName: approval.botName ?? undefined,
+            sessionId: approval.sessionId ?? undefined,
+            conversationId: approval.conversationId ?? undefined,
+          });
+        } else {
+          toolResult = { error: `Invalid input: ${validated.error.message}` };
+        }
+      } catch (err) {
+        toolResult = { error: err instanceof Error ? err.message : "Tool execution failed" };
+      }
+    }
+
+    const pausedCtx = approval.pausedLoopContext as {
+      model: string;
+      maxIterations: number;
+      maxTokens: number;
+      systemPrompt: string;
+      messages: unknown[];
+      remainingIterations: number;
+      toolCallId: string;
+      allToolCallIds?: string[];
+    } | null;
+
+    if (pausedCtx) {
+      try {
+        const toolContext: ToolContext = {
           clientId: approval.clientId,
           botId: approval.botId,
           botName: approval.botName ?? undefined,
           sessionId: approval.sessionId ?? undefined,
           conversationId: approval.conversationId ?? undefined,
+        };
+        const agenticResult = await resumeAgenticLoop({
+          pausedLoopContext: pausedCtx,
+          toolResult,
+          context: toolContext,
         });
-      } else {
-        toolResult = { error: `Invalid input: ${validated.error.message}` };
+        resumeResult = agenticResult;
+
+        if (agenticResult.finalContent) {
+          const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, agenticResult.finalContent);
+          resumeResult.finalContent = guardedContent;
+          await persistResumedOutput(approval, guardedContent);
+        }
+      } catch (err) {
+        console.error("[governance] Failed to resume agentic loop after approval:", err);
+        resumeResult = { error: "Loop resume failed" };
       }
-    } catch (err) {
-      toolResult = { error: err instanceof Error ? err.message : "Tool execution failed" };
     }
   }
 
@@ -268,43 +338,23 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
     .where(eq(pendingApprovalsTable.id, id))
     .returning();
 
-  let resumeResult = null;
-  const pausedCtx = approval.pausedLoopContext as {
-    model: string;
-    maxIterations: number;
-    maxTokens: number;
-    systemPrompt: string;
-    messages: unknown[];
-    remainingIterations: number;
-    toolCallId: string;
-    allToolCallIds?: string[];
-  } | null;
-
-  if (pausedCtx) {
-    try {
-      const toolContext: ToolContext = {
-        clientId: approval.clientId,
-        botId: approval.botId,
-        botName: approval.botName ?? undefined,
-        sessionId: approval.sessionId ?? undefined,
-        conversationId: approval.conversationId ?? undefined,
-      };
-      resumeResult = await resumeAgenticLoop({
-        pausedLoopContext: pausedCtx,
-        toolResult,
-        context: toolContext,
-      });
-
-      if (resumeResult.finalContent) {
-        const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, resumeResult.finalContent);
-        resumeResult.finalContent = guardedContent;
-        await persistResumedOutput(approval, guardedContent);
-      }
-    } catch (err) {
-      console.error("[governance] Failed to resume agentic loop after approval:", err);
-      resumeResult = { error: "Loop resume failed" };
-    }
-  }
+  // Audit the actual human approval action — this is what compliance reports count
+  // as a human oversight intervention (Article 13).
+  writeAuditEntry({
+    clientId: approval.clientId,
+    sessionId: approval.sessionId ? String(approval.sessionId) : null,
+    engine: "coordinator",
+    decisionType: "human_approval_outcome",
+    payload: {
+      outcome: "approved",
+      approvalId: approval.id,
+      toolName: approval.toolName,
+      botId: approval.botId,
+      botName: approval.botName,
+      resolvedBy: req.user!.userId,
+      resolvedAt: new Date().toISOString(),
+    },
+  }).catch(() => {});
 
   emitActivityEvent({
     clientId: approval.clientId,
@@ -431,6 +481,24 @@ router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), a
       resumeResult = { error: "Loop resume failed" };
     }
   }
+
+  // Audit the actual human rejection action — counted in compliance reports.
+  writeAuditEntry({
+    clientId: approval.clientId,
+    sessionId: approval.sessionId ? String(approval.sessionId) : null,
+    engine: "coordinator",
+    decisionType: "human_approval_outcome",
+    payload: {
+      outcome: "rejected",
+      approvalId: approval.id,
+      toolName: approval.toolName,
+      botId: approval.botId,
+      botName: approval.botName,
+      rejectionReason,
+      resolvedBy: req.user!.userId,
+      resolvedAt: new Date().toISOString(),
+    },
+  }).catch(() => {});
 
   emitActivityEvent({
     clientId: approval.clientId,
@@ -747,6 +815,89 @@ router.get("/governance/autonomy-score", requireRole("owner", "admin"), async (r
   const score = totalTasks === 0 ? 100 : Math.round((autonomousTasks / totalTasks) * 100);
 
   res.json({ score, totalTasks, autonomousTasks });
+});
+
+router.get("/governance/ai-trust-settings", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  try {
+    const settings = await db
+      .select()
+      .from(coordinatorClientSettingsTable)
+      .where(
+        and(
+          eq(coordinatorClientSettingsTable.clientId, clientId),
+          eq(coordinatorClientSettingsTable.settingKey, "require_human_approval"),
+        ),
+      )
+      .limit(1);
+
+    const thresholdRow = await db
+      .select()
+      .from(coordinatorClientSettingsTable)
+      .where(
+        and(
+          eq(coordinatorClientSettingsTable.clientId, clientId),
+          eq(coordinatorClientSettingsTable.settingKey, "human_approval_confidence_threshold"),
+        ),
+      )
+      .limit(1);
+
+    res.json({
+      requireHumanApproval: settings[0]?.settingValue === "true",
+      humanApprovalConfidenceThreshold: thresholdRow[0]?.settingValue ? Number(thresholdRow[0].settingValue) : 30,
+    });
+  } catch (err) {
+    console.error("[GovernanceRoutes] ai-trust-settings GET error:", err);
+    res.status(500).json({ error: "Failed to fetch AI trust settings" });
+  }
+});
+
+router.put("/governance/ai-trust-settings", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  const { requireHumanApproval, humanApprovalConfidenceThreshold } = req.body as {
+    requireHumanApproval?: boolean;
+    humanApprovalConfidenceThreshold?: number;
+  };
+
+  try {
+    if (requireHumanApproval !== undefined) {
+      await db
+        .insert(coordinatorClientSettingsTable)
+        .values({
+          clientId,
+          settingKey: "require_human_approval",
+          settingValue: String(!!requireHumanApproval),
+        })
+        .onConflictDoUpdate({
+          target: [coordinatorClientSettingsTable.clientId, coordinatorClientSettingsTable.settingKey],
+          set: { settingValue: String(!!requireHumanApproval), updatedAt: new Date() },
+        });
+    }
+
+    if (humanApprovalConfidenceThreshold !== undefined) {
+      const threshold = Math.max(0, Math.min(100, Number(humanApprovalConfidenceThreshold)));
+      await db
+        .insert(coordinatorClientSettingsTable)
+        .values({
+          clientId,
+          settingKey: "human_approval_confidence_threshold",
+          settingValue: String(threshold),
+        })
+        .onConflictDoUpdate({
+          target: [coordinatorClientSettingsTable.clientId, coordinatorClientSettingsTable.settingKey],
+          set: { settingValue: String(threshold), updatedAt: new Date() },
+        });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[GovernanceRoutes] ai-trust-settings PUT error:", err);
+    res.status(500).json({ error: "Failed to save AI trust settings" });
+  }
+});
+
+router.get("/governance/audit-health", requireRole("owner", "admin"), (_req, res): void => {
+  res.json(getAuditHealth());
 });
 
 export default router;

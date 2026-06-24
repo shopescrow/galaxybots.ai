@@ -90,3 +90,4 @@ export * from "./ollama-config";
 export * from "./belief-intelligence";
 export * from "./intelligence-learning";
 export * from "./intelligence-learning-v2";
+export * from "./galaxy-trust";

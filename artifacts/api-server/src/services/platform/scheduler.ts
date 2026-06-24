@@ -50,6 +50,7 @@ import { runPlatformIntelligenceScore } from "./jobs/platform-intelligence-score
 import { runWeeklyIntelligenceCycles } from "./jobs/run-intelligence-cycle";
 import { runPendingRegressionChecks } from "../intelligence/intelligence-cycle";
 import { computeAndStoreGlobalPriors } from "../intelligence/global-priors";
+import { runMonthlyComplianceReports } from "./jobs/monthly-compliance-report";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -122,6 +123,7 @@ const lowFreqJobs: Job[] = [
   { name: "intelligence-cycle", fn: runWeeklyIntelligenceCycles },
   { name: "regression-checks", fn: runPendingRegressionChecks },
   { name: "global-priors-nightly", fn: async () => { await computeAndStoreGlobalPriors(); } },
+  { name: "monthly-compliance-reports", fn: runMonthlyComplianceReports },
 ];
 
 const running = new Set<string>();

@@ -315,8 +315,54 @@ export default function BotDetail() {
   );
 }
 
+type ConfidenceState = "high" | "medium" | "low";
+
+function GalaxyMindBadge({
+  strategyLabel,
+  confidence,
+  confidenceState,
+  rationale,
+}: {
+  strategyLabel: string;
+  confidence?: number;
+  confidenceState?: ConfidenceState;
+  rationale?: string;
+}) {
+  const isLow = confidenceState === "low" || (confidence !== undefined && confidence < 30);
+  const isMedium = !isLow && (confidenceState === "medium" || (confidence !== undefined && confidence < 60));
+
+  const badgeColor = isLow
+    ? "bg-red-500/20 border-red-500/40 text-red-300"
+    : isMedium
+    ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+    : "bg-violet-500/20 border-violet-500/40 text-violet-300";
+
+  const iconColor = isLow ? "text-red-400" : isMedium ? "text-amber-400" : "text-violet-400";
+
+  const tooltipParts: string[] = [];
+  if (confidence !== undefined) tooltipParts.push(`Confidence: ${confidence}/100`);
+  if (strategyLabel) tooltipParts.push(`Strategy: ${strategyLabel}`);
+  if (rationale) tooltipParts.push(rationale);
+  if (isMedium && confidence !== undefined) tooltipParts.push("Low sample count or model mismatch may affect reliability.");
+  if (isLow && confidence !== undefined) tooltipParts.push("Review recommended before acting on this output.");
+
+  return (
+    <span
+      className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-tech cursor-default", badgeColor)}
+      title={tooltipParts.join(" · ")}
+    >
+      <Sparkles className={cn("w-2.5 h-2.5", iconColor)} />
+      GALAXYMIND · {strategyLabel}
+      {confidence !== undefined && (
+        <span className="opacity-80">{confidence}</span>
+      )}
+      {isLow && <span>⚠</span>}
+    </span>
+  );
+}
+
 function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botName: string }) {
-  const conductorStrategyEvent = events.find(e => e.type === "conductor_strategy") as (AgenticEvent & { strategy?: string; rationale?: string }) | undefined;
+  const conductorStrategyEvent = events.find(e => e.type === "conductor_strategy") as (AgenticEvent & { strategy?: string; rationale?: string; coordinationConfidence?: number; confidenceState?: ConfidenceState }) | undefined;
   const conductorProgressEvents = events.filter(e => e.type === "conductor_progress");
   const isConductorSynthesizing = events.some(e => e.type === "conductor_synthesizing");
   const progressEvents = events.filter(e => e.type === "moa_progress");
@@ -325,36 +371,66 @@ function MoAWorkingIndicator({ events, botName }: { events: AgenticEvent[]; botN
   const completed = (latest as AgenticEvent & { moaIndex?: number })?.moaIndex ?? conductorProgressEvents.length;
   const total = (latest as AgenticEvent & { moaTotal?: number })?.moaTotal ?? 10;
 
+  const confidence = conductorStrategyEvent?.coordinationConfidence;
+  const confidenceState = conductorStrategyEvent?.confidenceState;
+  const isLowConf = confidenceState === "low" || (confidence !== undefined && confidence < 30);
+  const isMedConf = !isLowConf && (confidenceState === "medium" || (confidence !== undefined && confidence < 60));
+
+  const containerColor = isLowConf
+    ? "bg-red-500/10 border-red-500/30"
+    : isMedConf
+    ? "bg-amber-500/10 border-amber-500/30"
+    : "bg-violet-500/10 border-violet-500/30";
+
   if (conductorStrategyEvent || conductorProgressEvents.length > 0 || isConductorSynthesizing) {
     const strategyLabel = conductorStrategyEvent?.strategy
       ? (conductorStrategyEvent.strategy as string).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
       : "Thinking";
     const latestMsg = conductorProgressEvents[conductorProgressEvents.length - 1]?.content ?? conductorStrategyEvent?.content ?? "";
 
+    const iconColor = isLowConf ? "text-red-400" : isMedConf ? "text-amber-400" : "text-violet-400";
+    const labelColor = isLowConf ? "text-red-300" : isMedConf ? "text-amber-300" : "text-violet-300";
+    const subColor = isLowConf ? "text-red-400/70" : isMedConf ? "text-amber-400/70" : "text-violet-400/70";
+    const badgeBorder = isLowConf ? "text-red-400 border-red-500/30" : isMedConf ? "text-amber-400 border-amber-500/30" : "text-violet-400 border-violet-500/30";
+    const barColor = isLowConf ? "bg-red-400" : isMedConf ? "bg-amber-400" : "bg-violet-400";
+    const barBg = isLowConf ? "bg-red-500/20" : isMedConf ? "bg-amber-500/20" : "bg-violet-500/20";
+
     if (isConductorSynthesizing) {
       return (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
-          <Sparkles className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
+        <div className={cn("flex items-center gap-3 px-4 py-3 rounded-xl border", containerColor)}>
+          <Sparkles className={cn("w-4 h-4 animate-pulse shrink-0", iconColor)} />
           <div className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className="text-xs font-tech text-violet-300">GalaxyMind — finalizing response…</span>
-            <div className="w-full bg-violet-500/20 rounded-full h-1">
-              <div className="bg-violet-400 h-1 rounded-full w-full animate-pulse" />
+            <span className={cn("text-xs font-tech", labelColor)}>GalaxyMind — finalizing response…</span>
+            <div className={cn("w-full rounded-full h-1", barBg)}>
+              <div className={cn("h-1 rounded-full w-full animate-pulse", barColor)} />
             </div>
           </div>
-          <span className="text-[10px] font-tech text-violet-400 shrink-0 border border-violet-500/30 px-1 rounded">{strategyLabel}</span>
+          <span className={cn("text-[10px] font-tech shrink-0 border px-1 rounded", badgeBorder)}>{strategyLabel}</span>
         </div>
       );
     }
 
     return (
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
-        <Brain className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
+      <div className={cn("flex items-center gap-3 px-4 py-3 rounded-xl border", containerColor)}>
+        <Brain className={cn("w-4 h-4 animate-pulse shrink-0", iconColor)} />
         <div className="flex flex-col gap-0.5 flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-tech text-violet-300">GalaxyMind</span>
-            <span className="text-[10px] font-tech text-violet-400 border border-violet-500/30 px-1 rounded">{strategyLabel}</span>
+            <span className={cn("text-xs font-tech", labelColor)}>GalaxyMind</span>
+            <span className={cn("text-[10px] font-tech border px-1 rounded", badgeBorder)}>{strategyLabel}</span>
+            {confidence !== undefined && (
+              <span className={cn("text-[10px] font-tech", subColor)}>
+                {isLowConf ? "⚠ Review recommended" : isMedConf ? `⚠ Low confidence (${confidence}/100)` : `${confidence}/100`}
+              </span>
+            )}
           </div>
-          <span className="text-xs text-violet-400/70 truncate">{latestMsg}</span>
+          {isMedConf && (
+            <span className={cn("text-xs truncate", subColor)}>
+              Consider reviewing this output before acting on it.
+            </span>
+          )}
+          {!isMedConf && !isLowConf && latestMsg && (
+            <span className={cn("text-xs truncate", subColor)}>{latestMsg}</span>
+          )}
         </div>
       </div>
     );
@@ -461,6 +537,37 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
     e.type === "conductor_strategy" || e.type === "conductor_progress" || e.type === "conductor_synthesizing"
   );
 
+  const humanApprovalEvent = streamEvents.find(e => e.type === "human_approval_required") as
+    (AgenticEvent & { pendingApprovalId?: number | null; confidenceScore?: number; strategy?: string }) | undefined;
+
+  const [approvalAction, setApprovalAction] = useState<"approving" | "rejecting" | "done" | null>(null);
+
+  const handleApproveStrategy = async () => {
+    if (!humanApprovalEvent?.pendingApprovalId || approvalAction) return;
+    setApprovalAction("approving");
+    try {
+      await fetch(`${API_BASE}/v1/governance/approvals/${humanApprovalEvent.pendingApprovalId}/approve`, {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      setApprovalAction("done");
+    } catch {
+      setApprovalAction(null);
+    }
+  };
+
+  const handleRejectStrategy = async () => {
+    if (!humanApprovalEvent?.pendingApprovalId || approvalAction) return;
+    setApprovalAction("rejecting");
+    try {
+      await fetch(`${API_BASE}/v1/governance/approvals/${humanApprovalEvent.pendingApprovalId}/reject`, {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "Rejected by owner in bot console" }),
+      });
+      setApprovalAction("done");
+    } catch {
+      setApprovalAction(null);
+    }
+  };
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -558,13 +665,12 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
                         </span>
                       )}
                       {hasConductor && (
-                        <span
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-500/40 text-violet-300 text-[10px] font-tech cursor-default"
-                          title={conductorData?.rationale ?? ""}
-                        >
-                          <Sparkles className="w-2.5 h-2.5" />
-                          GALAXYMIND · {strategyLabel}
-                        </span>
+                        <GalaxyMindBadge
+                          strategyLabel={strategyLabel ?? ""}
+                          confidence={(conductorData as { coordinationConfidence?: number } | null | undefined)?.coordinationConfidence}
+                          confidenceState={(conductorData as { confidenceState?: ConfidenceState } | null | undefined)?.confidenceState}
+                          rationale={conductorData?.rationale ?? ""}
+                        />
                       )}
                     </div>
                     <div className={cn(
@@ -599,6 +705,40 @@ function ChatInterface({ conversationId, botName, botId, botAvatar, canUseMoA, i
               </div>
             );
           })
+        )}
+
+        {humanApprovalEvent && approvalAction !== "done" && (
+          <div className="mx-4 mb-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
+            <div className="flex items-start gap-3">
+              <Shield className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-tech text-amber-300 font-semibold mb-0.5">GalaxyMind — Human Approval Required</p>
+                <p className="text-xs text-amber-300/70">
+                  Confidence {humanApprovalEvent.confidenceScore ?? "—"}/100 is below threshold.
+                  Strategy: <span className="font-tech">{(humanApprovalEvent.strategy ?? "").replace(/_/g, " ")}</span>.
+                  Approve to continue execution or reject to cancel.
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleApproveStrategy}
+                  disabled={!!approvalAction}
+                  className="px-2.5 py-1 text-xs font-tech rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
+                >
+                  {approvalAction === "approving" ? <Loader2 className="w-3 h-3 animate-spin" /> : "Approve"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRejectStrategy}
+                  disabled={!!approvalAction}
+                  className="px-2.5 py-1 text-xs font-tech rounded-md bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                >
+                  {approvalAction === "rejecting" ? <Loader2 className="w-3 h-3 animate-spin" /> : "Reject"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {isStreaming && (

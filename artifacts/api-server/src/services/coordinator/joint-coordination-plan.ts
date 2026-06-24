@@ -19,6 +19,15 @@ export interface JointCoordinationPlan {
   taskDescription: string;
   timestamp: number;
   reconciled: boolean;
+  coordinationConfidence?: number;
+  confidenceBreakdown?: {
+    sampleConfidence: number;
+    versionConfidence: number;
+    beliefConfidence: number;
+    minSampleCount: number;
+    modelVersionMatch: boolean;
+    beliefSuppressionCount: number;
+  };
 }
 
 export interface SessionContext {

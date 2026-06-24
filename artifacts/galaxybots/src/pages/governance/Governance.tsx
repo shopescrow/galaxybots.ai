@@ -14,7 +14,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Shield, Lock, Unlock, AlertTriangle, CheckCircle, XCircle,
-  Loader2, Save, Plus, Trash2, Copy, Bot, Megaphone
+  Loader2, Save, Plus, Trash2, Copy, Bot, Megaphone, Brain
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -45,16 +45,18 @@ export default function Governance() {
   const { user } = useAuth();
   const isAuthorized = user?.role === "owner" || user?.role === "admin";
 
+  const VALID_TABS = ["permissions", "approvals", "brand-voice", "templates", "ai-trust"];
+
   const [activeTab, setActiveTab] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    return tab && ["permissions", "approvals", "brand-voice", "templates"].includes(tab) ? tab : "permissions";
+    return tab && VALID_TABS.includes(tab) ? tab : "permissions";
   });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    if (tab && ["permissions", "approvals", "brand-voice", "templates"].includes(tab)) {
+    if (tab && VALID_TABS.includes(tab)) {
       setActiveTab(tab);
     }
   }, [window.location.search]);
@@ -88,12 +90,16 @@ export default function Governance() {
           <TabsTrigger value="templates" className="data-[state=active]:bg-blue-600">
             <Copy className="w-4 h-4 mr-2" />Templates
           </TabsTrigger>
+          <TabsTrigger value="ai-trust" className="data-[state=active]:bg-blue-600">
+            <Brain className="w-4 h-4 mr-2" />AI Trust
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="permissions"><PermissionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalsTab /></TabsContent>
         <TabsContent value="brand-voice"><BrandVoiceTab /></TabsContent>
         <TabsContent value="templates"><TemplatesTab /></TabsContent>
+        <TabsContent value="ai-trust"><AiTrustTab /></TabsContent>
       </Tabs>
     </AppLayout>
   );
@@ -645,6 +651,182 @@ function TemplatesTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function AiTrustTab() {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["ai-trust-settings"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/v1/governance/ai-trust-settings`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load AI trust settings");
+      return res.json() as Promise<{ requireHumanApproval: boolean; humanApprovalConfidenceThreshold: number }>;
+    },
+  });
+
+  const [requireHumanApproval, setRequireHumanApproval] = useState<boolean>(false);
+  const [threshold, setThreshold] = useState<number>(30);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setRequireHumanApproval(data.requireHumanApproval);
+      setThreshold(data.humanApprovalConfidenceThreshold);
+    }
+  }, [data]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/v1/governance/ai-trust-settings`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requireHumanApproval, humanApprovalConfidenceThreshold: threshold }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-trust-settings"] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="bg-slate-800/50 border-slate-700/50">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Brain className="w-5 h-5 text-blue-400" />
+            GalaxyMind Human Agency Gate
+          </CardTitle>
+          <CardDescription className="text-slate-400">
+            Control when GalaxyMind AI orchestration requires human approval before executing strategy decisions.
+            These settings apply to all MoA (Mixture-of-Agents) and multi-bot coordination sessions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg border border-slate-600/50">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-white">Require Human Approval</p>
+              <p className="text-xs text-slate-400">
+                When enabled, strategy decisions below the confidence threshold require human approval before
+                execution. The slider below sets the threshold. When the toggle is off, low confidence surfaces
+                as a warning in the GalaxyMind badge only — execution is never halted.
+              </p>
+            </div>
+            <button
+              onClick={() => setRequireHumanApproval((v) => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                requireHumanApproval ? "bg-blue-600" : "bg-slate-600"
+              }`}
+              role="switch"
+              aria-checked={requireHumanApproval}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  requireHumanApproval ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-white">Confidence Threshold for Auto-Approval</p>
+                <p className="text-xs text-slate-400">
+                  When "Require Human Approval" is off, strategies scoring below this confidence threshold will still
+                  surface a warning badge. Range: 0–100.
+                </p>
+              </div>
+              <span className="text-lg font-bold text-blue-400 w-12 text-right">{threshold}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={threshold}
+              onChange={(e) => setThreshold(Number(e.target.value))}
+              className="w-full accent-blue-500"
+            />
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>0 — never warn</span>
+              <span>50 — balanced</span>
+              <span>100 — always warn</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-blue-950/30 border border-blue-700/30 rounded-lg text-xs text-blue-300 space-y-1">
+            <p className="font-medium text-blue-200">How the GalaxyMind Badge works</p>
+            <p>🟢 <strong>Green</strong> — Confidence ≥ threshold. Strategy auto-approved. Low risk.</p>
+            <p>🟡 <strong>Amber</strong> — Confidence below threshold or human approval required. Awaiting confirmation.</p>
+            <p>🔴 <strong>Red</strong> — Circuit breaker open or budget guard triggered. Orchestration halted.</p>
+          </div>
+        </CardContent>
+        <CardFooter className="border-t border-slate-700/50 pt-4">
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : saved ? (
+              <CheckCircle className="w-4 h-4 mr-2 text-green-400" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            {saved ? "Saved!" : "Save Settings"}
+          </Button>
+          {saveMutation.isError && (
+            <p className="ml-4 text-sm text-red-400">Failed to save — please try again.</p>
+          )}
+        </CardFooter>
+      </Card>
+
+      <Card className="bg-slate-800/50 border-slate-700/50">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Shield className="w-5 h-5 text-emerald-400" />
+            EU AI Act Compliance (Article 13)
+          </CardTitle>
+          <CardDescription className="text-slate-400">
+            GalaxyBots.ai generates monthly transparency reports for all AI-orchestrated sessions,
+            covering human override rates, LLM cost, and confidence distributions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-slate-300">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <span>Monthly reports auto-generated on the 1st of each month for the prior month</span>
+          </div>
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <span>Immutable audit ledger with SHA-256 chain hashes on every orchestration event</span>
+          </div>
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <span>Reports available via API: <code className="bg-slate-700 px-1 rounded text-blue-300">GET /api/v1/audit/compliance-report?month=YYYY-MM</code></span>
+          </div>
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <span>Ledger export: <code className="bg-slate-700 px-1 rounded text-blue-300">GET /api/v1/audit/ledger?format=csv</code> for auditor download</span>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
