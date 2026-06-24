@@ -40,6 +40,13 @@ import { runAlignmentPatternExtraction } from "./jobs/alignment-pattern-extracti
 import { runExperimentMeasurement } from "./jobs/experiment-measurement";
 import { runAlignmentHarvester } from "./jobs/alignment-harvester";
 import { runCommunicationStyleAdaptation } from "./jobs/communication-style";
+import { runCrossClientCausalAggregation } from "./jobs/cross-client-causal-aggregation";
+import { runRoleSpecializationEngine } from "./jobs/role-specialization-engine";
+import { runNovelRoleDiscovery } from "./jobs/novel-role-discovery";
+import { runOracleReportGenerator } from "./jobs/oracle-report-generator";
+import { runConsequenceModelTrainer } from "./jobs/consequence-model-trainer";
+import { runCollectiveAnomalyDetection } from "./jobs/collective-anomaly-detection";
+import { runPlatformIntelligenceScore } from "./jobs/platform-intelligence-score";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -102,6 +109,13 @@ const lowFreqJobs: Job[] = [
   { name: "communication-style-adaptation", fn: runCommunicationStyleAdaptation },
   { name: "alignment-pattern-extraction", fn: runAlignmentPatternExtraction },
   { name: "experiment-measurement", fn: runExperimentMeasurement },
+  { name: "cross-client-causal-aggregation", fn: runCrossClientCausalAggregation },
+  { name: "role-specialization-engine", fn: runRoleSpecializationEngine },
+  { name: "novel-role-discovery", fn: runNovelRoleDiscovery },
+  { name: "oracle-report-generator", fn: runOracleReportGenerator },
+  { name: "consequence-model-trainer", fn: runConsequenceModelTrainer },
+  { name: "collective-anomaly-detection", fn: runCollectiveAnomalyDetection },
+  { name: "platform-intelligence-score", fn: runPlatformIntelligenceScore },
 ];
 
 const running = new Set<string>();

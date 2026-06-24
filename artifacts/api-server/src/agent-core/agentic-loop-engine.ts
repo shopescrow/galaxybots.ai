@@ -8,6 +8,10 @@ import { callWithFallback } from "../services/ai-safety/model-fallback.js";
 import { logLlmUsage } from "../services/analytics/llm-usage.js";
 import { checkCostCapAlerts } from "../services/analytics/cost-caps.js";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/platform/governance.js";
+import { checkConsequenceRisk, isNonIdempotentTool, getToolContextType, CONSEQUENCE_RISK_THRESHOLD } from "../services/platform/consequence-gate.js";
+import { getClientPlatformPriorText } from "../services/platform/jobs/cross-client-causal-aggregation.js";
+import { db, botVariantAssignmentsTable, botsTable, promptVersionsTable } from "@workspace/db";
+import { eq, and as drizzleAnd, desc, sql } from "drizzle-orm";
 import { isToolSandboxed, getSandboxedToolResponse } from "../services/platform/demo-sandbox.js";
 import {
   Confidence, Cost, Duration,
@@ -301,6 +305,70 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
     resolvedSystemPrompt = shadowResult.prompt;
     shadowPromptVersionId = shadowResult.promptVersionId;
     servingShadow = shadowResult.isShadow;
+  }
+
+  // ── Role variant assignment at execution time ───────────────────────────────
+  // Assign this session to the A/B variant for the bot's role at session start
+  // (not inferred post-hoc) so the challenger config is actually served to
+  // 20% of sessions. Stored in loopTrace.roleVariantLabel for evaluation.
+  let roleVariantLabel: "A" | "B" | null = null;
+  if (context.botId && context.sessionId) {
+    try {
+      const [botRow] = await db
+        .select({ title: botsTable.title })
+        .from(botsTable)
+        .where(eq(botsTable.id, context.botId))
+        .limit(1);
+
+      if (botRow?.title) {
+        // Include champion_declared so that after a champion is promoted it continues
+        // to serve traffic at its declared 100%/0% weights. Active = running A/B test;
+        // champion_declared = competition concluded, winner serves 100% going forward.
+        const [assignment] = await db
+          .select()
+          .from(botVariantAssignmentsTable)
+          .where(
+            drizzleAnd(
+              eq(botVariantAssignmentsTable.botRole, botRow.title),
+              sql`${botVariantAssignmentsTable.status} IN ('active', 'champion_declared')`,
+            ),
+          )
+          .orderBy(desc(botVariantAssignmentsTable.updatedAt))
+          .limit(1);
+
+        if (assignment) {
+          const weightA = assignment.assignmentWeightA ?? 0.8;
+          const hash = ((context.sessionId * 2654435761) >>> 0) % 10000;
+          roleVariantLabel = hash < Math.round(weightA * 10000) ? "A" : "B";
+
+          // If challenger (B) has a distinct config and shadow isn't already overriding → serve it.
+          // When B is champion (assignmentWeightB=1.0, assignmentWeightA=0.0), all traffic
+          // routes here and variant B prompt is served 100% of the time.
+          if (roleVariantLabel === "B" && assignment.variantBConfigId && !servingShadow) {
+            const [challengerVersion] = await db
+              .select({ promptText: promptVersionsTable.promptText })
+              .from(promptVersionsTable)
+              .where(eq(promptVersionsTable.id, assignment.variantBConfigId))
+              .limit(1);
+            if (challengerVersion?.promptText) {
+              resolvedSystemPrompt = challengerVersion.promptText;
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-fatal: fall through with roleVariantLabel = null
+    }
+  }
+
+  // ── Platform causal prior injection ────────────────────────────────────────
+  // Appended AFTER variant assignment so priors are added to whichever prompt
+  // variant (control or challenger) is being served. This ensures both A and B
+  // arms benefit equally from collective-intelligence injection and the A/B
+  // evaluation measures role specialization independent of prior quality.
+  if (context.clientId) {
+    const priorText = await getClientPlatformPriorText(context.clientId).catch(() => "");
+    if (priorText) resolvedSystemPrompt = resolvedSystemPrompt + priorText;
   }
 
   const loopMessages: ChatCompletionMessageParam[] = [
@@ -612,6 +680,7 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
         totalCost, startMs, iteration: iteration + 1,
         terminationReason, finalContent,
         sessionStore: resolvedSessionStore,
+        roleVariantLabel,
       });
       if (resolvedMemoryStore && context.sessionId && finalContent) {
         await resolvedMemoryStore.store(context.sessionId as number, [
@@ -684,9 +753,83 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
             terminationReason: "pending_approval",
             finalContent: pauseMsg,
             sessionStore: resolvedSessionStore,
+            roleVariantLabel,
           });
 
           return { finalContent: pauseMsg, events, paused: true, pendingApprovalId: approvalId, pausedToolName: toolName, totalTokensConsumed: cumulativeTokens };
+        }
+
+        // ── Consequence-grounded alignment gate ─────────────────────────────
+        // Query the trained consequence risk classifier before executing any
+        // non-idempotent (write) tool. Block and route to Pending Approvals if
+        // predicted harm probability ≥ 70% with ≥ 5 evidence records.
+        // Fails open (allows) on cold-start or lookup errors.
+        if (!needsApproval && isNonIdempotentTool(toolName) && !(governanceMode === "observe_only")) {
+          // Derive context type from tool name for action-hash-based lookup
+          const toolContextType = getToolContextType(toolName);
+          // Pass per-bot quality threshold so stricter/looser bots can tune the gate.
+          // config.qualityThreshold is set per-bot in botLoopConfig (default 0.7).
+          const botRiskThreshold = config.qualityThreshold ?? CONSEQUENCE_RISK_THRESHOLD;
+          const consequenceRisk = await checkConsequenceRisk(toolName, context.clientId, toolContextType, botRiskThreshold).catch(() => null);
+          if (consequenceRisk?.blocked) {
+            loopMessages.push({
+              role: "assistant",
+              content: normalized.content,
+              tool_calls: normalized.tool_calls as OpenAI.ChatCompletionMessageToolCall[],
+            });
+
+            const approvalId = await createPendingApproval({
+              clientId: context.clientId,
+              botId: context.botId,
+              botName: context.botName,
+              toolName,
+              toolInput: parsedArgs,
+              sessionId: context.sessionId,
+              conversationId: context.conversationId,
+              pausedLoopContext: {
+                model: config.model,
+                maxIterations: config.maxIterations,
+                maxTokens,
+                systemPrompt,
+                messages: loopMessages,
+                remainingIterations: config.maxIterations - iteration - 1,
+                toolCallId: toolCall.id,
+                allToolCallIds: normalized.tool_calls!.map((tc) => tc.id),
+              },
+            });
+
+            // Build evidence summary from top harmful outcome examples stored with the risk score
+            const evidenceSummary = consequenceRisk.topEvidenceExamples.length > 0
+              ? "\n\nSupporting evidence:\n" + consequenceRisk.topEvidenceExamples
+                  .map((e) => `  • ${e.toolName} → ${e.outcomeType} (harm: ${e.harmLabel}, effect: ${e.effectSize > 0 ? "+" : ""}${e.effectSize.toFixed(2)}, N=${e.clientCount})`)
+                  .join("\n")
+              : "";
+
+            const consequenceEv: AgenticEvent = {
+              type: "tool_pending_approval",
+              toolName,
+              toolCallId: toolCall.id,
+              approvalId,
+              content: `Tool "${toolName}" gated by consequence model. Approval request #${approvalId} created. Risk: ${(consequenceRisk.riskScore * 100).toFixed(0)}%.${evidenceSummary}`,
+              botId: context.botId,
+              botName: context.botName,
+              iteration,
+            };
+            const pauseMsg = `I was about to use "${toolName}", but the consequence model predicts a ${(consequenceRisk.riskScore * 100).toFixed(0)}% harm probability based on ${consequenceRisk.evidenceCount} past outcomes.${evidenceSummary}\n\nApproval request #${approvalId} has been created for owner review.`;
+            const pauseEv: AgenticEvent = { type: "message", content: pauseMsg, botId: context.botId, botName: context.botName, iteration };
+            events.push(consequenceEv, pauseEv); emit(consequenceEv); emit(pauseEv);
+
+            await persistTrace({
+              context, thoughts, actions, observations, evaluations,
+              totalCost, startMs, iteration: iteration + 1,
+              terminationReason: "pending_approval",
+              finalContent: pauseMsg,
+              sessionStore: resolvedSessionStore,
+              roleVariantLabel,
+            });
+
+            return { finalContent: pauseMsg, events, paused: true, pendingApprovalId: approvalId, pausedToolName: toolName, totalTokensConsumed: cumulativeTokens };
+          }
         }
       }
     }
@@ -833,6 +976,7 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
       totalCost, startMs, iteration: completedIterations,
       terminationReason, finalContent,
       sessionStore: resolvedSessionStore,
+      roleVariantLabel,
     });
   }
 
@@ -891,8 +1035,10 @@ async function persistTrace(opts: {
   terminationReason: string;
   finalContent: string;
   sessionStore: SessionStore;
+  /** Which A/B role variant was served to this session (null = no active experiment) */
+  roleVariantLabel?: "A" | "B" | null;
 }): Promise<void> {
-  const trace: LoopTrace = {
+  const trace: LoopTrace & { roleVariantLabel?: "A" | "B" | null } = {
     botId: opts.context.botId,
     botName: opts.context.botName,
     clientId: opts.context.clientId,
@@ -908,6 +1054,9 @@ async function persistTrace(opts: {
     totalCostCents: opts.totalCost.cents,
     terminationReason: opts.terminationReason,
     finalContent: opts.finalContent.slice(0, 500),
+    // Stored at session start so the role specialization engine reads actual
+    // assigned labels rather than recomputing the hash retroactively.
+    roleVariantLabel: opts.roleVariantLabel ?? null,
   };
 
   if (opts.context.sessionId) {

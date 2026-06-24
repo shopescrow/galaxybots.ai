@@ -1,0 +1,3816 @@
+import { pgTable, serial, integer, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+
+export const activationEmailsTable = pgTable("activation_emails", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  emailType: text("email_type").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+}, (t) => ({
+  uniqueUserEmailType: uniqueIndex("activation_emails_user_email_type_unique").on(t.userId, t.emailType),
+}));
+
+export type ActivationEmail = typeof activationEmailsTable.$inferSelect;
+import { pgTable, serial, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+
+export const aeoRecommendationCacheTable = pgTable("aeo_recommendation_cache", {
+  id: serial("id").primaryKey(),
+  url: text("url").notNull(),
+  cacheType: text("cache_type").notNull(),
+  resultJson: jsonb("result_json").notNull(),
+  cachedAt: timestamp("cached_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("aeo_recommendation_cache_url_type_idx").on(table.url, table.cacheType),
+  index("aeo_recommendation_cache_cached_at_idx").on(table.cachedAt),
+]);
+
+export type AeoRecommendationCache = typeof aeoRecommendationCacheTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { platformApiKeysTable } from "./platform-api-keys";
+import { aeoScoresTable } from "./aeo-scores";
+
+export const aeoScanRequestsTable = pgTable("aeo_scan_requests", {
+  id: serial("id").primaryKey(),
+  partnerKeyId: integer("partner_key_id").notNull().references(() => platformApiKeysTable.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  status: text("status").notNull().default("queued"),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  scoreId: integer("score_id").references(() => aeoScoresTable.id, { onDelete: "set null" }),
+}, (table) => [
+  index("aeo_scan_requests_partner_key_id_idx").on(table.partnerKeyId),
+  index("aeo_scan_requests_status_idx").on(table.status),
+  index("aeo_scan_requests_url_idx").on(table.url),
+]);
+
+export type AeoScanRequest = typeof aeoScanRequestsTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+import { bingolingoContentTable } from "./bingolingo";
+
+export const aeoScoresTable = pgTable("aeo_scores", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  bingolingoContentId: integer("bingolingo_content_id").references(() => bingolingoContentTable.id, { onDelete: "set null" }),
+  sourceUrl: text("source_url").notNull(),
+  overallScore: integer("overall_score").notNull(),
+  engineScores: jsonb("engine_scores").notNull().$type<Record<string, { score: number; cited: boolean }>>(),
+  citationCount: integer("citation_count").notNull().default(0),
+  recommendations: jsonb("recommendations").notNull().$type<string[]>(),
+  scanType: text("scan_type").notNull().default("client"),
+  scannedAt: timestamp("scanned_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("aeo_scores_source_url_scanned_at_idx").on(table.sourceUrl, table.scannedAt),
+  index("aeo_scores_bingolingo_content_id_idx").on(table.bingolingoContentId),
+]);
+
+export type AeoScore = typeof aeoScoresTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { platformApiKeysTable } from "./platform-api-keys";
+
+export const aeoWebhooksTable = pgTable("aeo_webhooks", {
+  id: serial("id").primaryKey(),
+  partnerKeyId: integer("partner_key_id").notNull().references(() => platformApiKeysTable.id, { onDelete: "cascade" }),
+  targetUrl: text("target_url").notNull(),
+  eventTypes: jsonb("event_types").notNull().$type<string[]>(),
+  secretHash: text("secret_hash"),
+  status: text("status").notNull().default("active"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  lastDeliveredAt: timestamp("last_delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("aeo_webhooks_partner_key_id_idx").on(table.partnerKeyId),
+  index("aeo_webhooks_status_idx").on(table.status),
+]);
+
+export type AeoWebhook = typeof aeoWebhooksTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb, numeric, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
+
+export const botLoopConfigTable = pgTable("bot_loop_config", {
+  id: serial("id").primaryKey(),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  maxIterations: integer("max_iterations").notNull().default(10),
+  timeBudgetMs: integer("time_budget_ms").notNull().default(120000),
+  costBudgetCents: integer("cost_budget_cents").notNull().default(500),
+  qualityThreshold: numeric("quality_threshold").notNull().default("0.7"),
+  enableSelfEvaluation: boolean("enable_self_evaluation").notNull().default(true),
+  enableBrowserAgent: boolean("enable_browser_agent").notNull().default(false),
+  model: text("model").notNull().default("gpt-4o-mini"),
+  fallbackModel: text("fallback_model"),
+  networkAllowList: text("network_allow_list").array().default([]),
+  autoApproveGoalImpactThreshold: integer("auto_approve_goal_impact_threshold").notNull().default(40),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const botFailureLogTable = pgTable("bot_failure_log", {
+  id: serial("id").primaryKey(),
+  botId: integer("bot_id").references(() => botsTable.id, { onDelete: "set null" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  sessionId: integer("session_id"),
+  conversationId: integer("conversation_id"),
+  failureCategory: text("failure_category").notNull(),
+  failureDetail: text("failure_detail").notNull(),
+  userInput: text("user_input"),
+  lastThought: text("last_thought"),
+  iterationsCompleted: integer("iterations_completed").notNull().default(0),
+  costCents: integer("cost_cents").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  toolsAttempted: text("tools_attempted").array().default([]),
+  traceSnapshot: jsonb("trace_snapshot").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const confidencePredictionsTable = pgTable("confidence_predictions", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id"),
+  conversationId: integer("conversation_id"),
+  botId: integer("bot_id").references(() => botsTable.id, { onDelete: "set null" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  iteration: integer("iteration").notNull().default(0),
+  predictedConfidence: numeric("predicted_confidence").notNull(),
+  completenessScore: numeric("completeness_score"),
+  accuracyScore: numeric("accuracy_score"),
+  relevanceScore: numeric("relevance_score"),
+  terminationReason: text("termination_reason"),
+  outcome: text("outcome"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBotLoopConfigSchema = createInsertSchema(botLoopConfigTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertBotFailureLogSchema = createInsertSchema(botFailureLogTable).omit({ id: true, createdAt: true });
+export const insertConfidencePredictionSchema = createInsertSchema(confidencePredictionsTable).omit({ id: true, createdAt: true });
+
+export type BotLoopConfig = typeof botLoopConfigTable.$inferSelect;
+export type InsertBotLoopConfig = z.infer<typeof insertBotLoopConfigSchema>;
+export type BotFailureLog = typeof botFailureLogTable.$inferSelect;
+export type InsertBotFailureLog = z.infer<typeof insertBotFailureLogSchema>;
+export type ConfidencePrediction = typeof confidencePredictionsTable.$inferSelect;
+export type InsertConfidencePrediction = z.infer<typeof insertConfidencePredictionSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+import { usersTable } from "./users";
+
+export const platformAuditLogTable = pgTable("platform_audit_log", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  resource: text("resource"),
+  resourceId: text("resource_id"),
+  metadata: jsonb("metadata"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPlatformAuditLogSchema = createInsertSchema(platformAuditLogTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PlatformAuditLog = typeof platformAuditLogTable.$inferSelect;
+export type InsertPlatformAuditLog = z.infer<typeof insertPlatformAuditLogSchema>;
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  real,
+  boolean,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
+
+export const beliefCategoryEnum = [
+  "market_conditions",
+  "client_facts",
+  "competitor_intel",
+  "product_knowledge",
+  "relationship_dynamics",
+  "operational",
+] as const;
+export type BeliefCategory = (typeof beliefCategoryEnum)[number];
+
+export const BELIEF_HALF_LIFE_DAYS: Record<BeliefCategory, number> = {
+  market_conditions: 14,
+  client_facts: 365,
+  competitor_intel: 30,
+  product_knowledge: 90,
+  relationship_dynamics: 60,
+  operational: 7,
+};
+
+export const botBeliefsTable = pgTable(
+  "bot_beliefs",
+  {
+    id: serial("id").primaryKey(),
+    botId: integer("bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    beliefText: text("belief_text").notNull(),
+    confidence: real("confidence").notNull().default(0.5),
+    evidenceCount: integer("evidence_count").notNull().default(1),
+    lastConfirmedAt: timestamp("last_confirmed_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    contradictedById: integer("contradicted_by_id"),
+    category: text("category").notNull().default("operational"),
+    halfLifeDays: integer("half_life_days").notNull().default(30),
+    immutable: boolean("immutable").notNull().default(false),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bot_beliefs_bot_id_idx").on(table.botId),
+    index("bot_beliefs_client_id_idx").on(table.clientId),
+    index("bot_beliefs_category_idx").on(table.category),
+  ],
+);
+
+export const clientBeliefsTable = pgTable(
+  "client_beliefs",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clientsTable.id, { onDelete: "cascade" }),
+    authorBotId: integer("author_bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    beliefText: text("belief_text").notNull(),
+    confidence: real("confidence").notNull().default(0.5),
+    category: text("category").notNull().default("client_facts"),
+    conflictResolutionStatus: text("conflict_resolution_status")
+      .notNull()
+      .default("none"),
+    contradictedById: integer("contradicted_by_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("client_beliefs_client_id_idx").on(table.clientId),
+    index("client_beliefs_author_bot_id_idx").on(table.authorBotId),
+  ],
+);
+
+export const episodicSummariesTable = pgTable(
+  "episodic_summaries",
+  {
+    id: serial("id").primaryKey(),
+    botId: integer("bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    narrative: text("narrative").notNull(),
+    anchorEvents: jsonb("anchor_events")
+      .$type<
+        Array<{
+          timestamp: string;
+          event: string;
+          significance: string;
+          permanent: boolean;
+        }>
+      >()
+      .default([]),
+    turningPoints: jsonb("turning_points").$type<string[]>().default([]),
+    decisions: jsonb("decisions").$type<string[]>().default([]),
+    outcomes: jsonb("outcomes").$type<string[]>().default([]),
+    forwardImplications: jsonb("forward_implications")
+      .$type<string[]>()
+      .default([]),
+    modelUsed: text("model_used").notNull().default("glm-5.2-long"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("episodic_summaries_bot_id_idx").on(table.botId),
+    index("episodic_summaries_client_id_idx").on(table.clientId),
+    index("episodic_summaries_period_idx").on(
+      table.periodStart,
+      table.periodEnd,
+    ),
+  ],
+);
+
+export const securityEventsTable = pgTable(
+  "security_events",
+  {
+    id: serial("id").primaryKey(),
+    eventType: text("event_type").notNull(),
+    source: text("source").notNull(),
+    contentHash: text("content_hash"),
+    disposition: text("disposition").notNull().default("quarantined"),
+    botId: integer("bot_id").references(() => botsTable.id, {
+      onDelete: "set null",
+    }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "set null",
+    }),
+    sessionId: integer("session_id"),
+    detectionPatterns: jsonb("detection_patterns")
+      .$type<string[]>()
+      .default([]),
+    adversarialScore: real("adversarial_score"),
+    rawContentPreview: text("raw_content_preview"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedByUserId: integer("reviewed_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("security_events_event_type_idx").on(table.eventType),
+    index("security_events_bot_id_idx").on(table.botId),
+    index("security_events_client_id_idx").on(table.clientId),
+    index("security_events_disposition_idx").on(table.disposition),
+  ],
+);
+
+export const pendingBeliefUpdatesTable = pgTable(
+  "pending_belief_updates",
+  {
+    id: serial("id").primaryKey(),
+    botId: integer("bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    existingBeliefId: integer("existing_belief_id"),
+    proposedBeliefText: text("proposed_belief_text").notNull(),
+    proposedConfidence: real("proposed_confidence").notNull(),
+    currentConfidence: real("current_confidence").notNull(),
+    confidenceDelta: real("confidence_delta").notNull(),
+    triggerSource: text("trigger_source").notNull(),
+    corroborationCount: integer("corroboration_count").notNull().default(0),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    reviewNote: text("review_note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("pending_belief_updates_bot_id_idx").on(table.botId),
+    index("pending_belief_updates_status_idx").on(table.status),
+  ],
+);
+
+export const insertBotBeliefSchema = createInsertSchema(botBeliefsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertClientBeliefSchema = createInsertSchema(
+  clientBeliefsTable,
+).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEpisodicSummarySchema = createInsertSchema(
+  episodicSummariesTable,
+).omit({ id: true, createdAt: true });
+export const insertSecurityEventSchema = createInsertSchema(
+  securityEventsTable,
+).omit({ id: true, createdAt: true });
+export const insertPendingBeliefUpdateSchema = createInsertSchema(
+  pendingBeliefUpdatesTable,
+).omit({ id: true, createdAt: true });
+
+export type BotBelief = typeof botBeliefsTable.$inferSelect;
+export type InsertBotBelief = z.infer<typeof insertBotBeliefSchema>;
+export type ClientBelief = typeof clientBeliefsTable.$inferSelect;
+export type InsertClientBelief = z.infer<typeof insertClientBeliefSchema>;
+export type EpisodicSummary = typeof episodicSummariesTable.$inferSelect;
+export type InsertEpisodicSummary = z.infer<typeof insertEpisodicSummarySchema>;
+export type SecurityEvent = typeof securityEventsTable.$inferSelect;
+export type InsertSecurityEvent = z.infer<typeof insertSecurityEventSchema>;
+export type PendingBeliefUpdate = typeof pendingBeliefUpdatesTable.$inferSelect;
+export type InsertPendingBeliefUpdate = z.infer<
+  typeof insertPendingBeliefUpdateSchema
+>;
+import { pgTable, serial, text, timestamp, integer, unique } from "drizzle-orm/pg-core";
+
+export const billingProviderConfigTable = pgTable("billing_provider_config", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull(),
+  tier: text("tier").notNull(),
+  paymentLinkUrl: text("payment_link_url").notNull(),
+  updatedBy: integer("updated_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  unique("billing_provider_config_provider_tier_unique").on(table.provider, table.tier),
+]);
+
+export type BillingProviderConfig = typeof billingProviderConfigTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb, index, boolean } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const bingolingoClientsTable = pgTable("bingolingo_clients", {
+  id: serial("id").primaryKey(),
+  galaxybotsClientId: integer("galaxybots_client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  industry: text("industry").notNull(),
+  website: text("website"),
+  logoUrl: text("logo_url"),
+  tagline: text("tagline"),
+  autoContentEnabled: boolean("auto_content_enabled").notNull().default(false),
+  defaultTone: text("default_tone").notNull().default("professional"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const bingolingoContentTable = pgTable("bingolingo_content", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => bingolingoClientsTable.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  body: text("body").notNull(),
+  metaDescription: text("meta_description"),
+  status: text("status").notNull().default("draft"),
+  topic: text("topic"),
+  tone: text("tone"),
+  keywords: jsonb("keywords").$type<string[]>(),
+  publishedUrl: text("published_url"),
+  viewCount: integer("view_count").notNull().default(0),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  index("bingolingo_content_client_idx").on(table.clientId),
+  index("bingolingo_content_status_idx").on(table.status),
+  index("bingolingo_content_slug_idx").on(table.slug),
+]);
+
+export const bingolingoApiKeysTable = pgTable("bingolingo_api_keys", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => bingolingoClientsTable.id, { onDelete: "cascade" }),
+  keyHash: text("key_hash").notNull().unique(),
+  label: text("label"),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("bingolingo_api_keys_hash_idx").on(table.keyHash),
+  index("bingolingo_api_keys_client_idx").on(table.clientId),
+]);
+
+export type BingolingoClient = typeof bingolingoClientsTable.$inferSelect;
+export type BingolingoContent = typeof bingolingoContentTable.$inferSelect;
+export type BingolingoApiKey = typeof bingolingoApiKeysTable.$inferSelect;
+import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const blogPostsTable = pgTable("blog_posts", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  excerpt: text("excerpt").notNull(),
+  content: text("content").notNull(),
+  author: text("author").notNull(),
+  category: text("category").notNull(),
+  coverImage: text("cover_image"),
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBlogPostSchema = createInsertSchema(blogPostsTable).omit({ id: true, createdAt: true });
+export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+export type BlogPost = typeof blogPostsTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const boardroomMessagesTable = pgTable("boardroom_messages", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id"),
+  botName: text("bot_name"),
+  botTitle: text("bot_title"),
+  role: text("role").notNull().default("bot"),
+  contentEncoded: text("content_encoded").notNull(),
+  contentEnglish: text("content_english").notNull(),
+  topic: text("topic"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("boardroom_messages_client_id_idx").on(table.clientId),
+]);
+
+export const insertBoardroomMessageSchema = createInsertSchema(boardroomMessagesTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BoardroomMessage = typeof boardroomMessagesTable.$inferSelect;
+export type InsertBoardroomMessage = z.infer<typeof insertBoardroomMessageSchema>;
+import { pgTable, serial, text, timestamp, integer, real, boolean, jsonb } from "drizzle-orm/pg-core";
+
+export const botAuditLogTable = pgTable("bot_audit_log", {
+  id: serial("id").primaryKey(),
+  action: text("action").notNull(),
+  reasoning: text("reasoning").notNull(),
+  confidence: real("confidence").notNull(),
+  requiresReview: boolean("requires_review").notNull().default(false),
+  clientId: integer("client_id"),
+  botId: integer("bot_id"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type BotAuditLog = typeof botAuditLogTable.$inferSelect;
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
+
+export const botHandoffRequestsTable = pgTable(
+  "bot_handoff_requests",
+  {
+    id: serial("id").primaryKey(),
+    sourceBotId: integer("source_bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    targetBotId: integer("target_bot_id").references(() => botsTable.id, {
+      onDelete: "set null",
+    }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    sessionId: integer("session_id"),
+    assignmentId: integer("assignment_id"),
+    reason: text("reason").notNull(),
+    terminationReason: text("termination_reason").notNull(),
+    context: jsonb("context").$type<Record<string, unknown>>().default({}),
+    recommendedRecipientName: text("recommended_recipient_name"),
+    status: text("status").notNull().default("pending"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resultingAssignmentId: integer("resulting_assignment_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bot_handoff_requests_source_bot_id_idx").on(table.sourceBotId),
+    index("bot_handoff_requests_target_bot_id_idx").on(table.targetBotId),
+    index("bot_handoff_requests_client_id_idx").on(table.clientId),
+    index("bot_handoff_requests_status_idx").on(table.status),
+  ],
+);
+
+export const insertBotHandoffRequestSchema = createInsertSchema(
+  botHandoffRequestsTable,
+).omit({ id: true, createdAt: true });
+
+export type BotHandoffRequest = typeof botHandoffRequestsTable.$inferSelect;
+export type InsertBotHandoffRequest = z.infer<
+  typeof insertBotHandoffRequestSchema
+>;
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { taskSessionsTable } from "./task-sessions";
+
+export const botMessagesTable = pgTable("bot_messages", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => taskSessionsTable.id, { onDelete: "cascade" }).notNull(),
+  fromBotId: integer("from_bot_id").references(() => botsTable.id, { onDelete: "set null" }),
+  fromBotName: text("from_bot_name"),
+  toBotId: integer("to_bot_id").references(() => botsTable.id, { onDelete: "set null" }),
+  toBotName: text("to_bot_name"),
+  taskId: text("task_id"),
+  messageType: text("message_type").notNull().default("assignment"),
+  payload: jsonb("payload"),
+  outcome: text("outcome"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBotMessageSchema = createInsertSchema(botMessagesTable).omit({ id: true, createdAt: true });
+export type BotMessage = typeof botMessagesTable.$inferSelect;
+export type InsertBotMessage = z.infer<typeof insertBotMessageSchema>;
+import { pgTable, text, serial, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const botsTable = pgTable("bots", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  title: text("title").notNull(),
+  department: text("department").notNull(),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  responsibilities: text("responsibilities").array().notNull().default([]),
+  personality: text("personality").notNull(),
+  avatar: text("avatar"),
+  voiceId: text("voice_id"),
+  declaration: text("declaration"),
+  addonType: text("addon_type"),
+  rank: text("rank").notNull().default("analyst"),
+  isAvailable: boolean("is_available").notNull().default(true),
+  isAiGenerated: boolean("is_ai_generated").notNull().default(false),
+  tenantId: integer("tenant_id"),
+  linkedCrmId: integer("linked_crm_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBotSchema = createInsertSchema(botsTable).omit({ id: true, createdAt: true });
+export type InsertBot = z.infer<typeof insertBotSchema>;
+export type Bot = typeof botsTable.$inferSelect;
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  real,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+import { botsTable } from "./bots";
+
+export const causalOutcomesTable = pgTable(
+  "causal_outcomes",
+  {
+    id: serial("id").primaryKey(),
+    actionId: integer("action_id"),
+    toolName: text("tool_name").notNull(),
+    metricName: text("metric_name").notNull(),
+    metricDelta: real("metric_delta"),
+    counterfactualBaseline: real("counterfactual_baseline"),
+    counterfactualMatchQuality: real("counterfactual_match_quality"),
+    attributionConfidence: real("attribution_confidence"),
+    measurementLagDays: integer("measurement_lag_days").notNull().default(7),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    botId: integer("bot_id").references(() => botsTable.id, {
+      onDelete: "set null",
+    }),
+    treatedCohortSize: integer("treated_cohort_size"),
+    controlCohortSize: integer("control_cohort_size"),
+    treatmentEffect: real("treatment_effect"),
+    observedOutcome: real("observed_outcome"),
+    causalPatternSummary: text("causal_pattern_summary"),
+    measuredAt: timestamp("measured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("causal_outcomes_client_id_idx").on(table.clientId),
+    index("causal_outcomes_tool_name_idx").on(table.toolName),
+    index("causal_outcomes_measured_at_idx").on(table.measuredAt),
+    index("causal_outcomes_attribution_confidence_idx").on(
+      table.attributionConfidence,
+    ),
+  ],
+);
+
+export const syntheticControlsTable = pgTable(
+  "synthetic_controls",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clientsTable.id, { onDelete: "cascade" }),
+    actionHash: text("action_hash").notNull(),
+    controlClientIds: jsonb("control_client_ids")
+      .$type<number[]>()
+      .notNull()
+      .default([]),
+    baselineMetrics: jsonb("baseline_metrics")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    industryVertical: text("industry_vertical"),
+    sizeCategory: text("size_category"),
+    matchScore: real("match_score"),
+    windowStart: timestamp("window_start", { withTimezone: true }),
+    windowEnd: timestamp("window_end", { withTimezone: true }),
+    computedAt: timestamp("computed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("synthetic_controls_client_id_idx").on(table.clientId),
+    index("synthetic_controls_action_hash_idx").on(table.actionHash),
+  ],
+);
+
+export const insertCausalOutcomeSchema = createInsertSchema(
+  causalOutcomesTable,
+).omit({ id: true, createdAt: true });
+export const insertSyntheticControlSchema = createInsertSchema(
+  syntheticControlsTable,
+).omit({ id: true, createdAt: true });
+
+export type CausalOutcome = typeof causalOutcomesTable.$inferSelect;
+export type InsertCausalOutcome = z.infer<typeof insertCausalOutcomeSchema>;
+export type SyntheticControl = typeof syntheticControlsTable.$inferSelect;
+export type InsertSyntheticControl = z.infer<typeof insertSyntheticControlSchema>;
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const clientBotsTable = pgTable("client_bots", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  botId: integer("bot_id").notNull(),
+  status: text("status").notNull().default("active"),
+  hiredAt: timestamp("hired_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertClientBotSchema = createInsertSchema(clientBotsTable).omit({
+  id: true,
+  hiredAt: true,
+});
+
+export type ClientBot = typeof clientBotsTable.$inferSelect;
+export type InsertClientBot = z.infer<typeof insertClientBotSchema>;
+import { pgTable, serial, text, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const clientCostCapsTable = pgTable("client_cost_caps", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }).unique(),
+  monthlyCapUsd: numeric("monthly_cap_usd").notNull().default("0"),
+  alertAt80Pct: boolean("alert_at_80_pct").notNull().default(true),
+  pauseAutonomousOnExhaust: boolean("pause_autonomous_on_exhaust").notNull().default(false),
+  alerted80Pct: boolean("alerted_80_pct").notNull().default(false),
+  alerted100Pct: boolean("alerted_100_pct").notNull().default(false),
+  alertResetMonth: text("alert_reset_month"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const analyticsApiKeysTable = pgTable("analytics_api_keys", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  apiKey: text("api_key").notNull().unique(),
+  label: text("label").notNull().default("default"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertClientCostCapSchema = createInsertSchema(clientCostCapsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAnalyticsApiKeySchema = createInsertSchema(analyticsApiKeysTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ClientCostCap = typeof clientCostCapsTable.$inferSelect;
+export type InsertClientCostCap = z.infer<typeof insertClientCostCapSchema>;
+export type AnalyticsApiKey = typeof analyticsApiKeysTable.$inferSelect;
+export type InsertAnalyticsApiKey = z.infer<typeof insertAnalyticsApiKeySchema>;
+import { pgTable, serial, text, timestamp, integer, numeric, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const clientHealthScoresTable = pgTable("client_health_scores", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  score: integer("score").notNull(),
+  trend: text("trend").notNull().default("stable"),
+  tag: text("tag").notNull().default("healthy"),
+  topSignals: jsonb("top_signals").default([]),
+  recommendedAction: text("recommended_action"),
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clientHealthEventsTable = pgTable("client_health_events", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  signal: text("signal").notNull(),
+  value: numeric("value").notNull().default("1"),
+  metadata: jsonb("metadata").default({}),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clientHealthNotesTable = pgTable("client_health_notes", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  note: text("note").notNull(),
+  tagOverride: text("tag_override"),
+  authorName: text("author_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertClientHealthScoreSchema = createInsertSchema(clientHealthScoresTable).omit({ id: true, computedAt: true });
+export const insertClientHealthEventSchema = createInsertSchema(clientHealthEventsTable).omit({ id: true, recordedAt: true });
+export const insertClientHealthNoteSchema = createInsertSchema(clientHealthNotesTable).omit({ id: true, createdAt: true });
+
+export type ClientHealthScore = typeof clientHealthScoresTable.$inferSelect;
+export type InsertClientHealthScore = z.infer<typeof insertClientHealthScoreSchema>;
+export type ClientHealthEvent = typeof clientHealthEventsTable.$inferSelect;
+export type InsertClientHealthEvent = z.infer<typeof insertClientHealthEventSchema>;
+export type ClientHealthNote = typeof clientHealthNotesTable.$inferSelect;
+export type InsertClientHealthNote = z.infer<typeof insertClientHealthNoteSchema>;
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const clientIntegrationsTable = pgTable("client_integrations", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  service: text("service").notNull(),
+  credential: text("credential").notNull(),
+  status: text("status").notNull().default("connected"),
+  label: text("label"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const insertClientIntegrationSchema = createInsertSchema(clientIntegrationsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ClientIntegration = typeof clientIntegrationsTable.$inferSelect;
+export type InsertClientIntegration = z.infer<typeof insertClientIntegrationSchema>;
+import { pgTable, serial, text, timestamp, integer, unique } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const clientStakeholdersTable = pgTable("client_stakeholders", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  lastPin: text("last_pin"),
+  pinExpiry: timestamp("pin_expiry", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  unique("client_stakeholder_email_unique").on(table.clientId, table.email),
+]);
+
+export const insertClientStakeholderSchema = createInsertSchema(clientStakeholdersTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastPin: true,
+  pinExpiry: true,
+});
+
+export type ClientStakeholder = typeof clientStakeholdersTable.$inferSelect;
+export type InsertClientStakeholder = z.infer<typeof insertClientStakeholderSchema>;
+import { pgTable, serial, text, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export interface WebsiteIntel {
+  scrapedAt: string;
+  title?: string;
+  summary?: string;
+  industry?: string;
+  valueProposition?: string;
+  productCategories?: string[];
+  targetMarket?: string;
+  rawContent?: string;
+}
+
+export const clientsTable = pgTable("clients", {
+  id: serial("id").primaryKey(),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  plan: text("plan").notNull().default("single"),
+  status: text("status").notNull().default("trial"),
+  hourlyRate: numeric("hourly_rate").notNull().default("150"),
+  websiteUrl: text("website_url"),
+  industry: text("industry"),
+  servicesList: text("services_list").array(),
+  targetMarket: text("target_market"),
+  businessContext: text("business_context"),
+  webhookSecret: text("webhook_secret"),
+  websiteIntel: jsonb("website_intel").$type<WebsiteIntel>(),
+  timezone: text("timezone").notNull().default("UTC"),
+  governanceMode: text("governance_mode").notNull().default("approval_all"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertClientSchema = createInsertSchema(clientsTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Client = typeof clientsTable.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+import { pgTable, serial, text, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const competitorUrlsTable = pgTable("competitor_urls", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  companyName: text("company_name").notNull(),
+  addedBy: text("added_by").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("competitor_urls_client_id_idx").on(table.clientId),
+  index("competitor_urls_url_idx").on(table.url),
+]);
+
+export type CompetitorUrl = typeof competitorUrlsTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const platformComplianceTable = pgTable("platform_compliance", {
+  id: serial("id").primaryKey(),
+  standardName: text("standard_name").notNull(),
+  category: text("category").notNull(),
+  status: text("status").notNull().default("pending"),
+  certificationId: text("certification_id"),
+  issuedBy: text("issued_by"),
+  details: text("details"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clientComplianceRequirementsTable = pgTable("client_compliance_requirements", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPlatformComplianceSchema = createInsertSchema(platformComplianceTable).omit({
+  id: true,
+  createdAt: true,
+  receivedAt: true,
+});
+
+export const insertClientComplianceRequirementSchema = createInsertSchema(clientComplianceRequirementsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PlatformCompliance = typeof platformComplianceTable.$inferSelect;
+export type InsertPlatformCompliance = z.infer<typeof insertPlatformComplianceSchema>;
+export type ClientComplianceRequirement = typeof clientComplianceRequirementsTable.$inferSelect;
+export type InsertClientComplianceRequirement = z.infer<typeof insertClientComplianceRequirementSchema>;
+import { pgTable, serial, integer, timestamp, numeric } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+
+export const confidenceConfigsTable = pgTable("confidence_configs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id).unique(),
+  emailWeight: numeric("email_weight").notNull().default("0.25"),
+  phoneWeight: numeric("phone_weight").notNull().default("0.25"),
+  domainWeight: numeric("domain_weight").notNull().default("0.20"),
+  socialWeight: numeric("social_weight").notNull().default("0.15"),
+  nameWeight: numeric("name_weight").notNull().default("0.15"),
+  reviewSlaHours: integer("review_sla_hours").notNull().default(24),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertConfidenceConfigSchema = createInsertSchema(confidenceConfigsTable);
+export const selectConfidenceConfigSchema = createSelectSchema(confidenceConfigsTable);
+
+export type ConfidenceConfig = typeof confidenceConfigsTable.$inferSelect;
+export type InsertConfidenceConfig = typeof confidenceConfigsTable.$inferInsert;
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id"),
+  botId: integer("bot_id").notNull().default(1),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, numeric, uniqueIndex } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+
+export const TASK_CATEGORIES = ["research", "analysis", "execution", "review", "legal", "financial"] as const;
+export const COORDINATOR_ROLES = ["thinker", "worker", "verifier"] as const;
+
+export type TaskCategory = (typeof TASK_CATEGORIES)[number];
+export type CoordinatorRole = (typeof COORDINATOR_ROLES)[number];
+
+export const coordinatorWeightsTable = pgTable(
+  "coordinator_weights",
+  {
+    id: serial("id").primaryKey(),
+    botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+    taskCategory: text("task_category").notNull(),
+    role: text("role").notNull(),
+    weight: numeric("weight", { precision: 10, scale: 6 }).notNull().default("1.0"),
+    lastUpdated: timestamp("last_updated", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    uniqueBotCategoryRole: uniqueIndex("coordinator_weights_bot_category_role_idx").on(
+      table.botId,
+      table.taskCategory,
+      table.role,
+    ),
+  }),
+);
+
+export const insertCoordinatorWeightSchema = createInsertSchema(coordinatorWeightsTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CoordinatorWeight = typeof coordinatorWeightsTable.$inferSelect;
+export type InsertCoordinatorWeight = z.infer<typeof insertCoordinatorWeightSchema>;
+
+export interface RoleAssignment {
+  botId: number;
+  botName: string;
+  role: CoordinatorRole;
+  weight: number;
+  reasoning: string;
+}
+
+export interface CoordinatorPlan {
+  runId?: number;
+  taskCategory: TaskCategory;
+  taskDescription: string;
+  thinker: RoleAssignment;
+  worker: RoleAssignment;
+  verifier: RoleAssignment;
+  roleAssignments: RoleAssignment[];
+  /**
+   * Step-index → role mapping (0-based, matches pipeline step order).
+   * This is the authoritative lookup used during execution — not botId —
+   * so role collision in 2-bot pipelines and ordering are both guaranteed.
+   */
+  roleByStepIndex: Record<number, CoordinatorRole>;
+  timestamp: number;
+  weightsSnapshot: Record<string, Record<string, number>>;
+  /** Quality scores recorded per step, populated during execution. */
+  qualityScores?: Record<string, number>;
+}
+import { pgTable, serial, text, timestamp, integer, jsonb, boolean, index } from "drizzle-orm/pg-core";
+import { extractionJobsTable } from "./extraction-jobs";
+import { usersTable } from "./users";
+
+export interface CellProvenance {
+  sourceJobId?: number;
+  sourcePageId?: number;
+  pageNumber?: number;
+  region?: { x: number; y: number; w: number; h: number } | null;
+  /** Per-cell screenshot regions, keyed by field name. Falls back to the
+   * row-level `region` when a cell-specific one is not available. */
+  regions?: Record<string, { x: number; y: number; w: number; h: number }>;
+  confidence?: Record<string, number>;
+  rawValues?: Record<string, unknown>;
+}
+
+export interface RecordWarning {
+  field?: string;
+  code: string;
+  message: string;
+  severity: "info" | "warn" | "error";
+}
+
+export type CrmFieldType =
+  | "string"
+  | "text"
+  | "number"
+  | "boolean"
+  | "date"
+  | "email"
+  | "url"
+  | "phone"
+  | "enum";
+
+export interface CrmFieldDef {
+  name: string;
+  label: string;
+  type: CrmFieldType;
+  required: boolean;
+  enumValues?: string[];
+  sampleValues?: unknown[];
+  sourceField?: string;
+  /**
+   * When set, this field is a foreign reference to another entity in the same
+   * blueprint. The stored value matches the target entity's primary display
+   * field, which allows commits and the related-records lookup to resolve
+   * links by value without depending on database ids.
+   */
+  linkTo?: string;
+}
+
+export interface CrmEntityDef {
+  name: string;
+  label: string;
+  primaryDisplayField?: string;
+  fields: CrmFieldDef[];
+}
+
+export interface CrmBlueprintDef {
+  entities: CrmEntityDef[];
+}
+
+export type CrmSyncCadence = "manual" | "hourly" | "daily" | "weekly";
+export type CrmSyncConflictPolicy = "local_wins" | "source_wins" | "ask";
+
+export const crmBlueprintsTable = pgTable("crm_blueprints", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  sourceJobId: integer("source_job_id").references(() => extractionJobsTable.id, { onDelete: "set null" }),
+  ownerUserId: integer("owner_user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["draft", "committed"] }).notNull().default("draft"),
+  definition: jsonb("definition").$type<CrmBlueprintDef>().notNull().default({ entities: [] } as CrmBlueprintDef),
+  recordCount: integer("record_count").notNull().default(0),
+  syncEnabled: boolean("sync_enabled").notNull().default(false),
+  syncCadence: text("sync_cadence", { enum: ["manual", "hourly", "daily", "weekly"] }).notNull().default("manual"),
+  syncConflictPolicy: text("sync_conflict_policy", { enum: ["local_wins", "source_wins", "ask"] }).notNull().default("local_wins"),
+  syncIdentityFields: jsonb("sync_identity_fields").$type<string[]>().notNull().default([] as string[]),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastSyncStatus: text("last_sync_status"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("crm_blueprints_status_idx").on(table.status),
+  index("crm_blueprints_source_job_idx").on(table.sourceJobId),
+  index("crm_blueprints_sync_due_idx").on(table.syncEnabled, table.lastSyncAt),
+  index("crm_blueprints_owner_idx").on(table.ownerUserId),
+]);
+
+export const crmRecordsTable = pgTable("crm_records", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  entityType: text("entity_type").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+  provenance: jsonb("provenance").$type<CellProvenance>().notNull().default({} as CellProvenance),
+  warnings: jsonb("warnings").$type<RecordWarning[]>().notNull().default([] as RecordWarning[]),
+  needsReview: boolean("needs_review").notNull().default(false),
+  identityKey: text("identity_key"),
+  sourceData: jsonb("source_data").$type<Record<string, unknown>>(),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  userModifiedAt: timestamp("user_modified_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("crm_records_crm_idx").on(table.crmId),
+  index("crm_records_entity_idx").on(table.crmId, table.entityType),
+  index("crm_records_identity_idx").on(table.crmId, table.entityType, table.identityKey),
+]);
+
+export type CrmSyncRunStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "drift_paused"
+  | "rolled_back";
+
+export interface CrmSyncTotals {
+  new: number;
+  changed: number;
+  unchanged: number;
+  removed: number;
+  conflicts: number;
+}
+
+export interface CrmSchemaDrift {
+  added: { name: string; type: string }[];
+  removed: { name: string; type: string }[];
+  changed: { name: string; oldType: string; newType: string }[];
+}
+
+export const crmSyncRunsTable = pgTable("crm_sync_runs", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  status: text("status", {
+    enum: ["pending", "running", "completed", "failed", "drift_paused", "rolled_back"],
+  }).notNull().default("pending"),
+  triggeredBy: text("triggered_by", { enum: ["manual", "scheduler"] }).notNull().default("manual"),
+  conflictPolicy: text("conflict_policy", { enum: ["local_wins", "source_wins", "ask"] }).notNull().default("local_wins"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  totals: jsonb("totals").$type<CrmSyncTotals>().notNull().default({
+    new: 0, changed: 0, unchanged: 0, removed: 0, conflicts: 0,
+  } as CrmSyncTotals),
+  schemaDrift: jsonb("schema_drift").$type<CrmSchemaDrift | null>(),
+  errorMessage: text("error_message"),
+  rollbackOfRunId: integer("rollback_of_run_id"),
+}, (table) => [
+  index("crm_sync_runs_crm_idx").on(table.crmId, table.startedAt),
+]);
+
+export type CrmSyncChangeType = "new" | "changed" | "unchanged" | "removed";
+export type CrmSyncChangeDecision = "pending" | "approved" | "rejected" | "auto_applied";
+
+export interface CrmFieldDiff {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+  conflictWithLocal?: boolean;
+  localValue?: unknown;
+}
+
+export const crmSyncChangesTable = pgTable("crm_sync_changes", {
+  id: serial("id").primaryKey(),
+  syncRunId: integer("sync_run_id").notNull().references(() => crmSyncRunsTable.id, { onDelete: "cascade" }),
+  crmId: integer("crm_id").notNull(),
+  entityType: text("entity_type").notNull(),
+  changeType: text("change_type", { enum: ["new", "changed", "unchanged", "removed"] }).notNull(),
+  identityKey: text("identity_key"),
+  recordId: integer("record_id"),
+  oldData: jsonb("old_data").$type<Record<string, unknown> | null>(),
+  newData: jsonb("new_data").$type<Record<string, unknown> | null>(),
+  fieldDiffs: jsonb("field_diffs").$type<CrmFieldDiff[]>().notNull().default([] as CrmFieldDiff[]),
+  hasConflicts: boolean("has_conflicts").notNull().default(false),
+  decision: text("decision", { enum: ["pending", "approved", "rejected", "auto_applied"] }).notNull().default("pending"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  reverseSnapshot: jsonb("reverse_snapshot").$type<Record<string, unknown> | null>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("crm_sync_changes_run_idx").on(table.syncRunId),
+  index("crm_sync_changes_record_idx").on(table.recordId),
+]);
+
+export interface PipelineStageState {
+  status: "pending" | "running" | "done" | "failed" | "skipped";
+  rowsIn?: number;
+  rowsOut?: number;
+  warnings?: number;
+  startedAt?: string;
+  finishedAt?: string;
+  message?: string;
+}
+
+export type PipelineStageName = "normalize" | "dedupe" | "resolve" | "dryrun" | "commit";
+
+export interface FieldRecipe {
+  transforms: string[];
+}
+
+export interface PipelineRecipe {
+  fields: Record<string, FieldRecipe>;
+  confidenceThreshold: number;
+}
+
+export interface DedupCluster {
+  id: string;
+  entityType: string;
+  rowIds: number[];
+  representativeRowId: number;
+  similarity: number;
+  signal: string;
+  method: "exact" | "fuzzy" | "embedding";
+  status: "proposed" | "accepted" | "rejected";
+  preview: Record<string, unknown>[];
+}
+
+export interface IdentityLink {
+  id: string;
+  fromEntityType: string;
+  fromRowId: number;
+  toEntityType: string;
+  toRowId: number;
+  signal: string;
+  similarity: number;
+  method: "fk_overlap" | "shared_identifier" | "embedding";
+  status: "proposed" | "accepted" | "rejected";
+}
+
+export interface DryRunRow {
+  rowId: number;
+  entityType: string;
+  data: Record<string, unknown>;
+  provenance: CellProvenance;
+  warnings: RecordWarning[];
+  needsReview: boolean;
+}
+
+export interface SavedViewDSL {
+  kind: "query";
+  entity: string;
+  filters: Array<{ field: string; op: string; value?: unknown }>;
+  sort?: { field: string; order: "asc" | "desc" } | null;
+  limit?: number | null;
+  aggregate?: { op: "count" | "sum" | "avg" | "min" | "max"; field?: string | null; groupBy?: string | null } | null;
+  project?: string[] | null;
+  output: "table" | "chart" | "summary";
+}
+
+export const crmSavedViewsTable = pgTable("crm_saved_views", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  question: text("question"),
+  dsl: jsonb("dsl").$type<SavedViewDSL>().notNull(),
+  pinned: boolean("pinned").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("crm_saved_views_crm_idx").on(table.crmId),
+]);
+
+export const crmInsightsTable = pgTable("crm_insights", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id"),
+  kind: text("kind").notNull(),
+  severity: text("severity", { enum: ["info", "warn", "alert"] }).notNull().default("info"),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({} as Record<string, unknown>),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("crm_insights_crm_idx").on(table.crmId),
+  index("crm_insights_observed_idx").on(table.crmId, table.observedAt),
+]);
+
+export const rebuildJobsTable = pgTable("rebuild_jobs", {
+  id: serial("id").primaryKey(),
+  crmId: integer("crm_id").notNull().references(() => crmBlueprintsTable.id, { onDelete: "cascade" }),
+  sourceJobId: integer("source_job_id").references(() => extractionJobsTable.id, { onDelete: "set null" }),
+  status: text("status", { enum: ["pending", "running", "awaiting_review", "ready_to_commit", "committed", "failed"] }).notNull().default("pending"),
+  currentStage: text("current_stage", { enum: ["normalize", "dedupe", "resolve", "dryrun", "commit"] }).notNull().default("normalize"),
+  stages: jsonb("stages").$type<Record<PipelineStageName, PipelineStageState>>().notNull().default({} as Record<PipelineStageName, PipelineStageState>),
+  recipe: jsonb("recipe").$type<PipelineRecipe>().notNull().default({ fields: {}, confidenceThreshold: 0.6 } as PipelineRecipe),
+  dedupClusters: jsonb("dedup_clusters").$type<DedupCluster[]>().notNull().default([] as DedupCluster[]),
+  identityLinks: jsonb("identity_links").$type<IdentityLink[]>().notNull().default([] as IdentityLink[]),
+  dryRunRows: jsonb("dry_run_rows").$type<DryRunRow[]>().notNull().default([] as DryRunRow[]),
+  warnings: jsonb("warnings").$type<RecordWarning[]>().notNull().default([] as RecordWarning[]),
+  rowsIn: integer("rows_in").notNull().default(0),
+  rowsOut: integer("rows_out").notNull().default(0),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("rebuild_jobs_crm_idx").on(table.crmId),
+  index("rebuild_jobs_status_idx").on(table.status),
+]);
+import { pgTable, serial, text, timestamp, integer, jsonb, index, boolean } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const developerApiKeysTable = pgTable("developer_api_keys", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  keyHash: text("key_hash").notNull().unique(),
+  keyPrefix: text("key_prefix").notNull(),
+  label: text("label").notNull().default("default"),
+  scopes: jsonb("scopes").$type<string[]>().notNull().default(["read"]),
+  tier: text("tier").notNull().default("standard"),
+  rateLimit: integer("rate_limit").notNull().default(1000),
+  status: text("status").notNull().default("active"),
+  totalCalls: integer("total_calls").notNull().default(0),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("developer_api_keys_client_id_idx").on(table.clientId),
+  index("developer_api_keys_key_hash_idx").on(table.keyHash),
+  index("developer_api_keys_status_idx").on(table.status),
+]);
+
+export const developerApiUsageLogTable = pgTable("developer_api_usage_log", {
+  id: serial("id").primaryKey(),
+  keyId: integer("key_id").notNull().references(() => developerApiKeysTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").notNull(),
+  endpoint: text("endpoint").notNull(),
+  method: text("method").notNull(),
+  statusCode: integer("status_code").notNull(),
+  latencyMs: integer("latency_ms"),
+  tokensConsumed: integer("tokens_consumed").default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("developer_api_usage_log_key_id_idx").on(table.keyId),
+  index("developer_api_usage_log_client_id_idx").on(table.clientId),
+  index("developer_api_usage_log_created_at_idx").on(table.createdAt),
+]);
+
+export const apiChangelogTable = pgTable("api_changelog", {
+  id: serial("id").primaryKey(),
+  version: text("version").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  breaking: boolean("breaking").notNull().default(false),
+  changes: jsonb("changes").$type<string[]>().notNull().default([]),
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type DeveloperApiKey = typeof developerApiKeysTable.$inferSelect;
+export type DeveloperApiUsageLog = typeof developerApiUsageLogTable.$inferSelect;
+export type ApiChangelog = typeof apiChangelogTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+import { botsTable } from "./bots";
+
+export interface DocumentVersion {
+  version: number;
+  content: unknown;
+  title: string;
+  editedBy: string;
+  createdAt: string;
+}
+
+export const documentsTable = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id").references(() => botsTable.id, { onDelete: "set null" }),
+  sessionId: integer("session_id"),
+  title: text("title").notNull(),
+  content: jsonb("content").$type<unknown>().notNull(),
+  department: text("department"),
+  status: text("status").notNull().default("draft"),
+  versionHistory: jsonb("version_history").$type<DocumentVersion[]>().default([]),
+  currentVersion: integer("current_version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertDocumentSchema = createInsertSchema(documentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type Document = typeof documentsTable.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+
+export const extractionJobsTable = pgTable("extraction_jobs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  status: text("status", { enum: ["pending", "running", "paused", "completed", "failed"] }).notNull().default("pending"),
+  extractionType: text("extraction_type", { enum: ["table", "list", "contacts", "custom"] }).notNull().default("custom"),
+  fieldMapping: jsonb("field_mapping").$type<{ fields: string[]; instructions?: string }>().default({ fields: [] }),
+  totalPages: integer("total_pages").notNull().default(0),
+  pagesCompleted: integer("pages_completed").notNull().default(0),
+  rowsExtracted: integer("rows_extracted").notNull().default(0),
+  errorMessage: text("error_message"),
+  extractedData: jsonb("extracted_data").$type<Record<string, unknown>[]>().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("extraction_jobs_status_idx").on(table.status),
+]);
+
+export const extractionPagesTable = pgTable("extraction_pages", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => extractionJobsTable.id, { onDelete: "cascade" }),
+  pageUrl: text("page_url").notNull(),
+  pageNumber: integer("page_number").notNull().default(1),
+  status: text("status", { enum: ["pending", "captured", "extracted", "failed"] }).notNull().default("pending"),
+  screenshotBase64: text("screenshot_base64"),
+  extractedRows: jsonb("extracted_rows").$type<Record<string, unknown>[]>().default([]),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("extraction_pages_job_idx").on(table.jobId),
+]);
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  index,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botAssignmentsTable } from "./memory";
+import { clientsTable } from "./clients";
+
+export const goalConflictsTable = pgTable(
+  "goal_conflicts",
+  {
+    id: serial("id").primaryKey(),
+    goalAId: integer("goal_a_id")
+      .notNull()
+      .references(() => botAssignmentsTable.id, { onDelete: "cascade" }),
+    goalBId: integer("goal_b_id")
+      .notNull()
+      .references(() => botAssignmentsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    conflictType: text("conflict_type").notNull(),
+    resolution: text("resolution"),
+    resolutionReason: text("resolution_reason"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: text("resolved_by").notNull().default("system"),
+    escalatedToHuman: integer("escalated_to_human").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("goal_conflicts_goal_a_id_idx").on(table.goalAId),
+    index("goal_conflicts_goal_b_id_idx").on(table.goalBId),
+    index("goal_conflicts_client_id_idx").on(table.clientId),
+    index("goal_conflicts_resolved_by_idx").on(table.resolvedBy),
+  ],
+);
+
+export const insertGoalConflictSchema = createInsertSchema(
+  goalConflictsTable,
+).omit({ id: true, createdAt: true });
+
+export type GoalConflict = typeof goalConflictsTable.$inferSelect;
+export type InsertGoalConflict = z.infer<typeof insertGoalConflictSchema>;
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb, unique } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+import { botsTable } from "./bots";
+
+export const botToolPermissionsTable = pgTable("bot_tool_permissions", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  botId: integer("bot_id").references(() => botsTable.id, { onDelete: "cascade" }).notNull(),
+  toolName: text("tool_name").notNull(),
+  allowed: boolean("allowed").notNull().default(true),
+  requiresApproval: boolean("requires_approval").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("bot_tool_perm_unique").on(table.clientId, table.botId, table.toolName),
+]);
+
+export const insertBotToolPermissionSchema = createInsertSchema(botToolPermissionsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type BotToolPermission = typeof botToolPermissionsTable.$inferSelect;
+export type InsertBotToolPermission = z.infer<typeof insertBotToolPermissionSchema>;
+
+export const pendingApprovalsTable = pgTable("pending_approvals", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  botId: integer("bot_id").references(() => botsTable.id, { onDelete: "cascade" }).notNull(),
+  botName: text("bot_name"),
+  toolName: text("tool_name").notNull(),
+  toolInput: jsonb("tool_input"),
+  status: text("status").notNull().default("pending"),
+  resolvedBy: integer("resolved_by"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  toolResult: jsonb("tool_result"),
+  pausedLoopContext: jsonb("paused_loop_context"),
+  sessionId: integer("session_id"),
+  conversationId: integer("conversation_id"),
+  slaDeadline: timestamp("sla_deadline", { withTimezone: true }),
+  escalatedAt: timestamp("escalated_at", { withTimezone: true }),
+  isTimeSensitive: boolean("is_time_sensitive").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPendingApprovalSchema = createInsertSchema(pendingApprovalsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type PendingApproval = typeof pendingApprovalsTable.$inferSelect;
+export type InsertPendingApproval = z.infer<typeof insertPendingApprovalSchema>;
+
+export const brandVoiceConfigsTable = pgTable("brand_voice_configs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  toneDescription: text("tone_description"),
+  prohibitedPhrases: text("prohibited_phrases").array().notNull().default([]),
+  requiredDisclaimers: text("required_disclaimers").array().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("brand_voice_client_unique").on(table.clientId),
+]);
+
+export const insertBrandVoiceConfigSchema = createInsertSchema(brandVoiceConfigsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type BrandVoiceConfig = typeof brandVoiceConfigsTable.$inferSelect;
+export type InsertBrandVoiceConfig = z.infer<typeof insertBrandVoiceConfigSchema>;
+
+export const permissionProfileTemplatesTable = pgTable("permission_profile_templates", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  permissions: jsonb("permissions").notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPermissionProfileTemplateSchema = createInsertSchema(permissionProfileTemplatesTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type PermissionProfileTemplate = typeof permissionProfileTemplatesTable.$inferSelect;
+export type InsertPermissionProfileTemplate = z.infer<typeof insertPermissionProfileTemplateSchema>;
+import { pgTable, text, serial, timestamp, integer, real, jsonb, vector, uniqueIndex, smallint } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const guardianStateTable = pgTable(
+  "guardian_state",
+  {
+    id: serial("id").primaryKey(),
+    singletonKey: smallint("singleton_key").notNull().default(1),
+    mode: text("mode").notNull().default("active"),
+    lastSwarmCycleAt: timestamp("last_swarm_cycle_at", { withTimezone: true }),
+    pausedByUserId: integer("paused_by_user_id"),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("guardian_state_singleton_key_idx").on(table.singletonKey)],
+);
+
+export const guardianIncidentsTable = pgTable("guardian_incidents", {
+  id: serial("id").primaryKey(),
+  domain: text("domain").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  severity: integer("severity").notNull().default(0),
+  blastRadius: integer("blast_radius").notNull().default(0),
+  recurrenceRate: real("recurrence_rate").notNull().default(0),
+  status: text("status").notNull().default("open"),
+  affectedComponent: text("affected_component"),
+  errorFingerprint: text("error_fingerprint"),
+  sourcePayload: jsonb("source_payload"),
+  kiloProAuditTag: text("kilopro_audit_tag"),
+  embedding: vector("embedding", { dimensions: 1536 }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const guardianWorkersTable = pgTable("guardian_workers", {
+  id: serial("id").primaryKey(),
+  incidentId: integer("incident_id").notNull().references(() => guardianIncidentsTable.id, { onDelete: "cascade" }),
+  beeType: text("bee_type").notNull(),
+  status: text("status").notNull().default("dispatched"),
+  finding: text("finding"),
+  proposedFix: text("proposed_fix"),
+  rootCause: text("root_cause"),
+  confidenceScore: real("confidence_score"),
+  rawResponse: jsonb("raw_response"),
+  dispatchedAt: timestamp("dispatched_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+export const guardianPostmortemsTable = pgTable("guardian_postmortems", {
+  id: serial("id").primaryKey(),
+  incidentId: integer("incident_id").notNull().references(() => guardianIncidentsTable.id, { onDelete: "cascade" }),
+  triggerEvent: text("trigger_event").notNull(),
+  detectionTime: text("detection_time"),
+  blastRadiusSummary: text("blast_radius_summary"),
+  timeline: text("timeline").notNull(),
+  rootCause: text("root_cause").notNull(),
+  appliedRemedy: text("applied_remedy").notNull(),
+  preventionRecommendation: text("prevention_recommendation").notNull(),
+  kiloProCompatible: text("kilopro_compatible").notNull().default("yes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const guardianPatrolsTable = pgTable("guardian_patrols", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  domain: text("domain").notNull(),
+  triggerPattern: text("trigger_pattern").notNull(),
+  schedulerJobName: text("scheduler_job_name"),
+  recurrenceCount: integer("recurrence_count").notNull().default(0),
+  isActive: text("is_active").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastTriggeredAt: timestamp("last_triggered_at", { withTimezone: true }),
+});
+
+export const insertGuardianIncidentSchema = createInsertSchema(guardianIncidentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertGuardianWorkerSchema = createInsertSchema(guardianWorkersTable).omit({ id: true, dispatchedAt: true });
+export const insertGuardianPostmortemSchema = createInsertSchema(guardianPostmortemsTable).omit({ id: true, createdAt: true });
+export const insertGuardianPatrolSchema = createInsertSchema(guardianPatrolsTable).omit({ id: true, createdAt: true });
+
+export type GuardianState = typeof guardianStateTable.$inferSelect;
+export type GuardianIncident = typeof guardianIncidentsTable.$inferSelect;
+export type GuardianWorker = typeof guardianWorkersTable.$inferSelect;
+export type GuardianPostmortem = typeof guardianPostmortemsTable.$inferSelect;
+export type GuardianPatrol = typeof guardianPatrolsTable.$inferSelect;
+export type InsertGuardianIncident = z.infer<typeof insertGuardianIncidentSchema>;
+import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { usersTable } from "./users";
+import { clientsTable } from "./clients";
+import { taskSessionsTable } from "./task-sessions";
+
+export const guestSessionsTable = pgTable("guest_sessions", {
+  id: serial("id").primaryKey(),
+  sessionToken: text("session_token").notNull().unique(),
+  ipHash: text("ip_hash").notNull(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  taskSessionId: integer("task_session_id").references(() => taskSessionsTable.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("active"),
+  claimedByUserId: integer("claimed_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  missionCompleted: boolean("mission_completed").notNull().default(false),
+  roiData: text("roi_data"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertGuestSessionSchema = createInsertSchema(guestSessionsTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type GuestSession = typeof guestSessionsTable.$inferSelect;
+export type InsertGuestSession = z.infer<typeof insertGuestSessionSchema>;
+export * from "./bots";
+export * from "./conversations";
+export * from "./messages";
+export * from "./clients";
+export * from "./client_bots";
+export * from "./boardroom";
+export * from "./journal";
+export * from "./blog_posts";
+export * from "./partner_registrations";
+export * from "./task-sessions";
+export * from "./world-state";
+export * from "./memory";
+export * from "./compliance";
+export * from "./client-integrations";
+export * from "./tool-activity-log";
+export * from "./aeo-scores";
+export * from "./receptionist";
+export * from "./users";
+export * from "./audit-log";
+export * from "./bot-audit-log";
+export * from "./session-outcomes";
+export * from "./prospects";
+export * from "./prospecting_jobs";
+export * from "./user-preferences";
+export * from "./governance";
+export * from "./knowledge-base";
+export * from "./knowledge-base-sources";
+export * from "./documents";
+export * from "./pipelines";
+export * from "./llm-usage-log";
+export * from "./client-cost-caps";
+export * from "./platform-api-keys";
+export * from "./mcp-tool-calls";
+export * from "./aeo-webhooks";
+export * from "./aeo-scan-requests";
+export * from "./aeo-recommendation-cache";
+export * from "./webhook-deliveries";
+export * from "./guest-sessions";
+export * from "./client-stakeholders";
+export * from "./installed-packs";
+export * from "./bingolingo";
+export * from "./marketplace";
+export * from "./sso";
+export * from "./sso-state";
+export * from "./proposals";
+export * from "./competitor-urls";
+export * from "./notifications";
+export * from "./client-health";
+export * from "./push-tokens";
+export * from "./developer-api-keys";
+export * from "./voice-intelligence";
+export * from "./subscription-plans";
+export * from "./partner-tiers";
+export * from "./confidence-configs";
+export * from "./prospecting-patterns";
+export * from "./mcp-oauth-clients";
+export * from "./intelligence-briefs";
+export * from "./mission-templates";
+export * from "./workflows";
+export * from "./activation-emails";
+export * from "./mcp-servers";
+export * from "./mcp-directory-submissions";
+export * from "./mcp-leads";
+export * from "./sla";
+export * from "./bot-messages";
+export * from "./mission-playbooks";
+export * from "./model-costs";
+export * from "./billing-provider-config";
+export * from "./extraction-jobs";
+export * from "./crm-blueprints";
+export * from "./guardian";
+export * from "./agent-loop";
+export * from "./beliefs";
+export * from "./causal-outcomes";
+export * from "./goal-conflicts";
+export * from "./uncertainty-schedules";
+export * from "./opportunity-signals";
+export * from "./bot-handoff-requests";
+export * from "./coordinator";
+export * from "./self-improvement";
+import { pgTable, serial, integer, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const installedPacksTable = pgTable("installed_packs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clientsTable.id, { onDelete: "cascade" }),
+  packId: text("pack_id").notNull(),
+  installedAt: timestamp("installed_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  unique("installed_packs_client_pack_unique").on(table.clientId, table.packId),
+]);
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const intelligenceBriefsTable = pgTable("intelligence_briefs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  briefType: text("brief_type", { enum: ["morning", "weekly"] }).notNull().default("morning"),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  bodyHtml: text("body_html").notNull(),
+  bodyText: text("body_text").notNull(),
+  deliveryChannels: jsonb("delivery_channels").$type<{ email: boolean; slack: boolean }>().notNull().default({ email: false, slack: false }),
+  deliveredAt: jsonb("delivered_at").$type<{ email?: string; slack?: string }>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("intelligence_briefs_client_generated_idx").on(table.clientId, table.generatedAt),
+  index("intelligence_briefs_client_type_idx").on(table.clientId, table.briefType),
+]);
+
+export const briefingSettingsTable = pgTable("briefing_settings", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  emailEnabled: integer("email_enabled").notNull().default(0),
+  emailRecipients: text("email_recipients").array(),
+  slackEnabled: integer("slack_enabled").notNull().default(0),
+  slackChannel: text("slack_channel").default("galaxybots-brief"),
+  deliveryHour: integer("delivery_hour").notNull().default(7),
+  deliveryMinute: integer("delivery_minute").notNull().default(30),
+  timezone: text("timezone").notNull().default("UTC"),
+  lastMorningBriefAt: timestamp("last_morning_brief_at", { withTimezone: true }),
+  lastWeeklyBriefAt: timestamp("last_weekly_brief_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type IntelligenceBrief = typeof intelligenceBriefsTable.$inferSelect;
+export type InsertIntelligenceBrief = typeof intelligenceBriefsTable.$inferInsert;
+export type BriefingSettings = typeof briefingSettingsTable.$inferSelect;
+export type InsertBriefingSettings = typeof briefingSettingsTable.$inferInsert;
+import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const journalEntriesTable = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  date: text("date").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  boardroomHighlights: text("boardroom_highlights").array().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertJournalEntrySchema = createInsertSchema(journalEntriesTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type JournalEntry = typeof journalEntriesTable.$inferSelect;
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const knowledgeBaseSourcesTable = pgTable("knowledge_base_sources", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(),
+  name: text("name").notNull(),
+  config: jsonb("config").notNull().default({}),
+  syncSchedule: text("sync_schedule").notNull().default("daily"),
+  status: text("status").notNull().default("pending"),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastSyncStatus: text("last_sync_status"),
+  lastSyncError: text("last_sync_error"),
+  documentCount: integer("document_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("kb_sources_client_id_idx").on(table.clientId),
+  index("kb_sources_source_type_idx").on(table.sourceType),
+]);
+
+export const kbSourceDocumentsTable = pgTable("kb_source_documents", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id").notNull().references(() => knowledgeBaseSourcesTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  externalId: text("external_id"),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  contentHash: text("content_hash"),
+  sourceUrl: text("source_url"),
+  lastModified: timestamp("last_modified", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("kb_src_docs_source_id_idx").on(table.sourceId),
+  index("kb_src_docs_client_id_idx").on(table.clientId),
+  index("kb_src_docs_external_id_idx").on(table.externalId),
+]);
+
+export const kbSourceChunksTable = pgTable("kb_source_chunks", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull().references(() => kbSourceDocumentsTable.id, { onDelete: "cascade" }),
+  sourceId: integer("source_id").notNull().references(() => knowledgeBaseSourcesTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  chunkIndex: integer("chunk_index").notNull().default(0),
+  embedding: jsonb("embedding"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("kb_src_chunks_document_id_idx").on(table.documentId),
+  index("kb_src_chunks_source_id_idx").on(table.sourceId),
+  index("kb_src_chunks_client_id_idx").on(table.clientId),
+]);
+
+export const insertKnowledgeBaseSourceSchema = createInsertSchema(knowledgeBaseSourcesTable).omit({ id: true, createdAt: true, updatedAt: true, lastSyncAt: true, lastSyncStatus: true, lastSyncError: true, documentCount: true });
+export const insertKbSourceDocumentSchema = createInsertSchema(kbSourceDocumentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertKbSourceChunkSchema = createInsertSchema(kbSourceChunksTable).omit({ id: true, createdAt: true });
+
+export type KnowledgeBaseSource = typeof knowledgeBaseSourcesTable.$inferSelect;
+export type InsertKnowledgeBaseSource = z.infer<typeof insertKnowledgeBaseSourceSchema>;
+export type KbSourceDocument = typeof kbSourceDocumentsTable.$inferSelect;
+export type InsertKbSourceDocument = z.infer<typeof insertKbSourceDocumentSchema>;
+export type KbSourceChunk = typeof kbSourceChunksTable.$inferSelect;
+export type InsertKbSourceChunk = z.infer<typeof insertKbSourceChunkSchema>;
+import { pgTable, serial, text, timestamp, integer, vector, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const knowledgeBaseDocumentsTable = pgTable("knowledge_base_documents", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  sourceFilename: text("source_filename").notNull(),
+  fileType: text("file_type").notNull(),
+  chunkCount: integer("chunk_count").notNull().default(0),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("kb_documents_client_id_idx").on(table.clientId),
+]);
+
+export const knowledgeBaseChunksTable = pgTable("knowledge_base_chunks", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull().references(() => knowledgeBaseDocumentsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  chunkText: text("chunk_text").notNull(),
+  chunkIndex: integer("chunk_index").notNull(),
+  embedding: vector("embedding", { dimensions: 1536 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("kb_chunks_document_id_idx").on(table.documentId),
+  index("kb_chunks_client_id_idx").on(table.clientId),
+]);
+
+export const insertKnowledgeBaseDocumentSchema = createInsertSchema(knowledgeBaseDocumentsTable).omit({ id: true, uploadedAt: true });
+export const insertKnowledgeBaseChunkSchema = createInsertSchema(knowledgeBaseChunksTable).omit({ id: true, createdAt: true });
+
+export type KnowledgeBaseDocument = typeof knowledgeBaseDocumentsTable.$inferSelect;
+export type InsertKnowledgeBaseDocument = z.infer<typeof insertKnowledgeBaseDocumentSchema>;
+export type KnowledgeBaseChunk = typeof knowledgeBaseChunksTable.$inferSelect;
+export type InsertKnowledgeBaseChunk = z.infer<typeof insertKnowledgeBaseChunkSchema>;
+import { pgTable, serial, text, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const llmUsageLogTable = pgTable("llm_usage_log", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id"),
+  botId: integer("bot_id"),
+  sessionId: integer("session_id"),
+  conversationId: integer("conversation_id"),
+  model: text("model").notNull(),
+  promptTokens: integer("prompt_tokens").notNull().default(0),
+  completionTokens: integer("completion_tokens").notNull().default(0),
+  estimatedCostUsd: numeric("estimated_cost_usd").notNull().default("0"),
+  latencyMs: integer("latency_ms").notNull().default(0),
+  calledAt: timestamp("called_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertLlmUsageLogSchema = createInsertSchema(llmUsageLogTable).omit({
+  id: true,
+  calledAt: true,
+});
+
+export type LlmUsageLog = typeof llmUsageLogTable.$inferSelect;
+export type InsertLlmUsageLog = z.infer<typeof insertLlmUsageLogSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index, boolean } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+import { clientsTable } from "./clients";
+
+export const marketplaceTemplatesTable = pgTable("marketplace_templates", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  industryTags: jsonb("industry_tags").$type<string[]>().default([]),
+  visibility: text("visibility").notNull().default("public"),
+  sourceData: jsonb("source_data").notNull(),
+  authorUserId: integer("author_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  authorClientId: integer("author_client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  authorName: text("author_name"),
+  installCount: integer("install_count").notNull().default(0),
+  featured: boolean("featured").notNull().default(false),
+  verified: boolean("verified").notNull().default(false),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  index("marketplace_templates_type_idx").on(table.type),
+  index("marketplace_templates_category_idx").on(table.category),
+  index("marketplace_templates_status_idx").on(table.status),
+  index("marketplace_templates_author_idx").on(table.authorUserId),
+]);
+
+export const marketplaceInstallsTable = pgTable("marketplace_installs", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => marketplaceTemplatesTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  installedResourceId: integer("installed_resource_id"),
+  installedAt: timestamp("installed_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("marketplace_installs_template_idx").on(table.templateId),
+  index("marketplace_installs_user_idx").on(table.userId),
+]);
+
+export type MarketplaceTemplate = typeof marketplaceTemplatesTable.$inferSelect;
+export type MarketplaceInstall = typeof marketplaceInstallsTable.$inferSelect;
+import { pgTable, serial, integer, text, timestamp, unique, jsonb } from "drizzle-orm/pg-core";
+import { mcpServersTable } from "./mcp-servers";
+
+export const mcpDirectorySubmissionsTable = pgTable("mcp_directory_submissions", {
+  id: serial("id").primaryKey(),
+  mcpServerId: integer("mcp_server_id").notNull().references(() => mcpServersTable.id, { onDelete: "cascade" }),
+  directorySlug: text("directory_slug").notNull(),
+  status: text("status").notNull().default("not_started"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  listingUrl: text("listing_url"),
+  optimizedDescription: text("optimized_description"),
+  notes: text("notes"),
+  submissionPayload: jsonb("submission_payload"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique().on(table.mcpServerId, table.directorySlug),
+]);
+
+export type McpDirectorySubmission = typeof mcpDirectorySubmissionsTable.$inferSelect;
+export type NewMcpDirectorySubmission = typeof mcpDirectorySubmissionsTable.$inferInsert;
+import { pgTable, serial, text, timestamp, integer, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { platformApiKeysTable } from "./platform-api-keys";
+
+export const mcpLeadSourceEnum = pgEnum("mcp_lead_source", [
+  "request_demo",
+  "roi_signal",
+  "pricing_signal",
+  "launch_page",
+]);
+
+export const mcpLeadsTable = pgTable("mcp_leads", {
+  id: serial("id").primaryKey(),
+  name: text("name"),
+  email: text("email").notNull(),
+  company: text("company"),
+  source: mcpLeadSourceEnum("source").notNull().default("launch_page"),
+  queryContext: jsonb("query_context"),
+  partnerKeyId: integer("partner_key_id").references(() => platformApiKeysTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("mcp_leads_email_source_idx").on(table.email, table.source),
+]);
+
+export type McpLead = typeof mcpLeadsTable.$inferSelect;
+export type NewMcpLead = typeof mcpLeadsTable.$inferInsert;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { platformApiKeysTable } from "./platform-api-keys";
+import { clientsTable } from "./clients";
+
+export const mcpOAuthClientsTable = pgTable("mcp_oauth_clients", {
+  id: serial("id").primaryKey(),
+  clientId: text("client_id").notNull().unique(),
+  clientName: text("client_name").notNull(),
+  clientSecretHash: text("client_secret_hash"),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull().default([]),
+  allowedScopes: jsonb("allowed_scopes").$type<string[]>().notNull().default(["bots:read"]),
+  platformApiKeyId: integer("platform_api_key_id").references(() => platformApiKeysTable.id, { onDelete: "set null" }),
+  clientIdOwner: integer("client_id_owner").references(() => clientsTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("mcp_oauth_clients_client_id_idx").on(table.clientId),
+  index("mcp_oauth_clients_client_id_owner_idx").on(table.clientIdOwner),
+]);
+
+export const mcpOAuthCodesTable = pgTable("mcp_oauth_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  oauthClientId: text("oauth_client_id").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  codeChallengeMethod: text("code_challenge_method").notNull().default("S256"),
+  redirectUri: text("redirect_uri").notNull(),
+  scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  authorizingClientId: integer("authorizing_client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  authorizingDevKeyId: integer("authorizing_dev_key_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("mcp_oauth_codes_code_idx").on(table.code),
+  index("mcp_oauth_codes_client_id_idx").on(table.oauthClientId),
+]);
+
+export const mcpOAuthTokensTable = pgTable("mcp_oauth_tokens", {
+  id: serial("id").primaryKey(),
+  accessTokenHash: text("access_token_hash").notNull().unique(),
+  refreshTokenHash: text("refresh_token_hash").unique(),
+  oauthClientId: text("oauth_client_id").notNull(),
+  scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("mcp_oauth_tokens_access_token_hash_idx").on(table.accessTokenHash),
+  index("mcp_oauth_tokens_refresh_token_hash_idx").on(table.refreshTokenHash),
+  index("mcp_oauth_tokens_client_id_idx").on(table.oauthClientId),
+]);
+
+export type McpOAuthClient = typeof mcpOAuthClientsTable.$inferSelect;
+export type McpOAuthCode = typeof mcpOAuthCodesTable.$inferSelect;
+export type McpOAuthToken = typeof mcpOAuthTokensTable.$inferSelect;
+import { pgTable, serial, integer, text, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const mcpServersTable = pgTable("mcp_servers", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  sseUrl: text("sse_url"),
+  authType: text("auth_type").notNull().default("api_key"),
+  tags: jsonb("tags").notNull().default([]),
+  isOwn: boolean("is_own").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type McpServer = typeof mcpServersTable.$inferSelect;
+export type NewMcpServer = typeof mcpServersTable.$inferInsert;
+import { pgTable, serial, text, timestamp, integer, jsonb, boolean, index } from "drizzle-orm/pg-core";
+import { platformApiKeysTable } from "./platform-api-keys";
+
+export const mcpToolCallsTable = pgTable("mcp_tool_calls", {
+  id: serial("id").primaryKey(),
+  partnerKeyId: integer("partner_key_id").references(() => platformApiKeysTable.id, { onDelete: "set null" }),
+  toolName: text("tool_name").notNull(),
+  inputUrl: text("input_url"),
+  inputJson: jsonb("input_json"),
+  responseStatus: text("response_status").notNull(),
+  latencyMs: integer("latency_ms").notNull().default(0),
+  cached: boolean("cached").notNull().default(false),
+  calledAt: timestamp("called_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("mcp_tool_calls_partner_key_id_idx").on(table.partnerKeyId),
+  index("mcp_tool_calls_called_at_idx").on(table.calledAt),
+  index("mcp_tool_calls_tool_name_idx").on(table.toolName),
+]);
+
+export type McpToolCall = typeof mcpToolCallsTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, vector, index, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
+
+export const botMemoriesTable = pgTable("bot_memories", {
+  id: serial("id").primaryKey(),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(),
+  sourceId: integer("source_id"),
+  sessionId: integer("session_id"),
+  content: text("content").notNull(),
+  summary: text("summary").notNull(),
+  topic: text("topic"),
+  embedding: vector("embedding", { dimensions: 1536 }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  supersededByBeliefId: integer("superseded_by_belief_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("bot_memories_bot_id_idx").on(table.botId),
+  index("bot_memories_client_id_idx").on(table.clientId),
+]);
+
+export const botAssignmentsTable = pgTable("bot_assignments", {
+  id: serial("id").primaryKey(),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  objective: text("objective").notNull(),
+  schedule: text("schedule").notNull().default("daily"),
+  isActive: text("is_active").notNull().default("true"),
+  actionMode: text("action_mode").notNull().default("passive"),
+  actionPrompt: text("action_prompt"),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  parentGoalId: integer("parent_goal_id"),
+  horizon: text("horizon").notNull().default("weekly"),
+  subTasks: jsonb("sub_tasks")
+    .$type<Array<{
+      id: string;
+      title: string;
+      dependsOn: string[];
+      status: "pending" | "running" | "done" | "blocked";
+      completedAt?: string;
+    }>>()
+    .default([]),
+  progressScore: integer("progress_score").notNull().default(0),
+  blockingOn: jsonb("blocking_on")
+    .$type<Array<{ reason: string; since: string }>>()
+    .default([]),
+  resourceRequirements: jsonb("resource_requirements")
+    .$type<{
+      timeBudgetMinutes: number;
+      costBudgetCents: number;
+      clientAttentionUnits: number;
+    }>()
+    .default({ timeBudgetMinutes: 60, costBudgetCents: 500, clientAttentionUnits: 1 }),
+  priorityTier: integer("priority_tier").notNull().default(2),
+  generatedBy: text("generated_by").notNull().default("human"),
+  impactScore: integer("impact_score"),
+  feasibilityScore: integer("feasibility_score"),
+  evidenceChain: jsonb("evidence_chain").$type<string[]>().default([]),
+  autoApproveThreshold: integer("auto_approve_threshold"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const backgroundReportsTable = pgTable("background_reports", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id").notNull().references(() => botAssignmentsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  summary: text("summary").notNull(),
+  runStatus: text("run_status").notNull().default("success"),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBotMemorySchema = createInsertSchema(botMemoriesTable).omit({ id: true, createdAt: true });
+export const insertBotAssignmentSchema = createInsertSchema(botAssignmentsTable).omit({ id: true, createdAt: true, lastRunAt: true });
+export const insertBackgroundReportSchema = createInsertSchema(backgroundReportsTable).omit({ id: true, createdAt: true, deliveredAt: true });
+
+export type BotMemory = typeof botMemoriesTable.$inferSelect;
+export type InsertBotMemory = z.infer<typeof insertBotMemorySchema>;
+export type BotAssignment = typeof botAssignmentsTable.$inferSelect;
+export type InsertBotAssignment = z.infer<typeof insertBotAssignmentSchema>;
+export type BackgroundReport = typeof backgroundReportsTable.$inferSelect;
+export type InsertBackgroundReport = z.infer<typeof insertBackgroundReportSchema>;
+import { integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+import { conversations } from "./conversations";
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  senderName: text("sender_name"),
+  messageType: text("message_type").notNull().default("text"),
+  toolData: jsonb("tool_data"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+import { pgTable, serial, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const missionPlaybooksTable = pgTable("mission_playbooks", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  steps: jsonb("steps").notNull().default([]),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  category: text("category").notNull().default("general"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertMissionPlaybookSchema = createInsertSchema(missionPlaybooksTable).omit({ id: true, createdAt: true });
+export type MissionPlaybook = typeof missionPlaybooksTable.$inferSelect;
+export type InsertMissionPlaybook = z.infer<typeof insertMissionPlaybookSchema>;
+import { pgTable, serial, text, timestamp, boolean, jsonb, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const missionTemplatesTable = pgTable("mission_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  estimatedDuration: text("estimated_duration"),
+  recommendedBots: jsonb("recommended_bots").notNull().default([]),
+  objectiveTemplate: text("objective_template").notNull(),
+  successCriteria: text("success_criteria"),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  createdBy: text("created_by"),
+  clientId: integer("client_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertMissionTemplateSchema = createInsertSchema(missionTemplatesTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MissionTemplate = typeof missionTemplatesTable.$inferSelect;
+export type InsertMissionTemplate = z.infer<typeof insertMissionTemplateSchema>;
+import { pgTable, serial, text, timestamp, numeric } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const modelCostsTable = pgTable("model_costs", {
+  id: serial("id").primaryKey(),
+  model: text("model").notNull().unique(),
+  inputCostPerToken: numeric("input_cost_per_token").notNull(),
+  outputCostPerToken: numeric("output_cost_per_token").notNull(),
+  contextWindow: numeric("context_window").notNull().default("128000"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertModelCostSchema = createInsertSchema(modelCostsTable).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type ModelCost = typeof modelCostsTable.$inferSelect;
+export type InsertModelCost = z.infer<typeof insertModelCostSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+import { usersTable } from "./users";
+
+export const notificationsTable = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  category: text("category", {
+    enum: ["prospect", "aeo", "competitor", "cost", "bot", "pipeline", "system", "approval"],
+  }).notNull(),
+  severity: text("severity", {
+    enum: ["info", "warning", "critical"],
+  }).notNull().default("info"),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  link: text("link"),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("notifications_client_read_created_idx").on(table.clientId, table.readAt, table.createdAt),
+  index("notifications_user_id_idx").on(table.userId),
+]);
+
+export type Notification = typeof notificationsTable.$inferSelect;
+export type InsertNotification = typeof notificationsTable.$inferInsert;
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  real,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+import { botsTable } from "./bots";
+
+export const opportunitySignalsTable = pgTable(
+  "opportunity_signals",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clientsTable.id, { onDelete: "cascade" }),
+    botId: integer("bot_id").references(() => botsTable.id, {
+      onDelete: "set null",
+    }),
+    signalType: text("signal_type").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    suggestedAction: text("suggested_action").notNull(),
+    predictedOutcomeDistribution: jsonb("predicted_outcome_distribution")
+      .$type<{
+        best: number;
+        median: number;
+        worst: number;
+        confidence: number;
+      }>()
+      .default({ best: 0, median: 0, worst: 0, confidence: 0 }),
+    probabilityOfSuccess: real("probability_of_success"),
+    evidenceChain: jsonb("evidence_chain").$type<string[]>().default([]),
+    causalPatternIds: jsonb("causal_pattern_ids")
+      .$type<number[]>()
+      .default([]),
+    status: text("status").notNull().default("pending"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    approvedByUserId: integer("approved_by_user_id"),
+    resultingAssignmentId: integer("resulting_assignment_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    detectedAt: timestamp("detected_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("opportunity_signals_client_id_idx").on(table.clientId),
+    index("opportunity_signals_status_idx").on(table.status),
+    index("opportunity_signals_signal_type_idx").on(table.signalType),
+    index("opportunity_signals_detected_at_idx").on(table.detectedAt),
+  ],
+);
+
+export const insertOpportunitySignalSchema = createInsertSchema(
+  opportunitySignalsTable,
+).omit({ id: true, createdAt: true });
+
+export type OpportunitySignal = typeof opportunitySignalsTable.$inferSelect;
+export type InsertOpportunitySignal = z.infer<
+  typeof insertOpportunitySignalSchema
+>;
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const partnerRegistrationsTable = pgTable("partner_registrations", {
+  id: serial("id").primaryKey(),
+  partnerRef: text("partner_ref").notNull(),
+  clientId: integer("client_id").notNull(),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  plan: text("plan").notNull().default("single"),
+  source: text("source"),
+  status: text("status").notNull().default("active"),
+  registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPartnerRegistrationSchema = createInsertSchema(partnerRegistrationsTable).omit({ id: true, registeredAt: true });
+export type InsertPartnerRegistration = z.infer<typeof insertPartnerRegistrationSchema>;
+export type PartnerRegistration = typeof partnerRegistrationsTable.$inferSelect;
+import { pgTable, serial, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const partnersTable = pgTable("partners", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  platformName: text("platform_name").notNull(),
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color"),
+  welcomeMessage: text("welcome_message").notNull(),
+  offer: text("offer"),
+  adminPassword: text("admin_password").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertPartnerSchema = createInsertSchema(partnersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+export type Partner = typeof partnersTable.$inferSelect;
+import { pgTable, serial, text, integer, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const partnersTable = pgTable("partners", {
+  id: serial("id").primaryKey(),
+  ref: text("ref").notNull().unique(),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  tier: text("tier").notNull().default("authorized"),
+  wholesaleDiscount: numeric("wholesale_discount", { precision: 5, scale: 2 }).notNull().default("40"),
+  minClients: integer("min_clients").notNull().default(5),
+  minMonthlySpend: numeric("min_monthly_spend", { precision: 10, scale: 2 }).notNull().default("200"),
+  contractType: text("contract_type").notNull().default("monthly"),
+  partnerName: text("partner_name").notNull(),
+  partnerLogo: text("partner_logo"),
+  primaryColor: text("primary_color"),
+  welcomeMessage: text("welcome_message").notNull(),
+  offer: text("offer"),
+  adminPasswordHash: text("admin_password_hash"),
+  isActive: boolean("is_active").notNull().default(true),
+  consecutiveMonthsBelowThreshold: integer("consecutive_months_below_threshold").notNull().default(0),
+  lastTierReviewAt: timestamp("last_tier_review_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const partnerApplicationsTable = pgTable("partner_applications", {
+  id: serial("id").primaryKey(),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  currentClientCount: integer("current_client_count").notNull().default(0),
+  requestedTier: text("requested_tier").notNull().default("authorized"),
+  resellerAgreementAccepted: boolean("reseller_agreement_accepted").notNull().default(false),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const partnerTierReviewLogTable = pgTable("partner_tier_review_log", {
+  id: serial("id").primaryKey(),
+  partnerId: integer("partner_id").notNull(),
+  partnerRef: text("partner_ref").notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).defaultNow().notNull(),
+  activeClientCount: integer("active_client_count").notNull().default(0),
+  monthlySpend: numeric("monthly_spend", { precision: 10, scale: 2 }).notNull().default("0"),
+  tierAtReview: text("tier_at_review").notNull(),
+  action: text("action").notNull().default("no_change"),
+  notes: text("notes"),
+});
+
+export const insertPartnerSchema = createInsertSchema(partnersTable).omit({ id: true, createdAt: true });
+export const insertPartnerApplicationSchema = createInsertSchema(partnerApplicationsTable).omit({ id: true, createdAt: true, reviewedAt: true });
+export const insertPartnerTierReviewLogSchema = createInsertSchema(partnerTierReviewLogTable).omit({ id: true, reviewedAt: true });
+
+export type Partner = typeof partnersTable.$inferSelect;
+export type PartnerApplication = typeof partnerApplicationsTable.$inferSelect;
+export type PartnerTierReviewLog = typeof partnerTierReviewLogTable.$inferSelect;
+export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+export type InsertPartnerApplication = z.infer<typeof insertPartnerApplicationSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, boolean, varchar, numeric } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+import { botsTable } from "./bots";
+
+export const pipelinesTable = pgTable("pipelines", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  triggerType: text("trigger_type").notNull().default("manual"),
+  triggerConfig: jsonb("trigger_config").default({}),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const pipelineStepsTable = pgTable("pipeline_steps", {
+  id: serial("id").primaryKey(),
+  pipelineId: integer("pipeline_id").notNull().references(() => pipelinesTable.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  instruction: text("instruction").notNull(),
+  stepType: text("step_type").notNull().default("generative"),
+  qualityThreshold: numeric("quality_threshold"),
+  maxGateRetries: integer("max_gate_retries").notNull().default(2),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const pipelineRunsTable = pgTable("pipeline_runs", {
+  id: serial("id").primaryKey(),
+  pipelineId: integer("pipeline_id").notNull().references(() => pipelinesTable.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  triggerType: text("trigger_type").notNull().default("manual"),
+  triggerData: jsonb("trigger_data").default({}),
+  coordinatorTrace: jsonb("coordinator_trace").$type<Record<string, unknown>>(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const pipelineRunStepsTable = pgTable("pipeline_run_steps", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").notNull().references(() => pipelineRunsTable.id, { onDelete: "cascade" }),
+  stepId: integer("step_id").notNull().references(() => pipelineStepsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  instruction: text("instruction").notNull(),
+  status: text("status").notNull().default("pending"),
+  output: text("output"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const pipelineTriggersTable = pgTable("pipeline_triggers", {
+  id: serial("id").primaryKey(),
+  pipelineId: integer("pipeline_id").notNull().references(() => pipelinesTable.id, { onDelete: "cascade" }),
+  triggerType: varchar("trigger_type", { length: 50 }).notNull().default("generic"),
+  endpointSlug: varchar("endpoint_slug", { length: 100 }).notNull().unique(),
+  signingSecret: text("signing_secret").notNull(),
+  label: text("label"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const triggerEventsTable = pgTable("trigger_events", {
+  id: serial("id").primaryKey(),
+  triggerId: integer("trigger_id").notNull().references(() => pipelineTriggersTable.id, { onDelete: "cascade" }),
+  pipelineId: integer("pipeline_id").notNull().references(() => pipelinesTable.id, { onDelete: "cascade" }),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  payloadPreview: text("payload_preview"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  errorMessage: text("error_message"),
+  runId: integer("run_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPipelineSchema = createInsertSchema(pipelinesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPipelineStepSchema = createInsertSchema(pipelineStepsTable).omit({ id: true, createdAt: true });
+export const insertPipelineRunSchema = createInsertSchema(pipelineRunsTable).omit({ id: true, createdAt: true });
+export const insertPipelineRunStepSchema = createInsertSchema(pipelineRunStepsTable).omit({ id: true, createdAt: true });
+export const insertPipelineTriggerSchema = createInsertSchema(pipelineTriggersTable).omit({ id: true, createdAt: true });
+export const insertTriggerEventSchema = createInsertSchema(triggerEventsTable).omit({ id: true, createdAt: true });
+
+export type Pipeline = typeof pipelinesTable.$inferSelect;
+export type InsertPipeline = z.infer<typeof insertPipelineSchema>;
+export type PipelineStep = typeof pipelineStepsTable.$inferSelect;
+export type InsertPipelineStep = z.infer<typeof insertPipelineStepSchema>;
+export type PipelineRun = typeof pipelineRunsTable.$inferSelect;
+export type InsertPipelineRun = z.infer<typeof insertPipelineRunSchema>;
+export type PipelineRunStep = typeof pipelineRunStepsTable.$inferSelect;
+export type InsertPipelineRunStep = z.infer<typeof insertPipelineRunStepSchema>;
+export type PipelineTrigger = typeof pipelineTriggersTable.$inferSelect;
+export type InsertPipelineTrigger = z.infer<typeof insertPipelineTriggerSchema>;
+export type TriggerEvent = typeof triggerEventsTable.$inferSelect;
+export type InsertTriggerEvent = z.infer<typeof insertTriggerEventSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const platformApiKeysTable = pgTable("platform_api_keys", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  label: text("label"),
+  keyHash: text("key_hash").notNull().unique(),
+  previousKeyHash: text("previous_key_hash"),
+  status: text("status").notNull().default("active"),
+  rateLimit: integer("rate_limit").notNull().default(100),
+  rateLimitPerHour: integer("rate_limit_per_hour").notNull().default(100),
+  requestCount: integer("request_count").notNull().default(0),
+  allowedTools: jsonb("allowed_tools").$type<string[] | null>(),
+  rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("platform_api_keys_platform_idx").on(table.platform),
+  index("platform_api_keys_key_hash_idx").on(table.keyHash),
+  index("platform_api_keys_client_id_idx").on(table.clientId),
+]);
+
+export type PlatformApiKey = typeof platformApiKeysTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb, numeric } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export interface ProposalSection {
+  id: string;
+  title: string;
+  content: string;
+  order: number;
+  speakerNotes?: string;
+}
+
+export const proposalsTable = pgTable("proposals", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  prospectName: text("prospect_name").notNull(),
+  prospectIndustry: text("prospect_industry"),
+  type: text("type").notNull().default("proposal"),
+  status: text("status").notNull().default("draft"),
+  sections: jsonb("sections").$type<ProposalSection[]>().default([]),
+  prospectDetails: jsonb("prospect_details").$type<Record<string, unknown>>().default({}),
+  shareToken: text("share_token").unique(),
+  value: numeric("value"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  wonAt: timestamp("won_at", { withTimezone: true }),
+  lostAt: timestamp("lost_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertProposalSchema = createInsertSchema(proposalsTable).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type Proposal = typeof proposalsTable.$inferSelect;
+export type InsertProposal = z.infer<typeof insertProposalSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, numeric, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const prospectingJobsTable = pgTable("prospecting_jobs", {
+  id: serial("id").primaryKey(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  query: text("query").notNull(),
+  location: text("location"),
+  limit: integer("limit").notNull().default(50),
+  status: text("status", { enum: ["pending", "submitted", "running", "completed", "failed", "paused", "human_review"] }).notNull().default("pending"),
+  pmJobId: text("pm_job_id"),
+  totalFound: integer("total_found").notNull().default(0),
+  processedCount: integer("processed_count").notNull().default(0),
+  successfulCount: integer("successful_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  humanReviewCount: integer("human_review_count").notNull().default(0),
+  totalCostCredits: numeric("total_cost_credits").notNull().default("0"),
+  checkpointData: jsonb("checkpoint_data"),
+  requestedBy: text("requested_by"),
+  source: text("source", { enum: ["galaxybots", "piratemonster"] }).notNull().default("galaxybots"),
+  webhookUrl: text("webhook_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  index("prospecting_jobs_client_id_idx").on(table.clientId),
+  index("prospecting_jobs_status_idx").on(table.status),
+  index("prospecting_jobs_idempotency_key_idx").on(table.idempotencyKey),
+]);
+
+export type ProspectingJob = typeof prospectingJobsTable.$inferSelect;
+export type InsertProspectingJob = typeof prospectingJobsTable.$inferInsert;
+import { pgTable, serial, varchar, integer, timestamp, numeric } from "drizzle-orm/pg-core";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+
+export const prospectingPatternsTable = pgTable("prospecting_patterns", {
+  id: serial("id").primaryKey(),
+  patternType: varchar("pattern_type", { length: 50 }).notNull(), // e.g., 'email', 'phone', 'extraction'
+  domainRegex: varchar("domain_regex", { length: 255 }).notNull(),
+  hintText: varchar("hint_text", { length: 1000 }).notNull(),
+  timesApplied: integer("times_applied").notNull().default(0),
+  successAfterHint: integer("success_after_hint").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertProspectingPatternSchema = createInsertSchema(prospectingPatternsTable);
+export const selectProspectingPatternSchema = createSelectSchema(prospectingPatternsTable);
+
+export type ProspectingPattern = typeof prospectingPatternsTable.$inferSelect;
+export type InsertProspectingPattern = typeof prospectingPatternsTable.$inferInsert;
+import { pgTable, serial, text, timestamp, integer, jsonb, real, index, boolean, numeric, unique } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+import { prospectingJobsTable } from "./prospecting_jobs";
+
+export const prospectsTable = pgTable("prospects", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  companyName: text("company_name").notNull(),
+  domain: text("domain"),
+  phone: text("phone"),
+  email: text("email"),
+  socialLinks: jsonb("social_links").$type<Record<string, string>>().default({}),
+  sourceUrl: text("source_url").notNull(),
+  confidenceScore: real("confidence_score").notNull().default(0),
+  icpScore: numeric("icp_score"),
+  icpCriteria: jsonb("icp_criteria"),
+  status: text("status", { enum: ["new", "enriched", "review_needed", "qualified", "contacted", "rejected", "responded", "converted"] }).notNull().default("new"),
+  errorCategory: text("error_category", { enum: ["network", "parsing", "not_found", "validation"] }),
+  retryStrategy: text("retry_strategy", { enum: ["exponential", "fixed", "none", "escalate"] }).default("none"),
+  attemptCount: integer("attempt_count").notNull().default(1),
+  enrichmentCostCredits: numeric("enrichment_cost_credits").notNull().default("0"),
+  jobId: integer("job_id").references(() => prospectingJobsTable.id, { onDelete: "set null" }),
+  extractionNotes: text("extraction_notes"),
+  convertedClientId: integer("converted_client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  convertedAt: timestamp("converted_at", { withTimezone: true }),
+  outreachSentCount: integer("outreach_sent_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("prospects_status_idx").on(table.status),
+  index("prospects_client_id_idx").on(table.clientId),
+  index("prospects_confidence_idx").on(table.confidenceScore),
+  unique("prospects_client_id_domain_idx").on(table.clientId, table.domain),
+]);
+
+export const prospectOutreachLogTable = pgTable("prospect_outreach_log", {
+  id: serial("id").primaryKey(),
+  prospectId: integer("prospect_id").notNull().references(() => prospectsTable.id, { onDelete: "cascade" }),
+  channel: text("channel", { enum: ["email", "sms"] }).notNull(),
+  messageBody: text("message_body").notNull(),
+  subject: text("subject"),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  deliveryStatus: text("delivery_status").notNull().default("sent"),
+  responseReceivedAt: timestamp("response_received_at", { withTimezone: true }),
+  responseSnippet: text("response_snippet"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("outreach_log_prospect_idx").on(table.prospectId),
+]);
+
+export const prospectOutreachTemplatesTable = pgTable("prospect_outreach_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  channel: text("channel", { enum: ["email", "sms"] }).notNull(),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Prospect = typeof prospectsTable.$inferSelect;
+export type InsertProspect = typeof prospectsTable.$inferInsert;
+export type ProspectOutreachLog = typeof prospectOutreachLogTable.$inferSelect;
+export type ProspectOutreachTemplate = typeof prospectOutreachTemplatesTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+
+export const pushTokensTable = pgTable("push_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  token: text("token").notNull(),
+  platform: text("platform", { enum: ["ios", "android", "web"] }).notNull().default("ios"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("push_tokens_user_id_idx").on(table.userId),
+  index("push_tokens_token_idx").on(table.token),
+  uniqueIndex("push_tokens_user_token_uniq").on(table.userId, table.token),
+]);
+
+export type PushToken = typeof pushTokensTable.$inferSelect;
+export type InsertPushToken = typeof pushTokensTable.$inferInsert;
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const crmTypeEnum = pgEnum("crm_type", ["hubspot", "salesforce", "custom_webhook", "none"]);
+
+export const receptionistConfigsTable = pgTable("receptionist_configs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }).unique(),
+  elevenlabsAgentId: text("elevenlabs_agent_id"),
+  twilioPhoneNumber: text("twilio_phone_number"),
+  businessName: text("business_name"),
+  businessHoursJson: jsonb("business_hours_json"),
+  knowledgeBasePrompt: text("knowledge_base_prompt"),
+  notificationEmail: text("notification_email"),
+  crmType: crmTypeEnum("crm_type").notNull().default("none"),
+  crmWebhookUrl: text("crm_webhook_url"),
+  crmFieldMapJson: jsonb("crm_field_map_json"),
+  isActive: boolean("is_active").notNull().default(true),
+  improvementCallCount: integer("improvement_call_count").notNull().default(0),
+  lastImprovedAt: timestamp("last_improved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const callLogsTable = pgTable("call_logs", {
+  id: serial("id").primaryKey(),
+  configId: integer("config_id").notNull().references(() => receptionistConfigsTable.id, { onDelete: "cascade" }),
+  twilioCallSid: text("twilio_call_sid").unique(),
+  twilioRecordingUrl: text("twilio_recording_url"),
+  direction: text("direction").notNull().default("inbound"),
+  fromNumber: text("from_number"),
+  toNumber: text("to_number"),
+  status: text("status").notNull().default("initiated"),
+  durationSeconds: integer("duration_seconds"),
+  transcriptText: text("transcript_text"),
+  transcriptSummary: text("transcript_summary"),
+  crmSynced: boolean("crm_synced").notNull().default(false),
+  crmSyncError: text("crm_sync_error"),
+  emailSent: boolean("email_sent").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("call_logs_config_id_idx").on(table.configId),
+  index("call_logs_created_at_idx").on(table.createdAt),
+]);
+
+export const callImprovementRunsTable = pgTable("call_improvement_runs", {
+  id: serial("id").primaryKey(),
+  configId: integer("config_id").notNull().references(() => receptionistConfigsTable.id, { onDelete: "cascade" }),
+  callsAnalyzed: integer("calls_analyzed").notNull(),
+  oldPromptSnapshot: text("old_prompt_snapshot"),
+  newPrompt: text("new_prompt"),
+  improvementNotes: text("improvement_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertReceptionistConfigSchema = createInsertSchema(receptionistConfigsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCallLogSchema = createInsertSchema(callLogsTable).omit({ id: true, createdAt: true });
+export const insertCallImprovementRunSchema = createInsertSchema(callImprovementRunsTable).omit({ id: true, createdAt: true });
+
+export type ReceptionistConfig = typeof receptionistConfigsTable.$inferSelect;
+export type InsertReceptionistConfig = z.infer<typeof insertReceptionistConfigSchema>;
+export type CallLog = typeof callLogsTable.$inferSelect;
+export type InsertCallLog = z.infer<typeof insertCallLogSchema>;
+export type CallImprovementRun = typeof callImprovementRunsTable.$inferSelect;
+export type InsertCallImprovementRun = z.infer<typeof insertCallImprovementRunSchema>;
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  real,
+  jsonb,
+  boolean,
+  pgEnum,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+
+export const stakeholderEnum = pgEnum("stakeholder_source", [
+  "owner",
+  "client",
+  "downstream",
+]);
+
+export const promptVersionsTable = pgTable(
+  "prompt_versions",
+  {
+    id: serial("id").primaryKey(),
+    botId: integer("bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    versionNum: integer("version_num").notNull().default(1),
+    promptText: text("prompt_text").notNull(),
+    diffFromPrev: text("diff_from_prev"),
+    evidenceSummary: text("evidence_summary"),
+    triggeredBy: text("triggered_by").notNull().default("system"),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    shadowPeriodEnd: timestamp("shadow_period_end", { withTimezone: true }),
+    outcomeScoreBefore: real("outcome_score_before"),
+    outcomeScoreAfter: real("outcome_score_after"),
+    shadowSuccesses: integer("shadow_successes").notNull().default(0),
+    shadowSampleN: integer("shadow_sample_n").notNull().default(0),
+    controlSuccesses: integer("control_successes").notNull().default(0),
+    controlSampleN: integer("control_sample_n").notNull().default(0),
+    diffMagnitudePct: real("diff_magnitude_pct"),
+    status: text("status").notNull().default("shadow"),
+    rollbackReason: text("rollback_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("prompt_versions_bot_id_idx").on(t.botId),
+    index("prompt_versions_status_idx").on(t.status),
+    index("prompt_versions_activated_at_idx").on(t.activatedAt),
+  ],
+);
+
+export const toolHeuristicsTable = pgTable(
+  "tool_heuristics",
+  {
+    id: serial("id").primaryKey(),
+    contextType: text("context_type").notNull(),
+    toolName: text("tool_name").notNull(),
+    successRate: real("success_rate").notNull().default(0),
+    sampleSize: integer("sample_size").notNull().default(0),
+    isCounterfactualAdjusted: boolean("is_counterfactual_adjusted")
+      .notNull()
+      .default(false),
+    rankInContext: integer("rank_in_context").notNull().default(1),
+    lastComputedAt: timestamp("last_computed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("tool_heuristics_context_type_idx").on(t.contextType),
+    index("tool_heuristics_tool_name_idx").on(t.toolName),
+    index("tool_heuristics_last_computed_at_idx").on(t.lastComputedAt),
+  ],
+);
+
+export const experimentsTable = pgTable(
+  "experiments",
+  {
+    id: serial("id").primaryKey(),
+    hypothesis: text("hypothesis").notNull(),
+    metric: text("metric").notNull(),
+    variantA: jsonb("variant_a").$type<Record<string, unknown>>().notNull().default({}),
+    variantB: jsonb("variant_b").$type<Record<string, unknown>>().notNull().default({}),
+    assignmentRule: text("assignment_rule").notNull().default("random_20pct"),
+    splitPct: real("split_pct").notNull().default(0.2),
+    targetSampleSize: integer("target_sample_size").notNull().default(100),
+    currentSampleSizeA: integer("current_sample_size_a").notNull().default(0),
+    currentSampleSizeB: integer("current_sample_size_b").notNull().default(0),
+    metricValueA: real("metric_value_a"),
+    metricValueB: real("metric_value_b"),
+    tStatistic: real("t_statistic"),
+    pValue: real("p_value"),
+    significanceThreshold: real("significance_threshold").notNull().default(0.05),
+    significanceReached: boolean("significance_reached").notNull().default(false),
+    winner: text("winner"),
+    result: text("result"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    proposedByBotId: integer("proposed_by_bot_id").references(() => botsTable.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").notNull().default("running"),
+    ethicsCheckPassed: boolean("ethics_check_passed").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("experiments_status_idx").on(t.status),
+    index("experiments_started_at_idx").on(t.startedAt),
+    index("experiments_significance_reached_idx").on(t.significanceReached),
+  ],
+);
+
+export const alignmentSignalsTable = pgTable(
+  "alignment_signals",
+  {
+    id: serial("id").primaryKey(),
+    approvalId: integer("approval_id"),
+    originalProposal: jsonb("original_proposal")
+      .$type<Record<string, unknown>>()
+      .default({}),
+    humanEdit: jsonb("human_edit")
+      .$type<Record<string, unknown>>()
+      .default({}),
+    diffSummary: text("diff_summary"),
+    patternCategory: text("pattern_category"),
+    sourceStakeholder: stakeholderEnum("source_stakeholder")
+      .notNull()
+      .default("owner"),
+    clientNpsScore: real("client_nps_score"),
+    renewalOutcome: text("renewal_outcome"),
+    escalationTicketId: text("escalation_ticket_id"),
+    extractedSoftRule: text("extracted_soft_rule"),
+    softRuleConfidence: real("soft_rule_confidence"),
+    softRuleStatus: text("soft_rule_status").default("pending"),
+    clusterId: text("cluster_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("alignment_signals_source_stakeholder_idx").on(t.sourceStakeholder),
+    index("alignment_signals_pattern_category_idx").on(t.patternCategory),
+    index("alignment_signals_cluster_id_idx").on(t.clusterId),
+    index("alignment_signals_soft_rule_status_idx").on(t.softRuleStatus),
+    index("alignment_signals_created_at_idx").on(t.createdAt),
+    uniqueIndex("alignment_signals_approval_id_unique").on(t.approvalId),
+  ],
+);
+
+export const calibrationCheckpointsTable = pgTable(
+  "calibration_checkpoints",
+  {
+    id: serial("id").primaryKey(),
+    botId: integer("bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    predictedAvg: real("predicted_avg").notNull(),
+    actualAvg: real("actual_avg").notNull(),
+    calibrationError: real("calibration_error").notNull(),
+    temperatureScaleFactor: real("temperature_scale_factor").notNull().default(1.0),
+    sampleSize: integer("sample_size").notNull().default(0),
+    reliabilityCurve: jsonb("reliability_curve")
+      .$type<Array<{ bin: number; predicted: number; actual: number; count: number }>>()
+      .default([]),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("calibration_checkpoints_bot_id_idx").on(t.botId),
+    index("calibration_checkpoints_period_end_idx").on(t.periodEnd),
+  ],
+);
+
+export const experimentAssignmentsTable = pgTable(
+  "experiment_assignments",
+  {
+    id: serial("id").primaryKey(),
+    experimentId: integer("experiment_id")
+      .notNull()
+      .references(() => experimentsTable.id, { onDelete: "cascade" }),
+    sessionId: integer("session_id"),
+    conversationId: integer("conversation_id"),
+    cohort: text("cohort").notNull(), // "A" or "B"
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("experiment_assignments_experiment_id_idx").on(t.experimentId),
+    index("experiment_assignments_session_id_idx").on(t.sessionId),
+    index("experiment_assignments_cohort_idx").on(t.cohort),
+    uniqueIndex("experiment_assignments_exp_session_unique").on(t.experimentId, t.sessionId),
+  ],
+);
+
+export const insertPromptVersionSchema = createInsertSchema(promptVersionsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertToolHeuristicSchema = createInsertSchema(toolHeuristicsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertExperimentSchema = createInsertSchema(experimentsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertAlignmentSignalSchema = createInsertSchema(alignmentSignalsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertCalibrationCheckpointSchema = createInsertSchema(
+  calibrationCheckpointsTable,
+).omit({ id: true, createdAt: true });
+
+export type PromptVersion = typeof promptVersionsTable.$inferSelect;
+export type InsertPromptVersion = z.infer<typeof insertPromptVersionSchema>;
+export type ToolHeuristic = typeof toolHeuristicsTable.$inferSelect;
+export type InsertToolHeuristic = z.infer<typeof insertToolHeuristicSchema>;
+export type Experiment = typeof experimentsTable.$inferSelect;
+export type InsertExperiment = z.infer<typeof insertExperimentSchema>;
+export type AlignmentSignal = typeof alignmentSignalsTable.$inferSelect;
+export type InsertAlignmentSignal = z.infer<typeof insertAlignmentSignalSchema>;
+export type CalibrationCheckpoint = typeof calibrationCheckpointsTable.$inferSelect;
+export type InsertCalibrationCheckpoint = z.infer<typeof insertCalibrationCheckpointSchema>;
+import { pgTable, serial, text, timestamp, integer, numeric, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { taskSessionsTable } from "./task-sessions";
+
+export const sessionOutcomesTable = pgTable("session_outcomes", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => taskSessionsTable.id, { onDelete: "cascade" }).unique(),
+  clientId: integer("client_id"),
+  botsDeployed: jsonb("bots_deployed").$type<{ botId: number; botName: string; department: string }[]>().default([]),
+  toolsExecuted: jsonb("tools_executed").$type<Record<string, number>>().default({}),
+  toolsExecutedTotal: integer("tools_executed_total").notNull().default(0),
+  durationMinutes: numeric("duration_minutes").notNull().default("0"),
+  estimatedHoursSaved: numeric("estimated_hours_saved").notNull().default("0"),
+  outcomeSummary: text("outcome_summary").notNull().default(""),
+  department: text("department"),
+  loopIterations: integer("loop_iterations"),
+  costCents: integer("cost_cents"),
+  terminationReason: text("termination_reason"),
+  failureCategory: text("failure_category"),
+  loopTrace: jsonb("loop_trace").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const roiShareableReportsTable = pgTable("roi_shareable_reports", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  shareToken: text("share_token").notNull().unique(),
+  title: text("title").notNull(),
+  dateFrom: timestamp("date_from", { withTimezone: true }).notNull(),
+  dateTo: timestamp("date_to", { withTimezone: true }).notNull(),
+  reportData: jsonb("report_data").$type<Record<string, unknown>>().default({}),
+  recommendation: text("recommendation"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertSessionOutcomeSchema = createInsertSchema(sessionOutcomesTable).omit({ id: true, createdAt: true });
+export const insertRoiShareableReportSchema = createInsertSchema(roiShareableReportsTable).omit({ id: true, createdAt: true });
+
+export type SessionOutcome = typeof sessionOutcomesTable.$inferSelect;
+export type InsertSessionOutcome = z.infer<typeof insertSessionOutcomeSchema>;
+export type RoiShareableReport = typeof roiShareableReportsTable.$inferSelect;
+export type InsertRoiShareableReport = z.infer<typeof insertRoiShareableReportSchema>;
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const slaTiersTable = pgTable("sla_tiers", {
+  id: serial("id").primaryKey(),
+  tierId: text("tier_id").notNull().unique(),
+  tierName: text("tier_name").notNull(),
+  responseTargetMs: integer("response_target_ms").notNull(),
+  completionTargetMinutes: integer("completion_target_minutes").notNull(),
+  escalationChannels: jsonb("escalation_channels").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const botSlaOverridesTable = pgTable("bot_sla_overrides", {
+  id: serial("id").primaryKey(),
+  botId: integer("bot_id").notNull(),
+  clientId: integer("client_id").notNull(),
+  responseTargetMs: integer("response_target_ms"),
+  completionTargetMinutes: integer("completion_target_minutes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const botSlaEventsTable = pgTable("bot_sla_events", {
+  id: serial("id").primaryKey(),
+  botId: integer("bot_id").notNull(),
+  clientId: integer("client_id").notNull(),
+  sessionId: integer("session_id"),
+  eventType: text("event_type").notNull().$type<"response" | "completion">(),
+  directedAt: timestamp("directed_at", { withTimezone: true }).notNull(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  durationMs: integer("duration_ms"),
+  approvalHoldMs: integer("approval_hold_ms").notNull().default(0),
+  netDurationMs: integer("net_duration_ms"),
+  targetMs: integer("target_ms").notNull(),
+  breached: boolean("breached").notNull().default(false),
+  breachNotifiedAt: timestamp("breach_notified_at", { withTimezone: true }),
+  tier: text("tier").notNull().default("standard"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertSlaTierSchema = createInsertSchema(slaTiersTable).omit({ id: true, createdAt: true });
+export const insertBotSlaOverrideSchema = createInsertSchema(botSlaOverridesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertBotSlaEventSchema = createInsertSchema(botSlaEventsTable).omit({ id: true, createdAt: true });
+
+export type SlaTier = typeof slaTiersTable.$inferSelect;
+export type BotSlaOverride = typeof botSlaOverridesTable.$inferSelect;
+export type BotSlaEvent = typeof botSlaEventsTable.$inferSelect;
+export type InsertBotSlaEvent = z.infer<typeof insertBotSlaEventSchema>;
+import { pgTable, serial, text, timestamp, jsonb } from "drizzle-orm/pg-core";
+
+export const ssoStateTable = pgTable("sso_state", {
+  id: serial("id").primaryKey(),
+  stateKey: text("state_key").notNull().unique(),
+  stateData: jsonb("state_data").notNull(),
+  stateType: text("state_type").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export type SsoState = typeof ssoStateTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+
+export const ssoConfigsTable = pgTable("sso_configs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }).unique(),
+  providerType: text("provider_type").notNull(),
+  idpMetadataUrl: text("idp_metadata_url"),
+  idpEntityId: text("idp_entity_id"),
+  idpSsoUrl: text("idp_sso_url"),
+  idpCert: text("idp_cert"),
+  oidcClientId: text("oidc_client_id"),
+  oidcClientSecret: text("oidc_client_secret"),
+  oidcIssuerUrl: text("oidc_issuer_url"),
+  domainHint: text("domain_hint").notNull(),
+  jitDefaultRole: text("jit_default_role").notNull().default("viewer"),
+  forceSso: boolean("force_sso").notNull().default(false),
+  scimToken: text("scim_token"),
+  scimGroupRoleMapping: jsonb("scim_group_role_mapping"),
+  jitDefaultPermissionProfileId: integer("jit_default_permission_profile_id"),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type SsoConfig = typeof ssoConfigsTable.$inferSelect;
+import { pgTable, serial, text, integer, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const subscriptionPlansTable = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  tier: text("tier").notNull().unique(),
+  monthlyPrice: numeric("monthly_price", { precision: 10, scale: 2 }).notNull(),
+  includedCredits: integer("included_credits").notNull(),
+  overageRatePerCredit: numeric("overage_rate_per_credit", { precision: 10, scale: 4 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const accountSubscriptionsTable = pgTable("account_subscriptions", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  planId: integer("plan_id").notNull(),
+  creditBalance: integer("credit_balance").notNull().default(0),
+  billingCycleStart: timestamp("billing_cycle_start", { withTimezone: true }).notNull().defaultNow(),
+  billingCycleEnd: timestamp("billing_cycle_end", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const usageEventsTable = pgTable("usage_events", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  model: text("model").notNull(),
+  tokens: integer("tokens").notNull().default(0),
+  creditsDeducted: integer("credits_deducted").notNull().default(0),
+  route: text("route"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const accessorialAddonsTable = pgTable("accessorial_addons", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  monthlyPrice: numeric("monthly_price", { precision: 10, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const accessorialSubscriptionsTable = pgTable("accessorial_subscriptions", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  addonId: integer("addon_id").notNull(),
+  status: text("status").notNull().default("active"),
+  activatedAt: timestamp("activated_at", { withTimezone: true }).defaultNow().notNull(),
+  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlansTable).omit({ id: true, createdAt: true });
+export const insertAccountSubscriptionSchema = createInsertSchema(accountSubscriptionsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertUsageEventSchema = createInsertSchema(usageEventsTable).omit({ id: true, createdAt: true });
+export const insertAccessorialAddonSchema = createInsertSchema(accessorialAddonsTable).omit({ id: true, createdAt: true });
+export const insertAccessorialSubscriptionSchema = createInsertSchema(accessorialSubscriptionsTable).omit({ id: true, activatedAt: true });
+
+export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
+export type AccountSubscription = typeof accountSubscriptionsTable.$inferSelect;
+export type UsageEvent = typeof usageEventsTable.$inferSelect;
+export type AccessorialAddon = typeof accessorialAddonsTable.$inferSelect;
+export type AccessorialSubscription = typeof accessorialSubscriptionsTable.$inferSelect;
+export type InsertAccountSubscription = z.infer<typeof insertAccountSubscriptionSchema>;
+export type InsertUsageEvent = z.infer<typeof insertUsageEventSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
+
+export const taskSessionsTable = pgTable("task_sessions", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  objective: text("objective").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const taskSessionBotsTable = pgTable("task_session_bots", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => taskSessionsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id").notNull().references(() => botsTable.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("member"),
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const taskSessionMessagesTable = pgTable("task_session_messages", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => taskSessionsTable.id, { onDelete: "cascade" }),
+  botId: integer("bot_id"),
+  botName: text("bot_name"),
+  botTitle: text("bot_title"),
+  role: text("role").notNull().default("bot"),
+  content: text("content").notNull(),
+  messageType: text("message_type").notNull().default("text"),
+  toolData: jsonb("tool_data"),
+  flaggedRoles: text("flagged_roles").array().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertTaskSessionSchema = createInsertSchema(taskSessionsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTaskSessionBotSchema = createInsertSchema(taskSessionBotsTable).omit({ id: true, addedAt: true });
+export const insertTaskSessionMessageSchema = createInsertSchema(taskSessionMessagesTable).omit({ id: true, createdAt: true });
+
+export type TaskSession = typeof taskSessionsTable.$inferSelect;
+export type InsertTaskSession = z.infer<typeof insertTaskSessionSchema>;
+export type TaskSessionBot = typeof taskSessionBotsTable.$inferSelect;
+export type InsertTaskSessionBot = z.infer<typeof insertTaskSessionBotSchema>;
+export type TaskSessionMessage = typeof taskSessionMessagesTable.$inferSelect;
+export type InsertTaskSessionMessage = z.infer<typeof insertTaskSessionMessageSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const toolActivityLogTable = pgTable("tool_activity_log", {
+  id: serial("id").primaryKey(),
+  toolName: text("tool_name").notNull(),
+  clientId: integer("client_id"),
+  sessionId: integer("session_id"),
+  botName: text("bot_name"),
+  url: text("url"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertToolActivityLogSchema = createInsertSchema(toolActivityLogTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ToolActivityLog = typeof toolActivityLogTable.$inferSelect;
+export type InsertToolActivityLog = z.infer<typeof insertToolActivityLogSchema>;
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  real,
+  index,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { botsTable } from "./bots";
+import { clientsTable } from "./clients";
+import { botAssignmentsTable } from "./memory";
+
+export const uncertaintySchedulesTable = pgTable(
+  "uncertainty_schedules",
+  {
+    id: serial("id").primaryKey(),
+    beliefId: integer("belief_id"),
+    goalId: integer("goal_id")
+      .notNull()
+      .references(() => botAssignmentsTable.id, { onDelete: "cascade" }),
+    botId: integer("bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    beliefText: text("belief_text").notNull(),
+    currentConfidence: real("current_confidence").notNull(),
+    requiredConfidence: real("required_confidence").notNull().default(0.7),
+    scheduledGatherAt: timestamp("scheduled_gather_at", {
+      withTimezone: true,
+    }).notNull(),
+    status: text("status").notNull().default("pending"),
+    gatheredAt: timestamp("gathered_at", { withTimezone: true }),
+    confidenceAfterGather: real("confidence_after_gather"),
+    leadTimeDays: integer("lead_time_days").notNull().default(2),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("uncertainty_schedules_goal_id_idx").on(table.goalId),
+    index("uncertainty_schedules_bot_id_idx").on(table.botId),
+    index("uncertainty_schedules_status_idx").on(table.status),
+    index("uncertainty_schedules_scheduled_gather_at_idx").on(
+      table.scheduledGatherAt,
+    ),
+  ],
+);
+
+export const insertUncertaintyScheduleSchema = createInsertSchema(
+  uncertaintySchedulesTable,
+).omit({ id: true, createdAt: true });
+
+export type UncertaintySchedule =
+  typeof uncertaintySchedulesTable.$inferSelect;
+export type InsertUncertaintySchedule = z.infer<
+  typeof insertUncertaintyScheduleSchema
+>;
+import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { usersTable } from "./users";
+
+export const userPreferencesTable = pgTable("user_preferences", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }).unique(),
+  logoUrl: text("logo_url"),
+  accentColor: text("accent_color").notNull().default("purple"),
+  fontSize: text("font_size").notNull().default("md"),
+  showBillingWidget: boolean("show_billing_widget").notNull().default(false),
+  notifyApprovals: boolean("notify_approvals").notNull().default(true),
+  notifyBotActions: boolean("notify_bot_actions").notNull().default(true),
+  notifyCostAlerts: boolean("notify_cost_alerts").notNull().default(true),
+  notifyScheduler: boolean("notify_scheduler").notNull().default(true),
+  notifySystem: boolean("notify_system").notNull().default(true),
+  pushEnabled: boolean("push_enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertUserPreferencesSchema = createInsertSchema(userPreferencesTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserPreferences = typeof userPreferencesTable.$inferSelect;
+export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export interface OnboardingState {
+  companyProfile: boolean;
+  firstClient: boolean;
+  industry: boolean;
+  integrations: boolean;
+  firstMission: boolean;
+  dismissed: boolean;
+  completedAt: string | null;
+  companyProfileStartedAt?: string | null;
+  firstClientStartedAt?: string | null;
+  industryStartedAt?: string | null;
+  integrationsStartedAt?: string | null;
+  firstMissionStartedAt?: string | null;
+}
+
+export const DEFAULT_ONBOARDING: OnboardingState = {
+  companyProfile: false,
+  firstClient: false,
+  industry: false,
+  integrations: false,
+  firstMission: false,
+  dismissed: false,
+  completedAt: null,
+};
+
+export const usersTable = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("viewer"),
+  displayName: text("display_name"),
+  bypassPayment: boolean("bypass_payment").notNull().default(false),
+  onboarding: jsonb("onboarding").$type<OnboardingState>().default(DEFAULT_ONBOARDING),
+  ssoProvider: text("sso_provider"),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertUserSchema = createInsertSchema(usersTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type User = typeof usersTable.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const callDebriefsTable = pgTable("call_debriefs", {
+  id: serial("id").primaryKey(),
+  callLogId: integer("call_log_id").notNull().unique(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  callerName: text("caller_name"),
+  callerIntent: text("caller_intent"),
+  keyConcerns: text("key_concerns"),
+  urgencyScore: integer("urgency_score"),
+  recommendedAction: text("recommended_action"),
+  followUpMessage: text("follow_up_message"),
+  isNewProspect: integer("is_new_prospect").notNull().default(0),
+  pipelineTriggered: integer("pipeline_triggered").notNull().default(0),
+  rawDebrief: jsonb("raw_debrief"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("call_debriefs_client_id_idx").on(table.clientId),
+  index("call_debriefs_call_log_id_idx").on(table.callLogId),
+]);
+
+export const voiceScriptsTable = pgTable("voice_scripts", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  scriptType: text("script_type").notNull().default("outbound"),
+  title: text("title").notNull(),
+  objective: text("objective"),
+  targetPersona: text("target_persona"),
+  desiredOutcome: text("desired_outcome"),
+  scriptContent: text("script_content").notNull(),
+  generatedBy: text("generated_by"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("voice_scripts_client_id_idx").on(table.clientId),
+]);
+
+export const meetingRecordingsTable = pgTable("meeting_recordings", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  durationSeconds: integer("duration_seconds"),
+  transcriptText: text("transcript_text"),
+  summary: jsonb("summary"),
+  status: text("status").notNull().default("pending"),
+  originalFilename: text("original_filename"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("meeting_recordings_client_id_idx").on(table.clientId),
+]);
+
+export const insertCallDebriefSchema = createInsertSchema(callDebriefsTable).omit({ id: true, createdAt: true });
+export const insertVoiceScriptSchema = createInsertSchema(voiceScriptsTable).omit({ id: true, createdAt: true });
+export const insertMeetingRecordingSchema = createInsertSchema(meetingRecordingsTable).omit({ id: true, createdAt: true });
+
+export type CallDebrief = typeof callDebriefsTable.$inferSelect;
+export type InsertCallDebrief = z.infer<typeof insertCallDebriefSchema>;
+export type VoiceScript = typeof voiceScriptsTable.$inferSelect;
+export type InsertVoiceScript = z.infer<typeof insertVoiceScriptSchema>;
+export type MeetingRecording = typeof meetingRecordingsTable.$inferSelect;
+export type InsertMeetingRecording = z.infer<typeof insertMeetingRecordingSchema>;
+import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { aeoWebhooksTable } from "./aeo-webhooks";
+import { aeoScoresTable } from "./aeo-scores";
+
+export const webhookDeliveriesTable = pgTable("webhook_deliveries", {
+  id: serial("id").primaryKey(),
+  webhookId: integer("webhook_id").notNull().references(() => aeoWebhooksTable.id, { onDelete: "cascade" }),
+  scoreId: integer("score_id").references(() => aeoScoresTable.id, { onDelete: "set null" }),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("webhook_deliveries_status_idx").on(table.status),
+  index("webhook_deliveries_webhook_id_idx").on(table.webhookId),
+]);
+
+export type WebhookDelivery = typeof webhookDeliveriesTable.$inferSelect;
+import { pgTable, serial, text, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { clientsTable } from "./clients";
+
+export const workflowsTable = pgTable("workflows", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  triggerType: text("trigger_type").notNull().default("manual"),
+  triggerConfig: jsonb("trigger_config").$type<Record<string, unknown>>().default({}),
+  nodes: jsonb("nodes").$type<unknown[]>().notNull().default([]),
+  edges: jsonb("edges").$type<unknown[]>().notNull().default([]),
+  enabled: boolean("enabled").notNull().default(true),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  runCount: integer("run_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const workflowRunsTable = pgTable("workflow_runs", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").references(() => workflowsTable.id, { onDelete: "cascade" }).notNull(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
+  triggeredBy: text("triggered_by").notNull().default("manual"),
+  status: text("status").notNull().default("running"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  log: jsonb("log").$type<unknown[]>().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const approvalSlaConfigsTable = pgTable("approval_sla_configs", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull().unique(),
+  defaultSlaMinutes: integer("default_sla_minutes").notNull().default(240),
+  timeSensitiveSlaMinutes: integer("time_sensitive_sla_minutes").notNull().default(60),
+  secondaryApproverEmail: text("secondary_approver_email"),
+  trustedCategories: text("trusted_categories").array().notNull().default(["web_search", "read_email"]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertWorkflowSchema = createInsertSchema(workflowsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWorkflowRunSchema = createInsertSchema(workflowRunsTable).omit({ id: true, createdAt: true });
+export const insertApprovalSlaConfigSchema = createInsertSchema(approvalSlaConfigsTable).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type Workflow = typeof workflowsTable.$inferSelect;
+export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
+export type WorkflowRun = typeof workflowRunsTable.$inferSelect;
+export type InsertWorkflowRun = z.infer<typeof insertWorkflowRunSchema>;
+export type ApprovalSlaConfig = typeof approvalSlaConfigsTable.$inferSelect;
+export type InsertApprovalSlaConfig = z.infer<typeof insertApprovalSlaConfigSchema>;
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { taskSessionsTable } from "./task-sessions";
+
+export const worldStateTable = pgTable("world_state", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => taskSessionsTable.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertWorldStateSchema = createInsertSchema(worldStateTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type WorldState = typeof worldStateTable.$inferSelect;
+export type InsertWorldState = z.infer<typeof insertWorldStateSchema>;

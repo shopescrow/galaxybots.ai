@@ -86,6 +86,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/experiments", label: "Experiments", description: "A/B hypothesis testing" },
       { href: "/alignment-audit", label: "Alignment Audit", description: "Multi-stakeholder learned preferences" },
       { href: "/prompt-versions", label: "Prompt Versions", description: "System prompt evolution history" },
+      { href: "/platform-intelligence", label: "Platform Intelligence", description: "Oracle reports, AGI dimensions & consequence alignment" },
     ],
   },
   {

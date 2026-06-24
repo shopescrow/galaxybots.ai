@@ -8,6 +8,7 @@ import pdfRouter from "./pdf";
 import mcpMarketingRouter from "./mcp-marketing";
 import pipelinesRouter from "./pipelines";
 import metricsRouter from "./metrics";
+import intelligenceRouter from "./intelligence";
 
 export function registerPlatformRoutes(router: IRouter) {
   router.use(healthRouter);
@@ -19,4 +20,5 @@ export function registerPlatformRoutes(router: IRouter) {
   router.use(pdfRouter);
   router.use(mcpMarketingRouter);
   router.use(pipelinesRouter);
+  router.use(intelligenceRouter);
 }
