@@ -19,19 +19,19 @@ export function Scene3() {
       className="absolute inset-0 flex items-center justify-center flex-col z-10"
       initial={{ opacity: 0, scale: 1.1 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, y: '-20vh' }}
+      exit={{ opacity: 0, y: -144 }}
       transition={{ duration: 0.8 }}
     >
-      <div className="absolute top-[15vh] left-[10vw]">
+      <div className="absolute top-[108px] left-[128px]">
         <motion.div 
-          className="text-[2vw] text-[var(--color-accent)] font-heading tracking-widest uppercase mb-2"
+          className="text-[26px] text-[var(--color-accent)] font-heading tracking-widest uppercase mb-2"
           initial={{ opacity: 0, x: -20 }}
           animate={phase >= 1 ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
         >
           Step 1: Onboard
         </motion.div>
         <motion.h2 
-          className="text-[5vw] font-display font-bold leading-tight"
+          className="text-[64px] font-display font-bold leading-tight"
           initial={{ opacity: 0, y: 20 }}
           animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
         >
@@ -39,7 +39,7 @@ export function Scene3() {
         </motion.h2>
       </div>
 
-      <div className="relative w-[70vw] h-[40vh] mt-[20vh]">
+      <div className="relative w-[896px] h-[288px] mt-[144px]">
         {/* Abstract representation of the AI core assembling */}
         <motion.img 
           src={`${import.meta.env.BASE_URL}images/ai-core.png`}
@@ -51,7 +51,7 @@ export function Scene3() {
         />
         
         <motion.div
-          className="absolute right-0 top-1/2 -translate-y-1/2 bg-black/40 backdrop-blur-xl border border-[var(--color-secondary)]/30 p-8 rounded-2xl"
+          className="absolute right-0 top-1/2 -translate-y-1/2 bg-black/40 backdrop-blur-xl border border-[var(--color-secondary)]/30 p-8 rounded-2xl max-w-[360px]"
           initial={{ opacity: 0, x: 100 }}
           animate={phase >= 3 ? { opacity: 1, x: 0 } : { opacity: 0, x: 100 }}
           transition={{ type: "spring", stiffness: 200, damping: 25 }}

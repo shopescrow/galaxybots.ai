@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useVideoPlayer } from '@/lib/video';
 import { Scene1 } from './video_scenes/Scene1';
@@ -6,6 +6,7 @@ import { Scene2 } from './video_scenes/Scene2';
 import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
+import { Scene6 } from './video_scenes/Scene6';
 
 export const SCENE_DURATIONS = {
   pitch: 4000,
@@ -13,6 +14,7 @@ export const SCENE_DURATIONS = {
   onboard1: 4000,
   onboard2: 4500,
   value: 5000,
+  secret: 4000,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -21,6 +23,7 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   onboard1: Scene3,
   onboard2: Scene4,
   value: Scene5,
+  secret: Scene6,
 };
 
 const SCENE_START_SEC: Record<string, number> = (() => {
@@ -34,6 +37,12 @@ const SCENE_START_SEC: Record<string, number> = (() => {
 })();
 
 const AUDIO_SEEK_EPSILON_SEC = 0.18;
+
+// Fixed 16:9 design stage. The whole composition is authored at this size and
+// uniformly scaled to fit any container/device, so it looks identical (just
+// smaller) everywhere instead of reflowing.
+const STAGE_W = 1280;
+const STAGE_H = 720;
 
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,
@@ -69,39 +78,57 @@ export default function VideoTemplate({
     audio.play().catch(() => {});
   }, [currentSceneKey, baseSceneKey, muted]);
 
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const update = () => {
+      setScale(Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   return (
-    <div
-      className="w-full h-screen overflow-hidden relative bg-[#0B0F19]"
-    >
-      {/* Persistent Background Layer */}
-      <div className="absolute inset-0">
-        <video 
-          src={`${import.meta.env.BASE_URL}videos/space-bg.mp4`} 
-          autoPlay loop muted playsInline
-          className="w-full h-full object-cover opacity-30 mix-blend-screen"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0B0F19]/40 via-transparent to-[#0B0F19]" />
-      </div>
-
-      <motion.div
-        className="absolute w-[80vw] h-[80vw] rounded-full blur-[120px] opacity-20"
-        animate={{
-          background: [
-            'radial-gradient(circle, var(--color-primary), transparent)',
-            'radial-gradient(circle, var(--color-secondary), transparent)',
-            'radial-gradient(circle, var(--color-accent), transparent)',
-            'radial-gradient(circle, var(--color-primary), transparent)'
-          ][sceneIndex % 4],
-          x: ['-20%', '50%', '80%', '10%', '30%'][sceneIndex],
-          y: ['-20%', '10%', '-30%', '40%', '10%'][sceneIndex],
-          scale: [1, 1.2, 0.8, 1.5, 1][sceneIndex]
+    <div className="w-screen h-screen overflow-hidden bg-[#0B0F19] relative">
+      <div
+        className="absolute top-1/2 left-1/2 origin-center overflow-hidden bg-[#0B0F19]"
+        style={{
+          width: STAGE_W,
+          height: STAGE_H,
+          transform: `translate(-50%, -50%) scale(${scale})`,
         }}
-        transition={{ duration: 2.5, ease: 'easeInOut' }}
-      />
+      >
+        {/* Persistent Background Layer */}
+        <div className="absolute inset-0">
+          <video
+            src={`${import.meta.env.BASE_URL}videos/space-bg.mp4`}
+            autoPlay loop muted playsInline
+            className="w-full h-full object-cover opacity-30 mix-blend-screen"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0B0F19]/40 via-transparent to-[#0B0F19]" />
+        </div>
 
-      <AnimatePresence mode="popLayout">
-        {SceneComponent && <SceneComponent key={currentSceneKey} />}
-      </AnimatePresence>
+        <motion.div
+          className="absolute w-[1024px] h-[1024px] rounded-full blur-[120px] opacity-20"
+          animate={{
+            background: [
+              'radial-gradient(circle, var(--color-primary), transparent)',
+              'radial-gradient(circle, var(--color-secondary), transparent)',
+              'radial-gradient(circle, var(--color-accent), transparent)',
+              'radial-gradient(circle, var(--color-primary), transparent)'
+            ][sceneIndex % 4],
+            x: ['-20%', '50%', '80%', '10%', '30%', '60%'][sceneIndex],
+            y: ['-20%', '10%', '-30%', '40%', '10%', '-15%'][sceneIndex],
+            scale: [1, 1.2, 0.8, 1.5, 1, 1.3][sceneIndex]
+          }}
+          transition={{ duration: 2.5, ease: 'easeInOut' }}
+        />
+
+        <AnimatePresence mode="popLayout">
+          {SceneComponent && <SceneComponent key={currentSceneKey} />}
+        </AnimatePresence>
+      </div>
 
       <audio
         ref={audioRef}

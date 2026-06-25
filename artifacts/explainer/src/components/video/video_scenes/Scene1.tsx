@@ -21,7 +21,7 @@ export function Scene1() {
       exit={{ opacity: 0, scale: 1.1, filter: 'blur(20px)' }}
       transition={{ duration: 0.8 }}
     >
-      <div className="relative text-center max-w-[80vw]">
+      <div className="relative text-center max-w-[1024px] px-[60px]">
         <motion.div 
           className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 text-[var(--color-primary)] font-heading tracking-widest text-xl mb-8"
           initial={{ opacity: 0, y: 20 }}
@@ -32,7 +32,7 @@ export function Scene1() {
           SYSTEM ONLINE
         </motion.div>
 
-        <h1 className="text-[6vw] font-display font-bold leading-tight mb-6">
+        <h1 className="text-[77px] font-display font-bold leading-tight mb-6">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}

@@ -19,15 +19,15 @@ export function Scene2() {
 
   return (
     <motion.div 
-      className="absolute inset-0 flex items-center justify-between px-[10vw] z-10"
-      initial={{ opacity: 0, x: '10vw' }}
+      className="absolute inset-0 flex items-center justify-between px-[100px] gap-[60px] z-10"
+      initial={{ opacity: 0, x: 80 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: '-10vw', filter: 'blur(10px)' }}
+      exit={{ opacity: 0, x: -80, filter: 'blur(10px)' }}
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="w-1/2">
+      <div className="w-[480px] shrink-0">
         <motion.h2 
-          className="text-[4.5vw] font-display font-bold leading-tight mb-6"
+          className="text-[58px] font-display font-bold leading-tight mb-6"
           initial={{ opacity: 0, x: -40 }}
           animate={phase >= 1 ? { opacity: 1, x: 0 } : { opacity: 0, x: -40 }}
           transition={{ duration: 0.6 }}
@@ -36,7 +36,7 @@ export function Scene2() {
         </motion.h2>
         
         <motion.p 
-          className="text-[2vw] text-white/70 font-body leading-relaxed max-w-lg"
+          className="text-[26px] text-white/70 font-body leading-relaxed max-w-[440px]"
           initial={{ opacity: 0 }}
           animate={phase >= 2 ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.5 }}
@@ -45,12 +45,14 @@ export function Scene2() {
         </motion.p>
       </div>
 
-      <div className="w-[40vw] h-[60vh] relative perspective-[1000px]">
+      <div
+        className="w-[512px] shrink-0 flex flex-col justify-center gap-3"
+        style={{ perspective: '1000px' }}
+      >
         {roles.map((role, i) => (
           <motion.div
             key={role}
-            className="absolute inset-x-0 h-24 bg-white/5 border border-white/20 rounded-xl backdrop-blur-md flex items-center px-8"
-            style={{ top: `${i * 18}%` }}
+            className="w-full bg-white/5 border border-white/20 rounded-xl backdrop-blur-md flex items-center px-8 py-5"
             initial={{ opacity: 0, z: -200, rotateX: 20, y: 50 }}
             animate={phase >= 3 ? { opacity: 1, z: 0, rotateX: 0, y: 0 } : { opacity: 0, z: -200, rotateX: 20, y: 50 }}
             transition={{ type: "spring", stiffness: 200, damping: 20, delay: phase >= 3 ? i * 0.1 : 0 }}
