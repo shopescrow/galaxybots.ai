@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/explainer/"
+title = "GalaxyBots.ai Explainer"
+version = "1.0.0"
+id = "artifacts/explainer"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/explainer/" ]
+localPort = 18524
+
+[services.development]
+run = "pnpm --filter @workspace/explainer run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/explainer", "run", "build" ]
+publicDir = "artifacts/explainer/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18524"
+BASE_PATH = "/explainer/"
