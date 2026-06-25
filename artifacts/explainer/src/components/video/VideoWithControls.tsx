@@ -306,18 +306,30 @@ export default function VideoWithControls() {
   const [tapPinned, setTapPinned] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const handlePointerEnter = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === 'mouse') setHovering(true);
+  // True when a pointer is within the bottom 25% of the player — the zone that
+  // reveals the control bar. Used by container-level handlers so the bottom
+  // overlay never blocks clicks on in-video content (e.g. the CTA buttons).
+  const isNearBottom = useCallback((clientY: number) => {
+    const el = containerRef.current;
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return clientY >= rect.bottom - rect.height * 0.25;
   }, []);
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'mouse') setHovering(isNearBottom(e.clientY));
+    },
+    [isNearBottom],
+  );
   const handlePointerLeave = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'mouse') setHovering(false);
   }, []);
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType === 'mouse') return;
-      if (collapsed) setTapPinned(true);
+      if (collapsed && isNearBottom(e.clientY)) setTapPinned(true);
     },
-    [collapsed],
+    [collapsed, isNearBottom],
   );
   const handleToggleCollapsed = useCallback(() => {
     setCollapsed((c) => {
@@ -389,7 +401,13 @@ export default function VideoWithControls() {
   const barVisible = !collapsed || hovering || tapPinned;
 
   return (
-    <div ref={containerRef} className="relative w-full h-screen bg-[#0B0F19]">
+    <div
+      ref={containerRef}
+      className="relative w-full h-screen bg-[#0B0F19]"
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
+    >
       <VideoTemplate
         key={mountKey}
         durations={durations}
@@ -402,14 +420,11 @@ export default function VideoWithControls() {
 
       <div
         ref={sensorRef}
-        className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end"
+        className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end"
         style={{ height: '25%' }}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        onPointerDown={handlePointerDown}
       >
-        <div className="flex-1 w-full" aria-hidden="true" />
-        <ControlBar
+        <div className={barVisible ? 'pointer-events-auto' : 'pointer-events-none'}>
+          <ControlBar
           visible={barVisible}
           collapsed={collapsed}
           locked={locked}
@@ -426,7 +441,8 @@ export default function VideoWithControls() {
           onToggleFullscreen={toggleFullscreen}
           onJumpTo={jumpTo}
           onToggleCollapsed={handleToggleCollapsed}
-        />
+          />
+        </div>
       </div>
     </div>
   );

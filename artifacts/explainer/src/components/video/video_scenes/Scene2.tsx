@@ -69,7 +69,7 @@ export function Scene2() {
                   <span className="text-[15px] text-white/50 font-body leading-tight">{role.h2Label}</span>
                 </div>
               </div>
-              <TermHotspot slug={slug} />
+              <TermHotspot slug={slug} revealOnHover={false} />
             </motion.div>
           );
         })}
