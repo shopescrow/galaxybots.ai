@@ -99,6 +99,7 @@ export const NAV_GROUPS: NavGroup[] = [
     children: [
       { href: "/integrations", label: "Integrations", description: "Third-party connections" },
       { href: "/billing", label: "Billing", description: "Billing and subscription" },
+      { href: "/statements", label: "Statements", description: "Itemized usage invoices & PDFs" },
       { href: "/marketplace", label: "Marketplace", description: "Apps and add-ons" },
       { href: "/five-year-plan", label: "Strategic Plan", description: "5-Year business strategy" },
       { href: "/user-guide", label: "User Guide", description: "New user onboarding guide" },

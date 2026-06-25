@@ -18,6 +18,7 @@ const Valuation           = lazy(() => import("@/pages/marketing/Valuation"));
 const Global              = lazy(() => import("@/pages/general/Global"));
 const Assembly            = lazy(() => import("@/pages/general/Assembly"));
 const Billing             = lazy(() => import("@/pages/billing/Billing"));
+const Statements          = lazy(() => import("@/pages/billing/Statements"));
 const Pricing             = lazy(() => import("@/pages/marketing/Pricing"));
 const Settings            = lazy(() => import("@/pages/settings/Settings"));
 
@@ -239,6 +240,7 @@ function AuthenticatedRoutes() {
         <Route path="/roi"                    component={ROIDashboard} />
         <Route path="/clients/:id/roi"        component={ROIDashboard} />
         <Route path="/billing"                component={Billing} />
+        <Route path="/statements"             component={() => <AdminOnly component={Statements} />} />
         <Route path="/scenarios"              component={Scenarios} />
         <Route path="/prospects"              component={Prospects} />
         <Route path="/prospector"             component={Prospector} />
