@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
+import { TermHotspot, TermChip } from '../InteractiveTerm';
 
 export function Scene5() {
   const [phase, setPhase] = useState(0);
@@ -45,7 +46,7 @@ export function Scene5() {
         </motion.div>
 
         <motion.h2 
-          className="text-[77px] font-display font-bold leading-tight mb-6"
+          className="text-[77px] font-display font-bold leading-tight mb-5"
           initial={{ opacity: 0, y: 30 }}
           animate={phase >= 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
           transition={{ duration: 0.6 }}
@@ -54,7 +55,7 @@ export function Scene5() {
         </motion.h2>
 
         <motion.p
-          className="text-[32px] text-white/70 font-body max-w-[800px] mb-8"
+          className="text-[32px] text-white/70 font-body max-w-[800px] mb-5"
           initial={{ opacity: 0 }}
           animate={phase >= 2 ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
@@ -63,7 +64,16 @@ export function Scene5() {
         </motion.p>
 
         <motion.div
-          className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-[38px] font-bold max-w-[1000px]"
+          className="mb-7"
+          initial={{ opacity: 0, y: 12 }}
+          animate={phase >= 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+          transition={{ duration: 0.5, delay: 0.35 }}
+        >
+          <TermChip slug="total-governance" label="Define: Total Governance" />
+        </motion.div>
+
+        <motion.div
+          className="relative flex flex-wrap items-center justify-center gap-x-8 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-10 py-5 text-[38px] font-bold max-w-[1000px]"
           initial={{ opacity: 0, y: 20 }}
           animate={phase >= 3 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6 }}
@@ -71,10 +81,11 @@ export function Scene5() {
           <span className="text-[var(--color-primary)]">24/7 Outcomes.</span>
           <span className="text-white/30">/</span>
           <span className="text-[var(--color-secondary)]">Absolute Control.</span>
+          <TermHotspot slug="outcomes-control" />
         </motion.div>
 
         <motion.div
-          className="mt-10 inline-flex items-center gap-4 px-8 py-4 rounded-full border border-[var(--color-secondary)]/40 bg-white/5 backdrop-blur-md"
+          className="relative mt-8 inline-flex items-center gap-4 rounded-full border border-[var(--color-secondary)]/40 bg-white/5 py-4 pl-8 pr-14 backdrop-blur-md"
           initial={{ opacity: 0, y: 20 }}
           animate={phase >= 4 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6 }}
@@ -85,6 +96,7 @@ export function Scene5() {
             <span className="text-white font-semibold">ISO-27001</span> &{' '}
             <span className="text-white font-semibold">SOC-2</span> compliance parameters.
           </span>
+          <TermHotspot slug="compliance" revealOnHover={false} />
         </motion.div>
       </div>
     </motion.div>

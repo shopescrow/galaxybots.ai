@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { TermChip } from '../InteractiveTerm';
 
 export function Scene1() {
   const [phase, setPhase] = useState(0);
@@ -49,6 +50,15 @@ export function Scene1() {
             Deployed for You.
           </motion.div>
         </h1>
+
+        <motion.div
+          className="mt-4 flex justify-center"
+          initial={{ opacity: 0, y: 12 }}
+          animate={phase >= 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <TermChip slug="fortune-500-intelligence" label="What this means" />
+        </motion.div>
       </div>
     </motion.div>
   );

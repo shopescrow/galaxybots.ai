@@ -1,5 +1,9 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { getTerm } from '@/content/explainerContent';
+import { TermHotspot } from '../InteractiveTerm';
+
+const roleSlugs = ['cmo', 'ciso', 'cfo', 'coo', 'cto'];
 
 export function Scene2() {
   const [phase, setPhase] = useState(0);
@@ -14,8 +18,6 @@ export function Scene2() {
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
-
-  const roles = ["CMO", "CISO", "CFO", "COO", "CTO"];
 
   return (
     <motion.div 
@@ -49,21 +51,28 @@ export function Scene2() {
         className="w-[512px] shrink-0 flex flex-col justify-center gap-3"
         style={{ perspective: '1000px' }}
       >
-        {roles.map((role, i) => (
-          <motion.div
-            key={role}
-            className="w-full bg-white/5 border border-white/20 rounded-xl backdrop-blur-md flex items-center px-8 py-5"
-            initial={{ opacity: 0, z: -200, rotateX: 20, y: 50 }}
-            animate={phase >= 3 ? { opacity: 1, z: 0, rotateX: 0, y: 0 } : { opacity: 0, z: -200, rotateX: 20, y: 50 }}
-            transition={{ type: "spring", stiffness: 200, damping: 20, delay: phase >= 3 ? i * 0.1 : 0 }}
-          >
-            <div className="flex items-center gap-6">
-              <div className="w-4 h-4 rounded-full bg-[var(--color-secondary)] animate-pulse" />
-              <span className="text-3xl font-heading font-bold">{role}</span>
-              <span className="text-xl text-white/50 font-body">Online</span>
-            </div>
-          </motion.div>
-        ))}
+        {roleSlugs.map((slug, i) => {
+          const role = getTerm(slug);
+          if (!role) return null;
+          return (
+            <motion.div
+              key={slug}
+              className="relative w-full bg-white/5 border border-white/20 rounded-xl backdrop-blur-md flex items-center px-8 py-5"
+              initial={{ opacity: 0, z: -200, rotateX: 20, y: 50 }}
+              animate={phase >= 3 ? { opacity: 1, z: 0, rotateX: 0, y: 0 } : { opacity: 0, z: -200, rotateX: 20, y: 50 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20, delay: phase >= 3 ? i * 0.1 : 0 }}
+            >
+              <div className="flex items-center gap-5">
+                <div className="w-4 h-4 rounded-full bg-[var(--color-secondary)] animate-pulse shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-3xl font-heading font-bold leading-tight">{role.term}</span>
+                  <span className="text-[15px] text-white/50 font-body leading-tight">{role.h2Label}</span>
+                </div>
+              </div>
+              <TermHotspot slug={slug} />
+            </motion.div>
+          );
+        })}
       </div>
     </motion.div>
   );

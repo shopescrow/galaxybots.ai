@@ -473,6 +473,10 @@ importers:
         version: 3.25.76
 
   artifacts/explainer:
+    dependencies:
+      react-router-dom:
+        specifier: ^7.13.1
+        version: 7.13.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@react-spring/web':
         specifier: ^10.0.3

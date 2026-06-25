@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { TermHotspot } from '../InteractiveTerm';
 
 export function Scene3() {
   const [phase, setPhase] = useState(0);
@@ -58,6 +59,7 @@ export function Scene3() {
         >
           <div className="text-3xl font-heading text-[var(--color-secondary)] mb-2">Hire the Full Company</div>
           <div className="text-xl text-white/70">1-Click deployment of all critical roles.</div>
+          <TermHotspot slug="hire-full-company" />
         </motion.div>
       </div>
 

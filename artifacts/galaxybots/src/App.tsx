@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
 import { PartnerProvider } from "@/contexts/PartnerContext";
 import { ActiveClientProvider } from "@/contexts/ActiveClientContext";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 // ─── Lazy page imports ──────────────────────────────────────────────────────
 const OnboardingWizard    = lazy(() => import("@/components/onboarding/OnboardingWizard"));
@@ -113,6 +114,41 @@ function PageLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+}
+
+// ─── Auto-recover from stale lazy chunks after a new deploy ──────────────────
+// A fresh deploy invalidates the hashed chunk filenames referenced by an
+// already-open tab. The dynamic import then 404s and (without this) renders a
+// blank page. Reload once per session to fetch the new assets.
+if (typeof window !== "undefined") {
+  window.addEventListener("vite:preloadError", () => {
+    try {
+      if (sessionStorage.getItem("chunk-reload") === "1") return;
+      sessionStorage.setItem("chunk-reload", "1");
+    } catch {
+      // sessionStorage can throw in private mode / storage-denied browsers.
+      // Fall through to a single reload attempt rather than crashing.
+    }
+    window.location.reload();
+  });
+}
+
+// ─── Full-page fallback when a route crashes or a chunk fails to load ────────
+function RootErrorFallback() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background text-center px-6">
+      <h1 className="text-xl font-bold">This page failed to load</h1>
+      <p className="text-sm text-muted-foreground max-w-sm">
+        Something went wrong while loading this page. Reloading usually fixes it.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+      >
+        Reload page
+      </button>
     </div>
   );
 }
@@ -287,7 +323,9 @@ export default function App() {
               <QueryClientProvider client={queryClient}>
                 <TooltipProvider>
                   <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                    <AppRouter />
+                    <ErrorBoundary fallback={<RootErrorFallback />}>
+                      <AppRouter />
+                    </ErrorBoundary>
                   </WouterRouter>
                   <Toaster />
                 </TooltipProvider>

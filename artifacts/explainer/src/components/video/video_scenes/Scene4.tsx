@@ -1,5 +1,13 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { TermHotspot } from '../InteractiveTerm';
+
+const missions = [
+  { name: 'Market Research', slug: 'market-research' },
+  { name: 'Security Audit', slug: 'security-audit' },
+  { name: 'Competitor Analysis', slug: 'competitor-analysis' },
+  { name: 'Campaign Strategy', slug: 'campaign-strategy' },
+];
 
 export function Scene4() {
   const [phase, setPhase] = useState(0);
@@ -13,13 +21,6 @@ export function Scene4() {
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
-
-  const missions = [
-    "Market Research",
-    "Security Audit",
-    "Competitor Analysis",
-    "Campaign Strategy"
-  ];
 
   return (
     <motion.div 
@@ -50,14 +51,14 @@ export function Scene4() {
         <div className="grid grid-cols-2 gap-6">
           {missions.map((mission, i) => (
             <motion.div
-              key={mission}
+              key={mission.slug}
               className="bg-white/5 border border-white/10 rounded-xl p-7 backdrop-blur-sm relative overflow-hidden group"
               initial={{ opacity: 0, scale: 0.8, y: 30 }}
               animate={phase >= 2 ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 30 }}
               transition={{ type: "spring", stiffness: 150, damping: 20, delay: phase >= 2 ? i * 0.15 : 0 }}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="text-2xl font-heading font-semibold text-white mb-3 leading-tight">{mission}</div>
+              <div className="text-2xl font-heading font-semibold text-white mb-3 leading-tight">{mission.name}</div>
               <div className="w-12 h-1 bg-[var(--color-primary)]/50 rounded-full" />
               
               {/* Highlight selection of one mission */}
@@ -69,6 +70,8 @@ export function Scene4() {
                   transition={{ duration: 0.3 }}
                 />
               )}
+
+              <TermHotspot slug={mission.slug} />
             </motion.div>
           ))}
         </div>

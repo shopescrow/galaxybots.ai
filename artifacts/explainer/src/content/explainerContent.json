@@ -1,0 +1,224 @@
+{
+  "name": "GalaxyBots.ai Explainer",
+  "version": 1,
+  "meta": {
+    "title": "GalaxyBots.ai - Fortune 500 Intelligence, Deployed for You",
+    "description": "An interactive explainer for GalaxyBots.ai: deploy an autonomous AI C-suite (CMO, CISO, CFO, COO, CTO), assign missions, and keep total governance with enterprise-grade ISO-27001 and SOC-2 compliance.",
+    "mainSite": "https://galaxybots.ai",
+    "explainerPath": "/explainer/"
+  },
+  "callToAction": {
+    "eyebrow": "Get Started",
+    "heading": "Deploy Your AI Workforce",
+    "subtext": "Start building your autonomous company today.",
+    "primary": { "label": "Start Free", "url": "/register" },
+    "secondary": { "label": "View Pricing", "url": "/pricing" }
+  },
+  "scenes": [
+    {
+      "order": 1,
+      "key": "pitch",
+      "title": "Fortune 500 Intelligence. Deployed for You.",
+      "summary": "GalaxyBots.ai delivers enterprise-grade AI executives to any business, no matter its size.",
+      "terms": ["fortune-500-intelligence"]
+    },
+    {
+      "order": 2,
+      "key": "product",
+      "title": "Hire Elite AI Personalities",
+      "summary": "Deploy 60+ specialized AI directors - including a CMO, CISO, CFO, COO, and CTO - operating 24/7 in the background.",
+      "terms": ["cmo", "ciso", "cfo", "coo", "cto"]
+    },
+    {
+      "order": 3,
+      "key": "onboard1",
+      "title": "Step 1: Onboard - Watch the Assembly",
+      "summary": "Hire the full company in a single click; all critical roles deploy together.",
+      "terms": ["hire-full-company"]
+    },
+    {
+      "order": 4,
+      "key": "onboard2",
+      "title": "Step 2: Directives - Select Missions",
+      "summary": "Assign missions such as Market Research, Security Audit, Competitor Analysis, and Campaign Strategy.",
+      "terms": ["market-research", "security-audit", "competitor-analysis", "campaign-strategy"]
+    },
+    {
+      "order": 5,
+      "key": "value",
+      "title": "Total Governance",
+      "summary": "You set the strategy; your AI workforce executes it 24/7 with absolute control and ISO-27001 & SOC-2 compliance.",
+      "terms": ["total-governance", "outcomes-control", "compliance"]
+    },
+    {
+      "order": 6,
+      "key": "secret",
+      "title": "The Secret Behind Success.",
+      "summary": "GalaxyBots.ai is the quiet advantage behind high-performing companies.",
+      "terms": []
+    },
+    {
+      "order": 7,
+      "key": "cta",
+      "title": "Deploy Your AI Workforce",
+      "summary": "Sign up to start free or view pricing for subscription plans.",
+      "terms": []
+    }
+  ],
+  "terms": [
+    {
+      "slug": "fortune-500-intelligence",
+      "term": "Fortune 500 Intelligence",
+      "h2Label": "Fortune 500 Intelligence",
+      "scene": "pitch",
+      "short": "Enterprise-grade AI executives - the caliber of intelligence that runs the world's biggest companies, deployed for you.",
+      "long": "GalaxyBots.ai gives you an autonomous executive team modeled on Fortune 500 leadership. Instead of recruiting an entire C-suite, you deploy AI directors that plan, decide, and execute at enterprise standard - available to any business, at any size.",
+      "definitionPath": "/explainer/#/define/fortune-500-intelligence",
+      "siteUrl": "/how-it-works",
+      "siteLabel": "See how it works"
+    },
+    {
+      "slug": "cmo",
+      "term": "CMO",
+      "h2Label": "Chief Marketing Officer",
+      "scene": "product",
+      "short": "Your autonomous growth strategist - plans and runs campaigns, brand, and demand generation around the clock.",
+      "long": "The AI CMO owns your marketing engine: positioning, campaigns, content, and demand generation. It studies your market, sets the strategy, and executes continuously so growth never waits on headcount.",
+      "definitionPath": "/explainer/#/define/cmo",
+      "siteUrl": "/marketplace",
+      "siteLabel": "Browse AI executives"
+    },
+    {
+      "slug": "ciso",
+      "term": "CISO",
+      "h2Label": "Chief Information Security Officer",
+      "scene": "product",
+      "short": "Continuously monitors threats, enforces policy, and keeps your security posture audit-ready.",
+      "long": "The AI CISO watches your environment for threats, enforces security policy, and maintains continuous compliance. It turns security from a periodic scramble into an always-on discipline.",
+      "definitionPath": "/explainer/#/define/ciso",
+      "siteUrl": "/compliance",
+      "siteLabel": "View compliance & trust"
+    },
+    {
+      "slug": "cfo",
+      "term": "CFO",
+      "h2Label": "Chief Financial Officer",
+      "scene": "product",
+      "short": "Models budgets, forecasts, and ROI in real time so every decision is grounded in the numbers.",
+      "long": "The AI CFO builds budgets, forecasts cash flow, and quantifies the ROI of every initiative. It gives you boardroom-grade financial clarity on demand.",
+      "definitionPath": "/explainer/#/define/cfo",
+      "siteUrl": "/roi",
+      "siteLabel": "Open the ROI dashboard"
+    },
+    {
+      "slug": "coo",
+      "term": "COO",
+      "h2Label": "Chief Operating Officer",
+      "scene": "product",
+      "short": "Orchestrates day-to-day operations and keeps every mission and team on schedule.",
+      "long": "The AI COO coordinates operations across your AI workforce - assigning missions, tracking progress, and removing bottlenecks so execution stays on track.",
+      "definitionPath": "/explainer/#/define/coo",
+      "siteUrl": "/deploy-team",
+      "siteLabel": "Deploy a team"
+    },
+    {
+      "slug": "cto",
+      "term": "CTO",
+      "h2Label": "Chief Technology Officer",
+      "scene": "product",
+      "short": "Architects your technology stack and drives technical execution and integrations.",
+      "long": "The AI CTO designs your technical architecture, manages integrations, and guides engineering decisions, keeping your stack modern and aligned with the business.",
+      "definitionPath": "/explainer/#/define/cto",
+      "siteUrl": "/developers",
+      "siteLabel": "Explore the developer portal"
+    },
+    {
+      "slug": "hire-full-company",
+      "term": "Hire the Full Company",
+      "h2Label": "One-Click Team Deployment",
+      "scene": "onboard1",
+      "short": "Deploy an entire C-suite of AI directors in a single click - no recruiting, no onboarding lag.",
+      "long": "Instead of hiring role by role, deploy a complete AI company in one click. Pre-assembled packs spin up every critical role at once, fully coordinated from day one.",
+      "definitionPath": "/explainer/#/define/hire-full-company",
+      "siteUrl": "/packs",
+      "siteLabel": "Explore bot packs"
+    },
+    {
+      "slug": "market-research",
+      "term": "Market Research",
+      "h2Label": "Market Research Mission",
+      "scene": "onboard2",
+      "short": "Tasks your AI team with mapping markets, customers, and trends to inform strategy.",
+      "long": "A Market Research mission sends your AI workforce to analyze your market, customers, and emerging trends - delivering the insight your strategy depends on.",
+      "definitionPath": "/explainer/#/define/market-research",
+      "siteUrl": "/deploy-team",
+      "siteLabel": "Deploy a mission"
+    },
+    {
+      "slug": "security-audit",
+      "term": "Security Audit",
+      "h2Label": "Security Audit Mission",
+      "scene": "onboard2",
+      "short": "Directs your AI CISO to review posture, surface risks, and produce audit-ready findings.",
+      "long": "A Security Audit mission puts your AI security team to work reviewing your posture, identifying vulnerabilities, and producing audit-ready documentation.",
+      "definitionPath": "/explainer/#/define/security-audit",
+      "siteUrl": "/compliance",
+      "siteLabel": "View compliance & trust"
+    },
+    {
+      "slug": "competitor-analysis",
+      "term": "Competitor Analysis",
+      "h2Label": "Competitor Analysis Mission",
+      "scene": "onboard2",
+      "short": "Benchmarks rivals' positioning, pricing, and moves so you can stay ahead.",
+      "long": "A Competitor Analysis mission tracks your rivals' positioning, pricing, and strategy, turning the competitive landscape into a clear, actionable picture.",
+      "definitionPath": "/explainer/#/define/competitor-analysis",
+      "siteUrl": "/deploy-team",
+      "siteLabel": "Deploy a mission"
+    },
+    {
+      "slug": "campaign-strategy",
+      "term": "Campaign Strategy",
+      "h2Label": "Campaign Strategy Mission",
+      "scene": "onboard2",
+      "short": "Has your AI CMO design end-to-end campaigns ready to launch across channels.",
+      "long": "A Campaign Strategy mission directs your AI marketing team to design end-to-end campaigns - messaging, channels, and sequencing - ready to launch.",
+      "definitionPath": "/explainer/#/define/campaign-strategy",
+      "siteUrl": "/marketplace",
+      "siteLabel": "Browse marketing bots"
+    },
+    {
+      "slug": "total-governance",
+      "term": "Total Governance",
+      "h2Label": "Total Governance",
+      "scene": "value",
+      "short": "You set the strategy; your AI workforce executes it with full visibility and human oversight.",
+      "long": "Total Governance means you stay in command. You define the strategy and guardrails while your AI executives execute - with complete transparency and human control at every step.",
+      "definitionPath": "/explainer/#/define/total-governance",
+      "siteUrl": "/governance",
+      "siteLabel": "Open governance console"
+    },
+    {
+      "slug": "outcomes-control",
+      "term": "24/7 Outcomes & Absolute Control",
+      "h2Label": "24/7 Outcomes, Absolute Control",
+      "scene": "value",
+      "short": "Around-the-clock execution paired with command-center oversight you never give up.",
+      "long": "Your AI workforce produces outcomes 24/7, while you retain absolute control from a single command center - approving, adjusting, and directing in real time.",
+      "definitionPath": "/explainer/#/define/outcomes-control",
+      "siteUrl": "/command-center",
+      "siteLabel": "Open the command center"
+    },
+    {
+      "slug": "compliance",
+      "term": "ISO-27001 & SOC-2",
+      "h2Label": "Enterprise Compliance",
+      "scene": "value",
+      "short": "GalaxyBots.ai operates within ISO-27001 and SOC-2 compliance parameters.",
+      "long": "Security and trust are built in. GalaxyBots.ai operates within ISO-27001 and SOC-2 compliance parameters, so your AI workforce meets enterprise governance and audit standards.",
+      "definitionPath": "/explainer/#/define/compliance",
+      "siteUrl": "/compliance",
+      "siteLabel": "View compliance & trust"
+    }
+  ]
+}

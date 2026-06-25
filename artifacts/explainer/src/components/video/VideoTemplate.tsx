@@ -7,14 +7,17 @@ import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 import { Scene6 } from './video_scenes/Scene6';
+import { Scene7 } from './video_scenes/Scene7';
+import { InteractiveContext } from './interactiveContext';
 
 export const SCENE_DURATIONS = {
-  pitch: 4000,
-  product: 4500,
-  onboard1: 4000,
-  onboard2: 4500,
-  value: 5000,
-  secret: 4000,
+  pitch: 6000,
+  product: 8000,
+  onboard1: 6500,
+  onboard2: 8000,
+  value: 8000,
+  secret: 6000,
+  cta: 7000,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -24,6 +27,7 @@ const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
   onboard2: Scene4,
   value: Scene5,
   secret: Scene6,
+  cta: Scene7,
 };
 
 const SCENE_START_SEC: Record<string, number> = (() => {
@@ -48,11 +52,15 @@ export default function VideoTemplate({
   durations = SCENE_DURATIONS,
   loop = true,
   muted = false,
+  volume = 0.45,
+  interactive = false,
   onSceneChange,
 }: {
   durations?: Record<string, number>;
   loop?: boolean;
   muted?: boolean;
+  volume?: number;
+  interactive?: boolean;
   onSceneChange?: (sceneKey: string) => void;
 } = {}) {
   const { currentSceneKey } = useVideoPlayer({ durations, loop });
@@ -70,13 +78,20 @@ export default function VideoTemplate({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = 0.45;
     const targetTime = SCENE_START_SEC[baseSceneKey] ?? 0;
     if (Math.abs(audio.currentTime - targetTime) > AUDIO_SEEK_EPSILON_SEC) {
       audio.currentTime = targetTime;
     }
     audio.play().catch(() => {});
-  }, [currentSceneKey, baseSceneKey, muted]);
+    // Note: muting is applied declaratively via the <audio muted> attribute, so
+    // mute/volume toggles must NOT be a dependency here — otherwise toggling them
+    // would re-seek audio back to the current scene's start.
+  }, [currentSceneKey, baseSceneKey]);
+
+  // Apply volume live without re-seeking/restarting playback on every change.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = Math.min(1, Math.max(0, volume));
+  }, [volume]);
 
   const [scale, setScale] = useState(1);
 
@@ -118,16 +133,18 @@ export default function VideoTemplate({
               'radial-gradient(circle, var(--color-accent), transparent)',
               'radial-gradient(circle, var(--color-primary), transparent)'
             ][sceneIndex % 4],
-            x: ['-20%', '50%', '80%', '10%', '30%', '60%'][sceneIndex],
-            y: ['-20%', '10%', '-30%', '40%', '10%', '-15%'][sceneIndex],
-            scale: [1, 1.2, 0.8, 1.5, 1, 1.3][sceneIndex]
+            x: ['-20%', '50%', '80%', '10%', '30%', '60%', '40%'][sceneIndex],
+            y: ['-20%', '10%', '-30%', '40%', '10%', '-15%', '20%'][sceneIndex],
+            scale: [1, 1.2, 0.8, 1.5, 1, 1.3, 1.1][sceneIndex]
           }}
           transition={{ duration: 2.5, ease: 'easeInOut' }}
         />
 
-        <AnimatePresence mode="popLayout">
-          {SceneComponent && <SceneComponent key={currentSceneKey} />}
-        </AnimatePresence>
+        <InteractiveContext.Provider value={interactive}>
+          <AnimatePresence mode="popLayout">
+            {SceneComponent && <SceneComponent key={currentSceneKey} />}
+          </AnimatePresence>
+        </InteractiveContext.Provider>
       </div>
 
       <audio
