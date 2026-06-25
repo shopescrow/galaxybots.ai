@@ -282,7 +282,16 @@ function ControlBar({
 }
 
 export default function VideoWithControls() {
-  const isIframed = typeof window !== 'undefined' && window.self !== window.top;
+  // The headless export/recording harness injects `window.startRecording`
+  // before any app code runs, so its presence — not iframe detection — is the
+  // reliable signal that we should render the clean, non-interactive recording.
+  // Every real visitor (desktop AND mobile, whether the video is embedded in an
+  // iframe or opened directly top-level from a shared link) gets the full
+  // interactive interface. `?export` forces the clean path for manual checks.
+  const isExportPath =
+    typeof window !== 'undefined' &&
+    (typeof window.startRecording === 'function' ||
+      new URLSearchParams(window.location.search).has('export'));
 
   const {
     sceneKeys,
@@ -396,7 +405,7 @@ export default function VideoWithControls() {
   }, [collapsed, tapPinned]);
 
   // Export path: no props, preserves recording markers and unmuted audio.
-  if (!isIframed) return <VideoTemplate />;
+  if (isExportPath) return <VideoTemplate />;
 
   const barVisible = !collapsed || hovering || tapPinned;
 
