@@ -8,9 +8,10 @@ import {
   withSemanticCache,
   newRunCacheStats,
   cacheHitRate,
-  type RunCacheStats,
 } from "../semantic-cache.js";
-import type { CommunicationStrategy } from "@workspace/db";
+import type { CommunicationStrategy, TaskCategory } from "@workspace/db";
+import { aggregateWithFidelityGuardrail, makeDefaultDeps } from "../aggregation/hierarchical-aggregator";
+import type { AggregationTrace } from "../aggregation/aggregation-trace";
 
 export interface StrategyAgent {
   name: string;
@@ -24,6 +25,8 @@ export interface StrategyInput {
   clientId?: number;
   botId?: number;
   conversationId?: number;
+  /** Task category — drives per-category aggregation fidelity thresholds. */
+  taskCategory?: TaskCategory;
   onProgress?: (event: { type: string; content: string; [key: string]: unknown }) => void;
 }
 
@@ -49,6 +52,8 @@ export interface StrategyResult {
   agentsUsed: string[];
   durationMs: number;
   telemetry?: StrategyTelemetry;
+  /** Set when hierarchical aggregation with the fidelity guardrail ran. */
+  aggregationTrace?: AggregationTrace;
 }
 
 const MODEL = "gpt-5.4";
@@ -163,86 +168,9 @@ Write the single definitive synthesized response:`;
   return synthResult.completion.choices[0]?.message?.content ?? valid[0] ?? "";
 }
 
-/**
- * Tree aggregation: split perspectives into groups, summarise each group in
- * parallel, then merge the group summaries. Each group summary is itself cached
- * (kind "summary") so repeated subsets across runs avoid re-summarisation.
- */
-async function synthesizeHierarchical(
-  perspectives: string[],
-  userContent: string,
-  groupSize: number,
-  input: StrategyInput,
-  cacheStats: RunCacheStats,
-  onProgress?: StrategyInput["onProgress"],
-): Promise<string> {
-  const valid = perspectives.filter(Boolean);
-  const groups: string[][] = [];
-  for (let i = 0; i < valid.length; i += groupSize) {
-    groups.push(valid.slice(i, i + groupSize));
-  }
-
-  const summaries = await Promise.all(
-    groups.map(async (group, gi) => {
-      const groupText = group.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n");
-      const groupPrompt = `You are consolidating a subset of ${group.length} independent analytical perspectives on the same question. Produce a faithful, comprehensive summary that preserves every distinct point, fact, and nuance. Do not drop information or editorialize.
-
-The ${group.length} perspectives:
-
-${groupText}
-
-Question: ${userContent}
-
-Write the consolidated summary of this subset:`;
-
-      onProgress?.({ type: "conductor_progress", content: `GalaxyMind — summarizing group ${gi + 1}/${groups.length}…`, strategy: "parallel_synthesis" });
-
-      const result = await withSemanticCache(
-        { clientId: input.clientId, kind: "summary", queryText: `group-summary:${groupText}`, model: MODEL, estimatedCostUsd: estimateCost(MODEL, estimateTokens(groupText) + 250, 500) },
-        async () => {
-          const msgs = trimToFitContextWindow(
-            [{ role: "system" as const, content: groupPrompt }, { role: "user" as const, content: userContent }],
-            MODEL,
-          );
-          const r = await callWithFallback({ model: MODEL, messages: msgs, clientId: input.clientId, botId: input.botId, conversationId: input.conversationId });
-          return r.completion.choices[0]?.message?.content ?? group[0] ?? "";
-        },
-        cacheStats,
-      );
-      return result.content;
-    }),
-  );
-
-  const validSummaries = summaries.filter(Boolean);
-  if (validSummaries.length === 1) return validSummaries[0];
-
-  onProgress?.({ type: "conductor_synthesizing", content: `GalaxyMind — merging ${validSummaries.length} group summaries…`, strategy: "parallel_synthesis" });
-
-  const mergePrompt = `You are synthesizing ${validSummaries.length} consolidated summaries (each already merged from several independent perspectives) into one definitive, authoritative response.
-
-Rules:
-- Integrate the strongest reasoning across all summaries
-- Resolve contradictions by choosing the most defensible position
-- Capture nuances raised across summaries
-- Eliminate redundancy and write as a single unified voice
-
-The ${validSummaries.length} summaries:
-
-${validSummaries.map((s, i) => `--- Summary ${i + 1} ---\n${s}`).join("\n\n")}
-
-Write the single definitive synthesized response:`;
-
-  const mergeMsgs = trimToFitContextWindow(
-    [{ role: "system" as const, content: mergePrompt }, { role: "user" as const, content: userContent }],
-    MODEL,
-  );
-  const mergeResult = await callWithFallback({ model: MODEL, messages: mergeMsgs, clientId: input.clientId, botId: input.botId, conversationId: input.conversationId });
-  return mergeResult.completion.choices[0]?.message?.content ?? validSummaries[0] ?? "";
-}
-
 export async function executeParallelSynthesis(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
-  const { agents, userContent, onProgress, clientId, botId, conversationId } = input;
+  const { agents, userContent, onProgress, clientId, botId, conversationId, taskCategory } = input;
 
   // Serve near-duplicate questions straight from the semantic cache.
   const served = await tryServeFinalFromCache(input);
@@ -277,8 +205,38 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
   console.log(`[ParallelSynthesis] aggregation=${decision.mode} — ${decision.rationale}`);
 
   let content: string;
+  let aggregationTrace: AggregationTrace | undefined;
   if (decision.mode === "hierarchical") {
-    content = await synthesizeHierarchical(perspectives, userContent, decision.groupSize, input, cacheStats, onProgress);
+    // Group-summary cache: reuse summaries of repeated perspective subsets across
+    // runs, wired into the fidelity guardrail's summarize step so the cost
+    // optimization survives alongside the guardrail.
+    const baseDeps = makeDefaultDeps({ clientId, botId, conversationId });
+    const cachedSummarize = async (texts: string[], uc: string): Promise<string> => {
+      const groupText = texts.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n");
+      const res = await withSemanticCache(
+        { clientId, kind: "summary", queryText: `group-summary:${groupText}`, model: MODEL, estimatedCostUsd: estimateCost(MODEL, estimateTokens(groupText) + 250, 500) },
+        () => baseDeps.summarize(texts, uc),
+        cacheStats,
+      );
+      return res.content;
+    };
+
+    // Fidelity guardrail: cluster perspectives, expand high-disagreement branches
+    // losslessly, score against a flat baseline and fall back to flat synthesis
+    // if fidelity degrades. Adaptive group sizing flows in as the cluster size.
+    const aggregation = await aggregateWithFidelityGuardrail({
+      perspectives,
+      userContent,
+      taskCategory,
+      clientId,
+      botId,
+      conversationId,
+      onProgress,
+      configOverrides: { clusterSize: decision.groupSize },
+      deps: { summarize: cachedSummarize },
+    });
+    content = aggregation.content;
+    aggregationTrace = aggregation.trace;
   } else {
     onProgress?.({ type: "conductor_synthesizing", content: "GalaxyMind — synthesizing all perspectives into one definitive response…", strategy: "parallel_synthesis" });
     content = await synthesizeFlat(perspectives, userContent, input);
@@ -301,6 +259,7 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
       adaptiveSavingsUsd: decision.savingsUsd,
       adaptiveSavingsMs: Math.round(decision.savingsMs),
     },
+    aggregationTrace,
   };
 }
 

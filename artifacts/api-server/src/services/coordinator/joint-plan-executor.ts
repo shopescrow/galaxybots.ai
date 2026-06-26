@@ -21,6 +21,7 @@ import {
   type StrategyResult,
 } from "../conductor/strategies/index";
 import type { JointCoordinationPlan } from "./joint-coordination-plan";
+import type { AggregationTrace } from "../conductor/aggregation/aggregation-trace";
 import { db, abExperimentsTable, weightSnapshotsTable, coordinatorClientSettingsTable, pendingApprovalsTable, coordinatorWeightsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import type { TaskCategory } from "@workspace/db";
@@ -78,6 +79,8 @@ export interface JointPlanExecutorResult {
   humanApprovalPending?: boolean;
   /** The pendingApprovalsTable row id when humanApprovalPending is true */
   pendingApprovalId?: number | null;
+  /** Aggregation fidelity trace (whether aggregation ran, tree depth, fidelity vs baseline). */
+  aggregationTrace?: AggregationTrace;
 }
 
 const DEFAULT_TARGET_MODEL = "gpt-5-mini";
@@ -662,6 +665,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     clientId,
     botId: agents[0]?.botId,
     conversationId,
+    taskCategory: taskCat,
     onProgress: wrapProgressWithCircuitBreaker(
       onProgress,
       sessionKey,
@@ -670,7 +674,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     ),
   };
 
-  let result;
+  let result: StrategyResult;
   try {
     switch (jointPlan.communicationStrategy) {
       case "sequential_debate":
@@ -737,6 +741,24 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
       reconciled: jointPlan.reconciled,
       pipelineRunId,
       sessionId: sessionKey,
+      // Aggregation fidelity provenance — lets operators audit, per run, whether
+      // aggregation was used, how deep the tree went, and fidelity vs baseline.
+      aggregation: result.aggregationTrace
+        ? {
+            used: result.aggregationTrace.aggregationUsed,
+            strategy: result.aggregationTrace.strategy,
+            treeDepth: result.aggregationTrace.treeDepth,
+            clusterCount: result.aggregationTrace.clusterCount,
+            escalatedClusterCount: result.aggregationTrace.escalatedClusterCount,
+            meanDivergence: result.aggregationTrace.meanDivergence,
+            maxDivergence: result.aggregationTrace.maxDivergence,
+            fidelityScore: result.aggregationTrace.fidelityScore,
+            baselineScore: result.aggregationTrace.baselineScore,
+            fidelityRatio: result.aggregationTrace.fidelityRatio,
+            fellBackToFlat: result.aggregationTrace.fellBackToFlat,
+            flaggedForReview: result.aggregationTrace.flaggedForReview,
+          }
+        : undefined,
     },
   }).catch(() => {});
 
@@ -751,6 +773,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     arbitrationNotes: jointPlan.arbitrationNotes,
     strategyId,
     coordinationConfidence: jointPlan.coordinationConfidence,
+    aggregationTrace: result.aggregationTrace,
   };
 
   } finally {
