@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, real, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, real, integer, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clientsTable } from "./clients";
@@ -30,6 +30,14 @@ export const conductorStrategiesTable = pgTable("conductor_strategies", {
   modelVersion: text("model_version"),
   modelTier: text("model_tier"),
   abVariant: text("ab_variant"),
+  // Adaptive aggregation + semantic cache telemetry (task #216)
+  aggregationMode: text("aggregation_mode"),
+  cacheHit: boolean("cache_hit"),
+  cacheHitRate: real("cache_hit_rate"),
+  cacheSimilarity: real("cache_similarity"),
+  cacheSavingsUsd: real("cache_savings_usd"),
+  adaptiveSavingsUsd: real("adaptive_savings_usd"),
+  adaptiveSavingsMs: integer("adaptive_savings_ms"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

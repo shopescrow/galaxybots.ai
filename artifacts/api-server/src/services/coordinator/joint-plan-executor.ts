@@ -1,5 +1,5 @@
 import { assignRoles } from "./galaxy-coordinator";
-import { selectStrategy, recordStrategyRun, recordStrategyOutcome, deriveModelTier } from "../conductor/galaxy-conductor";
+import { selectStrategy, recordStrategyRun, recordStrategyOutcome, recordRunTelemetry, deriveModelTier } from "../conductor/galaxy-conductor";
 import { resolveSplit } from "../intelligence/ab-experiment";
 import { arbitrate } from "./galaxy-arbitrator";
 import { distillForRole } from "./context-distiller";
@@ -18,6 +18,7 @@ import {
   executeRoundRobinReview,
   type StrategyAgent,
   type StrategyInput,
+  type StrategyResult,
 } from "../conductor/strategies/index";
 import type { JointCoordinationPlan } from "./joint-coordination-plan";
 import { db, abExperimentsTable, weightSnapshotsTable, coordinatorClientSettingsTable, pendingApprovalsTable, coordinatorWeightsTable } from "@workspace/db";
@@ -713,6 +714,9 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     recordLatency(durationMs, { isProbe: isHalfOpen && probeAllowed });
   }
 
+  // ── Persist adaptive-aggregation + semantic-cache telemetry (task #216) ──────
+  recordRunTelemetry(strategyId, result.telemetry).catch(() => {});
+
   // ── Update strategy cache with outcome ──────────────────────────────────────
   const outcomeQualityScore = confidenceScore ? confidenceScore.total / 100 : 0.7;
   updateStrategyCache(taskCat, jointPlan.communicationStrategy, outcomeQualityScore).catch(() => {});
@@ -760,12 +764,12 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 }
 
 async function executeWithRelayGuard(
-  executor: () => Promise<{ content: string; agentsUsed: string[]; durationMs: number }>,
+  executor: () => Promise<StrategyResult>,
   sessionId: string,
   strategy: "sequential_debate" | "round_robin_review",
   taskDescription: string,
   onProgress?: (event: { type: string; content: string; [key: string]: unknown }) => void,
-): Promise<{ content: string; agentsUsed: string[]; durationMs: number }> {
+): Promise<StrategyResult> {
   const start = Date.now();
 
   try {

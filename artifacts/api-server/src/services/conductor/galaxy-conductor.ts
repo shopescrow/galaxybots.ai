@@ -2,6 +2,7 @@ import { db, conductorStrategiesTable } from "@workspace/db";
 import { eq, and, avg, sql, lt } from "drizzle-orm";
 import type { CommunicationStrategy, ConductorMeta } from "@workspace/db";
 import { callWithFallback, ModelTier } from "../../services/ai-safety/model-fallback.js";
+import type { StrategyTelemetry } from "./strategies/index.js";
 
 export function deriveModelTier(model: string): string {
   if (!model) return ModelTier.EFFICIENT;
@@ -312,6 +313,34 @@ export async function recordStrategyRun(
     return row.id;
   } catch {
     return -1;
+  }
+}
+
+/**
+ * Persist adaptive-aggregation and semantic-cache telemetry onto a strategy run
+ * row (task #216). Best-effort: a missing row id or absent telemetry columns
+ * (e.g. before the migration applies) degrade silently and never break the run.
+ */
+export async function recordRunTelemetry(
+  strategyId: number,
+  telemetry?: StrategyTelemetry,
+): Promise<void> {
+  if (strategyId < 0 || !telemetry) return;
+  try {
+    await db
+      .update(conductorStrategiesTable)
+      .set({
+        aggregationMode: telemetry.aggregationMode ?? null,
+        cacheHit: telemetry.cacheHit ?? null,
+        cacheHitRate: telemetry.cacheHitRate ?? null,
+        cacheSimilarity: telemetry.cacheSimilarity ?? null,
+        cacheSavingsUsd: telemetry.cacheSavingsUsd ?? null,
+        adaptiveSavingsUsd: telemetry.adaptiveSavingsUsd ?? null,
+        adaptiveSavingsMs: telemetry.adaptiveSavingsMs ?? null,
+      })
+      .where(eq(conductorStrategiesTable.id, strategyId));
+  } catch (err) {
+    console.warn("[GalaxyConductor] recordRunTelemetry failed (non-fatal):", err instanceof Error ? err.message : err);
   }
 }
 

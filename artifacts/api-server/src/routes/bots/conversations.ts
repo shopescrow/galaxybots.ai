@@ -21,7 +21,7 @@ import { screenForInjection, wrapWithSafetyReinforcement, validateInputLength } 
 import { checkCostCapAlerts } from "../../services/analytics/cost-caps";
 import { applySlidingWindow, trimToFitContextWindow } from "../../services/ai-safety/context-window";
 import { callWithFallback } from "../../services/ai-safety/model-fallback";
-import { selectStrategy, recordStrategyRun, buildConductorMeta } from "../../services/conductor/galaxy-conductor";
+import { selectStrategy, recordStrategyRun, recordRunTelemetry, buildConductorMeta } from "../../services/conductor/galaxy-conductor";
 import { executeStrategy } from "../../services/conductor/strategies/index";
 
 const router: IRouter = Router();
@@ -502,6 +502,8 @@ You have access to tools that allow you to search the web, read/write shared sta
         String(params.data.id),
         "conversation",
       );
+
+      await recordRunTelemetry(conductorStrategyId, strategyResult.telemetry);
 
       botResponseContent = strategyResult.content
         ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";

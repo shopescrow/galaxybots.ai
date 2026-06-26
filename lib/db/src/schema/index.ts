@@ -86,6 +86,7 @@ export * from "./bot-handoff-requests";
 export * from "./coordinator";
 export * from "./self-improvement";
 export * from "./conductor";
+export * from "./semantic-cache";
 export * from "./ollama-config";
 export * from "./belief-intelligence";
 export * from "./intelligence-learning";
