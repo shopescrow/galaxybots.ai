@@ -1,5 +1,8 @@
-import { callWithFallback } from "../../ai-safety/model-fallback";
+import { callWithFallback, ModelTier } from "../../ai-safety/model-fallback";
 import { trimToFitContextWindow, estimateTokens } from "../../ai-safety/context-window";
+import { runFanOut } from "../../ai-safety/internal-concurrency";
+import { checkCostCapAlerts } from "../../analytics/cost-caps";
+import { selectTierForCategory, modelForTier } from "../../ai-safety/margin-guard";
 import { estimateCost } from "../../analytics/llm-usage";
 import { decideAggregationMode, type AggregationMode } from "../adaptive-aggregation.js";
 import {
@@ -27,8 +30,11 @@ export interface StrategyInput {
   clientId?: number;
   botId?: number;
   conversationId?: number;
-  /** Task category — drives per-category aggregation fidelity thresholds. */
+  sessionId?: number;
+  /** Task category — drives per-category aggregation fidelity thresholds AND margin-aware tier routing. */
   taskCategory?: TaskCategory;
+  /** Plan tier name used to size the internal fan-out concurrency pool. */
+  plan?: string | null;
   onProgress?: (event: { type: string; content: string; [key: string]: unknown }) => void;
 }
 
@@ -122,6 +128,28 @@ function cacheHitResult(
   };
 }
 
+/**
+ * Per-tier budget gate evaluated BEFORE each fan-out tier. When the client's
+ * monthly cost cap is exhausted we degrade (collapse to a single perspective,
+ * skip synthesis) instead of overshooting the cap mid-run.
+ */
+async function checkTierBudgetExhausted(clientId?: number): Promise<boolean> {
+  if (clientId == null) return false;
+  try {
+    const r = await checkCostCapAlerts(clientId);
+    return !r.withinBudget;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve the model an individual agent call should use given the task category. */
+function resolveAgentModel(taskCategory?: string): { model: string; tier: ModelTier } {
+  const tier = taskCategory ? selectTierForCategory(taskCategory) : ModelTier.FRONTIER;
+  if (tier === ModelTier.FRONTIER) return { model: MODEL, tier };
+  return { model: modelForTier(tier), tier };
+}
+
 async function callAgent(
   systemPrompt: string,
   userContent: string,
@@ -129,18 +157,23 @@ async function callAgent(
   clientId?: number,
   botId?: number,
   conversationId?: number,
+  sessionId?: number,
+  model: string = MODEL,
+  preferredTier?: ModelTier,
 ): Promise<string> {
   const msgs = trimToFitContextWindow(
     [{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: userContent }],
-    MODEL,
+    model,
   );
   const result = await callWithFallback({
-    model: MODEL,
+    model,
     messages: msgs,
     temperature,
     clientId,
     botId,
     conversationId,
+    sessionId,
+    ...(preferredTier ? { preferredTier } : {}),
   });
   return result.completion.choices[0]?.message?.content ?? "";
 }
@@ -250,7 +283,15 @@ Write the single definitive synthesized response:`;
 
 export async function executeParallelSynthesis(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
-  const { agents, userContent, onProgress, clientId, botId, conversationId, taskCategory } = input;
+  const { userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory, plan } = input;
+  let { agents } = input;
+  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
+
+  // ── In-loop budget gate: degrade to a single perspective if the cap is hit ──
+  if (await checkTierBudgetExhausted(clientId)) {
+    onProgress?.({ type: "conductor_progress", content: "GalaxyMind — monthly cost cap reached; degrading to a single perspective.", strategy: "parallel_synthesis", degraded: true });
+    agents = agents.slice(0, 1);
+  }
 
   // Serve near-duplicate questions straight from the semantic cache.
   const served = await tryServeFinalFromCache(input);
@@ -266,20 +307,27 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
   const perspectives: string[] = new Array(agents.length).fill("");
   let completed = 0;
 
-  await Promise.all(
-    agents.map(async (agent, i) => {
+  await runFanOut(
+    agents.map((agent, i) => async () => {
       try {
-        perspectives[i] = await callAgent(agent.systemPrompt, userContent, temperatures[i], clientId, botId, conversationId);
+        perspectives[i] = await callAgent(agent.systemPrompt, userContent, temperatures[i], clientId, botId, conversationId, sessionId, agentModel, agentTier);
       } catch {
         perspectives[i] = "";
       }
       completed++;
       onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${completed}/${agents.length} perspectives captured`, strategy: "parallel_synthesis" });
     }),
+    { clientId, plan },
   );
 
-  // Adaptively choose flat vs hierarchical aggregation by projected cost/latency.
   const valid = perspectives.filter(Boolean);
+
+  // Single-agent (or budget-degraded) runs skip the synthesis call entirely.
+  if (agents.length < 2) {
+    return { content: valid[0] ?? "", agentsUsed: agents.map((a) => a.name), durationMs: Date.now() - start };
+  }
+
+  // Adaptively choose flat vs hierarchical aggregation by projected cost/latency.
   const decision = decideAggregationMode(valid, MODEL, input.taskDescription);
   const cacheStats = newRunCacheStats();
   console.log(`[ParallelSynthesis] aggregation=${decision.mode} — ${decision.rationale}`);
@@ -355,7 +403,8 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
 
 export async function executeSequentialDebate(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
-  const { agents, userContent, onProgress, clientId, botId, conversationId } = input;
+  const { agents, userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory } = input;
+  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
 
   if (agents.length < 2) {
     return executeParallelSynthesis(input);
@@ -372,7 +421,7 @@ export async function executeSequentialDebate(input: StrategyInput): Promise<Str
   const [proposer, ...debaters] = agents;
 
   onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${proposer.name} forming initial position…`, strategy: "sequential_debate" });
-  let currentPosition = await callAgent(proposer.systemPrompt, userContent, 0.7, clientId, botId, conversationId);
+  let currentPosition = await callAgent(proposer.systemPrompt, userContent, 0.7, clientId, botId, conversationId, sessionId, agentModel, agentTier);
 
   for (let i = 0; i < debaters.length; i++) {
     const debater = debaters[i];
@@ -386,7 +435,7 @@ ${currentPosition}
 Critically evaluate this position. Identify weaknesses, gaps, or errors. Then produce a refined, improved response that incorporates the strongest elements while correcting the flaws. User's original question: ${userContent}`;
 
     onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${debater.name} critiquing and refining… (${i + 2}/${agents.length})`, strategy: "sequential_debate" });
-    const refined = await callAgent(debater.systemPrompt, debatePrompt, 0.6, clientId, botId, conversationId);
+    const refined = await callAgent(debater.systemPrompt, debatePrompt, 0.6, clientId, botId, conversationId, sessionId, agentModel, agentTier);
     if (refined) currentPosition = refined;
   }
 
@@ -404,10 +453,17 @@ Critically evaluate this position. Identify weaknesses, gaps, or errors. Then pr
 
 export async function executeHierarchicalDelegation(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
-  const { agents, userContent, onProgress, clientId, botId, conversationId } = input;
+  const { agents, userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory, plan } = input;
+  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
 
   if (agents.length < 2) {
     return executeParallelSynthesis(input);
+  }
+
+  // ── In-loop budget gate: degrade to single-perspective parallel run on cap ──
+  if (await checkTierBudgetExhausted(clientId)) {
+    onProgress?.({ type: "conductor_progress", content: "GalaxyMind — monthly cost cap reached; degrading hierarchical delegation.", strategy: "hierarchical_delegation", degraded: true });
+    return executeParallelSynthesis({ ...input, agents: agents.slice(0, 1) });
   }
 
   const served = await tryServeFinalFromCache(input);
@@ -434,7 +490,7 @@ Return a JSON array of subtask strings, one per specialist, in order. Return ONL
     [{ role: "system" as const, content: decompositionPrompt }, { role: "user" as const, content: userContent }],
     FALLBACK_MODEL,
   );
-  const decompResult = await callWithFallback({ model: FALLBACK_MODEL, messages: decompositionMsgs, clientId, botId, conversationId });
+  const decompResult = await callWithFallback({ model: FALLBACK_MODEL, messages: decompositionMsgs, clientId, botId, conversationId, sessionId, preferredTier: ModelTier.EFFICIENT });
   const decompRaw = decompResult.completion.choices[0]?.message?.content ?? "[]";
 
   let subtasks: string[] = [];
@@ -447,8 +503,8 @@ Return a JSON array of subtask strings, one per specialist, in order. Return ONL
 
   const specialistOutputs: Array<{ name: string; output: string }> = [];
 
-  await Promise.all(
-    specialists.map(async (specialist, i) => {
+  await runFanOut(
+    specialists.map((specialist, i) => async () => {
       const subtask = subtasks[i] ?? userContent;
       onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${specialist.name} executing subtask ${i + 1}/${specialists.length}…`, strategy: "hierarchical_delegation" });
       // Specialist subtasks recur across runs — cache by role + subtask.
@@ -457,14 +513,15 @@ Return a JSON array of subtask strings, one per specialist, in order. Return ONL
           clientId,
           kind: "agent",
           queryText: `${specialist.name}: ${subtask}`,
-          model: MODEL,
-          estimatedCostUsd: estimateCost(MODEL, estimateTokens(subtask) + 250, 700),
+          model: agentModel,
+          estimatedCostUsd: estimateCost(agentModel, estimateTokens(subtask) + 250, 700),
         },
-        () => callAgent(specialist.systemPrompt, subtask, 0.6, clientId, botId, conversationId),
+        () => callAgent(specialist.systemPrompt, subtask, 0.6, clientId, botId, conversationId, sessionId, agentModel, agentTier),
         cacheStats,
       );
       specialistOutputs[i] = { name: specialist.name, output: out };
     }),
+    { clientId, plan },
   );
 
   onProgress?.({ type: "conductor_synthesizing", content: `GalaxyMind — ${lead.name} integrating specialist outputs…`, strategy: "hierarchical_delegation" });
@@ -529,7 +586,7 @@ Write the final integrated response that synthesizes all specialist work into a 
       [{ role: "system" as const, content: integrationPrompt }, { role: "user" as const, content: userContent }],
       MODEL,
     );
-    const integrationResult = await callWithFallback({ model: MODEL, messages: integrationMsgs, clientId, botId, conversationId });
+    const integrationResult = await callWithFallback({ model: MODEL, messages: integrationMsgs, clientId, botId, conversationId, sessionId });
     content = integrationResult.completion.choices[0]?.message?.content ?? specialistOutputs.map((s) => s.output).join("\n\n");
   }
 
@@ -550,7 +607,8 @@ Write the final integrated response that synthesizes all specialist work into a 
 
 export async function executeRoundRobinReview(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
-  const { agents, userContent, onProgress, clientId, botId, conversationId } = input;
+  const { agents, userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory } = input;
+  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
 
   if (agents.length < 2) {
     return executeParallelSynthesis(input);
@@ -564,7 +622,7 @@ export async function executeRoundRobinReview(input: StrategyInput): Promise<Str
 
   onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${agents[0].name} drafting initial response…`, strategy: "round_robin_review" });
 
-  let currentDraft = await callAgent(agents[0].systemPrompt, userContent, 0.7, clientId, botId, conversationId);
+  let currentDraft = await callAgent(agents[0].systemPrompt, userContent, 0.7, clientId, botId, conversationId, sessionId, agentModel, agentTier);
 
   for (let i = 1; i < agents.length; i++) {
     const agent = agents[i];
@@ -580,7 +638,7 @@ Build on this draft. Enhance it with your expertise — add depth, correct any e
 Original question: ${userContent}`;
 
     onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${agent.name} building on draft… (${i + 1}/${agents.length})`, strategy: "round_robin_review" });
-    const improved = await callAgent(agent.systemPrompt, buildOnPrompt, 0.65, clientId, botId, conversationId);
+    const improved = await callAgent(agent.systemPrompt, buildOnPrompt, 0.65, clientId, botId, conversationId, sessionId, agentModel, agentTier);
     if (improved) currentDraft = improved;
   }
 

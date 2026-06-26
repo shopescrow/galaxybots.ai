@@ -40,6 +40,10 @@ import {
 } from "./orchestration-circuit-breaker.js";
 import { guardStrategy } from "../conductor/strategy-budget-guard.js";
 import { writeAuditEntry } from "../audit/audit-ledger.js";
+import { estimateRunTree } from "../billing/tree-cost-estimator.js";
+import { reconcileRunCredits } from "../billing/run-reconciliation.js";
+import { getRunRevenueUsd, evaluateMargin } from "../ai-safety/margin-guard.js";
+import { accountSubscriptionsTable, subscriptionPlansTable } from "@workspace/db";
 
 export interface JointPlanExecutorInput {
   taskDescription: string;
@@ -103,6 +107,28 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 
   const targetModel = input.targetModel ?? DEFAULT_TARGET_MODEL;
   const sessionKey = String(sessionId);
+  const numericSessionId = typeof sessionId === "number" ? sessionId : undefined;
+  const attribution = { clientId, botId: agents[0]?.botId, sessionId: numericSessionId, conversationId };
+  // Epoch ms captured immediately before any LLM fan-out — used to scope
+  // post-run cost reconciliation to this run's usage rows.
+  const runStartMs = Date.now();
+
+  // Resolve the client's plan tier once — sizes the internal concurrency pool
+  // and is reused by the margin guard. Best-effort; defaults are margin-safe.
+  let clientPlanTier: string | null = null;
+  if (clientId != null) {
+    try {
+      const [planRow] = await db
+        .select({ tier: subscriptionPlansTable.tier })
+        .from(accountSubscriptionsTable)
+        .innerJoin(subscriptionPlansTable, eq(accountSubscriptionsTable.planId, subscriptionPlansTable.id))
+        .where(and(eq(accountSubscriptionsTable.clientId, clientId), eq(accountSubscriptionsTable.status, "active")))
+        .limit(1);
+      clientPlanTier = planRow?.tier ?? null;
+    } catch {
+      clientPlanTier = null;
+    }
+  }
   // Unique run ID that ties all audit entries for this pipeline invocation together
   const pipelineRunId = `pr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -267,6 +293,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
       undefined,
       undefined,
       controlCapturedAt,
+      attribution,
     ).catch((err) => {
       console.error("[JointPlanExecutor] GalaxyConductor.selectStrategy failed:", err);
       return {
@@ -290,6 +317,56 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
       strategy: guardDecision.strategy,
       rationale: `${conductorStrategy.rationale} [BudgetGuard: downgraded from ${guardDecision.originalStrategy} — ${guardDecision.reason}]`,
     };
+  }
+
+  // ── Step 2.6: Margin-aware routing + real-time margin guard ─────────────────
+  // Project the per-tier cost of the chosen strategy, compare against the run's
+  // revenue, and downgrade (cheaper strategy) or pause-to-single-agent when the
+  // margin would fall below the floor. This protects per-run profit BEFORE we
+  // spend a single token on the fan-out.
+  let estimate = estimateRunTree({ strategy: conductorStrategy.strategy, agentCount: agents.length });
+  let marginAgentCap: number | undefined;
+  let marginDecision: ReturnType<typeof evaluateMargin> | null = null;
+  if (clientId != null) {
+    const runRevenueUsd = await getRunRevenueUsd(clientId, estimate.estimatedCredits);
+    marginDecision = evaluateMargin(estimate.estimatedCostUsd, runRevenueUsd);
+    if (marginDecision.action === "downgrade" && conductorStrategy.strategy !== "parallel_synthesis") {
+      conductorStrategy = {
+        ...conductorStrategy,
+        strategy: "parallel_synthesis",
+        rationale: `${conductorStrategy.rationale} [MarginGuard: downgraded to parallel_synthesis — ${marginDecision.reason}]`,
+      };
+      estimate = estimateRunTree({ strategy: conductorStrategy.strategy, agentCount: agents.length });
+    } else if (marginDecision.action === "pause") {
+      conductorStrategy = {
+        ...conductorStrategy,
+        strategy: "parallel_synthesis",
+        rationale: `${conductorStrategy.rationale} [MarginGuard: collapsed to single agent — ${marginDecision.reason}]`,
+      };
+      marginAgentCap = 1;
+      estimate = estimateRunTree({ strategy: "parallel_synthesis", agentCount: 1 });
+    }
+  }
+
+  if (marginDecision && marginDecision.action !== "proceed") {
+    writeAuditEntry({
+      clientId: clientId ?? null,
+      sessionId: sessionKey,
+      pipelineRunId,
+      engine: "conductor",
+      decisionType: "budget_override",
+      payload: {
+        guard: "margin_guard",
+        action: marginDecision.action,
+        projectedCostUsd: marginDecision.projectedCostUsd,
+        runRevenueUsd: marginDecision.runRevenueUsd,
+        marginPct: marginDecision.marginPct,
+        reason: marginDecision.reason,
+        strategy: conductorStrategy.strategy,
+        sessionId: sessionKey,
+        pipelineRunId,
+      },
+    }).catch(() => {});
   }
 
   // Audit strategy selection
@@ -611,6 +688,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
           priorContext,
           targetModel,
           agents.length,
+          { ...attribution, botId: agent.botId },
         ).catch(() => null),
         distillBeliefBriefing(
           agent.botId,
@@ -646,7 +724,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     conductorStrategy,
     distilledAgents.map((a) => a.name),
     0,
-    undefined,
+    estimate.estimatedCostUsd,
     sessionKey,
     "joint_plan_executor",
     clientId,
@@ -658,14 +736,42 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
   // ── Step 6: Execute strategy with AgentRelaySanitizer + StrategyCircuitBreaker ─
   clearStrategyBreakerSession(sessionKey);
 
+  // ── Pre-deduct the tree-aware estimate (balance-only) ───────────────────────
+  // Placed AFTER the human-approval gate so a paused run is never charged and an
+  // approval re-run does not double-deduct. Step 7 reconciliation trues this up
+  // to the actual logged cost. Coordination runs are otherwise uncharged on this
+  // path, so this closes the margin leak.
+  if (clientId != null && estimate.estimatedCredits > 0) {
+    try {
+      const [sub] = await db
+        .select({ id: accountSubscriptionsTable.id, creditBalance: accountSubscriptionsTable.creditBalance })
+        .from(accountSubscriptionsTable)
+        .where(and(eq(accountSubscriptionsTable.clientId, clientId), eq(accountSubscriptionsTable.status, "active")))
+        .limit(1);
+      if (sub) {
+        await db
+          .update(accountSubscriptionsTable)
+          .set({ creditBalance: Math.max(0, sub.creditBalance - estimate.estimatedCredits), updatedAt: new Date() })
+          .where(eq(accountSubscriptionsTable.id, sub.id));
+      }
+    } catch (err) {
+      console.error("[JointPlanExecutor] estimate pre-deduction failed:", err);
+    }
+  }
+
+  // Apply the margin guard's agent cap (set when it collapsed the run).
+  const executionAgents = marginAgentCap != null ? distilledAgents.slice(0, marginAgentCap) : distilledAgents;
+
   const strategyInput: StrategyInput = {
     taskDescription,
     userContent,
-    agents: distilledAgents,
+    agents: executionAgents,
     clientId,
     botId: agents[0]?.botId,
     conversationId,
-    taskCategory: taskCat,
+    sessionId: numericSessionId,
+    taskCategory: conductorStrategy.taskCategory,
+    plan: clientPlanTier,
     onProgress: wrapProgressWithCircuitBreaker(
       onProgress,
       sessionKey,
@@ -720,6 +826,19 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 
   // ── Persist adaptive-aggregation + semantic-cache telemetry (task #216) ──────
   recordRunTelemetry(strategyId, result.telemetry).catch(() => {});
+
+  // ── Step 7: Post-run credit reconciliation ──────────────────────────────────
+  // True up the pre-deducted tree estimate to the actual logged LLM cost for
+  // every internal call made during this run (conductor, distillation, agents,
+  // synthesis). Best-effort; never blocks the response.
+  if (clientId != null) {
+    reconcileRunCredits({
+      clientId,
+      runStartMs,
+      estimatedCredits: estimate.estimatedCredits,
+      route: "coordination_run",
+    }).catch((err) => console.error("[JointPlanExecutor] reconcileRunCredits failed:", err));
+  }
 
   // ── Update strategy cache with outcome ──────────────────────────────────────
   const outcomeQualityScore = confidenceScore ? confidenceScore.total / 100 : 0.7;

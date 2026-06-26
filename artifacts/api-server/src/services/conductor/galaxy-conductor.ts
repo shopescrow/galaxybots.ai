@@ -153,6 +153,7 @@ export async function selectStrategy(
   modelVersion?: string,
   modelTier?: string,
   controlCapturedAt?: Date,
+  attribution?: { clientId?: number; botId?: number; sessionId?: number; conversationId?: number },
 ): Promise<StrategySelection> {
   const taskCategory = (taskCategoryOverride as ConductorTaskCategory | undefined) ?? inferTaskCategory(taskDescription);
   const priors = priorScoresOverride ?? await getCategoryPriors(taskCategory, modelVersion, modelTier, controlCapturedAt);
@@ -244,6 +245,10 @@ Return a JSON object with exactly:
       ],
       maxCompletionTokens: 200,
       preferredTier: ModelTier.LOCAL,
+      clientId: attribution?.clientId,
+      botId: attribution?.botId,
+      sessionId: attribution?.sessionId,
+      conversationId: attribution?.conversationId,
     });
 
     let raw = result.completion.choices[0]?.message?.content ?? "{}";

@@ -42,11 +42,12 @@ const SCENE_START_SEC: Record<string, number> = (() => {
 
 const AUDIO_SEEK_EPSILON_SEC = 0.18;
 
-// Fixed 16:9 design stage. The whole composition is authored at this size and
+// Fixed 4:3 design stage. The whole composition is authored at this size and
 // uniformly scaled to fit any container/device, so it looks identical (just
-// smaller) everywhere instead of reflowing.
+// smaller) everywhere instead of reflowing. 4:3 fills portrait mobile screens
+// far better than 16:9 while still playing perfectly on desktop.
 const STAGE_W = 1280;
-const STAGE_H = 720;
+const STAGE_H = 960;
 
 export default function VideoTemplate({
   durations = SCENE_DURATIONS,

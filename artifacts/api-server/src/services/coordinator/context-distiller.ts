@@ -1,8 +1,21 @@
-import { callWithFallback } from "../ai-safety/model-fallback";
+import { callWithFallback, ModelTier } from "../ai-safety/model-fallback";
 import { generateEmbeddings } from "../bots/memory";
 import { topKBySimilarity } from "../scaling/scaling-primitives";
 import { scalingConfig, isScalingActive } from "../scaling/scaling-config";
 import type { CoordinatorRole } from "@workspace/db";
+
+/**
+ * Cost attribution for internal summarization calls. Without threading the
+ * client/bot identity into callWithFallback, distillation usage is never logged
+ * to llm_usage_log — a silent margin leak. All distillation rides the EFFICIENT
+ * tier.
+ */
+export interface DistillAttribution {
+  clientId?: number;
+  botId?: number;
+  sessionId?: number;
+  conversationId?: number;
+}
 
 export interface MemoryEntry {
   key: string;
@@ -80,7 +93,7 @@ function entryToText(entry: MemoryEntry): string {
  * full lexical scan. The role query is built from the role's memory tags plus the latest user
  * turn; entries are ranked by cosine similarity and the top-k are returned. Gated by the
  * memoryRetrieval flag/threshold — below threshold (or on any embedding failure) it falls back
- * to the exact lexical `filterMemoryByRole`, so behavior is unchanged for small memory sets.
+ * to the exact lexical \`filterMemoryByRole\`, so behavior is unchanged for small memory sets.
  */
 async function selectMemoryForRole(
   entries: MemoryEntry[],
@@ -116,7 +129,12 @@ async function selectMemoryForRole(
   }
 }
 
-async function summarizeContext(content: string, role: CoordinatorRole, budgetChars: number): Promise<string> {
+async function summarizeContext(
+  content: string,
+  role: CoordinatorRole,
+  budgetChars: number,
+  attribution?: DistillAttribution,
+): Promise<string> {
   const roleFocus = {
     thinker: "strategic insights, analytical findings, and planning context",
     worker: "operational procedures, task requirements, and execution context",
@@ -136,6 +154,11 @@ ${content.slice(0, budgetChars * 2)}`;
         { role: "user", content: prompt },
       ],
       maxCompletionTokens: Math.floor(budgetChars / APPROX_CHARS_PER_TOKEN),
+      clientId: attribution?.clientId,
+      botId: attribution?.botId,
+      sessionId: attribution?.sessionId,
+      conversationId: attribution?.conversationId,
+      preferredTier: ModelTier.EFFICIENT,
     });
 
     return result.completion.choices[0]?.message?.content ?? content.slice(0, budgetChars);
@@ -150,6 +173,7 @@ export async function distillForRole(
   priorContext: ConversationTurn[],
   targetModel: string,
   agentCount = 1,
+  attribution?: DistillAttribution,
 ): Promise<DistilledContext> {
   const contextWindowSize = getContextWindowSize(targetModel);
   const totalBudgetTokens = Math.floor(contextWindowSize * CONTEXT_BUDGET_RATIO);
@@ -176,7 +200,7 @@ export async function distillForRole(
   let truncated = false;
 
   if (estimateTokens(brief) > perAgentBudgetTokens) {
-    brief = await summarizeContext(combined, role, perAgentBudgetChars);
+    brief = await summarizeContext(combined, role, perAgentBudgetChars, attribution);
     truncated = true;
 
     if (estimateTokens(brief) > perAgentBudgetTokens) {
