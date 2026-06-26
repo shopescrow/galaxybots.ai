@@ -21,6 +21,12 @@ export const botMemoriesTable = pgTable("bot_memories", {
 }, (table) => [
   index("bot_memories_bot_id_idx").on(table.botId),
   index("bot_memories_client_id_idx").on(table.clientId),
+  // Approximate-nearest-neighbor index so top-k vector retrieval stays roughly
+  // flat as memory grows, instead of a sequential cosine scan over every row.
+  index("bot_memories_embedding_hnsw_idx").using(
+    "hnsw",
+    table.embedding.op("vector_cosine_ops"),
+  ),
 ]);
 
 export const botAssignmentsTable = pgTable("bot_assignments", {

@@ -3,6 +3,7 @@ import { generateEmbeddings } from "../bots/memory";
 import { topKBySimilarity } from "../scaling/scaling-primitives";
 import { scalingConfig, isScalingActive } from "../scaling/scaling-config";
 import type { CoordinatorRole } from "@workspace/db";
+import { rolePriorScore, clamp01, type CoordinatorRoleLike } from "../bots/hybrid-retrieval";
 
 /**
  * Cost attribution for internal summarization calls. Without threading the
@@ -52,12 +53,6 @@ const CONTEXT_BUDGET_RATIO = 0.60;
 const APPROX_CHARS_PER_TOKEN = 4;
 const SUMMARY_MODEL = "gpt-5-mini";
 
-const ROLE_MEMORY_TAGS: Record<CoordinatorRole, string[]> = {
-  thinker: ["strategic", "analytical", "research", "planning", "hypothesis", "insight"],
-  worker: ["operational", "procedural", "execution", "task", "implementation", "action"],
-  verifier: ["risk", "error", "correction", "validation", "audit", "review", "failure"],
-};
-
 function getContextWindowSize(targetModel: string): number {
   return MODEL_CONTEXT_WINDOWS[targetModel] ?? DEFAULT_CONTEXT_WINDOW;
 }
@@ -66,16 +61,22 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / APPROX_CHARS_PER_TOKEN);
 }
 
-function filterMemoryByRole(entries: MemoryEntry[], role: CoordinatorRole): MemoryEntry[] {
-  const relevantTags = ROLE_MEMORY_TAGS[role];
+// Weights for the in-memory (living-memory) rerank. This is the small,
+// transient scratchpad path; it shares the role-prior + recency blend used by
+// the DB-backed ANN retrieval (see services/bots/hybrid-retrieval.ts) so ranking
+// stays consistent across both paths. No vector similarity is available here.
+const LIVING_MEMORY_WEIGHTS = { rolePrior: 1, recency: 0.5 };
 
+function filterMemoryByRole(
+  entries: MemoryEntry[],
+  role: CoordinatorRole,
+  weights: { rolePrior: number; recency: number } = LIVING_MEMORY_WEIGHTS,
+): MemoryEntry[] {
   const scored = entries.map((entry) => {
-    const entryText = `${entry.key} ${entry.value} ${(entry.tags ?? []).join(" ")} ${entry.domain ?? ""}`.toLowerCase();
-    let score = 0;
-    for (const tag of relevantTags) {
-      if (entryText.includes(tag)) score += 2;
-    }
-    score += (entry.recency ?? 0) * 0.5;
+    const entryText = `${entry.key} ${entry.value} ${(entry.tags ?? []).join(" ")} ${entry.domain ?? ""}`;
+    const rolePrior = rolePriorScore(entryText, role as CoordinatorRoleLike);
+    const recency = clamp01(entry.recency ?? 0);
+    const score = weights.rolePrior * rolePrior + weights.recency * recency;
     return { entry, score };
   });
 

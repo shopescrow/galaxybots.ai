@@ -25,6 +25,7 @@ import { runGuardianPatrols } from "./jobs/guardian-patrol-runner";
 import { runDependencyVulnerabilityWatcher } from "./jobs/dependency-vulnerability-watcher";
 import { runGuardianInternalWatchers } from "./jobs/guardian-internal-watchers";
 import { checkMemoryConsolidation } from "./jobs/consolidate-memories";
+import { checkMemoryEmbeddingBackfill } from "./jobs/backfill-memory-embeddings";
 import { checkEpisodicMemory } from "./jobs/episodic-memory";
 import { checkBeliefDecay } from "./jobs/belief-decay";
 import { checkStaleBeliefUpdates } from "../../services/ai-safety/belief-anomaly";
@@ -109,6 +110,7 @@ const lowFreqJobs: Job[] = [
   { name: "opportunity-detection", fn: runOpportunityDetection },
   { name: "uncertainty-schedules", fn: checkUncertaintySchedules },
   { name: "memory-consolidation", fn: checkMemoryConsolidation },
+  { name: "memory-embedding-backfill", fn: checkMemoryEmbeddingBackfill },
   { name: "episodic-memory", fn: checkEpisodicMemory },
   { name: "belief-decay", fn: checkBeliefDecay },
   { name: "stale-belief-updates", fn: checkStaleBeliefUpdates },
