@@ -24,6 +24,11 @@ export const prospectsTable = pgTable("prospects", {
   convertedClientId: integer("converted_client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   convertedAt: timestamp("converted_at", { withTimezone: true }),
   outreachSentCount: integer("outreach_sent_count").notNull().default(0),
+  source: text("source").notNull().default("prospecting"),
+  productTag: text("product_tag", { enum: ["pirate_monster", "galaxybots", "kilopro"] }),
+  counterpartyHandle: text("counterparty_handle"),
+  contextUrl: text("context_url"),
+  expressedNeed: text("expressed_need"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

@@ -8,6 +8,7 @@ export const AUDIT_ENGINE_VALUES = [
   "arbitrator",
   "circuit_breaker",
   "budget_guard",
+  "moltbook",
 ] as const;
 
 export const AUDIT_DECISION_TYPE_VALUES = [

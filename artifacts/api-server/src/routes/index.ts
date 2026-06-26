@@ -18,6 +18,7 @@ import { registerCoordinatorRoutes } from "./coordinator";
 import { registerSelfImprovementRoutes } from "./self-improvement";
 import { registerIntelligenceRoutes } from "./intelligence";
 import { registerGaaRoutes } from "./gaa";
+import { registerMoltbookRoutes } from "./moltbook";
 
 const router: IRouter = Router();
 
@@ -39,5 +40,6 @@ registerCoordinatorRoutes(router);
 registerSelfImprovementRoutes(router);
 registerIntelligenceRoutes(router);
 registerGaaRoutes(router);
+registerMoltbookRoutes(router);
 
 export default router;

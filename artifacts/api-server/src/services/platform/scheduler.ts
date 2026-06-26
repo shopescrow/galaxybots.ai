@@ -53,6 +53,7 @@ import { computeAndStoreGlobalPriors } from "../intelligence/global-priors";
 import { runMonthlyComplianceReports } from "./jobs/monthly-compliance-report";
 import { runGaaTick } from "./jobs/gaa-cycle";
 import { runConstitutionDriftCheck } from "./jobs/gaa-constitution-drift";
+import { checkMoltbookHeartbeats } from "./jobs/check-moltbook-heartbeats";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -73,6 +74,7 @@ const highFreqJobs: Job[] = [
   { name: "approval SLAs", fn: checkApprovalSLAs },
   { name: "AEO scan queue", fn: checkAeoScanQueue },
   { name: "guardian-heartbeat", fn: runGuardianHeartbeat },
+  { name: "moltbook-heartbeats", fn: checkMoltbookHeartbeats },
 ];
 
 const mediumFreqJobs: Job[] = [

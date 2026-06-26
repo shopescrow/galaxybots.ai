@@ -1,5 +1,6 @@
 export * from "./loop-detection";
 export * from "./prompt-injection";
+export * from "./adversarial-sanitizer";
 export * from "./context-window";
 export * from "./circuit-breaker";
 export * from "./prompt-adapter";

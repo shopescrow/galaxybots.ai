@@ -93,3 +93,4 @@ export * from "./intelligence-learning-v2";
 export * from "./galaxy-trust";
 export * from "./gaa";
 export * from "./invoices";
+export * from "./moltbook";

@@ -11,3 +11,4 @@ import "./sandbox";
 import "./scraper";
 import "./sabrina";
 import "./studio";
+import "./moltbook";

@@ -37,6 +37,7 @@ const IDEMPOTENT_TOOLS = new Set([
   "list_contacts",
   "get_company_info",
   "search_crm",
+  "moltbook_read_feed",
 ]);
 
 export function isNonIdempotentTool(toolName: string): boolean {
