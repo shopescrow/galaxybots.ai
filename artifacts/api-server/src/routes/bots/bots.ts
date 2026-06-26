@@ -3,7 +3,7 @@ import { db, botsTable, botSlaEventsTable, botSlaOverridesTable, slaTiersTable, 
 import { eq, and, gte, desc, sql, or, isNull } from "drizzle-orm";
 import { GetBotParams, ListBotsResponse, GetBotResponse } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
-import { llmRateLimit } from "../../middleware/rate-limit";
+import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 import { getEffectiveSlaTargets } from "../../services/analytics/sla";
 import { sendValidationError, sendParamError } from "../../utils/validation";
 import { z } from "zod/v4";
@@ -98,7 +98,7 @@ router.get("/bots/declarations", async (req, res): Promise<void> => {
   res.json({ data: result, nextCursor, hasMore });
 });
 
-router.post("/bots/generate-declarations", llmRateLimit, async (req, res): Promise<void> => {
+router.post("/bots/generate-declarations", llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",

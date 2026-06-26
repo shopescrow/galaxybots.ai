@@ -22,6 +22,7 @@ export const AUDIT_DECISION_TYPE_VALUES = [
   "confidence_score",
   "human_approval_required",
   "human_approval_outcome",
+  "auto_approval",
   "outcome",
 ] as const;
 

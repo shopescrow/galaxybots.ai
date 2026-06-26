@@ -30,6 +30,7 @@ import { sendPushToClient } from "../admin/push-sender.js";
 import type { ConversationTurn, MemoryEntry } from "./context-distiller";
 import { scoreJointPlan, type SampleCountMap } from "./confidence-scorer.js";
 import { getCategoryPriors } from "../conductor/galaxy-conductor.js";
+import { recordScalingTelemetry } from "../analytics/scaling-telemetry.js";
 import {
   checkCircuit,
   acquireHalfOpenProbe,
@@ -44,6 +45,7 @@ import { estimateRunTree } from "../billing/tree-cost-estimator.js";
 import { reconcileRunCredits } from "../billing/run-reconciliation.js";
 import { getRunRevenueUsd, evaluateMargin } from "../ai-safety/margin-guard.js";
 import { accountSubscriptionsTable, subscriptionPlansTable } from "@workspace/db";
+import { getDegradationPolicy } from "../ai-safety/degradation-policy.js";
 
 export interface JointPlanExecutorInput {
   taskDescription: string;
@@ -149,6 +151,19 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     console.log(`[JointPlanExecutor] Circuit HALF-OPEN — this session is the single probe for ${sessionId}`);
   }
 
+  // ── Graceful degradation under provider stress ────────────────────────────────
+  // Tie orchestration aggressiveness to live AI-provider circuit health. When
+  // providers are degraded we cap the fleet (fewer agents → less load) and may
+  // force a flat single-pass synthesis instead of failing outright.
+  const degradationPolicy = getDegradationPolicy();
+  const fleetAgents =
+    degradationPolicy.maxFleetSize !== undefined && agents.length > degradationPolicy.maxFleetSize
+      ? agents.slice(0, Math.max(1, degradationPolicy.maxFleetSize))
+      : agents;
+  if (degradationPolicy.degraded) {
+    console.warn(`[JointPlanExecutor] Degraded mode (${degradationPolicy.level}) for session ${sessionId}: ${degradationPolicy.reason} — fleet ${agents.length}→${fleetAgents.length}`);
+  }
+
   // ── Probe lock safety ─────────────────────────────────────────────────────────
   // Wrap the entire main execution body in try/finally so the half-open probe
   // lock is always released — even when an uncaught exception is thrown anywhere
@@ -193,7 +208,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
   }
 
   // ── Step 1: GalaxyCoordinator — assign roles ─────────────────────────────────
-  const steps = agents.map((agent, idx) => ({
+  const steps = fleetAgents.map((agent, idx) => ({
     stepIndex: idx,
     botId: agent.botId,
     botName: agent.botName,
@@ -208,8 +223,8 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
 
   if (coordinatorPlan) {
     const validationResult = validateCoordinatorOutput(coordinatorPlan, {
-      availableBotIds: agents.map((a) => a.botId),
-      availableBotCount: agents.length,
+      availableBotIds: fleetAgents.map((a) => a.botId),
+      availableBotCount: fleetAgents.length,
     });
 
     if (!validationResult.valid) {
@@ -272,7 +287,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
   // In bypass mode (circuit open or half-open non-probe) skip the expensive LLM
   // conductor call entirely and go straight to the cached strategy.  Running
   // selectStrategy() in open mode defeats the purpose of degraded operation.
-  const conductorAgents = agents.map((a) => ({ name: a.botName }));
+  const conductorAgents = fleetAgents.map((a) => ({ name: a.botName }));
 
   let conductorStrategy: { strategy: typeof import("@workspace/db").COMMUNICATION_STRATEGY_VALUES[number]; rationale: string; taskCategory: TaskCategory };
 
@@ -294,6 +309,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
       undefined,
       controlCapturedAt,
       attribution,
+      conductorAgents.length,
     ).catch((err) => {
       console.error("[JointPlanExecutor] GalaxyConductor.selectStrategy failed:", err);
       return {
@@ -319,12 +335,23 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     };
   }
 
+  // ── Graceful degradation: collapse to flat single-pass synthesis ─────────────
+  // Under severe provider stress, skip multi-agent debate/delegation and run the
+  // cheapest single-pass strategy so the request degrades rather than fails.
+  if (degradationPolicy.forceFlatSynthesis && conductorStrategy.strategy !== "parallel_synthesis") {
+    conductorStrategy = {
+      ...conductorStrategy,
+      strategy: "parallel_synthesis",
+      rationale: `${conductorStrategy.rationale} [Degradation: forced flat synthesis — ${degradationPolicy.reason}]`,
+    };
+  }
+
   // ── Step 2.6: Margin-aware routing + real-time margin guard ─────────────────
   // Project the per-tier cost of the chosen strategy, compare against the run's
   // revenue, and downgrade (cheaper strategy) or pause-to-single-agent when the
   // margin would fall below the floor. This protects per-run profit BEFORE we
-  // spend a single token on the fan-out.
-  let estimate = estimateRunTree({ strategy: conductorStrategy.strategy, agentCount: agents.length });
+  // spend a single token on the fan-out. Runs on the (possibly degraded) fleet.
+  let estimate = estimateRunTree({ strategy: conductorStrategy.strategy, agentCount: fleetAgents.length });
   let marginAgentCap: number | undefined;
   let marginDecision: ReturnType<typeof evaluateMargin> | null = null;
   if (clientId != null) {
@@ -336,7 +363,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
         strategy: "parallel_synthesis",
         rationale: `${conductorStrategy.rationale} [MarginGuard: downgraded to parallel_synthesis — ${marginDecision.reason}]`,
       };
-      estimate = estimateRunTree({ strategy: conductorStrategy.strategy, agentCount: agents.length });
+      estimate = estimateRunTree({ strategy: conductorStrategy.strategy, agentCount: fleetAgents.length });
     } else if (marginDecision.action === "pause") {
       conductorStrategy = {
         ...conductorStrategy,
@@ -391,17 +418,17 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
   const fallbackPlan = coordinatorPlan ?? {
     taskCategory: taskCategoryOverride ?? ("execution" as TaskCategory),
     taskDescription,
-    thinker: { botId: agents[0]?.botId ?? 0, botName: agents[0]?.botName ?? "agent-0", role: "thinker" as const, weight: 1.0, reasoning: "fallback" },
-    worker: { botId: agents[0]?.botId ?? 0, botName: agents[0]?.botName ?? "agent-0", role: "worker" as const, weight: 1.0, reasoning: "fallback" },
-    verifier: { botId: agents[agents.length - 1]?.botId ?? 0, botName: agents[agents.length - 1]?.botName ?? "agent-0", role: "verifier" as const, weight: 1.0, reasoning: "fallback" },
-    roleAssignments: agents.map((a, i) => ({
+    thinker: { botId: fleetAgents[0]?.botId ?? 0, botName: fleetAgents[0]?.botName ?? "agent-0", role: "thinker" as const, weight: 1.0, reasoning: "fallback" },
+    worker: { botId: fleetAgents[0]?.botId ?? 0, botName: fleetAgents[0]?.botName ?? "agent-0", role: "worker" as const, weight: 1.0, reasoning: "fallback" },
+    verifier: { botId: fleetAgents[fleetAgents.length - 1]?.botId ?? 0, botName: fleetAgents[fleetAgents.length - 1]?.botName ?? "agent-0", role: "verifier" as const, weight: 1.0, reasoning: "fallback" },
+    roleAssignments: fleetAgents.map((a, i) => ({
       botId: a.botId,
       botName: a.botName,
-      role: (i === 0 ? "thinker" : i === agents.length - 1 ? "verifier" : "worker") as "thinker" | "worker" | "verifier",
+      role: (i === 0 ? "thinker" : i === fleetAgents.length - 1 ? "verifier" : "worker") as "thinker" | "worker" | "verifier",
       weight: 1.0,
       reasoning: "fallback assignment",
     })),
-    roleByStepIndex: Object.fromEntries(agents.map((_, i) => [i, i === 0 ? "thinker" : i === agents.length - 1 ? "verifier" : "worker"])) as Record<number, "thinker" | "worker" | "verifier">,
+    roleByStepIndex: Object.fromEntries(fleetAgents.map((_, i) => [i, i === 0 ? "thinker" : i === fleetAgents.length - 1 ? "verifier" : "worker"])) as Record<number, "thinker" | "worker" | "verifier">,
     timestamp: Date.now(),
     weightsSnapshot: {},
   };
@@ -416,9 +443,9 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
       taskCategory: conductorStrategy.taskCategory,
       reconciled: false,
       arbitrationNotes: [`Circuit ${circuitState} — Arbitration bypassed; cached strategy (${conductorStrategy.strategy}) used directly`],
-      agentSequence: agents.map((a, i) => ({
+      agentSequence: fleetAgents.map((a, i) => ({
         agentIndex: i,
-        role: (i === 0 ? "thinker" : i === agents.length - 1 ? "verifier" : "worker") as "thinker" | "worker" | "verifier",
+        role: (i === 0 ? "thinker" : i === fleetAgents.length - 1 ? "verifier" : "worker") as "thinker" | "worker" | "verifier",
         reasoning: "bypass mode",
       })),
     } as JointCoordinationPlan;
@@ -426,8 +453,8 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     jointPlan = arbitrate(fallbackPlan, conductorStrategy, {
       sessionId,
       clientId,
-      botIds: agents.map((a) => a.botId),
-      agentCount: agents.length,
+      botIds: fleetAgents.map((a) => a.botId),
+      agentCount: fleetAgents.length,
       taskDescription,
       taskCategory: taskCategoryOverride,
     });
@@ -675,10 +702,10 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
   // ── Step 4: ContextDistiller + BeliefDistiller — build role-specific briefings ─
   // Skip heavy distillation when circuit is bypassed to minimize overhead
   const distilledAgents: StrategyAgent[] = useLightweightBypass
-    ? agents.map((agent) => ({ name: agent.botName, systemPrompt: agent.systemPrompt }))
+    ? fleetAgents.map((agent) => ({ name: agent.botName, systemPrompt: agent.systemPrompt }))
     : await Promise.all(
     jointPlan.agentSequence.map(async (seqStep, idx) => {
-      const agent = agents[seqStep.agentIndex] ?? agents[idx] ?? agents[0];
+      const agent = fleetAgents[seqStep.agentIndex] ?? fleetAgents[idx] ?? fleetAgents[0];
       if (!agent) return { name: "unknown", systemPrompt: "" };
 
       const [distilled, beliefBriefing] = await Promise.all([
@@ -687,7 +714,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
           livingMemory,
           priorContext,
           targetModel,
-          agents.length,
+          fleetAgents.length,
           { ...attribution, botId: agent.botId },
         ).catch(() => null),
         distillBeliefBriefing(
@@ -767,7 +794,7 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
     userContent,
     agents: executionAgents,
     clientId,
-    botId: agents[0]?.botId,
+    botId: fleetAgents[0]?.botId,
     conversationId,
     sessionId: numericSessionId,
     taskCategory: conductorStrategy.taskCategory,
@@ -882,6 +909,24 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
   }).catch(() => {});
 
   clearStrategyBreakerSession(sessionKey);
+
+  // ── Per-run scaling & profitability telemetry ───────────────────────────────
+  // Records the observable signals for this run (tokens/cost from llm_usage_log,
+  // list-price credit revenue, conductor quality as a fidelity proxy). Scaling
+  // mechanism signals (tokensSaved/aggregationDepth/hit-rates) are owned by other
+  // tasks and recorded as NULL/0 here until those mechanisms emit them.
+  recordScalingTelemetry({
+    clientId: clientId ?? null,
+    sessionId: sessionKey,
+    conductorStrategyId: strategyId >= 0 ? strategyId : null,
+    taskCategory: taskCat,
+    strategy: jointPlan.communicationStrategy,
+    fleetSize: result.agentsUsed.length || distilledAgents.length || 1,
+    modelVersion: targetModel,
+    modelTier: deriveModelTier(targetModel),
+    fidelityScore: outcomeQualityScore,
+    costLookup: { conversationId: conversationId ?? null, since: new Date(start) },
+  }).catch(() => {});
 
   return {
     content: result.content,

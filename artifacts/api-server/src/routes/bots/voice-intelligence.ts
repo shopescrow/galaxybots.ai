@@ -13,7 +13,7 @@ import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireRole } from "../../middleware/auth";
-import { llmRateLimit } from "../../middleware/rate-limit";
+import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 import { logLlmUsage } from "../../services/analytics/llm-usage";
 import { generateCallDebrief } from "../../services/bots/call-debrief";
 
@@ -135,7 +135,7 @@ router.get("/voice/calls/:clientId", requireRole("owner", "admin"), async (req, 
   }
 });
 
-router.post("/voice/debrief/:callLogId", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/voice/debrief/:callLogId", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const callLogId = Number(req.params.callLogId);
   if (isNaN(callLogId)) {
     res.status(400).json({ error: "Invalid call log ID" });
@@ -202,7 +202,7 @@ const GenerateScriptBody = z.object({
   desiredOutcome: z.string().optional(),
 });
 
-router.post("/voice/scripts", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/voice/scripts", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const body = GenerateScriptBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -368,7 +368,7 @@ router.delete("/voice/scripts/:id", requireRole("owner", "admin"), async (req, r
   res.json({ success: true });
 });
 
-router.post("/voice/upload-recording", requireRole("owner", "admin"), llmRateLimit, upload.single("file"), async (req, res): Promise<void> => {
+router.post("/voice/upload-recording", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, upload.single("file"), async (req, res): Promise<void> => {
   const userClientId = req.user!.clientId;
 
   try {

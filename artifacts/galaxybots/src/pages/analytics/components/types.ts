@@ -99,6 +99,55 @@ export interface HealthAnalyticsData {
   }[];
 }
 
+export interface ScalingTelemetryData {
+  windowDays: number;
+  totals: {
+    runs: number;
+    totalMarginUsd: number;
+    avgMarginUsd: number;
+    totalCostUsd: number;
+    totalRevenueUsd: number;
+    avgFidelity: number | null;
+    totalTokensSaved: number;
+    marginPositiveRate: number;
+  };
+  byCategory: {
+    taskCategory: string;
+    fleetSize: number;
+    runs: number;
+    avgMarginUsd: number;
+    totalMarginUsd: number;
+    avgCostUsd: number;
+    avgRevenueUsd: number;
+    avgFidelity: number | null;
+    totalTokensSaved: number;
+    avgCacheHitRate: number | null;
+    avgRetrievalHitRate: number | null;
+  }[];
+  marginTrend: { date: string; avgMarginUsd: number; runs: number; avgFidelity: number | null }[];
+  recentRuns: {
+    id: number;
+    createdAt: string;
+    taskCategory: string;
+    strategy: string | null;
+    fleetSize: number;
+    modelTier: string | null;
+    marginUsd: number;
+    projectedCostUsd: number;
+    creditRevenueUsd: number;
+    fidelityScore: number | null;
+    tokensSaved: number;
+  }[];
+  alerts: {
+    type: "margin_regression" | "fidelity_regression";
+    taskCategory: string;
+    fleetSize: number;
+    value: number;
+    threshold: number;
+    message: string;
+  }[];
+}
+
 export interface VoiceAnalyticsData {
   totalCalls: number;
   avgDurationSeconds: number;

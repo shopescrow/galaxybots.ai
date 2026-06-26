@@ -17,7 +17,7 @@ import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-s
 import { runAgenticLoop, type AgenticEvent } from "../../tools";
 import { buildMemoryContext } from "../../services/bots/memory";
 import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base";
-import { llmRateLimit } from "../../middleware/rate-limit";
+import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 import { buildClientContext } from "../../services/clients/client-context";
 import { applyBrandVoiceGuardrails } from "../../services/platform/governance";
 import {
@@ -59,7 +59,7 @@ router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
 
 router.post(
   "/task-sessions/:id/messages",
-  llmRateLimit,
+  llmRateLimit, tenantFairShareConcurrency,
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {
@@ -245,7 +245,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
 
 router.post(
   "/task-sessions/:id/messages/stream",
-  llmRateLimit,
+  llmRateLimit, tenantFairShareConcurrency,
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {

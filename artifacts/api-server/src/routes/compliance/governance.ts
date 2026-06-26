@@ -45,6 +45,102 @@ async function persistResumedOutput(
   }
 }
 
+type PendingApprovalRow = typeof pendingApprovalsTable.$inferSelect;
+
+/**
+ * Execute an approved tool call and resume its paused agentic loop / pipeline.
+ * Shared by the single-approval route and the batch-approval route so both
+ * paths behave identically.
+ */
+async function executeApprovalAndResume(
+  approval: PendingApprovalRow,
+): Promise<{ toolResult: unknown; resumeResult: { finalContent?: string; error?: string } | null }> {
+  let toolResult: unknown = null;
+  let resumeResult: { finalContent?: string; error?: string } | null = null;
+
+  if (approval.toolName === "galaxy_mind_strategy") {
+    const resumeCtx = approval.pausedLoopContext as Omit<JointPlanExecutorInput, "onProgress"> | null;
+    if (resumeCtx) {
+      try {
+        const planResult = await executeJointPlan({ ...resumeCtx });
+        const finalContent = planResult.content || "(No response generated)";
+        const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, finalContent).catch(() => finalContent);
+        await persistResumedOutput(approval, guardedContent);
+        toolResult = { strategy: planResult.plan.communicationStrategy, agentsUsed: planResult.agentsUsed };
+        resumeResult = { finalContent: guardedContent };
+      } catch (err) {
+        console.error("[governance] Failed to resume GalaxyMind pipeline after approval:", err);
+        toolResult = { error: err instanceof Error ? err.message : "Pipeline resume failed" };
+        resumeResult = { error: "Pipeline resume failed" };
+      }
+    } else {
+      toolResult = { error: "No execution context stored — cannot resume pipeline" };
+      resumeResult = { error: "Missing pausedLoopContext" };
+    }
+    return { toolResult, resumeResult };
+  }
+
+  const tool = getTool(approval.toolName);
+  if (tool) {
+    try {
+      const validated = tool.inputSchema.safeParse(approval.toolInput);
+      if (validated.success) {
+        toolResult = await tool.execute(validated.data, {
+          clientId: approval.clientId,
+          botId: approval.botId,
+          botName: approval.botName ?? undefined,
+          sessionId: approval.sessionId ?? undefined,
+          conversationId: approval.conversationId ?? undefined,
+        });
+      } else {
+        toolResult = { error: `Invalid input: ${validated.error.message}` };
+      }
+    } catch (err) {
+      toolResult = { error: err instanceof Error ? err.message : "Tool execution failed" };
+    }
+  }
+
+  const pausedCtx = approval.pausedLoopContext as {
+    model: string;
+    maxIterations: number;
+    maxTokens: number;
+    systemPrompt: string;
+    messages: unknown[];
+    remainingIterations: number;
+    toolCallId: string;
+    allToolCallIds?: string[];
+  } | null;
+
+  if (pausedCtx) {
+    try {
+      const toolContext: ToolContext = {
+        clientId: approval.clientId,
+        botId: approval.botId,
+        botName: approval.botName ?? undefined,
+        sessionId: approval.sessionId ?? undefined,
+        conversationId: approval.conversationId ?? undefined,
+      };
+      const agenticResult = await resumeAgenticLoop({
+        pausedLoopContext: pausedCtx,
+        toolResult,
+        context: toolContext,
+      });
+      resumeResult = agenticResult;
+
+      if (agenticResult.finalContent) {
+        const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, agenticResult.finalContent);
+        resumeResult.finalContent = guardedContent;
+        await persistResumedOutput(approval, guardedContent);
+      }
+    } catch (err) {
+      console.error("[governance] Failed to resume agentic loop after approval:", err);
+      resumeResult = { error: "Loop resume failed" };
+    }
+  }
+
+  return { toolResult, resumeResult };
+}
+
 const router: IRouter = Router();
 
 router.get("/governance/tools", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
@@ -244,93 +340,7 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
 
   const approval = claimed;
 
-  let toolResult: unknown = null;
-  let resumeResult: { finalContent?: string; error?: string } | null = null;
-
-  if (approval.toolName === "galaxy_mind_strategy") {
-    // ── GalaxyMind Strategy Resume ─────────────────────────────────────────────
-    // The paused execution context stored when the human gate fired contains the
-    // full JointPlanExecutorInput with humanApprovalOverridden=true.  Re-run the
-    // pipeline from scratch (gate is bypassed on second pass) and persist the
-    // resulting content as a conversation/session message.
-    const resumeCtx = approval.pausedLoopContext as Omit<JointPlanExecutorInput, "onProgress"> | null;
-    if (resumeCtx) {
-      try {
-        const planResult = await executeJointPlan({ ...resumeCtx });
-        const finalContent = planResult.content || "(No response generated)";
-        const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, finalContent).catch(() => finalContent);
-        await persistResumedOutput(approval, guardedContent);
-        toolResult = { strategy: planResult.plan.communicationStrategy, agentsUsed: planResult.agentsUsed };
-        resumeResult = { finalContent: guardedContent };
-      } catch (err) {
-        console.error("[governance] Failed to resume GalaxyMind pipeline after approval:", err);
-        toolResult = { error: err instanceof Error ? err.message : "Pipeline resume failed" };
-        resumeResult = { error: "Pipeline resume failed" };
-      }
-    } else {
-      toolResult = { error: "No execution context stored — cannot resume pipeline" };
-      resumeResult = { error: "Missing pausedLoopContext" };
-    }
-  } else {
-    // ── Standard agentic-loop tool approval ────────────────────────────────────
-    const tool = getTool(approval.toolName);
-    if (tool) {
-      try {
-        const validated = tool.inputSchema.safeParse(approval.toolInput);
-        if (validated.success) {
-          toolResult = await tool.execute(validated.data, {
-            clientId: approval.clientId,
-            botId: approval.botId,
-            botName: approval.botName ?? undefined,
-            sessionId: approval.sessionId ?? undefined,
-            conversationId: approval.conversationId ?? undefined,
-          });
-        } else {
-          toolResult = { error: `Invalid input: ${validated.error.message}` };
-        }
-      } catch (err) {
-        toolResult = { error: err instanceof Error ? err.message : "Tool execution failed" };
-      }
-    }
-
-    const pausedCtx = approval.pausedLoopContext as {
-      model: string;
-      maxIterations: number;
-      maxTokens: number;
-      systemPrompt: string;
-      messages: unknown[];
-      remainingIterations: number;
-      toolCallId: string;
-      allToolCallIds?: string[];
-    } | null;
-
-    if (pausedCtx) {
-      try {
-        const toolContext: ToolContext = {
-          clientId: approval.clientId,
-          botId: approval.botId,
-          botName: approval.botName ?? undefined,
-          sessionId: approval.sessionId ?? undefined,
-          conversationId: approval.conversationId ?? undefined,
-        };
-        const agenticResult = await resumeAgenticLoop({
-          pausedLoopContext: pausedCtx,
-          toolResult,
-          context: toolContext,
-        });
-        resumeResult = agenticResult;
-
-        if (agenticResult.finalContent) {
-          const guardedContent = await applyBrandVoiceGuardrails(approval.clientId, agenticResult.finalContent);
-          resumeResult.finalContent = guardedContent;
-          await persistResumedOutput(approval, guardedContent);
-        }
-      } catch (err) {
-        console.error("[governance] Failed to resume agentic loop after approval:", err);
-        resumeResult = { error: "Loop resume failed" };
-      }
-    }
-  }
+  const { toolResult, resumeResult } = await executeApprovalAndResume(approval);
 
   const [updated] = await db
     .update(pendingApprovalsTable)
@@ -400,6 +410,119 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
     badge,
     isApproval: true,
   }).catch(() => {});
+});
+
+// ── Batch approval (governance at scale) ──────────────────────────────────────
+// Approve many pending requests in one call. Accepts either an explicit list of
+// approvalIds, or { all: true } to approve every currently-pending request for
+// the client. Each request is claimed atomically, executed and resumed via the
+// same path as single approval. High-risk gating already happened upstream when
+// the approval was created, so this only resolves human review in bulk.
+router.post("/governance/approvals/batch-approve", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  const body = (req.body ?? {}) as { approvalIds?: unknown; all?: unknown };
+
+  let targetIds: number[];
+  if (body.all === true) {
+    const pending = await db
+      .select({ id: pendingApprovalsTable.id })
+      .from(pendingApprovalsTable)
+      .where(
+        and(
+          eq(pendingApprovalsTable.clientId, clientId),
+          eq(pendingApprovalsTable.status, "pending"),
+        ),
+      );
+    targetIds = pending.map((p) => p.id);
+  } else if (Array.isArray(body.approvalIds)) {
+    targetIds = body.approvalIds
+      .map((v) => Number(v))
+      .filter((n) => Number.isInteger(n) && n > 0);
+  } else {
+    res.status(400).json({ error: "Provide approvalIds: number[] or all: true" });
+    return;
+  }
+
+  if (targetIds.length === 0) {
+    res.json({ approved: [], failed: [], total: 0 });
+    return;
+  }
+
+  const approved: Array<{ id: number; toolName: string }> = [];
+  const failed: Array<{ id: number; reason: string }> = [];
+
+  for (const id of targetIds) {
+    const [claimed] = await db
+      .update(pendingApprovalsTable)
+      .set({ status: "approved", resolvedBy: req.user!.userId, resolvedAt: new Date() })
+      .where(
+        and(
+          eq(pendingApprovalsTable.id, id),
+          eq(pendingApprovalsTable.clientId, clientId),
+          eq(pendingApprovalsTable.status, "pending"),
+        ),
+      )
+      .returning();
+
+    if (!claimed) {
+      failed.push({ id, reason: "not found or already resolved" });
+      continue;
+    }
+
+    try {
+      const { toolResult } = await executeApprovalAndResume(claimed);
+      await db
+        .update(pendingApprovalsTable)
+        .set({ toolResult })
+        .where(eq(pendingApprovalsTable.id, id));
+
+      writeAuditEntry({
+        clientId: claimed.clientId,
+        sessionId: claimed.sessionId ? String(claimed.sessionId) : null,
+        engine: "coordinator",
+        decisionType: "human_approval_outcome",
+        payload: {
+          outcome: "approved",
+          batch: true,
+          approvalId: claimed.id,
+          toolName: claimed.toolName,
+          botId: claimed.botId,
+          botName: claimed.botName,
+          resolvedBy: req.user!.userId,
+          resolvedAt: new Date().toISOString(),
+        },
+      }).catch(() => {});
+
+      emitActivityEvent({
+        clientId: claimed.clientId,
+        eventType: "approval",
+        source: "system",
+        severity: "info",
+        title: `Tool approved (batch): ${claimed.toolName}`,
+        description: `${claimed.botName ?? "Bot"} was approved to use "${claimed.toolName}" via batch approval`,
+        metadata: { approvalId: claimed.id, toolName: claimed.toolName, resolvedBy: req.user!.userId, batch: true },
+      });
+
+      approved.push({ id, toolName: claimed.toolName });
+    } catch (err) {
+      console.error(`[governance] Batch approval failed to resume approval ${id}:`, err);
+      failed.push({ id, reason: err instanceof Error ? err.message : "resume failed" });
+    }
+  }
+
+  const pendingCount = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(
+      and(
+        eq(pendingApprovalsTable.clientId, clientId),
+        eq(pendingApprovalsTable.status, "pending"),
+      ),
+    );
+  const badge = pendingCount[0]?.count ?? 0;
+  sendPushToClient(clientId, { title: "", body: "", badge, isApproval: true }).catch(() => {});
+
+  res.json({ approved, failed, total: targetIds.length });
 });
 
 router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), async (req, res): Promise<void> => {

@@ -8,8 +8,9 @@ import { callWithFallback } from "../services/ai-safety/model-fallback.js";
 import { logLlmUsage } from "../services/analytics/llm-usage.js";
 import { checkCostCapAlerts } from "../services/analytics/cost-caps.js";
 import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTINE_TOOLS, getClientGovernanceMode } from "../services/platform/governance.js";
-import { checkConsequenceRisk, isNonIdempotentTool, getToolContextType, CONSEQUENCE_RISK_THRESHOLD } from "../services/platform/consequence-gate.js";
+import { checkConsequenceRisk, isNonIdempotentTool, getToolContextType, CONSEQUENCE_RISK_THRESHOLD, evaluateAutoApproval } from "../services/platform/consequence-gate.js";
 import { getClientPlatformPriorText } from "../services/platform/jobs/cross-client-causal-aggregation.js";
+import { writeAuditEntry } from "../services/audit/audit-ledger.js";
 import { db, botVariantAssignmentsTable, botsTable, promptVersionsTable } from "@workspace/db";
 import { eq, and as drizzleAnd, desc, sql } from "drizzle-orm";
 import { isToolSandboxed, getSandboxedToolResponse } from "../services/platform/demo-sandbox.js";
@@ -700,10 +701,36 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
 
         const permCheck = await checkToolPermission(context.clientId, context.botId, toolName).catch(() => ({ allowed: true, requiresApproval: false }));
         const isRoutine = ROUTINE_TOOLS.includes(toolName);
-        const needsApproval =
+        let needsApproval =
           permCheck.requiresApproval &&
           !(governanceMode === "exception_only" && isRoutine) &&
           !(governanceMode === "observe_only");
+
+        // ── Risk-based auto-approval at scale ───────────────────────────────
+        // In exception_only mode, low-risk writes that would normally require a
+        // human are auto-approved based on the consequence risk classifier, so
+        // owners aren't a bottleneck. Destructive/financial contexts and any
+        // tool the model scores at/above the ceiling still gate to a human.
+        if (needsApproval && governanceMode === "exception_only") {
+          const autoDecision = await evaluateAutoApproval(toolName, context.clientId, getToolContextType(toolName)).catch(() => null);
+          if (autoDecision?.autoApprove) {
+            needsApproval = false;
+            writeAuditEntry({
+              clientId: context.clientId,
+              sessionId: context.sessionId ? String(context.sessionId) : null,
+              engine: "coordinator",
+              decisionType: "auto_approval",
+              payload: {
+                outcome: "auto_approved",
+                toolName,
+                botId: context.botId,
+                botName: context.botName,
+                riskScore: autoDecision.riskScore,
+                reason: autoDecision.reason,
+              },
+            }).catch(() => {});
+          }
+        }
 
         if (needsApproval) {
           loopMessages.push({

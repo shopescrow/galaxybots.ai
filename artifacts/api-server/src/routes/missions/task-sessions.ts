@@ -26,7 +26,7 @@ import { runAgenticLoop, type AgenticEvent } from "../../tools";
 import { buildMemoryContext } from "../../services/bots/memory";
 import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base";
 import { requireRole } from "../../middleware/auth";
-import { llmRateLimit } from "../../middleware/rate-limit";
+import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 import { requireTenantAccess } from "../../middleware/tenant";
 import { sendValidationError, sendParamError } from "../../utils/validation";
 import { buildClientContext } from "../../services/clients/client-context";
@@ -40,7 +40,7 @@ import {
 
 const router: IRouter = Router();
 
-router.post("/task-sessions/analyze", requireRole("owner", "admin"), requireTenantAccess("subClientId"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/task-sessions/analyze", requireRole("owner", "admin"), requireTenantAccess("subClientId"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const body = AnalyzeTaskBody.safeParse(req.body);
   if (!body.success) {
     sendValidationError(res, body.error);
@@ -128,7 +128,7 @@ Select 3-6 bots total. Only propose new bots if truly no existing bot covers a c
   });
 });
 
-router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const body = FabricateBotBody.safeParse(req.body);
   if (!body.success) {
     sendValidationError(res, body.error);
@@ -162,7 +162,7 @@ router.get("/task-sessions", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.post("/task-sessions", requireRole("owner", "admin"), requireTenantAccess("subClientId"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/task-sessions", requireRole("owner", "admin"), requireTenantAccess("subClientId"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const body = CreateTaskSessionBody.safeParse(req.body);
   if (!body.success) {
     sendValidationError(res, body.error);
@@ -253,7 +253,7 @@ router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
 
 router.post(
   "/task-sessions/:id/messages",
-  llmRateLimit,
+  llmRateLimit, tenantFairShareConcurrency,
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {
@@ -440,7 +440,7 @@ Only flag a missing role if it is genuinely critical and not covered by any curr
 
 router.post(
   "/task-sessions/:id/messages/stream",
-  llmRateLimit,
+  llmRateLimit, tenantFairShareConcurrency,
   async (req, res): Promise<void> => {
     const params = SendTaskSessionMessageParams.safeParse(req.params);
     if (!params.success) {

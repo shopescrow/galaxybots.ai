@@ -3,7 +3,7 @@ import { db, boardroomMessagesTable, botsTable } from "@workspace/db";
 import { desc, eq, and, sql } from "drizzle-orm";
 import { PostBoardroomMessageBody, GetBoardroomMessagesResponse } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { llmRateLimit } from "../../middleware/rate-limit";
+import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 
 const router: IRouter = Router();
 
@@ -33,7 +33,7 @@ router.get("/boardroom/messages", async (req, res): Promise<void> => {
   res.json(GetBoardroomMessagesResponse.parse(msgs.reverse()));
 });
 
-router.post("/boardroom/messages", llmRateLimit, async (req, res): Promise<void> => {
+router.post("/boardroom/messages", llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const body = PostBoardroomMessageBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });

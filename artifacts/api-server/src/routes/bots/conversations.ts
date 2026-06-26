@@ -21,7 +21,8 @@ import { screenForInjection, wrapWithSafetyReinforcement, validateInputLength } 
 import { checkCostCapAlerts } from "../../services/analytics/cost-caps";
 import { applySlidingWindow, trimToFitContextWindow } from "../../services/ai-safety/context-window";
 import { callWithFallback } from "../../services/ai-safety/model-fallback";
-import { selectStrategy, recordStrategyRun, recordRunTelemetry, buildConductorMeta } from "../../services/conductor/galaxy-conductor";
+import { selectStrategy, recordStrategyRun, recordRunTelemetry, buildConductorMeta, deriveModelTier } from "../../services/conductor/galaxy-conductor";
+import { recordScalingTelemetry } from "../../services/analytics/scaling-telemetry";
 import { executeStrategy } from "../../services/conductor/strategies/index";
 
 const router: IRouter = Router();
@@ -504,6 +505,21 @@ You have access to tools that allow you to search the web, read/write shared sta
       );
 
       await recordRunTelemetry(conductorStrategyId, strategyResult.telemetry);
+
+      recordScalingTelemetry({
+        clientId: req.user!.clientId ?? null,
+        sessionId: String(params.data.id),
+        conductorStrategyId: conductorStrategyId >= 0 ? conductorStrategyId : null,
+        taskCategory: selection.taskCategory,
+        strategy: selection.strategy,
+        fleetSize: strategyResult.agentsUsed.length || MOA_COUNT,
+        modelVersion: "gpt-5.4",
+        modelTier: deriveModelTier("gpt-5.4"),
+        costLookup: {
+          conversationId: params.data.id,
+          since: new Date(Date.now() - strategyResult.durationMs),
+        },
+      }).catch(() => {});
 
       botResponseContent = strategyResult.content
         ?? "I have considered this from multiple angles. Let me provide my definitive perspective.";

@@ -50,6 +50,7 @@ export * from "./push-tokens";
 export * from "./developer-api-keys";
 export * from "./voice-intelligence";
 export * from "./subscription-plans";
+export * from "./scaling-telemetry";
 export * from "./partner-tiers";
 export * from "./confidence-configs";
 export * from "./prospecting-patterns";

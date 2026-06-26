@@ -7,7 +7,7 @@ import type { ProposalSection } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireRole } from "../../middleware/auth";
-import { llmRateLimit } from "../../middleware/rate-limit";
+import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 import { buildClientContext } from "../../services/clients/client-context";
 import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base";
 import crypto from "crypto";
@@ -305,7 +305,7 @@ Write ONLY the "${template.title}" section. Make it detailed, persuasive, and ta
   return { systemPrompt, userPrompt };
 }
 
-router.post("/proposals/generate", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/proposals/generate", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const {
     prospectName,
     prospectIndustry,
@@ -409,7 +409,7 @@ router.post("/proposals/generate", requireRole("owner", "admin"), llmRateLimit, 
   }
 });
 
-router.post("/proposals/analyze-rfp", requireRole("owner", "admin"), llmRateLimit, async (req, res): Promise<void> => {
+router.post("/proposals/analyze-rfp", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const { rfpText } = req.body;
 
   if (!rfpText || typeof rfpText !== "string") {

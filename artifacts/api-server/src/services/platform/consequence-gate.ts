@@ -234,3 +234,50 @@ export async function checkConsequenceRisk(
     return { ...EMPTY_OK, reason: "lookup_error" };
   }
 }
+
+// ── Risk-based auto-approval (governance at scale) ────────────────────────────
+// Below this consequence risk score a write is considered low-risk enough to
+// auto-approve without a human, removing the approval bottleneck at scale.
+export const AUTO_APPROVE_RISK_CEILING = 0.3;
+
+// Context types that always require a human regardless of low/cold-start risk —
+// irreversible or money-moving actions are never auto-approved.
+const NEVER_AUTO_APPROVE_CONTEXTS = new Set([
+  "destructive_write",
+  "financial",
+]);
+
+export interface AutoApprovalDecision {
+  autoApprove: boolean;
+  riskScore: number;
+  reason: string;
+}
+
+/**
+ * Decide whether an approval-required write can be auto-approved based on its
+ * predicted consequence risk. High-risk contexts (destructive/financial) and
+ * anything the consequence model scores at/above the ceiling always fall back
+ * to a human. Cold-start (no score) on a low-risk context auto-approves so the
+ * system isn't gated to a halt before the risk model has data — the separate
+ * ≥70% consequence gate still blocks genuinely harmful actions.
+ */
+export async function evaluateAutoApproval(
+  toolName: string,
+  clientId: number | null | undefined,
+  contextType?: string,
+): Promise<AutoApprovalDecision> {
+  const resolvedContextType = contextType ?? getToolContextType(toolName);
+
+  if (NEVER_AUTO_APPROVE_CONTEXTS.has(resolvedContextType)) {
+    return { autoApprove: false, riskScore: 1, reason: `high-risk context "${resolvedContextType}" — human approval required` };
+  }
+
+  const risk = await checkConsequenceRisk(toolName, clientId, resolvedContextType).catch(() => null);
+  const riskScore = risk?.riskScore ?? 0;
+
+  if (riskScore >= AUTO_APPROVE_RISK_CEILING) {
+    return { autoApprove: false, riskScore, reason: `risk ${(riskScore * 100).toFixed(0)}% ≥ auto-approve ceiling ${(AUTO_APPROVE_RISK_CEILING * 100).toFixed(0)}%` };
+  }
+
+  return { autoApprove: true, riskScore, reason: `risk ${(riskScore * 100).toFixed(0)}% below ceiling for context "${resolvedContextType}"` };
+}

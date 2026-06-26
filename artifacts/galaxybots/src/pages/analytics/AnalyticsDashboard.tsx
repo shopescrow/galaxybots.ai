@@ -18,6 +18,7 @@ import { ClientHealthAnalyticsPanel } from "./components/ClientHealthAnalyticsPa
 import { VoiceAnalyticsPanel } from "./components/VoiceAnalyticsPanel";
 import { DataExportPanel } from "./components/DataExportPanel";
 import { BeliefHealthPanel } from "./components/BeliefHealthPanel";
+import { ScalingMarginPanel } from "./components/ScalingMarginPanel";
 import { useAnalyticsData } from "./components/useAnalyticsData";
 
 export default function AnalyticsDashboard() {
@@ -105,6 +106,10 @@ export default function AnalyticsDashboard() {
 
         <div className="grid grid-cols-1 mb-8">
           <ErrorBoundary><BeliefHealthPanel /></ErrorBoundary>
+        </div>
+
+        <div className="grid grid-cols-1 mb-8">
+          <ErrorBoundary><ScalingMarginPanel /></ErrorBoundary>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

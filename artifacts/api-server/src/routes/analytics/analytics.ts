@@ -636,4 +636,19 @@ router.get("/analytics/spend-by-tier", async (req, res): Promise<void> => {
   }
 });
 
+router.get("/analytics/scaling", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  try {
+    const { getScalingTelemetry } = await import("../../services/analytics/scaling-telemetry.js");
+    const windowDays = Math.min(180, Math.max(1, Number(req.query.windowDays) || 30));
+    const data = await getScalingTelemetry(clientId, windowDays);
+    res.json(data);
+  } catch (err) {
+    console.error("Scaling telemetry error:", err);
+    res.status(500).json({ error: "Failed to fetch scaling telemetry" });
+  }
+});
+
 export default router;

@@ -3,6 +3,13 @@ import { eq, and, avg, sql, lt } from "drizzle-orm";
 import type { CommunicationStrategy, ConductorMeta } from "@workspace/db";
 import { callWithFallback, ModelTier } from "../../services/ai-safety/model-fallback.js";
 import type { StrategyTelemetry } from "./strategies/index.js";
+import { getStrategyProfitPriors, fleetSizeBucket } from "../analytics/scaling-telemetry.js";
+
+// Self-tuning reward blend: the conductor optimizes for quality AND profitability.
+// Quality dominates so cost-cutting never wins by degrading output, but margin
+// breaks ties and steers away from configurations that lose money at scale.
+const QUALITY_REWARD_WEIGHT = 0.7;
+const MARGIN_REWARD_WEIGHT = 0.3;
 
 export function deriveModelTier(model: string): string {
   if (!model) return ModelTier.EFFICIENT;
@@ -132,6 +139,42 @@ export async function getCategoryPriors(
   }
 }
 
+/**
+ * Blend recorded profitability (per fleet-size bucket) into the quality priors.
+ * The UCB1 reward becomes a weighted mix of conductor quality and normalized
+ * margin, so the conductor self-tunes away from configurations that are
+ * unprofitable at scale while keeping quality the dominant signal. Exploration
+ * bonuses are preserved by recomputing UCB1 on the blended reward.
+ */
+export async function blendProfitIntoPriors(
+  qualityPriors: PriorScore[],
+  taskCategory: string,
+  fleetSize: number,
+): Promise<PriorScore[]> {
+  try {
+    const profit = await getStrategyProfitPriors(taskCategory, fleetSize);
+    if (profit.length === 0) return qualityPriors;
+
+    const marginByStrategy = new Map(profit.map((p) => [p.strategy, p.normalizedMargin]));
+    const totalTrials = qualityPriors.reduce((s, p) => s + p.runCount, 0);
+
+    return qualityPriors.map((p) => {
+      // Strategies with no recorded margin get a neutral 0.5 so they are neither
+      // penalized nor rewarded on profitability — only quality drives them.
+      const normalizedMargin = marginByStrategy.get(p.strategy) ?? 0.5;
+      const blendedReward =
+        QUALITY_REWARD_WEIGHT * p.avgScore + MARGIN_REWARD_WEIGHT * normalizedMargin;
+      return {
+        ...p,
+        avgScore: blendedReward,
+        ucb1Score: computeUcb1(blendedReward, p.runCount, totalTrials),
+      };
+    });
+  } catch {
+    return qualityPriors;
+  }
+}
+
 function inferTaskCategory(taskDescription: string): ConductorTaskCategory {
   const text = taskDescription.toLowerCase();
   if (text.includes("incident") || text.includes("alert") || text.includes("threat") || text.includes("breach")) return "incident_response";
@@ -154,11 +197,19 @@ export async function selectStrategy(
   modelTier?: string,
   controlCapturedAt?: Date,
   attribution?: { clientId?: number; botId?: number; sessionId?: number; conversationId?: number },
+  fleetSize?: number,
 ): Promise<StrategySelection> {
   const taskCategory = (taskCategoryOverride as ConductorTaskCategory | undefined) ?? inferTaskCategory(taskDescription);
-  const priors = priorScoresOverride ?? await getCategoryPriors(taskCategory, modelVersion, modelTier, controlCapturedAt);
+  const qualityPriors = priorScoresOverride ?? await getCategoryPriors(taskCategory, modelVersion, modelTier, controlCapturedAt);
 
   const agentCount = availableAgents.length;
+  const effectiveFleetSize = fleetSize ?? agentCount;
+
+  // ── Self-tuning: blend profitability into the reward ────────────────────────
+  // Fold recorded per-run margin (bucketed by fleet size) into each strategy's
+  // reward so selection consumes cost/quality/fleet-size outcomes together,
+  // instead of a static quality-only threshold. Quality dominates; margin steers.
+  const priors = await blendProfitIntoPriors(qualityPriors, taskCategory, effectiveFleetSize);
 
   if (priors.length > 0) {
     // True UCB1 selection: softmax-sample over UCB1 scores across ALL strategies
