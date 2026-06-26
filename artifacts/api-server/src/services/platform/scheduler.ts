@@ -53,6 +53,7 @@ import { computeAndStoreGlobalPriors } from "../intelligence/global-priors";
 import { runMonthlyComplianceReports } from "./jobs/monthly-compliance-report";
 import { runGaaTick } from "./jobs/gaa-cycle";
 import { runConstitutionDriftCheck } from "./jobs/gaa-constitution-drift";
+import { runSelfActualizationCycle } from "./jobs/self-actualization";
 import { checkMoltbookHeartbeats } from "./jobs/check-moltbook-heartbeats";
 
 export { checkApprovalSLAs };
@@ -96,6 +97,7 @@ const mediumFreqJobs: Job[] = [
 
 const lowFreqJobs: Job[] = [
   { name: "gaa-constitution-drift", fn: runConstitutionDriftCheck },
+  { name: "self-actualization", fn: runSelfActualizationCycle },
   { name: "competitor alerts", fn: checkCompetitorAlerts },
   { name: "BingoLingo auto-content", fn: checkBingolingoAutoContent },
   { name: "content AEO re-scans", fn: checkContentAeoRescans },

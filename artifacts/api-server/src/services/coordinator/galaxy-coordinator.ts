@@ -12,6 +12,12 @@ import {
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import type { CoordinatorPlan, CoordinatorRole, RoleAssignment, TaskCategory, BeliefSuppression } from "@workspace/db";
 import { getDomainConfidence } from "./belief-confidence-resolver";
+import {
+  getCapabilitySignal,
+  capabilityNudgeFactor,
+  updateCapabilityFromOutcome,
+  type CapabilitySignal,
+} from "../gaa/self-actualization/capability-model";
 import { initializeClientWeightsFromPriors, getGlobalPriors } from "../intelligence/global-priors";
 import { resolveSplit } from "../intelligence/ab-experiment";
 import { deriveModelTier } from "../conductor/galaxy-conductor";
@@ -323,10 +329,26 @@ export async function assignRoles(
 
   const suppressedFromThinker = new Set(beliefSuppressions.map((s) => s.botId));
 
+  // Self-actualization capability self-model: a bounded, confidence-weighted
+  // nudge applied to each bot's effective weight. Strong, confident capability
+  // in this category nudges selection up; confident weakness nudges it down.
+  // Always falls back to a neutral 1.0 nudge when there is no evidence.
+  const capabilitySignalMap = new Map<number, CapabilitySignal>();
+  await Promise.all(
+    uniqueBotIds.map(async (botId) => {
+      const signal = await getCapabilitySignal(botId, taskCategory, clientId).catch(
+        () => null,
+      );
+      if (signal) capabilitySignalMap.set(botId, signal);
+    }),
+  );
+
   const effectiveWeightMap = new Map<number, Record<CoordinatorRole, number>>();
   for (const [botId, roles] of weightMap.entries()) {
     const beliefConf = beliefConfidenceMap.get(botId) ?? 0.5;
     const isSuppressed = suppressedFromThinker.has(botId);
+    const capSignal = capabilitySignalMap.get(botId);
+    const capNudge = capSignal ? capabilityNudgeFactor(capSignal) : 1.0;
 
     const thinkerUcb1 = isSuppressed
       ? 0
@@ -335,19 +357,19 @@ export async function assignRoles(
           roles.thinker.sampleCount,
           totalTrials,
           clientUcb1Constant,
-        );
+        ) * capNudge;
     const workerUcb1 = ucb1Score(
       roles.worker.weight * BELIEF_BLEND_ALPHA + beliefConf * (1 - BELIEF_BLEND_ALPHA),
       roles.worker.sampleCount,
       totalTrials,
       clientUcb1Constant,
-    );
+    ) * capNudge;
     const verifierUcb1 = ucb1Score(
       roles.verifier.weight * BELIEF_BLEND_ALPHA + beliefConf * (1 - BELIEF_BLEND_ALPHA),
       roles.verifier.sampleCount,
       totalTrials,
       clientUcb1Constant,
-    );
+    ) * capNudge;
 
     effectiveWeightMap.set(botId, {
       thinker: thinkerUcb1,
@@ -359,6 +381,7 @@ export async function assignRoles(
     if (step) {
       console.log(
         `[GalaxyCoordinator] UCB1: bot=${step.botName}(${botId}) beliefConf=${beliefConf.toFixed(3)} ` +
+        `capNudge=${capNudge.toFixed(3)}${capSignal ? `(${capSignal.strengthTier})` : ""} ` +
         `thinker=${thinkerUcb1.toFixed(4)}(n=${roles.thinker.sampleCount}) worker=${workerUcb1.toFixed(4)}(n=${roles.worker.sampleCount}) ` +
         `verifier=${verifierUcb1.toFixed(4)}(n=${roles.verifier.sampleCount}) totalTrials=${totalTrials}${isSuppressed ? " [THINKER SUPPRESSED]" : ""}`,
       );
@@ -553,6 +576,19 @@ export async function updateRoutingWeights(
   // Use confound-residualized quality when provided; fall back to raw quality for backward compatibility.
   const effectiveQuality = residualizedQuality ?? qualityScore;
   const isSuccess = effectiveQuality >= COORDINATOR_QUALITY_THRESHOLD;
+
+  // Self-actualization: feed the capability self-model from this outcome. One
+  // update per distinct bot (the bot's competence in this category is a
+  // bot-level property, independent of the role it played). Fully fault-isolated.
+  const capabilityBotIds = new Set(roleAssignments.map((a) => a.botId));
+  for (const botId of capabilityBotIds) {
+    await updateCapabilityFromOutcome({
+      botId,
+      taskCategory,
+      quality: effectiveQuality,
+      clientId,
+    });
+  }
 
   for (const assignment of roleAssignments) {
     try {

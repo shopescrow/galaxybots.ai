@@ -31,8 +31,10 @@ import {
   Loader2,
   CheckCircle2,
   Gauge,
+  Sparkles,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SelfActualizationTab } from "./SelfActualizationTab";
 import {
   useGaaOverview,
   useGaaGoals,
@@ -291,6 +293,10 @@ export default function GaaConsole() {
             </TabsTrigger>
             <TabsTrigger value="journal">Journal</TabsTrigger>
             <TabsTrigger value="constitution">Constitution</TabsTrigger>
+            <TabsTrigger value="self-actualization">
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              Self-actualization
+            </TabsTrigger>
           </TabsList>
 
           {/* Goals */}
@@ -415,6 +421,11 @@ export default function GaaConsole() {
                 </CardContent>
               </Card>
             ))}
+          </TabsContent>
+
+          {/* Self-actualization */}
+          <TabsContent value="self-actualization">
+            <SelfActualizationTab />
           </TabsContent>
         </Tabs>
       </div>

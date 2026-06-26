@@ -138,3 +138,118 @@ export interface GaaCycleSummary {
   blocked: number;
   completed: number;
 }
+
+// ---- Self-actualization engine -------------------------------------------
+export interface SelfActSnapshot {
+  avgCompetence: number;
+  avgConfidence: number;
+  avgTrend: number;
+  reflections: number;
+  practiceRuns: number;
+  practiceAdopted: number;
+  practiceGainAvg: number;
+  transfers: number;
+  transfersApplied: number;
+  modsProposed: number;
+  modsPromoted: number;
+  modsRolledBack: number;
+  blockedPromotions: number;
+  killSwitchActive: boolean;
+}
+
+export interface SelfActOverview {
+  snapshot: SelfActSnapshot;
+  killSwitch: boolean;
+}
+
+export interface BotCapability {
+  id: number;
+  botId: number;
+  clientId: number | null;
+  taskCategory: string;
+  competence: number;
+  confidence: number;
+  trend: number;
+  sampleCount: number;
+  strengthTier: string;
+  lastQuality: number | null;
+  lastUpdated: string;
+}
+
+export interface BotReflectionRow {
+  id: number;
+  botId: number;
+  taskCategory: string | null;
+  failureCategory: string | null;
+  rootCauseType: string;
+  rootCause: string;
+  durableLesson: string;
+  preventionRule: string | null;
+  confidence: number;
+  createdAt: string;
+}
+
+export interface PracticeRunRow {
+  id: number;
+  botId: number;
+  taskCategory: string;
+  practiceTask: string;
+  source: string;
+  baselineScore: number;
+  practiceScore: number;
+  improvement: number;
+  costCents: number;
+  passedFidelity: boolean;
+  adopted: boolean;
+  createdAt: string;
+}
+
+export interface KnowledgeTransferRow {
+  id: number;
+  sourceBotId: number | null;
+  targetBotId: number;
+  taskCategory: string | null;
+  lessonText: string;
+  distilledBelief: string;
+  transferType: string;
+  confidence: number;
+  status: string;
+  conflictResolution: string | null;
+  createdAt: string;
+}
+
+export interface SelfModificationRow {
+  id: number;
+  botId: number | null;
+  modType: string;
+  title: string;
+  rationale: string;
+  riskLevel: string;
+  humanGated: boolean;
+  status: string;
+  governanceDecision: string | null;
+  proposedBy: string;
+  reviewedBy: string | null;
+  createdAt: string;
+}
+
+export interface SelfActMetricRow {
+  id: number;
+  periodStart: string;
+  periodEnd: string;
+  scope: string;
+  avgCompetence: number;
+  avgConfidence: number;
+  avgTrend: number;
+  reflections: number;
+  practiceRuns: number;
+  practiceAdopted: number;
+  transfers: number;
+  transfersApplied: number;
+  modsProposed: number;
+  modsPromoted: number;
+  modsRolledBack: number;
+  blockedPromotions: number;
+  killSwitchActive: boolean;
+  createdAt: string;
+}

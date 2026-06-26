@@ -9,6 +9,13 @@ import {
   type GaaConstitutionPrinciple,
   type GaaOverview,
   type GaaCycleSummary,
+  type SelfActOverview,
+  type BotCapability,
+  type BotReflectionRow,
+  type PracticeRunRow,
+  type KnowledgeTransferRow,
+  type SelfModificationRow,
+  type SelfActMetricRow,
 } from "@/lib/gaa-fetch";
 
 const keys = {
@@ -18,6 +25,15 @@ const keys = {
   escalations: (status?: string) =>
     ["gaa", "escalations", status ?? "all"] as const,
   constitution: ["gaa", "constitution"] as const,
+  selfAct: {
+    overview: ["gaa", "self-act", "overview"] as const,
+    capability: ["gaa", "self-act", "capability"] as const,
+    reflections: ["gaa", "self-act", "reflections"] as const,
+    practice: ["gaa", "self-act", "practice"] as const,
+    transfers: ["gaa", "self-act", "transfers"] as const,
+    modifications: ["gaa", "self-act", "modifications"] as const,
+    metrics: ["gaa", "self-act", "metrics"] as const,
+  },
 };
 
 export function useGaaOverview() {
@@ -121,6 +137,120 @@ export function useRunTick() {
     mutationFn: () => gaaPost<GaaCycleSummary>("/tick"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["gaa"] });
+    },
+  });
+}
+
+// ---- Self-actualization engine -------------------------------------------
+export function useSelfActOverview() {
+  return useQuery({
+    queryKey: keys.selfAct.overview,
+    queryFn: () => gaaGet<SelfActOverview>("/self-actualization/overview"),
+    refetchInterval: 15000,
+  });
+}
+
+export function useSelfActCapability() {
+  return useQuery({
+    queryKey: keys.selfAct.capability,
+    queryFn: () => gaaGet<BotCapability[]>("/self-actualization/capability"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useSelfActReflections() {
+  return useQuery({
+    queryKey: keys.selfAct.reflections,
+    queryFn: () => gaaGet<BotReflectionRow[]>("/self-actualization/reflections"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useSelfActPractice() {
+  return useQuery({
+    queryKey: keys.selfAct.practice,
+    queryFn: () => gaaGet<PracticeRunRow[]>("/self-actualization/practice"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useSelfActTransfers() {
+  return useQuery({
+    queryKey: keys.selfAct.transfers,
+    queryFn: () =>
+      gaaGet<KnowledgeTransferRow[]>("/self-actualization/transfers"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useSelfActModifications() {
+  return useQuery({
+    queryKey: keys.selfAct.modifications,
+    queryFn: () =>
+      gaaGet<SelfModificationRow[]>("/self-actualization/modifications"),
+    refetchInterval: 15000,
+  });
+}
+
+export function useSelfActMetrics() {
+  return useQuery({
+    queryKey: keys.selfAct.metrics,
+    queryFn: () => gaaGet<SelfActMetricRow[]>("/self-actualization/metrics"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useSetKillSwitch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (active: boolean) =>
+      gaaPost<{ active: boolean; rolledBack: number }>(
+        "/self-actualization/kill-switch",
+        { active },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["gaa", "self-act"] });
+    },
+  });
+}
+
+export function useApproveModification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      gaaPost<SelfModificationRow>(
+        `/self-actualization/modifications/${id}/approve`,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.selfAct.modifications });
+    },
+  });
+}
+
+export function useRejectModification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      gaaPost<SelfModificationRow>(
+        `/self-actualization/modifications/${id}/reject`,
+        { reason },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.selfAct.modifications });
+    },
+  });
+}
+
+export function useRollbackModification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
+      gaaPost<SelfModificationRow>(
+        `/self-actualization/modifications/${id}/rollback`,
+        { reason },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.selfAct.modifications });
     },
   });
 }

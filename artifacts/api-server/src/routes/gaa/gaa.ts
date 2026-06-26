@@ -25,6 +25,24 @@ import {
   reviveDeadLetter,
   runGaaCycle,
 } from "../../services/gaa";
+import {
+  getBotCapabilitySummary,
+  listReflections,
+  listPracticeRuns,
+  listKnowledgeTransfers,
+  listSelfModifications,
+  listSelfActualizationMetrics,
+  getLiveSnapshot,
+  isKillSwitchActive,
+  setKillSwitch,
+  proposeSelfModification,
+  approveSelfModification,
+  rejectSelfModification,
+  rollbackSelfModification,
+  rollbackAllPromoted,
+} from "../../services/gaa/self-actualization";
+import { db as _db, botCapabilityModelTable } from "@workspace/db";
+import { desc as _desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -376,5 +394,239 @@ router.post("/gaa/tick", adminOnly, async (_req, res): Promise<void> => {
   const summary = await runGaaCycle();
   res.json(summary);
 });
+
+// === Self-actualization engine ============================================
+
+// --- Live snapshot + metrics ----------------------------------------------
+router.get(
+  "/gaa/self-actualization/overview",
+  adminOnly,
+  async (_req, res): Promise<void> => {
+    const [snapshot, killSwitch] = await Promise.all([
+      getLiveSnapshot(),
+      isKillSwitchActive(),
+    ]);
+    res.json({ snapshot, killSwitch });
+  },
+);
+
+router.get(
+  "/gaa/self-actualization/metrics",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const limit =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 30;
+    const rows = await listSelfActualizationMetrics(
+      Number.isFinite(limit) ? limit : 30,
+    );
+    res.json(rows);
+  },
+);
+
+// --- Capability self-model -------------------------------------------------
+router.get(
+  "/gaa/self-actualization/capability",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const botIdRaw = req.query.botId;
+    if (typeof botIdRaw === "string") {
+      const botId = Number(botIdRaw);
+      if (!Number.isFinite(botId)) {
+        res.status(400).json({ error: "Invalid botId" });
+        return;
+      }
+      const rows = await getBotCapabilitySummary(botId);
+      res.json(rows);
+      return;
+    }
+    // Platform-wide view: most recently updated capability rows.
+    const rows = await _db
+      .select()
+      .from(botCapabilityModelTable)
+      .orderBy(_desc(botCapabilityModelTable.lastUpdated))
+      .limit(200);
+    res.json(rows);
+  },
+);
+
+// --- Reflections -----------------------------------------------------------
+router.get(
+  "/gaa/self-actualization/reflections",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const limit =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const rows = await listReflections(Number.isFinite(limit) ? limit : 50);
+    res.json(rows);
+  },
+);
+
+// --- Practice runs ---------------------------------------------------------
+router.get(
+  "/gaa/self-actualization/practice",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const limit =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const rows = await listPracticeRuns(Number.isFinite(limit) ? limit : 50);
+    res.json(rows);
+  },
+);
+
+// --- Knowledge transfers ---------------------------------------------------
+router.get(
+  "/gaa/self-actualization/transfers",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const limit =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const rows = await listKnowledgeTransfers(
+      Number.isFinite(limit) ? limit : 50,
+    );
+    res.json(rows);
+  },
+);
+
+// --- Self-modifications ----------------------------------------------------
+router.get(
+  "/gaa/self-actualization/modifications",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const statuses =
+      typeof req.query.status === "string"
+        ? req.query.status.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined;
+    const rows = await listSelfModifications(statuses);
+    res.json(rows);
+  },
+);
+
+const ProposeModBody = z.object({
+  modType: z.enum(["tool_policy", "role_definition", "prompt_addition"]),
+  title: z.string().min(1),
+  rationale: z.string().min(1),
+  proposal: z.record(z.unknown()),
+  evidence: z.record(z.unknown()).optional(),
+  botId: z.number().int().optional(),
+  clientId: z.number().int().optional(),
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
+});
+
+router.post(
+  "/gaa/self-actualization/modifications",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const parsed = ProposeModBody.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json({ error: "Invalid request body", details: parsed.error.flatten() });
+      return;
+    }
+    const created = await proposeSelfModification({
+      ...parsed.data,
+      proposedBy: `user:${req.user?.userId ?? "unknown"}`,
+    });
+    res.status(201).json(created);
+  },
+);
+
+router.post(
+  "/gaa/self-actualization/modifications/:id/approve",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid modification id" });
+      return;
+    }
+    const updated = await approveSelfModification(
+      id,
+      `user:${req.user?.userId ?? "unknown"}`,
+    );
+    if (!updated) {
+      res
+        .status(404)
+        .json({ error: "Modification not found or not awaiting approval" });
+      return;
+    }
+    res.json(updated);
+  },
+);
+
+const RejectModBody = z.object({ reason: z.string().min(1) });
+
+router.post(
+  "/gaa/self-actualization/modifications/:id/reject",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    const parsed = RejectModBody.safeParse(req.body);
+    if (!Number.isFinite(id) || !parsed.success) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+    const updated = await rejectSelfModification(
+      id,
+      parsed.data.reason,
+      `user:${req.user?.userId ?? "unknown"}`,
+    );
+    if (!updated) {
+      res.status(404).json({ error: "Modification not found" });
+      return;
+    }
+    res.json(updated);
+  },
+);
+
+router.post(
+  "/gaa/self-actualization/modifications/:id/rollback",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    const reason =
+      typeof req.body?.reason === "string" && req.body.reason.trim()
+        ? req.body.reason.trim()
+        : `Manual rollback by user:${req.user?.userId ?? "unknown"}`;
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid modification id" });
+      return;
+    }
+    const updated = await rollbackSelfModification(id, reason);
+    if (!updated) {
+      res.status(404).json({ error: "Modification not found" });
+      return;
+    }
+    res.json(updated);
+  },
+);
+
+// --- Kill switch -----------------------------------------------------------
+const KillSwitchBody = z.object({ active: z.boolean() });
+
+router.post(
+  "/gaa/self-actualization/kill-switch",
+  adminOnly,
+  async (req, res): Promise<void> => {
+    const parsed = KillSwitchBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    const updatedBy = `user:${req.user?.userId ?? "unknown"}`;
+    await setKillSwitch(parsed.data.active, updatedBy);
+    let rolledBack = 0;
+    if (parsed.data.active) {
+      // Engaging the kill switch immediately reverts all promoted self-changes.
+      rolledBack = await rollbackAllPromoted(`Kill switch engaged by ${updatedBy}`);
+    }
+    await recordAuditEvent({
+      eventType: "self_act_kill_switch",
+      decision: parsed.data.active ? "block" : "allow",
+      detail: `Self-actualization kill switch ${parsed.data.active ? "ENGAGED" : "released"} by ${updatedBy}. Rolled back ${rolledBack} promoted modification(s).`,
+    });
+    res.json({ active: parsed.data.active, rolledBack });
+  },
+);
 
 export default router;
