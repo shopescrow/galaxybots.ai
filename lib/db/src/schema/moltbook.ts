@@ -13,6 +13,7 @@ export const moltbookAccountsTable = pgTable("moltbook_accounts", {
   status: text("status", { enum: ["pending", "active", "disabled"] }).notNull().default("pending"),
   autonomousMode: boolean("autonomous_mode").notNull().default(false),
   lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+  lastOriginalPostAt: timestamp("last_original_post_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

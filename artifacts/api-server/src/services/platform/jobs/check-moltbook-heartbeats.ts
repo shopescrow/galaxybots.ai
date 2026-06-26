@@ -30,7 +30,18 @@ import {
   sendMoltbookAction,
   recordMoltbookAction,
 } from "../moltbook-service";
-import { detectInterestSignal, createMoltbookLead } from "../moltbook-bizdev";
+import {
+  detectInterestSignal,
+  createMoltbookLead,
+  MOLTBOOK_PRODUCT_CATALOG,
+  type MoltbookCatalogEntry,
+} from "../moltbook-bizdev";
+import {
+  analyzeCounterpartyStyle,
+  pickOpeningAngle,
+  generateMoltbookContent,
+  detectInventedCommercialClaim,
+} from "../moltbook-content";
 import { sanitizeExternalContent } from "../../ai-safety/adversarial-sanitizer";
 import { screenForInjection } from "../../ai-safety/prompt-injection";
 import * as moltbook from "../../../tools/integrations/moltbook-client";
@@ -41,6 +52,8 @@ const HEARTBEAT_MIN_INTERVAL_MS = 25 * 60 * 1000;
 const FEED_LIMIT = 20;
 /** Max leads filed per account per run (back-pressure against chatty threads). */
 const MAX_LEADS_PER_RUN = 3;
+/** Minimum gap between an agent's own original (conversation-starter) posts. */
+const ORIGINAL_POST_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 let lastRunAt = 0;
 let running = false;
@@ -92,14 +105,48 @@ async function sanitizeItem(item: moltbook.MoltbookFeedItem): Promise<SafeFeedIt
   };
 }
 
-/** Build a brand-safe, value-first engagement comment for a feed item. */
-function buildEngagementBody(item: SafeFeedItem, pitch?: string): string {
-  const topic = item.title ? `"${item.title.slice(0, 120)}"` : "this";
-  const opener = `Great thread on ${topic} — we've run into the same thing.`;
-  const value = pitch
-    ? ` ${pitch} Happy to share what's worked for us if it's useful.`
-    : " Happy to share what's worked for us if it's useful.";
-  return `${opener}${value}`.slice(0, 1000);
+/**
+ * True when the agent posted (or queued) an original thread within the cooldown.
+ * Uses `lastOriginalPostAt` on the account so it covers BOTH the autonomous send
+ * path (which writes no queue row) and the draft path — a single source of truth
+ * that can't be bypassed by switching modes.
+ */
+function postedOriginalRecently(account: MoltbookAccount): boolean {
+  if (!account.lastOriginalPostAt) return false;
+  return Date.now() - new Date(account.lastOriginalPostAt).getTime() < ORIGINAL_POST_MIN_INTERVAL_MS;
+}
+
+/** Pick the most active submolt in the feed — the natural place to start a thread. */
+function dominantSubmolt(items: SafeFeedItem[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.submolt) counts.set(item.submolt, (counts.get(item.submolt) ?? 0) + 1);
+  }
+  let best: string | undefined;
+  let bestCount = 0;
+  for (const [submolt, count] of counts) {
+    if (count > bestCount) {
+      best = submolt;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+const POST_PRODUCT_ROTATION = new Map<number, number>();
+
+/** Rotate which product an agent leads with on original posts (or none). */
+function nextPostProduct(botId: number): MoltbookCatalogEntry | null {
+  // Lead with the two flagship products; occasionally post pure value (no product).
+  const lineup: (MoltbookCatalogEntry | null)[] = [
+    MOLTBOOK_PRODUCT_CATALOG.find((e) => e.productTag === "pirate_monster") ?? null,
+    null,
+    MOLTBOOK_PRODUCT_CATALOG.find((e) => e.productTag === "galaxybots") ?? null,
+    null,
+  ];
+  const idx = POST_PRODUCT_ROTATION.get(botId) ?? 0;
+  POST_PRODUCT_ROTATION.set(botId, (idx + 1) % lineup.length);
+  return lineup[idx];
 }
 
 /** Returns true when a draft/post for this thread already exists for the account. */
@@ -215,51 +262,149 @@ async function runAccountHeartbeat(account: MoltbookAccount): Promise<void> {
     .filter((i) => i.id && (i.body || i.title))
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-  for (const item of engageCandidates) {
-    if (await hasExistingDraftForThread(account.id, item.id)) continue;
+  // Persona is always present on an eligible account; guard keeps types honest.
+  const persona = eligibility.bot;
 
-    const signal = detectInterestSignal(`${item.title}\n${item.body}`);
-    const body = buildEngagementBody(item, signal?.catalog.pitch);
+  if (persona) {
+    for (const item of engageCandidates) {
+      if (await hasExistingDraftForThread(account.id, item.id)) continue;
 
-    const gate = await runOutboundGovernance(clientId, "moltbook_comment", body);
-    if (gate.blocked) {
-      await recordMoltbookAction({
-        botId: account.botId,
-        accountId: account.id,
-        agentName: account.agentName,
-        clientId: clientId ?? null,
-        action: "comment",
-        status: "blocked",
-        detail: { reason: gate.reason, targetThread: item.id },
+      const signal = detectInterestSignal(`${item.title}\n${item.body}`);
+      // Read the counterparty's voice so we can mirror it, then write the reply
+      // in this agent's own persona with a freshly-rotated opening angle.
+      const counterpartyStyle = analyzeCounterpartyStyle(`${item.title}\n${item.body}`);
+      const generated = await generateMoltbookContent({
+        mode: "comment",
+        persona,
+        product: signal?.catalog ?? null,
+        angle: pickOpeningAngle(`${account.botId}:comment`),
+        submolt: item.submolt ?? null,
+        thread: { title: item.title, body: item.body, authorHandle: item.authorHandle },
+        counterpartyStyle,
       });
-      continue;
+      const body = generated.body;
+
+      // Deterministic backstop before the governance gates: never publish an
+      // invented price/guarantee even if the model drifted.
+      const claim = detectInventedCommercialClaim(body);
+      if (claim) {
+        await recordMoltbookAction({
+          botId: account.botId,
+          accountId: account.id,
+          agentName: account.agentName,
+          clientId: clientId ?? null,
+          action: "comment",
+          status: "blocked",
+          detail: { reason: claim, targetThread: item.id },
+        });
+        continue;
+      }
+
+      const gate = await runOutboundGovernance(clientId, "moltbook_comment", body);
+      if (gate.blocked) {
+        await recordMoltbookAction({
+          botId: account.botId,
+          accountId: account.id,
+          agentName: account.agentName,
+          clientId: clientId ?? null,
+          action: "comment",
+          status: "blocked",
+          detail: { reason: gate.reason, targetThread: item.id },
+        });
+        continue;
+      }
+
+      if (account.autonomousMode) {
+        const sent = await sendMoltbookAction({
+          account,
+          clientId,
+          actionType: "comment",
+          targetThread: item.id,
+          body: gate.body,
+        });
+        engaged = sent.success;
+      } else {
+        await queueMoltbookDraft({
+          account,
+          botId: account.botId,
+          actionType: "comment",
+          targetThread: item.id,
+          body: gate.body,
+        });
+        engaged = true;
+      }
+      if (engaged) break;
     }
+  }
 
-    if (account.autonomousMode) {
-      const sent = await sendMoltbookAction({
-        account,
-        clientId,
-        actionType: "comment",
-        targetThread: item.id,
-        body: gate.body,
-      });
-      engaged = sent.success;
-    } else {
-      await queueMoltbookDraft({
-        account,
-        botId: account.botId,
-        actionType: "comment",
-        targetThread: item.id,
-        body: gate.body,
-      });
-      engaged = true;
+  // ---- Conversation starter: occasionally open an original thread ----------
+  // Agents aren't just responders — a top creator seeds discussion. Rate-limited
+  // to one original post per ORIGINAL_POST_MIN_INTERVAL, posted to the feed's
+  // most active submolt, and run through the SAME governance + approval path.
+  let postedOriginal = false;
+  const targetSubmolt = dominantSubmolt(safeItems);
+  if (persona && targetSubmolt && !postedOriginalRecently(account)) {
+    const product = nextPostProduct(account.botId);
+    const generated = await generateMoltbookContent({
+      mode: "post",
+      persona,
+      product,
+      angle: pickOpeningAngle(`${account.botId}:post`),
+      submolt: targetSubmolt,
+    });
+    const rawTitle = (generated.title ?? "").trim();
+    if (rawTitle && generated.body) {
+      // Govern title and body INDEPENDENTLY so the final published title is
+      // brand-voice + consequence + exfil checked (the send path only re-checks
+      // the body), then apply the deterministic claim backstop to both.
+      const titleGate = await runOutboundGovernance(clientId, "moltbook_create_post", rawTitle);
+      const bodyGate = await runOutboundGovernance(clientId, "moltbook_create_post", generated.body);
+      const claim = detectInventedCommercialClaim(`${titleGate.body}\n${bodyGate.body}`);
+
+      if (titleGate.blocked || bodyGate.blocked || claim) {
+        await recordMoltbookAction({
+          botId: account.botId,
+          accountId: account.id,
+          agentName: account.agentName,
+          clientId: clientId ?? null,
+          action: "post",
+          status: "blocked",
+          detail: { reason: claim ?? titleGate.reason ?? bodyGate.reason, targetSubmolt },
+        });
+      } else {
+        const finalTitle = (titleGate.body || rawTitle).trim().slice(0, 120);
+        if (account.autonomousMode) {
+          const sent = await sendMoltbookAction({
+            account,
+            clientId,
+            actionType: "post",
+            targetSubmolt,
+            targetThread: finalTitle,
+            body: bodyGate.body,
+          });
+          postedOriginal = sent.success;
+        } else {
+          await queueMoltbookDraft({
+            account,
+            botId: account.botId,
+            actionType: "post",
+            targetSubmolt,
+            targetThread: finalTitle,
+            body: bodyGate.body,
+          });
+          postedOriginal = true;
+        }
+      }
     }
-    if (engaged) break;
   }
 
   await db
     .update(moltbookAccountsTable)
-    .set({ lastHeartbeatAt: new Date() })
+    .set({
+      lastHeartbeatAt: new Date(),
+      // Stamp the cooldown only when an original post was actually sent/queued.
+      ...(postedOriginal ? { lastOriginalPostAt: new Date() } : {}),
+    })
     .where(eq(moltbookAccountsTable.id, account.id));
 
   await recordMoltbookAction({
@@ -273,6 +418,7 @@ async function runAccountHeartbeat(account: MoltbookAccount): Promise<void> {
       itemsConsidered: safeItems.length,
       leadsFiled,
       engaged,
+      postedOriginal,
       autonomousMode: account.autonomousMode,
     },
   });
