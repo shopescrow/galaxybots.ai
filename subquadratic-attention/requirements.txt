@@ -1,0 +1,10 @@
+# Sub-Quadratic Attention research framework (CPU-only, Replit-compatible).
+# Versions pinned to the toolchain this framework was developed and tested on.
+torch==2.12.1
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.11.0
+streamlit==1.58.0
+networkx==3.6.1
+einops==0.8.1
+pytest==9.1.1
