@@ -1,4 +1,7 @@
 import { callWithFallback } from "../ai-safety/model-fallback";
+import { generateEmbeddings } from "../bots/memory";
+import { topKBySimilarity } from "../scaling/scaling-primitives";
+import { scalingConfig, isScalingActive } from "../scaling/scaling-config";
 import type { CoordinatorRole } from "@workspace/db";
 
 export interface MemoryEntry {
@@ -68,6 +71,51 @@ function filterMemoryByRole(entries: MemoryEntry[], role: CoordinatorRole): Memo
     .map((s) => s.entry);
 }
 
+function entryToText(entry: MemoryEntry): string {
+  return `${entry.key} ${entry.value} ${(entry.tags ?? []).join(" ")} ${entry.domain ?? ""}`.trim();
+}
+
+/**
+ * Select the role-relevant memory entries using semantic top-k vector retrieval instead of a
+ * full lexical scan. The role query is built from the role's memory tags plus the latest user
+ * turn; entries are ranked by cosine similarity and the top-k are returned. Gated by the
+ * memoryRetrieval flag/threshold — below threshold (or on any embedding failure) it falls back
+ * to the exact lexical `filterMemoryByRole`, so behavior is unchanged for small memory sets.
+ */
+async function selectMemoryForRole(
+  entries: MemoryEntry[],
+  role: CoordinatorRole,
+  priorContext: ConversationTurn[],
+): Promise<MemoryEntry[]> {
+  if (!isScalingActive(scalingConfig.memoryRetrieval, entries.length)) {
+    return filterMemoryByRole(entries, role);
+  }
+
+  try {
+    const lastUserTurn = [...priorContext].reverse().find((t) => t.role === "user")?.content ?? "";
+    const roleQuery = `${ROLE_MEMORY_TAGS[role].join(" ")} ${lastUserTurn}`.trim();
+
+    const [queryEmbedding, ...entryEmbeddings] = await generateEmbeddings([
+      roleQuery,
+      ...entries.map(entryToText),
+    ]);
+
+    if (!queryEmbedding || entryEmbeddings.length !== entries.length) {
+      return filterMemoryByRole(entries, role);
+    }
+
+    const k = scalingConfig.memoryTopK > 0 ? scalingConfig.memoryTopK : entries.length;
+    const ranked = topKBySimilarity(
+      queryEmbedding,
+      entries.map((entry, i) => ({ item: entry, embedding: entryEmbeddings[i] })),
+      k,
+    );
+    return ranked.map((r) => r.item);
+  } catch {
+    return filterMemoryByRole(entries, role);
+  }
+}
+
 async function summarizeContext(content: string, role: CoordinatorRole, budgetChars: number): Promise<string> {
   const roleFocus = {
     thinker: "strategic insights, analytical findings, and planning context",
@@ -108,7 +156,7 @@ export async function distillForRole(
   const perAgentBudgetTokens = Math.floor(totalBudgetTokens / Math.max(agentCount, 1));
   const perAgentBudgetChars = perAgentBudgetTokens * APPROX_CHARS_PER_TOKEN;
 
-  const filteredMemory = filterMemoryByRole(livingMemory, role);
+  const filteredMemory = await selectMemoryForRole(livingMemory, role, priorContext);
 
   const memorySection = filteredMemory.length > 0
     ? filteredMemory

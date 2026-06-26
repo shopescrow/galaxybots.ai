@@ -14,6 +14,22 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return response.data[0].embedding;
 }
 
+/**
+ * Embed multiple texts in a single API call. Returns vectors in the same order as the
+ * input. Used by the scaling layer for bounded top-k vector retrieval over in-memory sets.
+ */
+export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  const response = await openai.embeddings.create({
+    model: "text-embedding-3-small",
+    input: texts,
+  });
+  return response.data
+    .slice()
+    .sort((a, b) => a.index - b.index)
+    .map((d) => d.embedding);
+}
+
 export async function storeMemory(params: {
   botId: number;
   clientId?: number;

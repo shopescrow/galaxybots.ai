@@ -15,6 +15,7 @@ import { getDomainConfidence } from "./belief-confidence-resolver";
 import { initializeClientWeightsFromPriors, getGlobalPriors } from "../intelligence/global-priors";
 import { resolveSplit } from "../intelligence/ab-experiment";
 import { deriveModelTier } from "../conductor/galaxy-conductor";
+import { scalingConfig, isScalingActive } from "../scaling/scaling-config";
 
 const TASK_CATEGORIES = ["research", "analysis", "execution", "review", "legal", "financial"] as const;
 const COORDINATOR_ROLES: CoordinatorRole[] = ["thinker", "worker", "verifier"];
@@ -111,6 +112,23 @@ function softmaxSample(
     if (r <= cumulative) return items[i];
   }
   return items[items.length - 1];
+}
+
+/**
+ * Bound the candidate set before softmax sampling so role selection scales sub-linearly
+ * with fleet size. When the pool exceeds the configured threshold, shortlist the top
+ * candidates by their (already-computed) UCB1 weight — preserving the highest-scoring
+ * arms so selection quality is equivalent — instead of softmax-sampling the whole fleet
+ * on every assignment. Below the threshold the pool is returned unchanged.
+ */
+function shortlistCandidates(
+  candidates: Array<{ botId: number; botName: string; weight: number }>,
+  poolSize: number,
+): Array<{ botId: number; botName: string; weight: number }> {
+  if (!isScalingActive(scalingConfig.roleSelection, poolSize)) return candidates;
+  const k = Math.max(scalingConfig.roleSelection.threshold, Math.ceil(Math.sqrt(candidates.length)));
+  if (candidates.length <= k) return candidates;
+  return [...candidates].sort((a, b) => b.weight - a.weight).slice(0, k);
 }
 
 interface WeightRow {
@@ -394,22 +412,26 @@ export async function assignRoles(
   // bot for each role from the deduplicated bot pool.
   const uniqueSteps = Array.from(new Map(steps.map((s) => [s.botId, s])).values());
 
+  const poolSize = uniqueSteps.length;
+
   const eligibleThinkers = uniqueSteps.filter((s) => !suppressedFromThinker.has(s.botId));
   const thinkerCandidatePool = eligibleThinkers.length > 0 ? eligibleThinkers : uniqueSteps;
-  const thinkerCandidate = n >= 3 ? softmaxSample(makeBestCandidates("thinker", thinkerCandidatePool)) : null;
+  const thinkerCandidate = n >= 3
+    ? softmaxSample(shortlistCandidates(makeBestCandidates("thinker", thinkerCandidatePool), poolSize))
+    : null;
 
   const workerCandidatePool = thinkerCandidate
     ? uniqueSteps.filter((s) => s.botId !== thinkerCandidate.botId)
     : uniqueSteps;
   const workerCandidate = softmaxSample(
-    makeBestCandidates("worker", workerCandidatePool.length > 0 ? workerCandidatePool : uniqueSteps),
+    shortlistCandidates(makeBestCandidates("worker", workerCandidatePool.length > 0 ? workerCandidatePool : uniqueSteps), poolSize),
   );
 
   const verifierCandidatePool = uniqueSteps.filter(
     (s) => s.botId !== workerCandidate.botId && (!thinkerCandidate || s.botId !== thinkerCandidate.botId),
   );
   const verifierCandidate = n >= 2
-    ? softmaxSample(makeBestCandidates("verifier", verifierCandidatePool.length > 0 ? verifierCandidatePool : uniqueSteps))
+    ? softmaxSample(shortlistCandidates(makeBestCandidates("verifier", verifierCandidatePool.length > 0 ? verifierCandidatePool : uniqueSteps), poolSize))
     : null;
 
   // Phase 2 — Execution-order preservation: sort the UCB1-selected bots by step index,

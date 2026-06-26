@@ -7,6 +7,8 @@ import { broadcastSSEToAll } from "../platform/sse";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { registerDynamicJob } from "../platform/guardian-dynamic-jobs";
 import { selectStrategy, recordStrategyRun } from "../conductor/galaxy-conductor";
+import { treeAggregate } from "../scaling/scaling-primitives";
+import { scalingConfig, isScalingActive } from "../scaling/scaling-config";
 
 let swarmLoopInterval: ReturnType<typeof setInterval> | null = null;
 let lastSwarmCycleAt: Date | null = null;
@@ -58,11 +60,44 @@ async function updateLastSwarmCycle(): Promise<void> {
     .where(sql`1=1`);
 }
 
+function renderFinding(f: BeeFinding): string {
+  return `[${f.beeType.toUpperCase()}] ${f.finding} | Fix: ${f.proposedFix} | Confidence: ${(f.confidenceScore * 100).toFixed(0)}%`;
+}
+
+async function summariseFindingCluster(lines: string[]): Promise<string> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      max_completion_tokens: 600,
+      messages: [
+        { role: "system", content: "You are the Guardian Queen consolidating worker-bee incident findings. Preserve every distinct issue, proposed fix, and the highest relevant confidence. Be terse and technical." },
+        { role: "user", content: `Consolidate these ${lines.length} worker-bee findings into a single cohesive set of bullet points. Do not drop any distinct issue or fix.\n\n${lines.join("\n")}` },
+      ],
+    });
+    return completion.choices[0]?.message?.content ?? lines.join("\n");
+  } catch {
+    return lines.join("\n");
+  }
+}
+
+/**
+ * Synthesize worker-bee findings into the incident report. Below the guardianAggregation
+ * threshold this is a byte-identical flat join (zero change for typical small swarms). Above
+ * the threshold, findings are hierarchically tree-aggregated (√n clustering, bounded fan-in)
+ * via the LLM so the report stays coherent and bounded even for very large swarms.
+ */
 async function synthesiseReport(findings: BeeFinding[]): Promise<string> {
-  const summary = findings
-    .map((f) => `[${f.beeType.toUpperCase()}] ${f.finding} | Fix: ${f.proposedFix} | Confidence: ${(f.confidenceScore * 100).toFixed(0)}%`)
-    .join("\n");
-  return summary;
+  if (!isScalingActive(scalingConfig.guardianAggregation, findings.length)) {
+    return findings.map(renderFinding).join("\n");
+  }
+
+  return treeAggregate<BeeFinding>({
+    items: findings,
+    toText: renderFinding,
+    fanIn: scalingConfig.aggregationFanIn,
+    summarizeGroup: async (lines) => summariseFindingCluster(lines),
+    finalCombine: async (lines) => summariseFindingCluster(lines),
+  });
 }
 
 async function generatePostmortem(incidentId: number): Promise<void> {

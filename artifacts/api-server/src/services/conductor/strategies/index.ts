@@ -9,6 +9,8 @@ import {
   newRunCacheStats,
   cacheHitRate,
 } from "../semantic-cache.js";
+import { treeAggregate } from "../../scaling/scaling-primitives";
+import { scalingConfig, isScalingActive } from "../../scaling/scaling-config";
 import type { CommunicationStrategy, TaskCategory } from "@workspace/db";
 import { aggregateWithFidelityGuardrail, makeDefaultDeps } from "../aggregation/hierarchical-aggregator";
 import type { AggregationTrace } from "../aggregation/aggregation-trace";
@@ -168,6 +170,84 @@ Write the single definitive synthesized response:`;
   return synthResult.completion.choices[0]?.message?.content ?? valid[0] ?? "";
 }
 
+interface CallCtx {
+  clientId?: number;
+  botId?: number;
+  conversationId?: number;
+}
+
+async function llmCombine(systemPrompt: string, userContent: string, ctx: CallCtx): Promise<string> {
+  const msgs = trimToFitContextWindow(
+    [{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: userContent }],
+    MODEL,
+  );
+  const result = await callWithFallback({ model: MODEL, messages: msgs, ...ctx });
+  return result.completion.choices[0]?.message?.content ?? "";
+}
+
+type ProgressFn = StrategyInput["onProgress"];
+
+/**
+ * Hierarchically aggregate N independent perspectives into one definitive response.
+ * Clusters into ~√n groups, consolidates each group, then synthesizes the bounded set of
+ * group summaries — keeping the largest prompt O(√n) so large fan-outs never overflow the
+ * context window. Streams a progress event per aggregation tier.
+ */
+async function aggregatePerspectives(
+  perspectives: string[],
+  userContent: string,
+  ctx: CallCtx,
+  onProgress: ProgressFn,
+  strategy: string,
+): Promise<string> {
+  const items = perspectives.filter(Boolean);
+
+  return treeAggregate<string>({
+    items,
+    toText: (p) => p,
+    fanIn: scalingConfig.aggregationFanIn,
+    onTier: (info) =>
+      onProgress?.({
+        type: "conductor_progress",
+        content: `GalaxyMind — tree-aggregating ${info.total} perspectives into ${info.groups} clusters (tier ${info.tier})…`,
+        strategy,
+      }),
+    summarizeGroup: async (texts, meta) => {
+      const groupPrompt = `You are consolidating ${texts.length} independent analytical perspectives (cluster ${meta.groupIndex + 1} of ${meta.groupCount}) on the same question into ONE cohesive intermediate perspective.
+
+Rules:
+- Integrate the strongest reasoning across these perspectives
+- Resolve trivial contradictions and remove redundancy
+- Preserve every distinct insight and nuance
+
+The ${texts.length} perspectives:
+
+${texts.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
+
+Write the consolidated intermediate perspective:`;
+      const out = await llmCombine(groupPrompt, userContent, ctx);
+      return out || texts.join("\n\n");
+    },
+    finalCombine: async (texts) => {
+      const finalPrompt = `You are synthesizing ${texts.length} consolidated analytical perspectives on the same question. Produce a single, definitive, authoritative response.
+
+Rules:
+- Integrate the strongest reasoning from all perspectives
+- Resolve contradictions by choosing the most defensible position
+- Capture nuances raised across multiple perspectives
+- Eliminate redundancy and write as a single unified voice
+
+The ${texts.length} perspectives:
+
+${texts.map((p, i) => `--- Perspective ${i + 1} ---\n${p}`).join("\n\n")}
+
+Write the single definitive synthesized response:`;
+      const out = await llmCombine(finalPrompt, userContent, ctx);
+      return out || texts.find(Boolean) || "";
+    },
+  });
+}
+
 export async function executeParallelSynthesis(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
   const { agents, userContent, onProgress, clientId, botId, conversationId, taskCategory } = input;
@@ -205,8 +285,18 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
   console.log(`[ParallelSynthesis] aggregation=${decision.mode} — ${decision.rationale}`);
 
   let content: string;
+  let aggregationMode: AggregationMode = decision.mode;
   let aggregationTrace: AggregationTrace | undefined;
-  if (decision.mode === "hierarchical") {
+  if (isScalingActive(scalingConfig.synthesisAggregation, agents.length)) {
+    // Large fan-out (task #213): bounded √n recursive tree-aggregation keeps each synthesis
+    // prompt O(√n) so very large agent counts never overflow the context window. This takes
+    // precedence over the adaptive flat/hierarchical decision once past the configured threshold.
+    aggregationMode = "hierarchical";
+    content =
+      (await aggregatePerspectives(perspectives, userContent, { clientId, botId, conversationId }, onProgress, "parallel_synthesis")) ||
+      valid[0] ||
+      "";
+  } else if (decision.mode === "hierarchical") {
     // Group-summary cache: reuse summaries of repeated perspective subsets across
     // runs, wired into the fidelity guardrail's summarize step so the cost
     // optimization survives alongside the guardrail.
@@ -251,7 +341,7 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
     agentsUsed: agents.map((a) => a.name),
     durationMs: Date.now() - start,
     telemetry: {
-      aggregationMode: decision.mode,
+      aggregationMode,
       cacheHit: false,
       cacheHitRate: cacheHitRate(cacheStats),
       cacheSimilarity: cacheStats.hits > 0 ? cacheStats.bestSimilarity : null,
@@ -379,7 +469,52 @@ Return a JSON array of subtask strings, one per specialist, in order. Return ONL
 
   onProgress?.({ type: "conductor_synthesizing", content: `GalaxyMind — ${lead.name} integrating specialist outputs…`, strategy: "hierarchical_delegation" });
 
-  const integrationPrompt = `${lead.systemPrompt}
+  let content: string;
+  if (isScalingActive(scalingConfig.synthesisAggregation, specialists.length)) {
+    // Many specialists: tree-aggregate their outputs so the lead's integration prompt stays bounded.
+    const renderOutput = (s: { name: string; output: string }, i: number) => `--- ${s.name} (subtask ${i + 1}) ---\n${s.output}`;
+    content =
+      (await treeAggregate<{ name: string; output: string }>({
+        items: specialistOutputs.filter((s) => s && s.output),
+        toText: renderOutput,
+        fanIn: scalingConfig.aggregationFanIn,
+        onTier: (info) =>
+          onProgress?.({
+            type: "conductor_progress",
+            content: `GalaxyMind — ${lead.name} integrating ${info.total} specialist outputs in ${info.groups} clusters (tier ${info.tier})…`,
+            strategy: "hierarchical_delegation",
+          }),
+        summarizeGroup: async (texts, meta) => {
+          const groupPrompt = `${lead.systemPrompt}
+
+You are integrating a cluster of specialist outputs (cluster ${meta.groupIndex + 1} of ${meta.groupCount}) for the task below into ONE cohesive partial result. Preserve every distinct contribution.
+
+Original task: ${userContent}
+
+Specialist outputs:
+${texts.join("\n\n")}
+
+Write the consolidated partial result for this cluster:`;
+          const out = await llmCombine(groupPrompt, userContent, { clientId, botId, conversationId });
+          return out || texts.join("\n\n");
+        },
+        finalCombine: async (texts) => {
+          const finalPrompt = `${lead.systemPrompt}
+
+You decomposed a task and your specialists' work has been consolidated into ${texts.length} cluster result(s). Integrate them into a single, coherent, complete response.
+
+Original task: ${userContent}
+
+Consolidated specialist results:
+${texts.map((t, i) => `--- Cluster ${i + 1} ---\n${t}`).join("\n\n")}
+
+Write the final integrated response that synthesizes all specialist work into a unified answer:`;
+          const out = await llmCombine(finalPrompt, userContent, { clientId, botId, conversationId });
+          return out || texts.join("\n\n");
+        },
+      })) || specialistOutputs.map((s) => s.output).join("\n\n");
+  } else {
+    const integrationPrompt = `${lead.systemPrompt}
 
 You decomposed a task and your specialists have completed their subtasks. Integrate their outputs into a single, coherent, complete response.
 
@@ -390,12 +525,13 @@ ${specialistOutputs.map((s, i) => `--- ${s.name} (subtask ${i + 1}) ---\n${s.out
 
 Write the final integrated response that synthesizes all specialist work into a unified answer:`;
 
-  const integrationMsgs = trimToFitContextWindow(
-    [{ role: "system" as const, content: integrationPrompt }, { role: "user" as const, content: userContent }],
-    MODEL,
-  );
-  const integrationResult = await callWithFallback({ model: MODEL, messages: integrationMsgs, clientId, botId, conversationId });
-  const content = integrationResult.completion.choices[0]?.message?.content ?? specialistOutputs.map((s) => s.output).join("\n\n");
+    const integrationMsgs = trimToFitContextWindow(
+      [{ role: "system" as const, content: integrationPrompt }, { role: "user" as const, content: userContent }],
+      MODEL,
+    );
+    const integrationResult = await callWithFallback({ model: MODEL, messages: integrationMsgs, clientId, botId, conversationId });
+    content = integrationResult.completion.choices[0]?.message?.content ?? specialistOutputs.map((s) => s.output).join("\n\n");
+  }
 
   await storeFinalInCache(input, content);
 
