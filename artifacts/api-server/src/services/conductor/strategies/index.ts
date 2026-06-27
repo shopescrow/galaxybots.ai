@@ -3,6 +3,18 @@ import { trimToFitContextWindow, estimateTokens } from "../../ai-safety/context-
 import { runFanOut } from "../../ai-safety/internal-concurrency";
 import { checkCostCapAlerts } from "../../analytics/cost-caps";
 import { selectTierForCategory, modelForTier } from "../../ai-safety/margin-guard";
+import {
+  selectModelForTask,
+  recordModelSelection,
+  recordModelOutcome,
+  getModelOptimizerSettings,
+  getModelReputationPriors,
+  estimateDifficultyFromInput,
+  bucketDifficulty,
+  auditModelDecision,
+  FRONTIER_CANDIDATE_MODELS,
+  EFFICIENT_CANDIDATE_MODELS,
+} from "../../ai-safety/model-router";
 import { estimateCost } from "../../analytics/llm-usage";
 import { decideAggregationMode, type AggregationMode } from "../adaptive-aggregation.js";
 import {
@@ -36,6 +48,13 @@ export interface StrategyInput {
   /** Plan tier name used to size the internal fan-out concurrency pool. */
   plan?: string | null;
   onProgress?: (event: { type: string; content: string; [key: string]: unknown }) => void;
+  /**
+   * Internal: the model-selection decision resolved once per run by
+   * resolveAgentModelForRun and cached here so nested strategy fallbacks
+   * (e.g. sequential_debate → parallel_synthesis) reuse the same choice and
+   * never double-record telemetry. Not set by callers.
+   */
+  __resolvedModel?: { model: string; tier: ModelTier; telemetryId: number };
 }
 
 export interface StrategyTelemetry {
@@ -148,6 +167,180 @@ function resolveAgentModel(taskCategory?: string): { model: string; tier: ModelT
   const tier = taskCategory ? selectTierForCategory(taskCategory) : ModelTier.FRONTIER;
   if (tier === ModelTier.FRONTIER) return { model: MODEL, tier };
   return { model: modelForTier(tier), tier };
+}
+
+/**
+ * Resolve the model for a run via the self-optimizing model router (task #231),
+ * recording per-model telemetry. Resolved once per run and cached on the input
+ * so nested strategy fallbacks reuse the same choice. When the optimizer is
+ * disabled (default) the router returns the static `resolveAgentModel` result
+ * verbatim, so behavior is identical to pre-existing fallback routing.
+ *
+ * Best-effort: any failure degrades to the static fallback and never breaks the
+ * run. The chosen model still flows through callWithFallback (the single safe
+ * execution path), so the optimizer can never bypass governance or cost caps.
+ */
+async function resolveAgentModelForRun(
+  input: StrategyInput,
+): Promise<{ model: string; tier: ModelTier; telemetryId: number }> {
+  if (input.__resolvedModel) return input.__resolvedModel;
+
+  const fallback = resolveAgentModel(input.taskCategory);
+  const taskCategory = input.taskCategory ?? "general";
+
+  let resolved: { model: string; tier: ModelTier; telemetryId: number } = {
+    model: fallback.model,
+    tier: fallback.tier,
+    telemetryId: -1,
+  };
+
+  try {
+    const difficultyScore = estimateDifficultyFromInput(estimateTokens(input.userContent));
+    const decision = await selectModelForTask({
+      taskCategory,
+      clientId: input.clientId,
+      botId: input.botId,
+      difficultyScore,
+      fallbackModel: fallback.model,
+      fallbackTier: fallback.tier,
+    });
+
+    const telemetryId = await recordModelSelection({
+      clientId: input.clientId,
+      botId: input.botId,
+      sessionId: input.sessionId,
+      taskCategory,
+      model: decision.model,
+      modelTier: decision.tier,
+      difficultyBucket: decision.difficultyBucket,
+      selectionMode: decision.mode,
+      chosenModel: decision.pendingModel ?? undefined,
+    });
+
+    auditModelDecision(decision, { clientId: input.clientId, sessionId: input.sessionId, botId: input.botId }).catch(() => {});
+
+    resolved = { model: decision.model, tier: decision.tier, telemetryId };
+  } catch (err) {
+    console.warn("[Strategies] resolveAgentModelForRun failed, using fallback:", err instanceof Error ? err.message : err);
+  }
+
+  input.__resolvedModel = resolved;
+  return resolved;
+}
+
+/** Use an LLM judge to score two answers (0..1 each) against the question. */
+async function judgeAnswers(question: string, liveAnswer: string, candidateAnswer: string, ctx: CallCtx): Promise<{ live: number; candidate: number } | null> {
+  try {
+    const prompt = `You are an impartial answer-quality judge. Score each of the two answers to the user's question on a 0.0–1.0 scale (1.0 = excellent, complete, accurate; 0.0 = useless or wrong).
+
+Question:
+${question}
+
+Answer A:
+${liveAnswer.slice(0, 4000)}
+
+Answer B:
+${candidateAnswer.slice(0, 4000)}
+
+Return ONLY valid JSON: {"a": <0..1>, "b": <0..1>}`;
+    const res = await callWithFallback({
+      model: FALLBACK_MODEL,
+      messages: [
+        { role: "system", content: "You are a strict answer-quality judge. Return only JSON." },
+        { role: "user", content: prompt },
+      ],
+      maxCompletionTokens: 60,
+      preferredTier: ModelTier.EFFICIENT,
+      clientId: ctx.clientId,
+      botId: ctx.botId,
+      conversationId: ctx.conversationId,
+    });
+    let raw = (res.completion.choices[0]?.message?.content ?? "{}").trim();
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) raw = match[0];
+    const parsed = JSON.parse(raw) as { a?: number; b?: number };
+    const live = Math.min(1, Math.max(0, Number(parsed.a)));
+    const candidate = Math.min(1, Math.max(0, Number(parsed.b)));
+    if (!Number.isFinite(live) || !Number.isFinite(candidate)) return null;
+    return { live, candidate };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Shadow/comparison rollout (task #231 step 4). On an owner-gated sample, run a
+ * candidate model (the best-reputation model NOT currently serving) in parallel
+ * on the same question, score both with a judge, and record the candidate as a
+ * SHADOW telemetry row with its resolved reward. Shadow rows are excluded from
+ * live selection priors until the periodic re-evaluation job promotes a winner.
+ *
+ * Fire-and-forget: never blocks or alters the live user response. The candidate
+ * answer is discarded — only its score is recorded.
+ */
+async function maybeRunShadow(input: StrategyInput, liveContent: string, liveModel: string): Promise<void> {
+  try {
+    if (input.clientId == null || !liveContent) return;
+    const settings = await getModelOptimizerSettings(input.clientId);
+    if (!settings.enabled || !settings.shadowEnabled) return;
+    if (Math.random() >= settings.shadowSampleRate) return;
+
+    const taskCategory = input.taskCategory ?? "general";
+    const liveTier = input.__resolvedModel?.tier ?? ModelTier.FRONTIER;
+    const pool = liveTier === ModelTier.FRONTIER ? FRONTIER_CANDIDATE_MODELS : EFFICIENT_CANDIDATE_MODELS;
+    const difficultyBucket = bucketDifficulty(estimateDifficultyFromInput(estimateTokens(input.userContent)));
+
+    // Candidate = highest-reputation model that is NOT the one that served live.
+    const priors = await getModelReputationPriors(taskCategory, pool, difficultyBucket);
+    const candidate = priors
+      .filter((p) => p.model !== liveModel)
+      .sort((a, b) => b.avgReward - a.avgReward)[0]?.model;
+    if (!candidate) return;
+
+    const callStart = Date.now();
+    const candidateAnswer = await callAgent(
+      "You are an expert assistant. Answer the user's question directly and completely.",
+      input.userContent,
+      0.7,
+      input.clientId,
+      input.botId,
+      input.conversationId,
+      input.sessionId,
+      candidate,
+    );
+    const latencyMs = Date.now() - callStart;
+    if (!candidateAnswer) return;
+
+    const scores = await judgeAnswers(input.userContent, liveContent, candidateAnswer, {
+      clientId: input.clientId,
+      botId: input.botId,
+      conversationId: input.conversationId,
+    });
+    if (!scores) return;
+
+    const candidateCost = estimateCost(candidate, estimateTokens(input.userContent) + 200, estimateTokens(candidateAnswer));
+    const shadowId = await recordModelSelection({
+      clientId: input.clientId,
+      botId: input.botId,
+      sessionId: input.sessionId,
+      taskCategory,
+      model: candidate,
+      modelTier: liveTier,
+      difficultyBucket,
+      selectionMode: "shadow",
+      shadow: true,
+      chosenModel: liveModel,
+    });
+    await recordModelOutcome(shadowId, {
+      quality: scores.candidate,
+      costUsd: candidateCost,
+      latencyMs,
+      qualityWeight: settings.qualityWeight,
+    });
+    console.log(`[Strategies] shadow comparison: live=${liveModel}(${scores.live.toFixed(2)}) candidate=${candidate}(${scores.candidate.toFixed(2)})`);
+  } catch (err) {
+    console.warn("[Strategies] maybeRunShadow failed (non-fatal):", err instanceof Error ? err.message : err);
+  }
 }
 
 async function callAgent(
@@ -285,7 +478,7 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
   const start = Date.now();
   const { userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory, plan } = input;
   let { agents } = input;
-  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
+  const { model: agentModel, tier: agentTier } = await resolveAgentModelForRun(input);
 
   // ── In-loop budget gate: degrade to a single perspective if the cap is hit ──
   if (await checkTierBudgetExhausted(clientId)) {
@@ -384,6 +577,9 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
 
   await storeFinalInCache(input, content);
 
+  // Owner-gated shadow rollout — offline learning, never blocks the response.
+  void maybeRunShadow(input, content, agentModel);
+
   return {
     content,
     agentsUsed: agents.map((a) => a.name),
@@ -404,7 +600,7 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
 export async function executeSequentialDebate(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
   const { agents, userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory } = input;
-  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
+  const { model: agentModel, tier: agentTier } = await resolveAgentModelForRun(input);
 
   if (agents.length < 2) {
     return executeParallelSynthesis(input);
@@ -454,7 +650,7 @@ Critically evaluate this position. Identify weaknesses, gaps, or errors. Then pr
 export async function executeHierarchicalDelegation(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
   const { agents, userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory, plan } = input;
-  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
+  const { model: agentModel, tier: agentTier } = await resolveAgentModelForRun(input);
 
   if (agents.length < 2) {
     return executeParallelSynthesis(input);
@@ -608,7 +804,7 @@ Write the final integrated response that synthesizes all specialist work into a 
 export async function executeRoundRobinReview(input: StrategyInput): Promise<StrategyResult> {
   const start = Date.now();
   const { agents, userContent, onProgress, clientId, botId, conversationId, sessionId, taskCategory } = input;
-  const { model: agentModel, tier: agentTier } = resolveAgentModel(taskCategory);
+  const { model: agentModel, tier: agentTier } = await resolveAgentModelForRun(input);
 
   if (agents.length < 2) {
     return executeParallelSynthesis(input);

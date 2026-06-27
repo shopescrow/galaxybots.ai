@@ -9,6 +9,7 @@ export const AUDIT_ENGINE_VALUES = [
   "circuit_breaker",
   "budget_guard",
   "moltbook",
+  "model_router",
 ] as const;
 
 export const AUDIT_DECISION_TYPE_VALUES = [
@@ -24,6 +25,7 @@ export const AUDIT_DECISION_TYPE_VALUES = [
   "human_approval_outcome",
   "auto_approval",
   "outcome",
+  "model_selection",
 ] as const;
 
 export type AuditEngine = (typeof AUDIT_ENGINE_VALUES)[number];

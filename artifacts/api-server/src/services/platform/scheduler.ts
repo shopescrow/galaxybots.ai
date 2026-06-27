@@ -36,6 +36,7 @@ import { checkUncertaintySchedules } from "./jobs/uncertainty-scheduler";
 import { runSyntheticControlScan } from "./jobs/synthetic-control-builder";
 import { runCalibrationPipeline } from "./jobs/calibration-pipeline";
 import { runPromptEvolution, runPromptShadowPromotion } from "./jobs/prompt-evolution";
+import { runModelReputationReeval } from "./jobs/model-reputation";
 import { runToolHeuristicsUpdate } from "./jobs/tool-heuristics";
 import { runAlignmentPatternExtraction } from "./jobs/alignment-pattern-extraction";
 import { runExperimentMeasurement } from "./jobs/experiment-measurement";
@@ -118,6 +119,7 @@ const lowFreqJobs: Job[] = [
   { name: "calibration-pipeline", fn: runCalibrationPipeline },
   { name: "prompt-evolution", fn: runPromptEvolution },
   { name: "prompt-shadow-promotion", fn: runPromptShadowPromotion },
+  { name: "model-reputation-reeval", fn: runModelReputationReeval },
   { name: "tool-heuristics-update", fn: runToolHeuristicsUpdate },
   { name: "alignment-harvester", fn: runAlignmentHarvester },
   { name: "communication-style-adaptation", fn: runCommunicationStyleAdaptation },

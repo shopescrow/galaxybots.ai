@@ -10,9 +10,17 @@ import {
   taskSessionMessagesTable,
   clientsTable,
   coordinatorClientSettingsTable,
+  botModelPoliciesTable,
 } from "@workspace/db";
-import { eq, and, sql, gte } from "drizzle-orm";
+import { eq, and, sql, gte, or, isNull } from "drizzle-orm";
 import { requireRole } from "../../middleware/auth";
+import {
+  getModelOptimizerSettings,
+  setModelOptimizerSetting,
+  MODEL_OPTIMIZER_SETTING_KEYS,
+  FRONTIER_CANDIDATE_MODELS,
+  EFFICIENT_CANDIDATE_MODELS,
+} from "../../services/ai-safety/model-router";
 import { getAllTools, getTool, type ToolContext } from "../../tools";
 import { SENSITIVE_TOOLS, SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS, READ_ONLY_ANALYST_TOOLS, applyBrandVoiceGuardrails } from "../../services/platform/governance";
 import { resumeAgenticLoop, resumeAgenticLoopWithRejection } from "../../tools/agentic-loop";
@@ -1021,6 +1029,122 @@ router.put("/governance/ai-trust-settings", requireRole("owner", "admin"), async
 
 router.get("/governance/audit-health", requireRole("owner", "admin"), (_req, res): void => {
   res.json(getAuditHealth());
+});
+
+// ── Self-optimizing model routing — owner controls (task #231) ──────────────
+
+router.get("/governance/model-optimizer", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+  try {
+    const settings = await getModelOptimizerSettings(clientId);
+    const policies = await db
+      .select({
+        botId: botModelPoliciesTable.botId,
+        model: botModelPoliciesTable.model,
+        allowed: botModelPoliciesTable.allowed,
+      })
+      .from(botModelPoliciesTable)
+      .where(eq(botModelPoliciesTable.clientId, clientId));
+    res.json({
+      ...settings,
+      frontierCandidates: FRONTIER_CANDIDATE_MODELS,
+      efficientCandidates: EFFICIENT_CANDIDATE_MODELS,
+      botPolicies: policies,
+    });
+  } catch (err) {
+    console.error("[GovernanceRoutes] model-optimizer GET error:", err);
+    res.status(500).json({ error: "Failed to fetch model optimizer settings" });
+  }
+});
+
+router.put("/governance/model-optimizer", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+  const body = req.body as {
+    enabled?: boolean;
+    qualityWeight?: number;
+    requireApproval?: boolean;
+    shadowEnabled?: boolean;
+    shadowSampleRate?: number;
+    shadowThreshold?: number;
+  };
+  try {
+    const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+    if (body.enabled !== undefined) await setModelOptimizerSetting(clientId, MODEL_OPTIMIZER_SETTING_KEYS.enabled, String(!!body.enabled));
+    if (body.requireApproval !== undefined) await setModelOptimizerSetting(clientId, MODEL_OPTIMIZER_SETTING_KEYS.requireApproval, String(!!body.requireApproval));
+    if (body.shadowEnabled !== undefined) await setModelOptimizerSetting(clientId, MODEL_OPTIMIZER_SETTING_KEYS.shadowEnabled, String(!!body.shadowEnabled));
+    if (body.qualityWeight !== undefined) await setModelOptimizerSetting(clientId, MODEL_OPTIMIZER_SETTING_KEYS.qualityWeight, String(clamp01(Number(body.qualityWeight))));
+    if (body.shadowSampleRate !== undefined) await setModelOptimizerSetting(clientId, MODEL_OPTIMIZER_SETTING_KEYS.shadowSampleRate, String(clamp01(Number(body.shadowSampleRate))));
+    if (body.shadowThreshold !== undefined) await setModelOptimizerSetting(clientId, MODEL_OPTIMIZER_SETTING_KEYS.shadowThreshold, String(clamp01(Number(body.shadowThreshold))));
+
+    await writeAuditEntry({
+      clientId,
+      engine: "model_router",
+      decisionType: "model_selection",
+      payload: { action: "settings_update", by: req.user!.userId ?? null, changes: body },
+    }).catch(() => {});
+
+    res.json(await getModelOptimizerSettings(clientId));
+  } catch (err) {
+    console.error("[GovernanceRoutes] model-optimizer PUT error:", err);
+    res.status(500).json({ error: "Failed to save model optimizer settings" });
+  }
+});
+
+router.get("/governance/bots/:botId/model-policy", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+  const botId = Number(req.params.botId);
+  if (!Number.isFinite(botId)) { res.status(400).json({ error: "Invalid botId" }); return; }
+  try {
+    const rows = await db
+      .select({ model: botModelPoliciesTable.model, allowed: botModelPoliciesTable.allowed })
+      .from(botModelPoliciesTable)
+      .where(and(eq(botModelPoliciesTable.clientId, clientId), eq(botModelPoliciesTable.botId, botId)));
+    res.json({ botId, policies: rows });
+  } catch (err) {
+    console.error("[GovernanceRoutes] bot model-policy GET error:", err);
+    res.status(500).json({ error: "Failed to fetch bot model policy" });
+  }
+});
+
+router.put("/governance/bots/:botId/model-policy", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+  const botId = Number(req.params.botId);
+  if (!Number.isFinite(botId)) { res.status(400).json({ error: "Invalid botId" }); return; }
+  const { model, allowed } = req.body as { model?: string; allowed?: boolean };
+  if (!model || typeof allowed !== "boolean") { res.status(400).json({ error: "model and allowed are required" }); return; }
+  try {
+    // Verify the bot is visible to this client (own tenant or shared) before writing a policy.
+    const bot = await db
+      .select({ id: botsTable.id })
+      .from(botsTable)
+      .where(and(eq(botsTable.id, botId), or(isNull(botsTable.tenantId), eq(botsTable.tenantId, clientId))))
+      .limit(1);
+    if (bot.length === 0) { res.status(404).json({ error: "Bot not found" }); return; }
+
+    await db
+      .insert(botModelPoliciesTable)
+      .values({ clientId, botId, model, allowed })
+      .onConflictDoUpdate({
+        target: [botModelPoliciesTable.botId, botModelPoliciesTable.model],
+        set: { allowed, updatedAt: new Date() },
+      });
+
+    await writeAuditEntry({
+      clientId,
+      engine: "model_router",
+      decisionType: "model_selection",
+      payload: { action: "bot_policy_update", botId, model, allowed, by: req.user!.userId ?? null },
+    }).catch(() => {});
+
+    res.json({ ok: true, botId, model, allowed });
+  } catch (err) {
+    console.error("[GovernanceRoutes] bot model-policy PUT error:", err);
+    res.status(500).json({ error: "Failed to save bot model policy" });
+  }
 });
 
 export default router;

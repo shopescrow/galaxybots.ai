@@ -13,8 +13,10 @@ import {
   clientsTable,
   slaTiersTable,
   botSlaOverridesTable,
+  modelSelectionTelemetryTable,
+  modelReputationTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "crypto";
 import {
@@ -648,6 +650,134 @@ router.get("/analytics/scaling", async (req, res): Promise<void> => {
   } catch (err) {
     console.error("Scaling telemetry error:", err);
     res.status(500).json({ error: "Failed to fetch scaling telemetry" });
+  }
+});
+
+// ── Self-optimizing model routing — observability (task #231) ───────────────
+router.get("/analytics/model-optimizer", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  try {
+    const windowDays = Math.min(180, Math.max(1, Number(req.query.windowDays) || 30));
+    const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+
+    // Per-model live performance (resolved, non-shadow telemetry) by category.
+    const byModel = await db
+      .select({
+        taskCategory: modelSelectionTelemetryTable.taskCategory,
+        model: modelSelectionTelemetryTable.model,
+        modelTier: modelSelectionTelemetryTable.modelTier,
+        decisions: sql<number>`COUNT(*)`,
+        avgReward: sql<number>`AVG(${modelSelectionTelemetryTable.rewardScore})`,
+        avgQuality: sql<number>`AVG(${modelSelectionTelemetryTable.qualityScore})`,
+        avgCost: sql<number>`AVG(${modelSelectionTelemetryTable.costUsd})`,
+        avgLatencyMs: sql<number>`AVG(${modelSelectionTelemetryTable.latencyMs})`,
+      })
+      .from(modelSelectionTelemetryTable)
+      .where(
+        and(
+          eq(modelSelectionTelemetryTable.clientId, clientId),
+          eq(modelSelectionTelemetryTable.shadow, false),
+          isNotNull(modelSelectionTelemetryTable.rewardScore),
+          gte(modelSelectionTelemetryTable.createdAt, since),
+        ),
+      )
+      .groupBy(
+        modelSelectionTelemetryTable.taskCategory,
+        modelSelectionTelemetryTable.model,
+        modelSelectionTelemetryTable.modelTier,
+      );
+
+    // Selection-mode distribution (optimizer vs fallback vs pending vs shadow).
+    const byMode = await db
+      .select({
+        selectionMode: modelSelectionTelemetryTable.selectionMode,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(modelSelectionTelemetryTable)
+      .where(
+        and(
+          eq(modelSelectionTelemetryTable.clientId, clientId),
+          gte(modelSelectionTelemetryTable.createdAt, since),
+        ),
+      )
+      .groupBy(modelSelectionTelemetryTable.selectionMode);
+
+    // Shadow comparisons (candidate model vs the model that actually served).
+    const shadow = await db
+      .select({
+        taskCategory: modelSelectionTelemetryTable.taskCategory,
+        candidateModel: modelSelectionTelemetryTable.model,
+        servedModel: modelSelectionTelemetryTable.chosenModel,
+        samples: sql<number>`COUNT(*)`,
+        avgCandidateReward: sql<number>`AVG(${modelSelectionTelemetryTable.rewardScore})`,
+        avgCandidateQuality: sql<number>`AVG(${modelSelectionTelemetryTable.qualityScore})`,
+      })
+      .from(modelSelectionTelemetryTable)
+      .where(
+        and(
+          eq(modelSelectionTelemetryTable.clientId, clientId),
+          eq(modelSelectionTelemetryTable.shadow, true),
+          isNotNull(modelSelectionTelemetryTable.rewardScore),
+          gte(modelSelectionTelemetryTable.createdAt, since),
+        ),
+      )
+      .groupBy(
+        modelSelectionTelemetryTable.taskCategory,
+        modelSelectionTelemetryTable.model,
+        modelSelectionTelemetryTable.chosenModel,
+      );
+
+    // Learned reputation table (the bandit's current beliefs).
+    const reputation = await db
+      .select({
+        taskCategory: modelReputationTable.taskCategory,
+        model: modelReputationTable.model,
+        difficultyBucket: modelReputationTable.difficultyBucket,
+        avgReward: modelReputationTable.avgReward,
+        avgQuality: modelReputationTable.avgQuality,
+        avgCostUsd: modelReputationTable.avgCostUsd,
+        avgLatencyMs: modelReputationTable.avgLatencyMs,
+        sampleCount: modelReputationTable.sampleCount,
+      })
+      .from(modelReputationTable);
+
+    res.json({
+      windowDays,
+      byModel: byModel.map((r) => ({
+        taskCategory: r.taskCategory,
+        model: r.model,
+        modelTier: r.modelTier,
+        decisions: Number(r.decisions),
+        avgReward: r.avgReward != null ? Number(r.avgReward) : null,
+        avgQuality: r.avgQuality != null ? Number(r.avgQuality) : null,
+        avgCost: r.avgCost != null ? Number(r.avgCost) : null,
+        avgLatencyMs: r.avgLatencyMs != null ? Number(r.avgLatencyMs) : null,
+      })),
+      byMode: byMode.map((r) => ({ selectionMode: r.selectionMode, count: Number(r.count) })),
+      shadow: shadow.map((r) => ({
+        taskCategory: r.taskCategory,
+        candidateModel: r.candidateModel,
+        servedModel: r.servedModel,
+        samples: Number(r.samples),
+        avgCandidateReward: r.avgCandidateReward != null ? Number(r.avgCandidateReward) : null,
+        avgCandidateQuality: r.avgCandidateQuality != null ? Number(r.avgCandidateQuality) : null,
+      })),
+      reputation: reputation.map((r) => ({
+        taskCategory: r.taskCategory,
+        model: r.model,
+        difficultyBucket: r.difficultyBucket,
+        avgReward: r.avgReward != null ? Number(r.avgReward) : null,
+        avgQuality: r.avgQuality != null ? Number(r.avgQuality) : null,
+        avgCostUsd: r.avgCostUsd != null ? Number(r.avgCostUsd) : null,
+        avgLatencyMs: r.avgLatencyMs != null ? Number(r.avgLatencyMs) : null,
+        sampleCount: Number(r.sampleCount),
+      })),
+    });
+  } catch (err) {
+    console.error("Model optimizer analytics error:", err);
+    res.status(500).json({ error: "Failed to fetch model optimizer analytics" });
   }
 });
 

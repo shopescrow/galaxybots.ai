@@ -13,6 +13,7 @@ import { estimateHoursSaved } from "./roi";
 import { createNotification } from "../admin/notifications";
 import { recordStrategyOutcome, setStrategyConfoundScores } from "../conductor/galaxy-conductor";
 import { recordExperimentResult } from "../intelligence/ab-experiment";
+import { recordSessionModelOutcomes, getModelOptimizerSettings } from "../ai-safety/model-router";
 
 const MAX_EXPECTED_TOOLS = 20;
 const MAX_ITERATIONS = 10;
@@ -220,6 +221,32 @@ export async function captureSessionOutcome(
       if (clientId) {
         const storedVariant = conductorRow[0].abVariant as "control" | "treatment" | null;
         recordExperimentResult(clientId, String(sessionId), finalQuality, storedVariant ?? undefined).catch(() => {});
+      }
+
+      // ── Model-selection reward signal (task #231) ──────────────────────
+      // Resolve the reward for every model-selection telemetry row attached to
+      // this session: quality (finalQuality), the session's actual LLM cost,
+      // and total latency, blended by the owner's quality-vs-cost weight.
+      try {
+        const [costRow] = await db
+          .select({
+            totalCost: sql<number>`coalesce(sum(${llmUsageLogTable.estimatedCostUsd}::numeric), 0)`,
+            totalLatency: sql<number>`coalesce(sum(${llmUsageLogTable.latencyMs}), 0)`,
+          })
+          .from(llmUsageLogTable)
+          .where(eq(llmUsageLogTable.sessionId, sessionId));
+        const settings = await getModelOptimizerSettings(clientId ?? null);
+        await recordSessionModelOutcomes({
+          sessionId,
+          quality: finalQuality,
+          totalCostUsd: Number(costRow?.totalCost ?? 0),
+          totalLatencyMs: Number(costRow?.totalLatency ?? 0),
+          taskDifficulty: taskDifficultyScore,
+          promptQuality: promptQualityScore,
+          qualityWeight: settings.qualityWeight,
+        });
+      } catch (modelErr) {
+        console.warn("[outcome-capture] model reward wiring failed (non-fatal):", modelErr instanceof Error ? modelErr.message : modelErr);
       }
     }
   } catch {
