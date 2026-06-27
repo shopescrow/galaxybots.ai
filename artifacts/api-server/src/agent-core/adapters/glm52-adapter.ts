@@ -21,12 +21,23 @@ const GLM_MODEL_ROUTING: Record<string, string> = {
   "glm-5.2-ultra": "glm-4.6",
 };
 
+// Blended USD cost per 1k *total* tokens for each live Zhipu model, used for the
+// injected-provider cost (applied to prompt+completion combined). These are the
+// account's actual direct-Zhipu/BigModel rates, NOT OpenRouter list prices:
+//   glm-4.6 / glm-4.5    z.ai $0.60/M in, $2.20/M out
+//   glm-4.5-air          z.ai $0.20/M in, $1.10/M out
+//   glm-4.5-flash        z.ai free
+//   glm-4-plus           BigModel ¥5/M single blended rate (~$0.70/M)
+// Because this map carries a single rate over total tokens (the central router's
+// per-token map in services/analytics/llm-usage.ts keeps input/output split),
+// the frontier rates here are blended assuming a representative 3:1 input:output
+// token mix, e.g. glm-4.6 = (3*0.60 + 2.20)/4 = $1.00/M. Keep both maps in sync.
 const MODEL_COST_PER_1K_TOKENS: Record<string, number> = {
-  "glm-4.6": 0.06,
-  "glm-4.5": 0.06,
-  "glm-4.5-air": 0.02,
-  "glm-4.5-flash": 0.01,
-  "glm-4-plus": 0.05,
+  "glm-4.6": 0.001,
+  "glm-4.5": 0.001,
+  "glm-4.5-air": 0.000425,
+  "glm-4.5-flash": 0,
+  "glm-4-plus": 0.0007,
 };
 
 interface GLMResponse {

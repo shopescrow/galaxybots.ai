@@ -9,14 +9,19 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-4-turbo": { input: 10 / 1_000_000, output: 30 / 1_000_000 },
   "gpt-3.5-turbo": { input: 0.5 / 1_000_000, output: 1.5 / 1_000_000 },
   "claude-sonnet-4-6": { input: 3 / 1_000_000, output: 15 / 1_000_000 },
-  // GLM 5.2 variants (Zhipu BigModel). Frontier variants priced at GLM-5.2 list
-  // rates; flash is the cheap efficient-tier variant. Owners can override these
-  // via the admin model-costs endpoint.
-  "glm-5.2": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
-  "glm-5.2-flash": { input: 0.2 / 1_000_000, output: 0.6 / 1_000_000 },
-  "glm-5.2-plus": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
-  "glm-5.2-long": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
-  "glm-5.2-ultra": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
+  // GLM 5.2 variants routed onto the live Zhipu models (see GLM_MODEL_ROUTING in
+  // agent-core/adapters/glm52-adapter.ts). Rates are the account's actual
+  // direct-Zhipu/BigModel pricing, NOT OpenRouter list prices, and must stay in
+  // sync with that adapter's blended MODEL_COST_PER_1K_TOKENS map:
+  //   glm-5.2 / -plus / -ultra -> glm-4.6 / glm-4.5  z.ai $0.60/M in, $2.20/M out
+  //   glm-5.2-flash            -> glm-4.5-flash       z.ai free
+  //   glm-5.2-long             -> glm-4-plus          BigModel ¥5/M (~$0.70/M, single rate)
+  // Owners can override these via the admin model-costs endpoint.
+  "glm-5.2": { input: 0.6 / 1_000_000, output: 2.2 / 1_000_000 },
+  "glm-5.2-flash": { input: 0, output: 0 },
+  "glm-5.2-plus": { input: 0.6 / 1_000_000, output: 2.2 / 1_000_000 },
+  "glm-5.2-long": { input: 0.7 / 1_000_000, output: 0.7 / 1_000_000 },
+  "glm-5.2-ultra": { input: 0.6 / 1_000_000, output: 2.2 / 1_000_000 },
 };
 
 let cachedDbCosts: Record<string, { input: number; output: number }> | null = null;
