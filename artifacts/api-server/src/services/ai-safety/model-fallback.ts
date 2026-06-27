@@ -5,6 +5,7 @@ import { isRateLimitError } from "@workspace/integrations-openai-ai-server";
 import { adaptOpenAIToAnthropic } from "./prompt-adapter";
 import { recordSuccess, recordError, isCircuitOpen } from "./circuit-breaker";
 import { logLlmUsage } from "../analytics/llm-usage";
+import { GLM52Adapter, GLM_CIRCUIT_KEY, isGlmModel } from "../../agent-core/adapters/glm52-adapter";
 
 /**
  * The Replit AI integration proxy (`@workspace/integrations-openai-ai-server`)
@@ -17,6 +18,14 @@ import { logLlmUsage } from "../analytics/llm-usage";
  * "anthropic" as separate providers — if Anthropic's API is down, only
  * claude-* calls fail while gpt-* calls continue working through the
  * same proxy.
+ *
+ * GLM ("glm-5.2*") models are NOT served by the Replit proxy — they are
+ * dispatched through the dedicated GLM52Adapter (Zhipu BigModel API) which
+ * is the single integration point for that backend. GLM has its own
+ * circuit-breaker provider key ("glm") so its health is tracked
+ * independently of openai/anthropic, and it participates in fallback in both
+ * directions (degrading to GPT/Claude, and serving as a fallback option for
+ * the GPT/Claude chains).
  */
 
 /**
@@ -57,13 +66,23 @@ function toCompletionResult(raw: Awaited<ReturnType<typeof openai.chat.completio
 }
 
 const FALLBACK_CHAINS: Record<string, string[]> = {
-  "gpt-5.4": ["gpt-5.4", "gpt-4o", "claude-sonnet-4-6"],
-  "gpt-4o": ["gpt-4o", "gpt-5-mini", "claude-sonnet-4-6"],
-  "gpt-5-mini": ["gpt-5-mini", "gpt-4o", "claude-sonnet-4-6"],
-  "claude-sonnet-4-6": ["claude-sonnet-4-6", "gpt-4o"],
+  // GLM 5.2 is the lead frontier model: a request for any frontier model tries
+  // GLM first, then degrades to GPT-5.4 / GPT-4o / Claude if Zhipu is down or
+  // the key is absent. (gpt-5-mini stays the cheap EFFICIENT-tier workhorse.)
+  "gpt-5.4": ["glm-5.2-ultra", "gpt-5.4", "gpt-4o", "claude-sonnet-4-6"],
+  "gpt-4o": ["glm-5.2-plus", "gpt-4o", "claude-sonnet-4-6", "gpt-5-mini"],
+  "claude-sonnet-4-6": ["glm-5.2-plus", "claude-sonnet-4-6", "gpt-4o"],
+  "gpt-5-mini": ["gpt-5-mini", "gpt-4o", "claude-sonnet-4-6", "glm-5.2-flash"],
+  // GLM models fail over to GPT/Claude if Zhipu is unavailable.
+  "glm-5.2": ["glm-5.2", "gpt-4o", "claude-sonnet-4-6"],
+  "glm-5.2-flash": ["glm-5.2-flash", "gpt-5-mini", "claude-sonnet-4-6"],
+  "glm-5.2-plus": ["glm-5.2-plus", "gpt-4o", "claude-sonnet-4-6"],
+  "glm-5.2-long": ["glm-5.2-long", "gpt-4o", "claude-sonnet-4-6"],
+  "glm-5.2-ultra": ["glm-5.2-ultra", "gpt-5.4", "gpt-4o", "claude-sonnet-4-6"],
 };
 
 function getProvider(model: string): string {
+  if (isGlmModel(model)) return GLM_CIRCUIT_KEY;
   if (model.startsWith("claude")) return "anthropic";
   return "openai";
 }
@@ -81,6 +100,11 @@ function isRetryableError(err: unknown): boolean {
 }
 
 function inferTierForModel(model: string): ModelTier {
+  // GLM variants: flash/base are cheap (EFFICIENT), plus/long/ultra are FRONTIER-class.
+  if (isGlmModel(model)) {
+    if (model === "glm-5.2" || model.startsWith("glm-5.2-flash")) return ModelTier.EFFICIENT;
+    return ModelTier.FRONTIER;
+  }
   if (TIER_EFFICIENT_MODELS.some((m) => model.startsWith(m.split("-").slice(0, 2).join("-")))) return ModelTier.EFFICIENT;
   if (TIER_FRONTIER_MODELS.some((m) => model.startsWith(m.split("-").slice(0, 2).join("-")))) return ModelTier.FRONTIER;
   if (model.startsWith("gpt-5-mini") || model.includes("haiku")) return ModelTier.EFFICIENT;
@@ -179,11 +203,49 @@ export async function callWithFallback(options: {
       continue;
     }
 
+    // GLM key absent → skip silently so the chain degrades to GPT/Claude exactly
+    // as it would today (GLM never makes the system less reliable).
+    if (provider === GLM_CIRCUIT_KEY && !new GLM52Adapter().isAvailable()) {
+      console.log(`[ModelFallback] Skipping ${model} (GLM key not configured)`);
+      continue;
+    }
+
     try {
       const callStart = Date.now();
       let completion: CompletionResult;
 
-      if (provider === "anthropic") {
+      if (provider === GLM_CIRCUIT_KEY) {
+        const glm = new GLM52Adapter();
+        const glmMessages = options.messages.map((m) => ({
+          role: m.role as "system" | "user" | "assistant" | "tool",
+          content: typeof m.content === "string" ? m.content : (m.content == null ? null : String(m.content)),
+          ...(("tool_calls" in m && m.tool_calls) ? { tool_calls: m.tool_calls as Array<{ id: string; type: string; function: { name: string; arguments: string } }> } : {}),
+          ...(("tool_call_id" in m && m.tool_call_id) ? { tool_call_id: m.tool_call_id as string } : {}),
+        }));
+
+        const glmResult = await glm.complete({
+          model,
+          messages: glmMessages,
+          maxTokens: options.maxCompletionTokens,
+          tools: options.tools as Parameters<GLM52Adapter["complete"]>[0]["tools"],
+          clientId: options.clientId,
+          botId: options.botId,
+          sessionId: options.sessionId ? Number(options.sessionId) : undefined,
+          conversationId: options.conversationId ? Number(options.conversationId) : undefined,
+        });
+
+        completion = {
+          choices: [{
+            message: { content: glmResult.content, tool_calls: glmResult.tool_calls },
+            finish_reason: "stop",
+          }],
+          usage: {
+            prompt_tokens: glmResult.promptTokens,
+            completion_tokens: glmResult.completionTokens,
+            total_tokens: glmResult.promptTokens + glmResult.completionTokens,
+          },
+        };
+      } else if (provider === "anthropic") {
         const adapted = adaptOpenAIToAnthropic(options.messages);
         const anthropicMessages = adapted.messages.map((m) => ({
           role: m.role as "user" | "assistant" | "system",

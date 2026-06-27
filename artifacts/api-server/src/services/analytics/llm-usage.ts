@@ -9,6 +9,14 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-4-turbo": { input: 10 / 1_000_000, output: 30 / 1_000_000 },
   "gpt-3.5-turbo": { input: 0.5 / 1_000_000, output: 1.5 / 1_000_000 },
   "claude-sonnet-4-6": { input: 3 / 1_000_000, output: 15 / 1_000_000 },
+  // GLM 5.2 variants (Zhipu BigModel). Frontier variants priced at GLM-5.2 list
+  // rates; flash is the cheap efficient-tier variant. Owners can override these
+  // via the admin model-costs endpoint.
+  "glm-5.2": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
+  "glm-5.2-flash": { input: 0.2 / 1_000_000, output: 0.6 / 1_000_000 },
+  "glm-5.2-plus": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
+  "glm-5.2-long": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
+  "glm-5.2-ultra": { input: 0.95 / 1_000_000, output: 3.0 / 1_000_000 },
 };
 
 let cachedDbCosts: Record<string, { input: number; output: number }> | null = null;

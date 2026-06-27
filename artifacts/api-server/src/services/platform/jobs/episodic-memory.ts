@@ -78,7 +78,7 @@ Return ONLY valid JSON:
     },
   ];
 
-  const glm = new GLM52Adapter(process.env.GLM_API_KEY ?? "");
+  const glm = new GLM52Adapter(process.env.ZHIPU_API_KEY ?? "");
   if (!glm.isAvailable()) {
     console.warn("[episodic-memory] GLM API key not configured");
     return null;

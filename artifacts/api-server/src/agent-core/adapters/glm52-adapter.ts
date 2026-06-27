@@ -2,19 +2,31 @@ import type { LLMProvider, LLMCompletionOptions, LLMCompletion } from "../ports/
 
 const GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
 
+/** Circuit-breaker provider key for the GLM/Zhipu backend (independent of openai/anthropic). */
+export const GLM_CIRCUIT_KEY = "glm";
+
+/** True when the model name targets the GLM family (routed through Zhipu's BigModel API). */
+export function isGlmModel(model: string): boolean {
+  return model.startsWith("glm-");
+}
+
+// Maps the system's logical glm-5.2* names onto the concrete models the Zhipu
+// BigModel API currently serves. The legacy glm-4-flash/glm-4-long/glm-4 names
+// were retired by Zhipu; the live model family is glm-4.6 / glm-4.5* / glm-4-plus.
 const GLM_MODEL_ROUTING: Record<string, string> = {
-  "glm-5.2": "glm-4-flash",
-  "glm-5.2-flash": "glm-4-flash",
-  "glm-5.2-plus": "glm-4-plus",
-  "glm-5.2-long": "glm-4-long",
-  "glm-5.2-ultra": "glm-4",
+  "glm-5.2": "glm-4.6",
+  "glm-5.2-flash": "glm-4.5-flash",
+  "glm-5.2-plus": "glm-4.5",
+  "glm-5.2-long": "glm-4-plus",
+  "glm-5.2-ultra": "glm-4.6",
 };
 
 const MODEL_COST_PER_1K_TOKENS: Record<string, number> = {
-  "glm-4-flash": 0.01,
-  "glm-4-plus": 0.07,
-  "glm-4-long": 0.07,
-  "glm-4": 0.14,
+  "glm-4.6": 0.06,
+  "glm-4.5": 0.06,
+  "glm-4.5-air": 0.02,
+  "glm-4.5-flash": 0.01,
+  "glm-4-plus": 0.05,
 };
 
 interface GLMResponse {
@@ -99,7 +111,7 @@ export class GLM52Adapter implements LLMProvider {
       throw new Error("GLM 5.2 adapter is not available: missing API key or circuit open");
     }
 
-    const routedModel = GLM_MODEL_ROUTING[options.model] ?? "glm-4-flash";
+    const routedModel = GLM_MODEL_ROUTING[options.model] ?? "glm-4.5-flash";
 
     const body: Record<string, unknown> = {
       model: routedModel,
