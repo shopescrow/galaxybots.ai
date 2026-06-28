@@ -9,6 +9,7 @@ import { useSidebarState } from "@/hooks/useSidebarState";
 import { CommandPalette, addRecentPage } from "@/components/command/CommandPalette";
 import { KeyboardShortcuts } from "@/components/command/KeyboardShortcuts";
 import { AeoScanModal } from "@/components/command/AeoScanModal";
+import { GalaxyNetworkChat } from "@/components/galaxy-chat/GalaxyNetworkChat";
 import { useClients } from "@/hooks/use-clients";
 import { useActiveClient } from "@/contexts/ActiveClientContext";
 import { useToast } from "@/hooks/use-toast";
@@ -199,6 +200,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onOpenAeoScan={() => setAeoScanOpen(true)} />
       <KeyboardShortcuts open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <AeoScanModal open={aeoScanOpen} onOpenChange={setAeoScanOpen} />
+      <GalaxyNetworkChat />
     </div>
   );
 }
