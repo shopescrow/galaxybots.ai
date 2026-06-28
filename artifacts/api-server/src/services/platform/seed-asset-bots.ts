@@ -49,6 +49,29 @@ const ASSET_BOTS = [
     isAiGenerated: false,
   },
   {
+    name: "Content & Data Creator",
+    title: "Producer of SEO Content, Newsletters & Data Assets",
+    department: "Asset Studio",
+    category: "Creator",
+    description:
+      "The Content & Data Creator produces information assets that earn over the long term: programmatic-SEO blog articles (reviews, comparisons, niche guides), recurring newsletter issues, and curated industry datasets/reports. It researches a niche, drafts the deliverable, and stores every piece as an Asset Studio asset. Blog posts can flow to the public blog and newsletters/datasets export as downloadable files — but only after human review. It never publishes on its own.",
+    responsibilities: [
+      "Generate keyword-targeted SEO articles (reviews, comparisons, guides)",
+      "Produce recurring newsletter issues as reviewable, exportable assets",
+      "Assemble and clean curated datasets/reports from scraped sources",
+      "Store all content as Asset Studio assets and submit for human review",
+      "Publish approved blog posts to the public blog surface on sign-off",
+    ],
+    personality:
+      "Curious, methodical, and audience-obsessed. Thinks in keywords, search intent, and recurring value. Ships steady, structured content but always respects the approval gate — it drafts, humans decide.",
+    avatar: "content-data-creator",
+    declaration:
+      "I am the Content & Data Creator. I turn niches into SEO articles, newsletters, and datasets that compound — and nothing ships without your sign-off.",
+    rank: "specialist",
+    isAvailable: true,
+    isAiGenerated: false,
+  },
+  {
     name: "Asset Manager",
     title: "Portfolio Steward of the Asset Studio",
     department: "Asset Studio",

@@ -12,6 +12,7 @@ import { checkDueAssignments } from "./jobs/check-due-assignments";
 import { checkWeeklyBriefings } from "./jobs/check-weekly-briefings";
 import { checkKnowledgeBaseSyncs } from "./jobs/check-kb-syncs";
 import { checkBingolingoAutoContent } from "./jobs/check-bingolingo-auto-content";
+import { checkContentNewsletters } from "./jobs/check-content-newsletters";
 import { checkCompetitorAlerts } from "./jobs/check-competitor-alerts";
 import { checkHealthScores } from "./jobs/check-health-scores";
 import { checkWeeklyPulse } from "./jobs/check-weekly-pulse";
@@ -103,6 +104,7 @@ const lowFreqJobs: Job[] = [
   { name: "self-actualization", fn: runSelfActualizationCycle },
   { name: "competitor alerts", fn: checkCompetitorAlerts },
   { name: "BingoLingo auto-content", fn: checkBingolingoAutoContent },
+  { name: "content newsletters", fn: checkContentNewsletters },
   { name: "content AEO re-scans", fn: checkContentAeoRescans },
   { name: "partner tier review", fn: checkPartnerTierCompliance },
   { name: "activation nurture", fn: checkActivationNurture },

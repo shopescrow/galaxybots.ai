@@ -352,7 +352,22 @@ router.post("/assets/:id/status", async (req, res): Promise<void> => {
     .where(eq(assetsTable.id, id))
     .returning();
 
-  res.json(updated);
+  // When a blog-kind content asset is approved & published, mirror it into the
+  // public blog surface so it appears on the site. Idempotent on slug.
+  let blogPublished: { slug: string; alreadyPublished: boolean } | null = null;
+  if (status === "published") {
+    const meta = (asset.metadata ?? {}) as Record<string, unknown>;
+    if (meta.contentKind === "blog") {
+      try {
+        const { publishBlogAssetToBlogSurface } = await import("../services/content/content-assets");
+        blogPublished = await publishBlogAssetToBlogSurface(id, req.user!.clientId);
+      } catch (err) {
+        console.error("[assets] blog publish failed:", err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
+  res.json(blogPublished ? { ...updated, blogPublished } : updated);
 });
 
 // ---- Attach a generated file (object-storage path) -------------------------
