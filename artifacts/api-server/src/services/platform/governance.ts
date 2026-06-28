@@ -306,6 +306,10 @@ export const DEPARTMENT_TOOL_DEFAULTS: Record<string, { allowed: string[]; appro
     approvalRequired: ["post_slack_message", "send_email"],
   },
   "Asset Studio": {
+    // Asset Studio bots produce digital assets and structured specs. None of
+    // these tools take external/on-chain/financial action — the web3 tools only
+    // write draft specs, and publishing is gated by an explicit human approval
+    // on the asset lifecycle (see assets route /status), not at tool-call time.
     allowed: [
       ...SAFE_READ_TOOLS,
       "write_world_state",
@@ -321,6 +325,9 @@ export const DEPARTMENT_TOOL_DEFAULTS: Record<string, { allowed: string[]; appro
       "generate_pod_design",
       "generate_logo_brand_kit",
       "generate_stock_media_batch",
+      "draft_web3_asset_spec",
+      "generate_virtual_influencer_persona",
+      "catalog_lora_model",
     ],
     approvalRequired: [],
   },

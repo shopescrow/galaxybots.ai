@@ -23,6 +23,8 @@ import {
   DollarSign,
   CheckCircle2,
   ShieldCheck,
+  ShieldAlert,
+  Sparkles,
   Store,
   FileText,
   History,
@@ -31,7 +33,6 @@ import {
   Copy,
   Search,
   CalendarClock,
-  Sparkles,
   Users,
   TrendingUp,
 } from "lucide-react";
@@ -180,6 +181,151 @@ function MicroSaasPanel({ asset }: { asset: AssetDetailType }) {
 
 function authToken(): string | null {
   return typeof localStorage !== "undefined" ? localStorage.getItem("auth_token") : null;
+}
+
+const WEB3_KIND_LABELS: Record<string, string> = {
+  agent_token: "AI-Agent Token",
+  virtual_influencer: "Virtual Influencer",
+  tradable_model: "Tradable Model (LoRA)",
+};
+
+function humanizeKey(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+// Recursively render an arbitrary spec value (string / array / object) so the
+// full generated spec is visible regardless of its exact shape.
+function SpecValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return <span className="whitespace-pre-wrap break-words">{String(value)}</span>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-muted-foreground">—</span>;
+    const allPrimitive = value.every(
+      (v) => typeof v === "string" || typeof v === "number" || typeof v === "boolean",
+    );
+    if (allPrimitive) {
+      return (
+        <ul className="list-disc pl-5 space-y-1">
+          {value.map((v, i) => (
+            <li key={i} className="break-words">{String(v)}</li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        {value.map((v, i) => (
+          <div key={i} className="rounded-md border border-border/60 p-3">
+            <SpecValue value={v} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return (
+      <div className="space-y-2">
+        {entries.map(([k, v]) => (
+          <div key={k}>
+            <div className="text-xs font-semibold text-muted-foreground">{humanizeKey(k)}</div>
+            <div className="text-sm mt-0.5">
+              <SpecValue value={v} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <span>{String(value)}</span>;
+}
+
+function Web3SpecPanel({ asset }: { asset: AssetDetailType }) {
+  const metadata = asset.metadata as Record<string, unknown> | null;
+  if (asset.type !== "web3" || !metadata) return null;
+
+  const kind = typeof metadata.web3Kind === "string" ? metadata.web3Kind : undefined;
+  const spec = (metadata.spec ?? null) as Record<string, unknown> | null;
+  const manualActions = Array.isArray(metadata.manualActions)
+    ? (metadata.manualActions as unknown[]).filter((a): a is string => typeof a === "string")
+    : [];
+  const disclaimer = typeof metadata.disclaimer === "string" ? metadata.disclaimer : undefined;
+
+  // The raw "spec" already nests manualActions; hide it from the spec grid so
+  // it isn't duplicated alongside the dedicated guardrail card.
+  const specEntries = spec
+    ? Object.entries(spec).filter(([k]) => k !== "manualActions" && k !== "raw")
+    : [];
+
+  return (
+    <div className="space-y-6">
+      {/* Hard human-in-the-loop guardrails */}
+      <Card className="border-amber-500/40 bg-amber-500/5">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2 text-amber-300">
+            <ShieldAlert className="h-4 w-4" /> Manual human actions required
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This is an exploratory spec only. No on-chain, wallet, custody, trading, or
+            fund-handling action is ever taken autonomously. Every step below must be
+            performed manually by a human, and the asset must pass approval before publishing.
+          </p>
+          {manualActions.length > 0 ? (
+            <ul className="space-y-2">
+              {manualActions.map((action, i) => (
+                <li key={i} className="flex gap-2 text-sm">
+                  <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-400" />
+                  <span>{action}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No manual actions recorded.</p>
+          )}
+          {disclaimer && (
+            <p className="text-xs text-muted-foreground border-t border-amber-500/20 pt-3">
+              {disclaimer}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Generated concept spec */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            {kind ? WEB3_KIND_LABELS[kind] ?? humanizeKey(kind) : "Web3"} Concept Spec
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {specEntries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No spec content recorded.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+              {specEntries.map(([k, v]) => (
+                <div key={k} className="space-y-1.5">
+                  <div className="text-sm font-semibold">{humanizeKey(k)}</div>
+                  <div className="text-sm text-muted-foreground">
+                    <SpecValue value={v} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 function StatusActions({ asset }: { asset: AssetDetailType }) {
@@ -594,6 +740,7 @@ export default function AssetDetail() {
         </Card>
 
         {asset.type === "micro_saas" && <MicroSaasPanel asset={asset} />}
+        <Web3SpecPanel asset={asset} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ListingCopyCard asset={asset} />
