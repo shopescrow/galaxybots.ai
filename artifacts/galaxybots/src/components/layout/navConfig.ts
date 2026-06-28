@@ -91,6 +91,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/prompt-versions", label: "Prompt Versions", description: "System prompt evolution history" },
       { href: "/platform-intelligence", label: "Platform Intelligence", description: "Oracle reports, AGI dimensions & consequence alignment" },
       { href: "/galaxy-intelligence", label: "Galaxy Intelligence", description: "Self-optimization dashboard — routing weights, strategy win rates & quality trends" },
+      { href: "/demand-intelligence", label: "Demand Intelligence", description: "Niche demand vs. competition research feeding the creator bots' creation queue" },
     ],
   },
   {

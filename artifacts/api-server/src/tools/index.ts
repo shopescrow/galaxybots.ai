@@ -15,6 +15,7 @@ import "./micro-saas-tools";
 import "./visual-tools";
 import "./web3-tools";
 import "./prospecting-tools";
+import "./demand-tools";
 import "./browser-agent";
 export { getTool, getAllTools, getOpenAIToolDefinitions, type ToolContext } from "./registry";
 export { runAgenticLoop, type AgenticEvent, type AgenticLoopOptions, type AgenticLoopResult } from "./agentic-loop";

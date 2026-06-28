@@ -59,6 +59,7 @@ import { runConstitutionDriftCheck } from "./jobs/gaa-constitution-drift";
 import { runSelfActualizationCycle } from "./jobs/self-actualization";
 import { checkMoltbookHeartbeats } from "./jobs/check-moltbook-heartbeats";
 import { runAssetManagementCycle } from "./jobs/asset-lifecycle";
+import { runDemandRefresh } from "./jobs/demand-refresh";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -140,6 +141,7 @@ const lowFreqJobs: Job[] = [
   { name: "global-priors-nightly", fn: async () => { await computeAndStoreGlobalPriors(); } },
   { name: "monthly-compliance-reports", fn: runMonthlyComplianceReports },
   { name: "asset-management-cycle", fn: runAssetManagementCycle },
+  { name: "demand-refresh", fn: runDemandRefresh },
 ];
 
 const running = new Set<string>();

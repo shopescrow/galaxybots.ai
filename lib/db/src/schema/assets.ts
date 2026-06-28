@@ -61,6 +61,8 @@ export const assetsTable = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     niche: text("niche"),
+    // The demand opportunity this asset was created from, if any (reverse trace).
+    sourceOpportunityId: integer("source_opportunity_id"),
     status: text("status").notNull().default("idea"),
     targetPlatform: text("target_platform"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
