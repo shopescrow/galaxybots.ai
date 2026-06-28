@@ -62,6 +62,8 @@ const Governance          = lazy(() => import("@/pages/governance/Governance"));
 const GaaConsole          = lazy(() => import("@/pages/gaa/GaaConsole"));
 const KnowledgeBase       = lazy(() => import("@/pages/knowledge-base/KnowledgeBase"));
 const DocumentStudio      = lazy(() => import("@/pages/documents/DocumentStudio"));
+const AssetStudio         = lazy(() => import("@/pages/asset-studio/AssetStudio"));
+const AssetDetail         = lazy(() => import("@/pages/asset-studio/AssetDetail"));
 const ProposalStudio      = lazy(() => import("@/pages/proposals/ProposalStudio"));
 const SharedProposal      = lazy(() => import("@/pages/proposals/SharedProposal"));
 const Pipelines           = lazy(() => import("@/pages/pipelines/Pipelines"));
@@ -249,6 +251,8 @@ function AuthenticatedRoutes() {
         <Route path="/gaa"                    component={() => <OwnerOnly component={GaaConsole} />} />
         <Route path="/knowledge-base"         component={KnowledgeBase} />
         <Route path="/documents"              component={DocumentStudio} />
+        <Route path="/asset-studio"           component={AssetStudio} />
+        <Route path="/asset-studio/:id"       component={AssetDetail} />
         <Route path="/proposals"              component={ProposalStudio} />
         <Route path="/pipelines"              component={Pipelines} />
         <Route path="/analytics"              component={AnalyticsDashboard} />

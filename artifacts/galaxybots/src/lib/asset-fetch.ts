@@ -67,17 +67,35 @@ export async function assetDelete<T>(path: string): Promise<T> {
 }
 
 // ---- Shared types ---------------------------------------------------------
+// Mirrors the canonical ASSET_TYPES enum in @workspace/db. The create/update
+// API routes validate against this exact set, so the UI must not offer others.
 export const ASSET_TYPE_OPTIONS = [
   "printable",
-  "template",
-  "ebook",
-  "course",
-  "micro_saas",
-  "data_product",
   "video",
-  "audio",
+  "micro_saas",
+  "data",
   "visual",
-  "newsletter",
+  "web3",
+  "other",
+] as const;
+
+export const ASSET_TYPE_LABELS: Record<string, string> = {
+  printable: "Printable / Planner",
+  video: "Faceless Video",
+  micro_saas: "Micro-SaaS / AI Tool",
+  data: "Data / Info Product",
+  visual: "Visual / Brand Asset",
+  web3: "AI Agent / Web3",
+  other: "Other",
+};
+
+export const ASSET_FILE_KIND_OPTIONS = [
+  "pdf",
+  "image",
+  "audio",
+  "video",
+  "dataset",
+  "archive",
   "other",
 ] as const;
 
@@ -89,6 +107,15 @@ export const ASSET_STATUS_OPTIONS = [
   "tracking",
   "archived",
 ] as const;
+
+export const ASSET_STATUS_LABELS: Record<string, string> = {
+  idea: "Idea",
+  draft: "Draft",
+  in_review: "In Review",
+  published: "Published",
+  tracking: "Tracking",
+  archived: "Archived",
+};
 
 export type AssetStatus = (typeof ASSET_STATUS_OPTIONS)[number];
 

@@ -97,6 +97,7 @@ const STATIC_ROUTES: Array<{ href: string; label: string; description?: string; 
   { href: "/boardroom", label: "Boardroom", description: "Strategic discussions", keywords: ["strategy"] },
   { href: "/knowledge-base", label: "Knowledge Base", description: "Knowledge repository" },
   { href: "/documents", label: "Documents", description: "Document studio" },
+  { href: "/asset-studio", label: "Asset Studio", description: "Income-producing digital assets", keywords: ["assets", "portfolio", "revenue", "products"] },
   { href: "/pipelines", label: "Pipelines", description: "Automation pipelines" },
   { href: "/compliance", label: "Compliance", description: "Compliance tracking" },
   { href: "/governance", label: "Governance", description: "Governance controls" },

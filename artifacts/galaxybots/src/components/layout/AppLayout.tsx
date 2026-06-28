@@ -24,6 +24,7 @@ const PATH_LABELS: Record<string, string> = {
   "/boardroom": "Boardroom",
   "/knowledge-base": "Knowledge Base",
   "/documents": "Documents",
+  "/asset-studio": "Asset Studio",
   "/pipelines": "Pipelines",
   "/compliance": "Compliance",
   "/governance": "Governance",
