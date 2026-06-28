@@ -265,6 +265,14 @@ router.put("/assets/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: `Invalid type. One of: ${ASSET_TYPES.join(", ")}` });
     return;
   }
+  if (
+    managerBotId !== undefined &&
+    managerBotId !== null &&
+    !(await validateBotOwnership(managerBotId, req.user!.clientId))
+  ) {
+    res.status(403).json({ error: "Manager bot not found or not owned by this client" });
+    return;
+  }
 
   const [updated] = await db
     .update(assetsTable)
@@ -506,6 +514,22 @@ router.post("/assets/:id/revenue", async (req, res): Promise<void> => {
   if (!asset) {
     res.status(404).json({ error: "Asset not found" });
     return;
+  }
+
+  if (listingId !== undefined && listingId !== null) {
+    const [listing] = await db
+      .select({ id: assetListingsTable.id })
+      .from(assetListingsTable)
+      .where(
+        and(
+          eq(assetListingsTable.id, listingId),
+          eq(assetListingsTable.assetId, id),
+        ),
+      );
+    if (!listing) {
+      res.status(400).json({ error: "listingId does not belong to this asset" });
+      return;
+    }
   }
 
   const [entry] = await db
