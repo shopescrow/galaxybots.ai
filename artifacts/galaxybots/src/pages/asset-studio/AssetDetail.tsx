@@ -29,6 +29,8 @@ import {
   Plus,
   Tag,
   Copy,
+  Search,
+  CalendarClock,
 } from "lucide-react";
 import {
   assetGet,
@@ -511,6 +513,10 @@ export default function AssetDetail() {
             </CardContent>
           </Card>
 
+          <VideoPackageCard metadata={asset.metadata} />
+
+          <SocialScheduleCard metadata={asset.metadata} />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-sm flex items-center gap-2">
@@ -611,6 +617,130 @@ export default function AssetDetail() {
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+type Metadata = Record<string, unknown> | null;
+
+interface VideoSeo {
+  title?: string;
+  description?: string;
+  tags?: string[];
+}
+interface VideoPackageMeta {
+  topic?: string;
+  orientation?: string;
+  hook?: string;
+  callToAction?: string;
+  estimatedDurationSeconds?: number;
+  seo?: VideoSeo;
+  scenes?: { heading?: string; visual?: string }[];
+  shortForm?: { title?: string };
+  tutorial?: { title?: string; steps?: number };
+}
+interface SocialPost {
+  platform?: string;
+  caption?: string;
+  hashtags?: string[];
+  scheduledAt?: string;
+}
+interface SocialPlanMeta {
+  posts?: SocialPost[];
+  generatedAt?: string;
+}
+
+function VideoPackageCard({ metadata }: { metadata: Metadata }) {
+  const pkg = (metadata?.videoPackage as VideoPackageMeta | undefined) ?? undefined;
+  if (!pkg) return null;
+  const seo = pkg.seo;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Search className="h-4 w-4" /> Video Package &amp; SEO
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {pkg.hook && (
+          <div>
+            <div className="text-xs text-muted-foreground">Hook</div>
+            <div>{pkg.hook}</div>
+          </div>
+        )}
+        {seo?.title && (
+          <div>
+            <div className="text-xs text-muted-foreground">SEO Title</div>
+            <div className="font-medium">{seo.title}</div>
+          </div>
+        )}
+        {seo?.description && (
+          <div>
+            <div className="text-xs text-muted-foreground">Description</div>
+            <div>{seo.description}</div>
+          </div>
+        )}
+        {seo?.tags && seo.tags.length > 0 && (
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Tags</div>
+            <div className="flex flex-wrap gap-1.5">
+              {seo.tags.map((t, i) => (
+                <Badge key={i} variant="outline">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
+          {pkg.orientation && <span>Orientation: {pkg.orientation}</span>}
+          {typeof pkg.estimatedDurationSeconds === "number" && (
+            <span>~{pkg.estimatedDurationSeconds}s</span>
+          )}
+          {pkg.scenes && <span>{pkg.scenes.length} scenes</span>}
+          {pkg.shortForm && <span>+ short-form</span>}
+          {pkg.tutorial && <span>+ tutorial ({pkg.tutorial.steps ?? 0} steps)</span>}
+        </div>
+        {pkg.callToAction && (
+          <div>
+            <div className="text-xs text-muted-foreground">Call to action</div>
+            <div>{pkg.callToAction}</div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SocialScheduleCard({ metadata }: { metadata: Metadata }) {
+  const plan = (metadata?.socialPlan as SocialPlanMeta | undefined) ?? undefined;
+  const posts = plan?.posts ?? [];
+  if (!plan || posts.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center gap-2">
+          <CalendarClock className="h-4 w-4" /> Social Schedule
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {posts.map((p, i) => (
+          <div key={i} className="border-b border-border pb-2 last:border-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">{p.platform ?? "Post"}</span>
+              {p.scheduledAt && (
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {new Date(p.scheduledAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+            {p.caption && <div className="text-xs mt-1">{p.caption}</div>}
+            {p.hashtags && p.hashtags.length > 0 && (
+              <div className="text-xs text-primary mt-1">{p.hashtags.join(" ")}</div>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -18,6 +18,7 @@ import { bootstrapGaa } from "./services/gaa/bootstrap";
 import { loadOllamaConfigFromDb } from "./routes/admin/ollama";
 import { seedGuardianQueenBot } from "./services/guardian/seed-guardian-queen-bot";
 import { seedAssetBots } from "./services/platform/seed-asset-bots";
+import { seedFacelessVideoBots } from "./services/platform/seed-faceless-video-bots";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -463,6 +464,9 @@ const server = app.listen(port, async () => {
   });
   seedAssetBots().catch((err) => {
     console.error("[AssetStudio] Asset bot seeding failed:", err);
+  });
+  seedFacelessVideoBots().catch((err) => {
+    console.error("[AssetStudio] Video bot seeding failed:", err);
   });
   seedGuardianQueenBot().catch((err) => {
     console.error("[GuardianQueen] Bot seeding failed:", err);

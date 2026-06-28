@@ -138,6 +138,33 @@ export class ObjectStorageService {
     return objectPath.startsWith(`/objects/uploads/${ownerPrefix}/`);
   }
 
+  /**
+   * Upload a raw buffer to private object storage from the server (no browser
+   * round-trip). Signs a one-time PUT URL, uploads the bytes, and returns the
+   * normalized `/objects/...` entity path suitable for storing in the DB
+   * (e.g. asset_files.object_path). Throws on any non-2xx upload response so
+   * callers fail explicitly rather than persisting a path that has no bytes.
+   */
+  async uploadBytes(params: {
+    data: Buffer;
+    contentType: string;
+    ownerPrefix?: string;
+  }): Promise<string> {
+    const uploadURL = await this.getObjectEntityUploadURL(params.ownerPrefix);
+    const response = await fetch(uploadURL, {
+      method: "PUT",
+      headers: { "Content-Type": params.contentType },
+      body: params.data,
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Object upload failed (${response.status} ${response.statusText})`,
+      );
+    }
+    return this.normalizeObjectEntityPath(uploadURL.split("?")[0]);
+  }
+
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
