@@ -230,3 +230,123 @@
 .blue-rule {
   height: 0.2vh;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   GALAXY MALL — Design System Extensions
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes district-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+@keyframes hologram-flicker {
+  0%, 88%, 91%, 94%, 100% { opacity: 1; }
+  89%, 92% { opacity: 0.7; }
+}
+
+@keyframes shimmer-right {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(300%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-6px); }
+}
+
+@keyframes neon-breathe {
+  0%, 100% { box-shadow: 0 0 8px hsl(270 80% 60% / 0.28); }
+  50%      { box-shadow: 0 0 22px hsl(270 80% 60% / 0.5); }
+}
+
+@keyframes scan-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.6; }
+  to   { transform: translateY(100vh); opacity: 0; }
+}
+
+/* Deep glassmorphism panel */
+.glass-deep {
+  background: linear-gradient(135deg, hsl(230 45% 6% / 0.92) 0%, hsl(240 40% 5% / 0.88) 100%);
+  border: 1px solid hsl(270 80% 60% / 0.14);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow:
+    0 20px 60px hsl(230 50% 2% / 0.6),
+    inset 0 1px 0 hsl(270 80% 60% / 0.07),
+    0 0 0 1px hsl(270 80% 60% / 0.04);
+}
+
+/* Neon glow shadow utilities */
+.shadow-glow-purple { box-shadow: 0 0 20px hsl(270 80% 60% / 0.35), 0 0 40px hsl(270 80% 60% / 0.1); }
+.shadow-glow-cyan   { box-shadow: 0 0 20px hsl(190 90% 50% / 0.35), 0 0 40px hsl(190 90% 50% / 0.1); }
+.shadow-glow-gold   { box-shadow: 0 0 20px hsl(45 100% 55% / 0.35), 0 0 40px hsl(45 100% 55% / 0.1); }
+.shadow-glow-emerald{ box-shadow: 0 0 20px hsl(150 70% 50% / 0.35), 0 0 40px hsl(150 70% 50% / 0.1); }
+.shadow-glow-blue   { box-shadow: 0 0 20px hsl(220 75% 60% / 0.35), 0 0 40px hsl(220 75% 60% / 0.1); }
+
+/* Galaxy grid floor — applied to content area */
+.galaxy-grid {
+  background-image:
+    linear-gradient(hsl(270 80% 60% / 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(270 80% 60% / 0.016) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Shimmer sweep */
+.shimmer-sweep {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    hsl(270 80% 60% / 0.05) 50%,
+    transparent 65%
+  );
+  animation: shimmer-right 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Holographic gradient border (using mask) */
+.holo-border {
+  position: relative;
+}
+.holo-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    hsl(270 80% 60% / 0.5),
+    hsl(190 90% 50% / 0.3),
+    hsl(45 100% 55% / 0.2),
+    hsl(270 80% 60% / 0.4)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Neon text — tricolor galaxy gradient */
+.text-neon {
+  background: linear-gradient(135deg, hsl(270 80% 75%), hsl(190 90% 65%), hsl(45 100% 70%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 6px hsl(270 80% 60% / 0.35));
+}
+
+/* Animation helpers */
+.animate-district-pulse   { animation: district-pulse 4s ease-in-out infinite; }
+.animate-hologram-flicker { animation: hologram-flicker 8s ease-in-out infinite; }
+.animate-float            { animation: float 6s ease-in-out infinite; }
+.animate-neon-breathe     { animation: neon-breathe 3s ease-in-out infinite; }

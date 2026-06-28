@@ -153,7 +153,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <div
         className={cn(
-          "flex flex-col flex-1 transition-all duration-300",
+          "flex flex-col flex-1 transition-all duration-300 galaxy-grid",
           showResumeBanner ? "pt-[88px]" : "pt-14",
           "lg:ml-60",
           collapsed && "lg:ml-16"
@@ -161,9 +161,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       >
         <main className="flex-1 flex flex-col">
           <motion.div
-            initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: prefersReducedMotion ? 0 : 0.4 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8, filter: "blur(3px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] }}
             className="flex-1 h-full content-scroll"
           >
             {children}

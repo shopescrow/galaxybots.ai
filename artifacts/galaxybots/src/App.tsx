@@ -67,6 +67,7 @@ const AssetDetail         = lazy(() => import("@/pages/asset-studio/AssetDetail"
 const ProposalStudio      = lazy(() => import("@/pages/proposals/ProposalStudio"));
 const SharedProposal      = lazy(() => import("@/pages/proposals/SharedProposal"));
 const Pipelines           = lazy(() => import("@/pages/pipelines/Pipelines"));
+const GalaxyAtrium        = lazy(() => import("@/pages/atrium/GalaxyAtrium"));
 const CommandCenter       = lazy(() => import("@/pages/command-center/CommandCenter"));
 const AssetReviewCockpit  = lazy(() => import("@/pages/asset-review/AssetReviewCockpit"));
 const AnalyticsDashboard  = lazy(() => import("@/pages/analytics/AnalyticsDashboard"));
@@ -191,7 +192,7 @@ function SmartHome() {
   if (isLoading) return <PageLoader />;
   if (user) {
     if (user.role === "owner" || user.role === "admin") {
-      return <Redirect to="/command-center" />;
+      return <Redirect to="/atrium" />;
     }
     return <Redirect to="/boardroom" />;
   }
@@ -221,6 +222,7 @@ function AuthenticatedRoutes() {
     <>
       <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
       <Switch>
+        <Route path="/atrium"                 component={GalaxyAtrium} />
         <Route path="/command-center"         component={() => <AdminOnly component={CommandCenter} />} />
         <Route path="/asset-review"           component={() => <AdminOnly component={AssetReviewCockpit} />} />
         <Route path="/bots"                   component={BotRoster} />

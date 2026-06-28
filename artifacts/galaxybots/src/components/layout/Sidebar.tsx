@@ -12,6 +12,22 @@ interface SidebarProps {
   onLinkClick?: () => void;
 }
 
+// ── District color palette ────────────────────────────────────────────────────
+const DISTRICT: Record<string, { color: string; bg: string; glow: string; border: string }> = {
+  gold:    { color: "hsl(45 100% 55%)",   bg: "hsl(45 100% 55% / 0.09)",   glow: "hsl(45 100% 55% / 0.22)",   border: "hsl(45 100% 55% / 0.25)"   },
+  cyan:    { color: "hsl(190 90% 50%)",   bg: "hsl(190 90% 50% / 0.09)",   glow: "hsl(190 90% 50% / 0.22)",   border: "hsl(190 90% 50% / 0.25)"   },
+  emerald: { color: "hsl(150 70% 50%)",   bg: "hsl(150 70% 50% / 0.09)",   glow: "hsl(150 70% 50% / 0.22)",   border: "hsl(150 70% 50% / 0.25)"   },
+  purple:  { color: "hsl(270 80% 60%)",   bg: "hsl(270 80% 60% / 0.09)",   glow: "hsl(270 80% 60% / 0.22)",   border: "hsl(270 80% 60% / 0.25)"   },
+  blue:    { color: "hsl(220 75% 60%)",   bg: "hsl(220 75% 60% / 0.09)",   glow: "hsl(220 75% 60% / 0.22)",   border: "hsl(220 75% 60% / 0.25)"   },
+  amber:   { color: "hsl(38 100% 55%)",   bg: "hsl(38 100% 55% / 0.09)",   glow: "hsl(38 100% 55% / 0.22)",   border: "hsl(38 100% 55% / 0.25)"   },
+};
+const DEFAULT_DC = DISTRICT.purple;
+
+function dc(group: NavGroup) {
+  return (group.color && DISTRICT[group.color]) || DEFAULT_DC;
+}
+
+// ── Route helpers ─────────────────────────────────────────────────────────────
 function isRouteActive(location: string, href: string): boolean {
   if (location === href) return true;
   if (location.startsWith(href + "/") || location.startsWith(href + "?")) return true;
@@ -56,6 +72,7 @@ function useOpenGroups(location: string): [string[], (id: string) => void] {
   return [openGroups, toggle];
 }
 
+// ── GroupFlyout ───────────────────────────────────────────────────────────────
 interface FlyoutProps {
   group: NavGroup;
   onLinkClick?: () => void;
@@ -64,13 +81,25 @@ interface FlyoutProps {
 
 function GroupFlyout({ group, onLinkClick, location }: FlyoutProps) {
   const activeHref = findActiveChild(location, group);
+  const d = dc(group);
   return (
     <div
-      className="absolute left-full top-0 ml-2 w-52 z-50 rounded-xl border border-border/60 bg-background/95 shadow-2xl py-2 backdrop-blur-xl"
+      className="absolute left-full top-0 ml-2 w-56 z-50 rounded-2xl shadow-2xl py-2 backdrop-blur-xl overflow-hidden"
+      style={{
+        background: "linear-gradient(160deg, hsl(230 45% 5.5%) 0%, hsl(240 40% 4.5%) 100%)",
+        border: `1px solid ${d.border}`,
+        boxShadow: `0 24px 60px hsl(230 45% 2% / 0.8), 0 0 0 1px ${d.bg}, inset 0 1px 0 ${d.bg}`,
+      }}
       role="menu"
     >
-      <div className="px-3 py-1.5 text-[10px] font-tech font-semibold uppercase tracking-widest text-muted-foreground">
-        {group.label}
+      <div
+        className="flex items-center gap-2 px-3 py-2 mb-1"
+        style={{ borderBottom: `1px solid ${d.bg}` }}
+      >
+        <span style={{ color: d.color, textShadow: `0 0 8px ${d.color}`, fontSize: "8px" }}>◆</span>
+        <span style={{ color: d.color }} className="text-[10px] font-tech font-bold uppercase tracking-[0.2em] opacity-75">
+          {group.district || group.label}
+        </span>
       </div>
       {group.children.map((child) => {
         const active = activeHref === child.href;
@@ -80,17 +109,13 @@ function GroupFlyout({ group, onLinkClick, location }: FlyoutProps) {
             href={child.href}
             onClick={onLinkClick}
             role="menuitem"
-            className={cn(
-              "flex flex-col px-3 py-2 text-sm font-tech transition-colors",
-              active
-                ? "text-primary bg-secondary/60"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
-            )}
+            className="flex flex-col px-3 py-2 text-sm font-tech transition-all duration-150"
+            style={active ? { color: d.color, backgroundColor: d.bg } : undefined}
             aria-current={active ? "page" : undefined}
           >
-            <span>{child.label}</span>
+            <span className={cn(active ? "" : "text-muted-foreground hover:text-foreground")}>{child.label}</span>
             {child.description && (
-              <span className="text-[11px] text-muted-foreground/70">{child.description}</span>
+              <span className="text-[10px] text-muted-foreground/50 mt-0.5">{child.description}</span>
             )}
           </Link>
         );
@@ -99,6 +124,7 @@ function GroupFlyout({ group, onLinkClick, location }: FlyoutProps) {
   );
 }
 
+// ── IconRailItem (collapsed mode) ─────────────────────────────────────────────
 interface IconRailItemProps {
   group: NavGroup;
   onLinkClick?: () => void;
@@ -111,6 +137,7 @@ function IconRailItem({ group, onLinkClick, location, active }: IconRailItemProp
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const Icon = group.icon;
+  const d = dc(group);
 
   const openFlyout = () => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
@@ -140,10 +167,8 @@ function IconRailItem({ group, onLinkClick, location, active }: IconRailItemProp
       <a
         href={group.externalHref}
         title={group.label}
-        className={cn(
-          "relative flex items-center justify-center w-10 h-10 rounded-xl transition-colors",
-          "text-amber-400 hover:bg-amber-400/10"
-        )}
+        className="relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200"
+        style={{ color: d.color }}
         aria-label={group.label}
       >
         <Icon className="w-5 h-5" />
@@ -152,26 +177,29 @@ function IconRailItem({ group, onLinkClick, location, active }: IconRailItemProp
   }
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={openFlyout}
-      onMouseLeave={closeFlyout}
-    >
+    <div className="relative" onMouseEnter={openFlyout} onMouseLeave={closeFlyout}>
       <button
         ref={buttonRef}
         onClick={() => setShowFlyout((o) => !o)}
         onKeyDown={handleButtonKeyDown}
-        className={cn(
-          "flex items-center justify-center w-10 h-10 rounded-xl transition-colors",
-          active
-            ? "bg-primary/15 text-primary"
-            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-        )}
+        title={group.label}
+        className="relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200"
+        style={active ? {
+          color: d.color,
+          backgroundColor: d.bg,
+          boxShadow: `0 0 16px ${d.glow}, inset 0 0 12px ${d.bg}`,
+        } : undefined}
         aria-label={group.label}
         aria-haspopup="menu"
         aria-expanded={showFlyout}
       >
-        <Icon className="w-5 h-5" />
+        <Icon className={cn("w-5 h-5", !active && "text-muted-foreground")} />
+        {active && (
+          <span
+            className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: d.color, boxShadow: `0 0 5px ${d.color}` }}
+          />
+        )}
       </button>
       {showFlyout && group.children.length > 0 && (
         <GroupFlyout
@@ -184,6 +212,7 @@ function IconRailItem({ group, onLinkClick, location, active }: IconRailItemProp
   );
 }
 
+// ── AccordionGroup (expanded mode) ────────────────────────────────────────────
 interface AccordionGroupProps {
   group: NavGroup;
   isOpen: boolean;
@@ -192,6 +221,7 @@ interface AccordionGroupProps {
   onLinkClick?: () => void;
   location: string;
   activeChildHref: string | null;
+  showDistrictLabel: boolean;
 }
 
 function AccordionGroup({
@@ -202,9 +232,11 @@ function AccordionGroup({
   onLinkClick,
   location,
   activeChildHref,
+  showDistrictLabel,
 }: AccordionGroupProps) {
   const Icon = group.icon;
   const groupRef = useRef<HTMLDivElement>(null);
+  const d = dc(group);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "Escape") {
@@ -241,43 +273,60 @@ function AccordionGroup({
 
   if (group.external && group.externalHref) {
     return (
-      <a
-        href={group.externalHref}
-        className={cn(
-          "flex items-center gap-3 px-3 py-2.5 rounded-xl font-tech text-sm font-semibold transition-colors",
-          "text-amber-400 hover:bg-amber-400/10"
+      <div>
+        {showDistrictLabel && group.district && (
+          <div className="px-3 pt-3 pb-0.5">
+            <span className="text-[9px] font-tech font-bold uppercase tracking-[0.22em] opacity-35" style={{ color: d.color }}>
+              {group.district}
+            </span>
+          </div>
         )}
-      >
-        <Icon className="w-4 h-4 shrink-0" />
-        <span>{group.label}</span>
-      </a>
+        <a
+          href={group.externalHref}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-tech text-sm font-semibold transition-all duration-200"
+          style={{ color: d.color }}
+        >
+          <Icon className="w-4 h-4 shrink-0" />
+          <span>{group.label}</span>
+        </a>
+      </div>
     );
   }
 
   return (
     <div ref={groupRef}>
+      {showDistrictLabel && group.district && (
+        <div className="px-3 pt-3 pb-0.5">
+          <span className="text-[9px] font-tech font-bold uppercase tracking-[0.22em] opacity-35" style={{ color: d.color }}>
+            {group.district}
+          </span>
+        </div>
+      )}
       <button
         onClick={onToggle}
         onKeyDown={handleKeyDown}
         aria-expanded={isOpen}
-        className={cn(
-          "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-tech text-sm font-semibold transition-colors",
-          isActive
-            ? "text-primary bg-primary/8"
-            : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-        )}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-tech text-sm font-semibold transition-all duration-200"
+        style={isActive ? {
+          color: d.color,
+          backgroundColor: d.bg,
+          boxShadow: `inset 2px 0 0 ${d.color}`,
+        } : undefined}
       >
-        <Icon className="w-4 h-4 shrink-0" />
-        <span className="flex-1 text-left">{group.label}</span>
+        <Icon className={cn("w-4 h-4 shrink-0 transition-colors", isActive ? "" : "text-muted-foreground")} />
+        <span className={cn("flex-1 text-left transition-colors", isActive ? "" : "text-muted-foreground")}>{group.label}</span>
         {isOpen ? (
-          <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+          <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-50" />
         ) : (
-          <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+          <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-35" />
         )}
       </button>
 
       {isOpen && (
-        <div className="ml-7 mt-0.5 flex flex-col gap-0.5 border-l border-border/40 pl-3">
+        <div
+          className="ml-7 mt-0.5 flex flex-col gap-0.5 pl-3"
+          style={{ borderLeft: `1px solid ${d.border}` }}
+        >
           {group.children.map((child, idx) => {
             const active = activeChildHref === child.href;
             return (
@@ -286,15 +335,22 @@ function AccordionGroup({
                 href={child.href}
                 onClick={onLinkClick}
                 onKeyDown={(e: KeyboardEvent<HTMLAnchorElement>) => handleChildKeyDown(e, idx)}
-                className={cn(
-                  "flex items-center px-2 py-1.5 rounded-lg font-tech text-sm transition-colors",
-                  active
-                    ? "text-primary bg-primary/10 font-semibold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                )}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg font-tech text-sm transition-all duration-150"
+                style={active ? { color: d.color, backgroundColor: d.bg } : undefined}
                 aria-current={active ? "page" : undefined}
               >
-                {child.label}
+                <span
+                  className="text-[7px] shrink-0 leading-none transition-all"
+                  style={active
+                    ? { color: d.color, textShadow: `0 0 5px ${d.color}` }
+                    : { color: "transparent" }
+                  }
+                >
+                  ●
+                </span>
+                <span className={cn("text-sm leading-none", active ? "" : "text-muted-foreground")}>
+                  {child.label}
+                </span>
               </Link>
             );
           })}
@@ -304,6 +360,7 @@ function AccordionGroup({
   );
 }
 
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: SidebarProps) {
   const [location] = useLocation();
   const { user } = useAuth();
@@ -319,10 +376,16 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
     onLinkClick?.();
   };
 
+  const sidebarStyle = {
+    background: "linear-gradient(180deg, hsl(230 50% 3.5%) 0%, hsl(245 42% 5%) 50%, hsl(230 50% 3.5%) 100%)",
+    borderRight: "1px solid hsl(270 80% 60% / 0.10)",
+    boxShadow: "4px 0 40px hsl(270 80% 60% / 0.03), inset -1px 0 0 hsl(270 80% 60% / 0.05)",
+  };
+
   const sidebarContent = (
-    <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden py-3">
+    <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden py-3 scrollbar-hide">
       {collapsed ? (
-        <div className="flex flex-col items-center gap-1 px-2">
+        <div className="flex flex-col items-center gap-1.5 px-2">
           {visibleGroups.map((group) => (
             <IconRailItem
               key={group.id}
@@ -335,7 +398,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
         </div>
       ) : (
         <div className="flex flex-col gap-0.5 px-2">
-          {visibleGroups.map((group) => (
+          {visibleGroups.map((group, idx) => (
             <AccordionGroup
               key={group.id}
               group={group}
@@ -345,6 +408,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
               onToggle={() => toggleGroup(group.id)}
               onLinkClick={handleLinkClick}
               location={location}
+              showDistrictLabel={idx > 0}
             />
           ))}
         </div>
@@ -356,34 +420,44 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
     <>
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={onCloseMobile}
           aria-hidden="true"
         />
       )}
 
+      {/* Desktop sidebar */}
       <aside
         className={cn(
-          "fixed top-14 left-0 h-[calc(100vh-3.5rem)] z-40 flex flex-col border-r border-border/40 bg-background/95 backdrop-blur-xl transition-all duration-300",
+          "fixed top-14 left-0 h-[calc(100vh-3.5rem)] z-40 flex flex-col transition-all duration-300",
           "hidden lg:flex",
           collapsed ? "w-16" : "w-60"
         )}
+        style={sidebarStyle}
         aria-label="Sidebar navigation"
       >
         {sidebarContent}
       </aside>
 
+      {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed top-0 left-0 h-full w-72 z-50 flex flex-col border-r border-border/40 bg-background shadow-2xl transition-transform duration-300 lg:hidden",
+          "fixed top-0 left-0 h-full w-72 z-50 flex flex-col shadow-2xl transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{
+          background: "linear-gradient(180deg, hsl(230 50% 3.5%) 0%, hsl(245 42% 5%) 50%, hsl(230 50% 3.5%) 100%)",
+          borderRight: "1px solid hsl(270 80% 60% / 0.12)",
+        }}
         aria-label="Mobile navigation"
         aria-hidden={!mobileOpen}
       >
-        <div className="flex items-center justify-between px-4 h-14 border-b border-border/40">
+        <div
+          className="flex items-center justify-between px-4 h-14"
+          style={{ borderBottom: "1px solid hsl(270 80% 60% / 0.12)" }}
+        >
           <span className="font-display font-bold text-lg tracking-wider">
-            GALAXY<span className="text-primary">BOTS</span>
+            GALAXY<span style={{ color: "hsl(270 80% 60%)", textShadow: "0 0 16px hsl(270 80% 60% / 0.5)" }}>BOTS</span>
           </span>
           <button
             onClick={onCloseMobile}
@@ -393,9 +467,9 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto scrollbar-hide">
           <div className="flex flex-col gap-0.5 px-2 py-3">
-            {visibleGroups.map((group) => (
+            {visibleGroups.map((group, idx) => (
               <AccordionGroup
                 key={group.id}
                 group={group}
@@ -405,6 +479,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
                 onToggle={() => toggleGroup(group.id)}
                 onLinkClick={handleLinkClick}
                 location={location}
+                showDistrictLabel={idx > 0}
               />
             ))}
           </div>

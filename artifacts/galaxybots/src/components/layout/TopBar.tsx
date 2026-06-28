@@ -40,7 +40,13 @@ function UserAvatar() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-tech font-bold text-primary hover:bg-primary/30 transition-colors"
+        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-tech font-bold transition-all duration-200 hover:scale-105"
+        style={{
+          color: "hsl(270 80% 75%)",
+          background: "hsl(270 80% 60% / 0.12)",
+          border: "1px solid hsl(270 80% 60% / 0.35)",
+          boxShadow: "0 0 12px hsl(270 80% 60% / 0.18)",
+        }}
         aria-label="User menu"
         aria-expanded={open}
         aria-haspopup="true"
@@ -48,24 +54,31 @@ function UserAvatar() {
         {initials}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur-xl py-1 z-50">
-          <div className="px-3 py-2 border-b border-border/40">
+        <div
+          className="absolute right-0 top-full mt-2 w-52 rounded-2xl shadow-2xl py-1 z-50 backdrop-blur-xl overflow-hidden"
+          style={{
+            background: "linear-gradient(160deg, hsl(230 45% 6%) 0%, hsl(240 40% 5%) 100%)",
+            border: "1px solid hsl(270 80% 60% / 0.18)",
+            boxShadow: "0 20px 60px hsl(230 50% 2% / 0.8), 0 0 0 1px hsl(270 80% 60% / 0.06)",
+          }}
+        >
+          <div className="px-3 py-2.5" style={{ borderBottom: "1px solid hsl(270 80% 60% / 0.1)" }}>
             <p className="text-xs font-tech font-semibold text-foreground truncate">
               {user.displayName || user.email}
             </p>
-            <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+            <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{user.email}</p>
           </div>
           <Link
             href="/settings"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+            className="flex items-center gap-2.5 px-3 py-2 text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
           >
             <User className="w-3.5 h-3.5" />
             Profile & Settings
           </Link>
           <button
             onClick={() => { setOpen(false); logout(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-tech text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
           >
             <LogOut className="w-3.5 h-3.5" />
             Sign out
@@ -94,8 +107,14 @@ export function ResumeSetupPrompt() {
 
   return (
     <>
-      <div className="fixed top-14 left-0 right-0 z-40 flex items-center justify-between gap-3 px-4 py-2 bg-primary/10 border-b border-primary/20 text-sm">
-        <div className="flex items-center gap-2 text-primary text-xs font-medium min-w-0">
+      <div
+        className="fixed top-14 left-0 right-0 z-40 flex items-center justify-between gap-3 px-4 py-2 text-sm"
+        style={{
+          background: "hsl(270 80% 60% / 0.08)",
+          borderBottom: "1px solid hsl(270 80% 60% / 0.18)",
+        }}
+      >
+        <div className="flex items-center gap-2 text-xs font-medium min-w-0" style={{ color: "hsl(270 80% 75%)" }}>
           <CheckCircle className="w-4 h-4 shrink-0" />
           <span className="truncate">
             <span className="hidden sm:inline">Setup in progress — </span>
@@ -104,7 +123,11 @@ export function ResumeSetupPrompt() {
         </div>
         <button
           onClick={() => setWizardOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-200 hover:scale-105"
+          style={{
+            background: "hsl(270 80% 60%)",
+            color: "white",
+          }}
         >
           Continue Setup
         </button>
@@ -131,7 +154,12 @@ function OnboardingProgressBadge() {
     <>
       <button
         onClick={() => setWizardOpen(true)}
-        className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+        className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105"
+        style={{
+          background: "hsl(270 80% 60% / 0.1)",
+          border: "1px solid hsl(270 80% 60% / 0.25)",
+          color: "hsl(270 80% 75%)",
+        }}
         title={`Setup ${percent}% complete`}
       >
         <CheckCircle className="w-3.5 h-3.5" />
@@ -149,57 +177,93 @@ export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBa
 
   const displayLogo = partner?.partnerLogo || preferences?.logoUrl || logoImg;
   const displayName = partner?.partnerName || null;
+  const homeHref = user ? "/atrium" : "/";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center border-b border-border/40 bg-background/95 supports-[backdrop-filter]:bg-background/60 supports-[backdrop-filter]:backdrop-blur-xl px-3 gap-3">
+    <header
+      className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center px-3 gap-3 supports-[backdrop-filter]:backdrop-blur-xl"
+      style={{
+        background: "linear-gradient(180deg, hsl(230 52% 4%) 0%, hsl(235 48% 3.5%) 100%)",
+        borderBottom: "1px solid hsl(270 80% 60% / 0.12)",
+        boxShadow: "0 1px 0 hsl(190 90% 50% / 0.04), 0 4px 30px hsl(230 52% 2% / 0.7)",
+      }}
+    >
+      {/* Mobile menu toggle */}
       <button
         onClick={onMobileToggle}
-        className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 min-w-[40px] min-h-[40px] flex items-center justify-center"
+        className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors"
         aria-label="Toggle navigation"
       >
         <Menu className="w-5 h-5" />
       </button>
 
+      {/* Desktop sidebar toggle */}
       <button
         onClick={onSidebarToggle}
-        className="hidden lg:flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 min-w-[40px] min-h-[40px] items-center justify-center"
+        className="hidden lg:flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 min-w-[40px] min-h-[40px] items-center justify-center transition-colors"
         aria-label="Toggle sidebar"
       >
         <Menu className="w-5 h-5" />
       </button>
 
-      <Link href="/" className="flex items-center gap-2.5 group min-w-0">
-        <img
-          src={displayLogo}
-          alt={displayName || "GalaxyBots.ai"}
-          className="w-8 h-8 rounded-xl object-cover shrink-0"
-        />
+      {/* Logo */}
+      <Link href={homeHref} className="flex items-center gap-2.5 group min-w-0">
+        <div className="relative shrink-0">
+          <img
+            src={displayLogo}
+            alt={displayName || "GalaxyBots.ai"}
+            className="w-8 h-8 rounded-xl object-cover transition-all duration-300 group-hover:scale-105"
+          />
+          <div
+            className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{ boxShadow: "0 0 18px hsl(270 80% 60% / 0.5)", border: "1px solid hsl(270 80% 60% / 0.3)" }}
+          />
+        </div>
         {displayName ? (
           <span className="font-display font-bold text-lg tracking-wider text-foreground truncate">
             {displayName}
           </span>
         ) : (
           <span className="font-display font-bold text-lg tracking-wider text-foreground hidden sm:block">
-            GALAXY<span className="text-primary">BOTS</span>
+            GALAXY<span
+              style={{
+                color: "hsl(270 80% 65%)",
+                textShadow: "0 0 20px hsl(270 80% 60% / 0.45)",
+              }}
+            >BOTS</span>
           </span>
         )}
       </Link>
 
       <div className="flex-1" />
 
+      {/* Actions */}
       <div className="flex items-center gap-1">
+        {/* Command palette — holographic scanner */}
         <button
           onClick={onOpenPalette}
-          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/40 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground transition-all duration-200 font-tech"
+          style={{
+            background: "hsl(230 40% 7%)",
+            border: "1px solid hsl(270 80% 60% / 0.18)",
+            boxShadow: "0 0 12px hsl(270 80% 60% / 0.05), inset 0 1px 0 hsl(270 80% 60% / 0.06)",
+          }}
           aria-label="Search (Ctrl+K)"
         >
-          <Search className="w-3.5 h-3.5" />
-          <span className="font-tech text-xs hidden md:block">Search</span>
-          <kbd className="hidden md:flex text-[10px] border border-border/60 rounded px-1 py-0.5 ml-1">⌘K</kbd>
+          <Search className="w-3.5 h-3.5" style={{ color: "hsl(270 80% 60% / 0.7)" }} />
+          <span className="text-xs hidden md:block">Search</span>
+          <kbd
+            className="hidden md:flex text-[10px] rounded px-1.5 py-0.5 ml-1 font-mono opacity-50"
+            style={{ border: "1px solid hsl(270 80% 60% / 0.2)", color: "hsl(270 80% 70%)" }}
+          >
+            ⌘K
+          </kbd>
         </button>
+
+        {/* Mobile search */}
         <button
           onClick={onOpenPalette}
-          className="sm:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          className="sm:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
           aria-label="Search"
         >
           <Search className="w-4 h-4" />
@@ -207,16 +271,18 @@ export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBa
 
         {user && <NotificationBell />}
         <LanguageSelector />
+
         <Link href="/settings">
           <Button
             variant="ghost"
             size="sm"
-            className="font-tech text-xs min-h-[40px] min-w-[40px] px-2"
+            className="font-tech text-xs min-h-[40px] min-w-[40px] px-2 text-muted-foreground hover:text-foreground"
             aria-label="Settings"
           >
             <Settings className="w-4 h-4" />
           </Button>
         </Link>
+
         <OnboardingProgressBadge />
         <UserAvatar />
       </div>
