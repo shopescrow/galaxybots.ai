@@ -27,6 +27,8 @@ import {
   FileText,
   History,
   Plus,
+  Tag,
+  Copy,
 } from "lucide-react";
 import {
   assetGet,
@@ -115,6 +117,82 @@ function StatusActions({ asset }: { asset: AssetDetailType }) {
         );
       })}
     </div>
+  );
+}
+
+interface ListingCopyShape {
+  title?: string;
+  tags?: string[];
+  description?: string;
+  suggestedPriceUsd?: number;
+}
+
+function ListingCopyCard({ asset }: { asset: AssetDetailType }) {
+  const { toast } = useToast();
+  const listing = (asset.metadata?.["listingCopy"] ?? null) as ListingCopyShape | null;
+  if (!listing) return null;
+
+  const copyText = [
+    listing.title ? `Title: ${listing.title}` : "",
+    listing.tags && listing.tags.length ? `Tags: ${listing.tags.join(", ")}` : "",
+    listing.description ? `\n${listing.description}` : "",
+    typeof listing.suggestedPriceUsd === "number"
+      ? `\nSuggested price: ${fmtMoney(listing.suggestedPriceUsd)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Tag className="h-4 w-4" /> Listing Copy
+        </CardTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            navigator.clipboard?.writeText(copyText);
+            toast({ title: "Listing copy copied" });
+          }}
+        >
+          <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {listing.title && (
+          <div>
+            <div className="text-xs text-muted-foreground">Title</div>
+            <div className="font-medium">{listing.title}</div>
+          </div>
+        )}
+        {listing.tags && listing.tags.length > 0 && (
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Tags</div>
+            <div className="flex flex-wrap gap-1.5">
+              {listing.tags.map((t) => (
+                <Badge key={t} variant="outline">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {listing.description && (
+          <div>
+            <div className="text-xs text-muted-foreground">Description</div>
+            <p className="whitespace-pre-wrap">{listing.description}</p>
+          </div>
+        )}
+        {typeof listing.suggestedPriceUsd === "number" && listing.suggestedPriceUsd > 0 && (
+          <div>
+            <div className="text-xs text-muted-foreground">Suggested price</div>
+            <div className="font-medium">{fmtMoney(listing.suggestedPriceUsd)}</div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -402,6 +480,7 @@ export default function AssetDetail() {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ListingCopyCard asset={asset} />
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">

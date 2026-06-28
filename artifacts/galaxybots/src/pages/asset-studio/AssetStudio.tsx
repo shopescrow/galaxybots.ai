@@ -32,16 +32,21 @@ import {
   Rocket,
   Layers,
   DollarSign,
+  Sparkles,
 } from "lucide-react";
 import {
   assetGet,
   assetPost,
+  generateDocumentAsset,
   ASSET_TYPE_OPTIONS,
   ASSET_TYPE_LABELS,
   ASSET_STATUS_OPTIONS,
   ASSET_STATUS_LABELS,
+  DOCUMENT_KIND_OPTIONS,
+  DOCUMENT_KIND_LABELS,
   type Asset,
   type Portfolio,
+  type DocumentKind,
 } from "@/lib/asset-fetch";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -267,6 +272,138 @@ function CreateAssetDialog() {
   );
 }
 
+function GenerateDocumentDialog() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<DocumentKind>("printable");
+  const [niche, setNiche] = useState("");
+  const [title, setTitle] = useState("");
+  const [audience, setAudience] = useState("");
+  const [targetPlatform, setTargetPlatform] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const generate = useMutation({
+    mutationFn: () =>
+      generateDocumentAsset({
+        kind,
+        niche: niche.trim(),
+        title: title.trim() || undefined,
+        audience: audience.trim() || undefined,
+        targetPlatform: targetPlatform.trim() || undefined,
+        notes: notes.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["asset-portfolio"] });
+      toast({
+        title: "Document generated",
+        description: `"${res.title}" is ready for your review.`,
+      });
+      setOpen(false);
+      setNiche("");
+      setTitle("");
+      setAudience("");
+      setTargetPlatform("");
+      setNotes("");
+      setKind("printable");
+      navigate(`/asset-studio/${res.assetId}`);
+    },
+    onError: (e: Error) =>
+      toast({ title: "Generation failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !generate.isPending && setOpen(v)}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Sparkles className="h-4 w-4 mr-2" /> Generate with AI
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Generate a Document Asset</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Document type</label>
+            <Select value={kind} onValueChange={(v) => setKind(v as DocumentKind)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_KIND_OPTIONS.map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {DOCUMENT_KIND_LABELS[k]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Niche / brief</label>
+            <Textarea
+              value={niche}
+              onChange={(e) => setNiche(e.target.value)}
+              placeholder="e.g. ADHD daily planner for remote workers"
+              rows={2}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Title (optional)</label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Auto if blank" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Target Platform</label>
+              <Input
+                value={targetPlatform}
+                onChange={(e) => setTargetPlatform(e.target.value)}
+                placeholder="e.g. Etsy, Gumroad"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Audience (optional)</label>
+            <Input
+              value={audience}
+              onChange={(e) => setAudience(e.target.value)}
+              placeholder="e.g. neurodivergent adults"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes (optional)</label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any requirements, angle, or themes to include"
+              rows={2}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The bot generates a print-ready PDF and listing copy, then files it for your review.
+            Nothing is published without your approval.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => generate.mutate()} disabled={!niche.trim() || generate.isPending}>
+            {generate.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-2" /> Generate
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AssetList() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
@@ -381,7 +518,10 @@ export default function AssetStudio() {
               published only with your sign-off.
             </p>
           </div>
-          <CreateAssetDialog />
+          <div className="flex items-center gap-2">
+            <GenerateDocumentDialog />
+            <CreateAssetDialog />
+          </div>
         </div>
 
         <PortfolioOverview />

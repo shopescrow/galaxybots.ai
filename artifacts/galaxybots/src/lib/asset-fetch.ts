@@ -66,6 +66,58 @@ export async function assetDelete<T>(path: string): Promise<T> {
   return handle<T>(res);
 }
 
+// ---- Document Studio (AI-generated document assets) -----------------------
+const DOC_PREFIX = `${BASE}/api/document-assets`;
+
+export const DOCUMENT_KIND_OPTIONS = ["printable", "prompt_pack", "ebook"] as const;
+export type DocumentKind = (typeof DOCUMENT_KIND_OPTIONS)[number];
+
+export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
+  printable: "Printable / Planner",
+  prompt_pack: "Prompt Pack",
+  ebook: "Short E-book",
+};
+
+export interface ListingCopy {
+  title: string;
+  tags: string[];
+  description: string;
+  suggestedPriceUsd: number;
+}
+
+export interface GenerateDocumentInput {
+  kind: DocumentKind;
+  niche: string;
+  title?: string;
+  audience?: string;
+  tone?: string;
+  pageCount?: number;
+  promptCount?: number;
+  targetPlatform?: string;
+  notes?: string;
+}
+
+export interface GenerateDocumentResult {
+  assetId: number;
+  title: string;
+  status: string;
+  kind: DocumentKind;
+  fileName: string;
+  fileId: number;
+  listing: ListingCopy;
+}
+
+export async function generateDocumentAsset(
+  body: GenerateDocumentInput,
+): Promise<GenerateDocumentResult> {
+  const res = await fetch(`${DOC_PREFIX}/generate`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  return handle<GenerateDocumentResult>(res);
+}
+
 // ---- Shared types ---------------------------------------------------------
 // Mirrors the canonical ASSET_TYPES enum in @workspace/db. The create/update
 // API routes validate against this exact set, so the UI must not offer others.

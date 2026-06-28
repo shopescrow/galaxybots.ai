@@ -20,6 +20,7 @@ import { registerIntelligenceRoutes } from "./intelligence";
 import { registerGaaRoutes } from "./gaa";
 import { registerMoltbookRoutes } from "./moltbook";
 import { registerAssetRoutes } from "./assets";
+import { registerDocumentAssetRoutes } from "./document-assets";
 
 const router: IRouter = Router();
 
@@ -43,5 +44,6 @@ registerIntelligenceRoutes(router);
 registerGaaRoutes(router);
 registerMoltbookRoutes(router);
 registerAssetRoutes(router);
+registerDocumentAssetRoutes(router);
 
 export default router;

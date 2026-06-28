@@ -108,6 +108,32 @@ export class ObjectStorageService {
     });
   }
 
+  /**
+   * Upload an in-memory buffer (e.g. a generated PDF) directly to object
+   * storage and return its normalized `/objects/...` entity path. Used by
+   * server-side asset generation that produces files without a browser round
+   * trip. Mirrors the client upload flow: request a signed PUT URL, push the
+   * bytes, then normalize the URL into the stored entity path.
+   */
+  async uploadBuffer(
+    data: Buffer,
+    ownerPrefix: string,
+    contentType: string,
+  ): Promise<{ objectPath: string; sizeBytes: number }> {
+    const signedUrl = await this.getObjectEntityUploadURL(ownerPrefix);
+    const res = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: data,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) {
+      throw new Error(`Object storage upload failed: HTTP ${res.status}`);
+    }
+    const objectPath = this.normalizeObjectEntityPath(signedUrl.split("?")[0]);
+    return { objectPath, sizeBytes: data.length };
+  }
+
   isObjectOwnedBy(objectPath: string, ownerPrefix: string): boolean {
     return objectPath.startsWith(`/objects/uploads/${ownerPrefix}/`);
   }

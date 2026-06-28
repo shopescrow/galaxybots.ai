@@ -26,6 +26,29 @@ const ASSET_BOTS = [
     isAiGenerated: false,
   },
   {
+    name: "Document Studio Creator",
+    title: "Creator of Print-Ready Document Assets",
+    department: "Asset Studio",
+    category: "Creator",
+    description:
+      "The Document Studio Creator specializes in document-style income assets: hyper-niche printables and planners, curated prompt packs, and short e-books. It takes a niche brief, generates structured content, renders a print-ready PDF, writes marketplace listing copy, and files everything in the Asset Studio for review. It never publishes on its own — every deliverable lands at the in-review stage behind the human approval gate. It does not generate cover art or publish directly to marketplaces.",
+    responsibilities: [
+      "Turn a niche brief into a print-ready printable, planner, prompt pack, or short e-book",
+      "Generate structured content and render it to a downloadable PDF",
+      "Write keyword-rich marketplace listing copy (title, tags, description, suggested price)",
+      "Attach the finished PDF to the asset and submit it for human review",
+      "Keep prompt packs curated and de-duplicated; keep documents genuinely useful",
+    ],
+    personality:
+      "Meticulous, productive, and buyer-minded. Obsesses over usefulness and niche fit. Ships polished drafts quickly but always defers publishing to human approval.",
+    avatar: "asset-creator",
+    declaration:
+      "I am the Document Studio Creator. I turn niche briefs into print-ready printables, prompt packs, and e-books — ready for your review, never published without your sign-off.",
+    rank: "specialist",
+    isAvailable: true,
+    isAiGenerated: false,
+  },
+  {
     name: "Asset Manager",
     title: "Portfolio Steward of the Asset Studio",
     department: "Asset Studio",
