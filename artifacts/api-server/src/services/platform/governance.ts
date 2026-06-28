@@ -305,6 +305,25 @@ export const DEPARTMENT_TOOL_DEFAULTS: Record<string, { allowed: string[]; appro
     allowed: [...SAFE_READ_TOOLS, "write_world_state", "post_slack_message", "read_slack_channel", "send_email", "read_email"],
     approvalRequired: ["post_slack_message", "send_email"],
   },
+  "Asset Studio": {
+    allowed: [
+      ...SAFE_READ_TOOLS,
+      "write_world_state",
+      "create_document",
+      "read_document",
+      "create_asset",
+      "attach_asset_file",
+      "submit_asset_for_review",
+      "mark_asset_published",
+      "log_asset_revenue",
+      "list_portfolio",
+      "generate_visual_asset",
+      "generate_pod_design",
+      "generate_logo_brand_kit",
+      "generate_stock_media_batch",
+    ],
+    approvalRequired: [],
+  },
 };
 
 export async function backfillExistingBotPermissions(getAllToolsFn: () => Array<{ name: string }>) {
