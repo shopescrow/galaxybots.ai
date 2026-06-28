@@ -68,6 +68,7 @@ const ProposalStudio      = lazy(() => import("@/pages/proposals/ProposalStudio"
 const SharedProposal      = lazy(() => import("@/pages/proposals/SharedProposal"));
 const Pipelines           = lazy(() => import("@/pages/pipelines/Pipelines"));
 const CommandCenter       = lazy(() => import("@/pages/command-center/CommandCenter"));
+const AssetReviewCockpit  = lazy(() => import("@/pages/asset-review/AssetReviewCockpit"));
 const AnalyticsDashboard  = lazy(() => import("@/pages/analytics/AnalyticsDashboard"));
 const PitchDeck           = lazy(() => import("@/pages/five-year-plan/PitchDeck"));
 const UserGuide           = lazy(() => import("@/pages/user-guide/UserGuide"));
@@ -221,6 +222,7 @@ function AuthenticatedRoutes() {
       <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
       <Switch>
         <Route path="/command-center"         component={() => <AdminOnly component={CommandCenter} />} />
+        <Route path="/asset-review"           component={() => <AdminOnly component={AssetReviewCockpit} />} />
         <Route path="/bots"                   component={BotRoster} />
         <Route path="/bots/ai-receptionist"   component={AIReceptionist} />
         <Route path="/bots/:id/cfo-dashboard" component={CFODashboard} />

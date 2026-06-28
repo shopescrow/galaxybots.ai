@@ -22,6 +22,7 @@ import { registerMoltbookRoutes } from "./moltbook";
 import { registerAssetRoutes } from "./assets";
 import { registerDocumentAssetRoutes } from "./document-assets";
 import { registerMicroToolsRoutes } from "./micro-tools";
+import { registerAssetReviewRoutes } from "./assets-review";
 
 const router: IRouter = Router();
 
@@ -44,6 +45,7 @@ registerSelfImprovementRoutes(router);
 registerIntelligenceRoutes(router);
 registerGaaRoutes(router);
 registerMoltbookRoutes(router);
+registerAssetReviewRoutes(router);
 registerAssetRoutes(router);
 registerDocumentAssetRoutes(router);
 registerMicroToolsRoutes(router);

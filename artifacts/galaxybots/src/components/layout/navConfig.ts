@@ -39,6 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
     roles: ["owner", "admin"],
     children: [
       { href: "/command-center", label: "Command Center", description: "Owner/admin overview" },
+      { href: "/asset-review", label: "Review Cockpit", description: "Batch asset review & confidence-tiered autonomy" },
       { href: "/activity", label: "Activity Stream", description: "Unified cross-platform activity feed" },
       { href: "/process-studio", label: "Process Studio", description: "Visual workflow builder" },
       { href: "/assembly", label: "Assembly", description: "Build and configure assemblies" },

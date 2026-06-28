@@ -58,6 +58,15 @@ export async function assetPost<T>(path: string, body?: unknown): Promise<T> {
   return handle<T>(res);
 }
 
+export async function assetPut<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_PREFIX}${path}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return handle<T>(res);
+}
+
 export async function assetDelete<T>(path: string): Promise<T> {
   const res = await fetch(`${API_PREFIX}${path}`, {
     method: "DELETE",
@@ -244,4 +253,90 @@ export interface Portfolio {
   totals: { total: number; published: number; revenue: number };
   byType: Record<string, { count: number; revenue: number }>;
   byStatus: Record<string, number>;
+}
+
+// ---- Review cockpit / autonomy types --------------------------------------
+export type AssetComplianceStatus = "pass" | "fail" | "review" | "pending";
+
+export interface ConfidenceFactor {
+  key: string;
+  label: string;
+  points: number;
+  max: number;
+  detail: string;
+}
+
+export interface ReviewQueueItem {
+  id: number;
+  title: string;
+  type: string;
+  description: string | null;
+  niche: string | null;
+  targetPlatform: string | null;
+  status: AssetStatus;
+  botId: number | null;
+  botName: string | null;
+  fileCount: number;
+  revenueToDate: string;
+  createdAt: string;
+  updatedAt: string;
+  confidenceScore: number;
+  confidenceFactors: ConfidenceFactor[];
+  complianceStatus: AssetComplianceStatus;
+  complianceIssues: string[];
+  autoPublishEligible: boolean;
+  autonomyReason: string;
+  thresholdUsed: number | null;
+  hoursInReview: number;
+  slaOverdue: boolean;
+}
+
+export interface ReviewQueueResponse {
+  items: ReviewQueueItem[];
+  reviewSlaHours: number;
+}
+
+export type BulkReviewAction = "approve" | "reject" | "revise";
+
+export interface BulkReviewResult {
+  action: BulkReviewAction;
+  updated: number[];
+  skipped: number[];
+}
+
+export interface AutonomyConfig {
+  id: number;
+  clientId: number;
+  assetType: string;
+  targetPlatform: string;
+  autoPublishEnabled: boolean;
+  confidenceThreshold: number;
+  requireCompliancePass: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutonomyRunResult {
+  published: Array<{ id: number; title: string; score: number }>;
+  skipped: Array<{ id: number; reason: string }>;
+  message?: string;
+}
+
+export interface AutoPublishLogEntry {
+  id: number;
+  clientId: number;
+  assetId: number | null;
+  assetTitle: string;
+  assetType: string;
+  targetPlatform: string | null;
+  confidenceScore: number;
+  thresholdUsed: number;
+  complianceStatus: string;
+  confidenceFactors: { factors?: ConfidenceFactor[] } | null;
+  previousStatus: string | null;
+  rolledBack: boolean;
+  rolledBackAt: string | null;
+  rolledBackBy: number | null;
+  rollbackReason: string | null;
+  createdAt: string;
 }
