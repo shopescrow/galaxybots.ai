@@ -98,3 +98,4 @@ export * from "./self-actualization";
 export * from "./invoices";
 export * from "./moltbook";
 export * from "./model-routing";
+export * from "./assets";

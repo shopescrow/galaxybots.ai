@@ -7,6 +7,7 @@ import "./competitor-tools";
 import "./prospect-tools";
 import "./outreach-tools";
 import "./content-attribution-tools";
+import "./asset-tools";
 import "./prospecting-tools";
 import "./browser-agent";
 export { getTool, getAllTools, getOpenAIToolDefinitions, type ToolContext } from "./registry";

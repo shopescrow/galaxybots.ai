@@ -17,6 +17,7 @@ import { startQueenSwarmLoop } from "./services/guardian/queen-orchestrator";
 import { bootstrapGaa } from "./services/gaa/bootstrap";
 import { loadOllamaConfigFromDb } from "./routes/admin/ollama";
 import { seedGuardianQueenBot } from "./services/guardian/seed-guardian-queen-bot";
+import { seedAssetBots } from "./services/platform/seed-asset-bots";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -459,6 +460,9 @@ const server = app.listen(port, async () => {
   });
   seedAgiBlogPost().catch((err) => {
     console.error("[seed] AGI blog post seeding failed:", err);
+  });
+  seedAssetBots().catch((err) => {
+    console.error("[AssetStudio] Asset bot seeding failed:", err);
   });
   seedGuardianQueenBot().catch((err) => {
     console.error("[GuardianQueen] Bot seeding failed:", err);
