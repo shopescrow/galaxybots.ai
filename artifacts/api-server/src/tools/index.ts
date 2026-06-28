@@ -11,6 +11,7 @@ import "./asset-tools";
 import "./document-asset-tools";
 import "./video-tools";
 import "./content-data-tools";
+import "./micro-saas-tools";
 import "./prospecting-tools";
 import "./browser-agent";
 export { getTool, getAllTools, getOpenAIToolDefinitions, type ToolContext } from "./registry";

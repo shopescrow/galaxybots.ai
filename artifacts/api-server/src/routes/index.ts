@@ -21,6 +21,7 @@ import { registerGaaRoutes } from "./gaa";
 import { registerMoltbookRoutes } from "./moltbook";
 import { registerAssetRoutes } from "./assets";
 import { registerDocumentAssetRoutes } from "./document-assets";
+import { registerMicroToolsRoutes } from "./micro-tools";
 
 const router: IRouter = Router();
 
@@ -45,5 +46,6 @@ registerGaaRoutes(router);
 registerMoltbookRoutes(router);
 registerAssetRoutes(router);
 registerDocumentAssetRoutes(router);
+registerMicroToolsRoutes(router);
 
 export default router;

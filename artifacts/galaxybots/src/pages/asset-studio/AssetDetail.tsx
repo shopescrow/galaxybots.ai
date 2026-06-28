@@ -31,6 +31,9 @@ import {
   Copy,
   Search,
   CalendarClock,
+  Sparkles,
+  Users,
+  TrendingUp,
 } from "lucide-react";
 import {
   assetGet,
@@ -64,6 +67,115 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
 function fmtMoney(n: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
+}
+
+const PRICING_MODEL_LABELS: Record<string, string> = {
+  subscription_monthly: "Monthly subscription",
+  subscription_annual: "Annual subscription",
+  usage_based: "Usage-based",
+  freemium: "Freemium",
+  one_time: "One-time purchase",
+};
+
+interface MicroSaasSpecShape {
+  name?: string;
+  tagline?: string;
+  coreFeature?: string;
+  targetUser?: string;
+  aiPromptLogic?: string;
+  pricing?: { model?: string; monthlyPriceUsd?: number; rationale?: string };
+}
+
+interface SubscriptionShape {
+  enabled?: boolean;
+  model?: string;
+  monthlyPriceUsd?: number;
+  activeSubscribers?: number;
+  mrrUsd?: number;
+  placeholder?: boolean;
+}
+
+interface ScaffoldShape {
+  slug?: string;
+  previewPath?: string;
+  endpoint?: { method?: string; path?: string };
+}
+
+function MicroSaasPanel({ asset }: { asset: AssetDetailType }) {
+  const metadata = (asset.metadata ?? {}) as Record<string, unknown>;
+  const spec = metadata.spec as MicroSaasSpecShape | undefined;
+  const subscription = metadata.subscription as SubscriptionShape | undefined;
+  const scaffold = metadata.scaffold as ScaffoldShape | undefined;
+
+  if (!spec && !subscription) return null;
+
+  const pricingModel = subscription?.model ?? spec?.pricing?.model;
+  const monthlyPrice =
+    subscription?.monthlyPriceUsd ?? spec?.pricing?.monthlyPriceUsd ?? 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Sparkles className="h-4 w-4" /> Micro-SaaS &amp; Subscription
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {spec?.coreFeature && (
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Core feature</div>
+            <p className="text-sm">{spec.coreFeature}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border p-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <DollarSign className="h-3.5 w-3.5" /> Price
+            </div>
+            <div className="text-lg font-bold">{fmtMoney(monthlyPrice)}</div>
+            <div className="text-xs text-muted-foreground">
+              {pricingModel
+                ? PRICING_MODEL_LABELS[pricingModel] ?? pricingModel
+                : "—"}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Users className="h-3.5 w-3.5" /> Subscribers
+            </div>
+            <div className="text-lg font-bold">
+              {subscription?.activeSubscribers ?? 0}
+            </div>
+            <div className="text-xs text-muted-foreground">Active</div>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3.5 w-3.5" /> MRR
+            </div>
+            <div className="text-lg font-bold">
+              {fmtMoney(subscription?.mrrUsd ?? 0)}
+            </div>
+            <div className="text-xs text-muted-foreground">Monthly recurring</div>
+          </div>
+        </div>
+
+        {scaffold?.endpoint?.path && (
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">AI endpoint</div>
+            <code className="text-xs bg-muted px-2 py-1 rounded block w-fit max-w-full truncate">
+              {scaffold.endpoint.method ?? "POST"} {scaffold.endpoint.path}
+            </code>
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground border-t border-border pt-3">
+          Subscription and revenue figures are placeholders — billing is not yet
+          wired to a real provider.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function authToken(): string | null {
@@ -480,6 +592,8 @@ export default function AssetDetail() {
             )}
           </CardContent>
         </Card>
+
+        {asset.type === "micro_saas" && <MicroSaasPanel asset={asset} />}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ListingCopyCard asset={asset} />

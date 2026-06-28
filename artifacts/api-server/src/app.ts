@@ -193,6 +193,7 @@ const PUBLIC_PREFIX_SUFFIXES = [
   "/liberator/jobs/",
   "/proposals/shared/",
   "/roi/shared/",
+  "/micro-tools/",
 ];
 
 function buildPublicPaths(prefix: string) {

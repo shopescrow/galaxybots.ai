@@ -9,6 +9,7 @@
     "seed-guardian-queen": "tsx ./src/seed-guardian-queen.ts",
     "seed-blog": "tsx ./src/seed-blog.ts",
     "seed-kilopro": "tsx ./src/seed-kilopro.ts",
+    "seed-micro-saas": "tsx ./src/seed-micro-saas.ts",
     "generate-whitepaper": "tsx ./src/generate-whitepaper.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

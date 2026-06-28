@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/caption-forge/"
+title = "Caption Forge"
+version = "1.0.0"
+id = "artifacts/caption-forge"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/caption-forge/" ]
+localPort = 23397
+
+[services.development]
+run = "pnpm --filter @workspace/caption-forge run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/caption-forge", "run", "build" ]
+publicDir = "artifacts/caption-forge/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23397"
+BASE_PATH = "/caption-forge/"
