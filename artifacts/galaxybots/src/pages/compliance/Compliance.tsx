@@ -13,6 +13,7 @@ import {
   useDeleteClientComplianceMutation,
 } from "@/hooks/use-compliance";
 import { useClients } from "@/hooks/use-clients";
+import { FirewallPanel } from "./FirewallPanel";
 import type {
   CreateClientComplianceBodyStatus,
   UpdateClientComplianceBodyStatus,
@@ -606,7 +607,7 @@ function ClientComplianceSection() {
 }
 
 export default function Compliance() {
-  const [tab, setTab] = useState<"platform" | "client">("platform");
+  const [tab, setTab] = useState<"platform" | "client" | "firewall">("platform");
 
   return (
     <AppLayout>
@@ -625,6 +626,7 @@ export default function Compliance() {
           {[
             { key: "platform" as const, label: "Platform Status" },
             { key: "client" as const, label: "Client Requirements" },
+            { key: "firewall" as const, label: "IP & Publishing Firewall" },
           ].map((t) => (
             <button
               key={t.key}
@@ -642,6 +644,7 @@ export default function Compliance() {
 
         {tab === "platform" && <PlatformCompliancePanel />}
         {tab === "client" && <ClientComplianceSection />}
+        {tab === "firewall" && <FirewallPanel />}
       </div>
     </AppLayout>
   );

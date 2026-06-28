@@ -10,11 +10,13 @@ import {
   ASSET_TYPES,
   ASSET_STATUSES,
   ASSET_FILE_KINDS,
+  assetComplianceChecksTable,
   type AssetStatus,
   type AssetStatusEvent,
 } from "@workspace/db";
 import { eq, desc, and, ilike, sql, SQL } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { runPrePublishGate } from "../services/compliance/pre-publish-gate";
 
 const objectStorage = new ObjectStorageService();
 
@@ -328,6 +330,54 @@ router.post("/assets/:id/status", async (req, res): Promise<void> => {
       allowed: ALLOWED_TRANSITIONS[current] ?? [],
     });
     return;
+  }
+
+  // Compliance & IP firewall: every asset is screened before it can move to
+  // "published"/for sale. Hard failures (block) can never be published; flagged
+  // assets are routed to human review with the specific reasons.
+  if (status === "published") {
+    const gate = await runPrePublishGate({
+      asset,
+      triggeredBy: `user:${req.user!.userId ?? "owner"}`,
+    });
+
+    if (gate.decision === "block") {
+      res.status(403).json({
+        error: "Blocked by the compliance & IP firewall — this asset cannot be published.",
+        decision: "block",
+        reasons: gate.reasons,
+        checks: gate.checks,
+        checkId: gate.checkId,
+      });
+      return;
+    }
+
+    // Flagged assets need an explicit human acknowledgement (approve: true).
+    // Without it, the asset is routed to the firewall review queue.
+    if (gate.decision === "flag" && approve !== true) {
+      res.status(403).json({
+        error: "Flagged by the compliance & IP firewall — routed to human review.",
+        decision: "flag",
+        requiresReview: true,
+        reasons: gate.reasons,
+        checks: gate.checks,
+        checkId: gate.checkId,
+      });
+      return;
+    }
+
+    // A human reviewed a flagged asset and accepted it — record the approval.
+    if (gate.decision === "flag" && approve === true) {
+      await db
+        .update(assetComplianceChecksTable)
+        .set({
+          reviewStatus: "approved",
+          reviewedBy: `user:${req.user!.userId ?? "owner"}`,
+          reviewedAt: new Date(),
+          reviewNote: note ?? "Approved at publish time.",
+        })
+        .where(eq(assetComplianceChecksTable.id, gate.checkId));
+    }
   }
 
   // Human-approval gate: publishing requires explicit sign-off.

@@ -281,6 +281,72 @@ async function ensureCrmTables() {
   }
 }
 
+async function ensureFirewallTables() {
+  // Idempotent DDL for the Compliance & IP firewall (pre-publish safety gate).
+  // Mirrors lib/db/src/schema/compliance.ts. Safe to run on every startup.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "asset_compliance_checks" (
+        "id" serial PRIMARY KEY,
+        "asset_id" integer NOT NULL REFERENCES "assets"("id") ON DELETE CASCADE,
+        "client_id" integer NOT NULL REFERENCES "clients"("id") ON DELETE CASCADE,
+        "target_platform" text,
+        "decision" text NOT NULL DEFAULT 'pass',
+        "review_status" text NOT NULL DEFAULT 'auto_passed',
+        "checks" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "reasons" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "similarity_score" numeric,
+        "matched_asset_id" integer,
+        "matched_asset_title" text,
+        "triggered_by" text,
+        "reviewed_by" text,
+        "reviewed_at" timestamp with time zone,
+        "review_note" text,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS "asset_compliance_checks_asset_id_idx" ON "asset_compliance_checks"("asset_id");
+      CREATE INDEX IF NOT EXISTS "asset_compliance_checks_client_id_idx" ON "asset_compliance_checks"("client_id");
+      CREATE INDEX IF NOT EXISTS "asset_compliance_checks_review_status_idx" ON "asset_compliance_checks"("review_status");
+      CREATE INDEX IF NOT EXISTS "asset_compliance_checks_created_at_idx" ON "asset_compliance_checks"("created_at");
+
+      CREATE TABLE IF NOT EXISTS "asset_license_records" (
+        "id" serial PRIMARY KEY,
+        "asset_id" integer NOT NULL REFERENCES "assets"("id") ON DELETE CASCADE,
+        "client_id" integer NOT NULL REFERENCES "clients"("id") ON DELETE CASCADE,
+        "ai_generated" boolean NOT NULL DEFAULT true,
+        "sources_used" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "usage_rights" text,
+        "disclosure_state" text NOT NULL DEFAULT 'required',
+        "disclosure_text" text,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+        CONSTRAINT "asset_license_records_asset_unique" UNIQUE ("asset_id")
+      );
+      CREATE INDEX IF NOT EXISTS "asset_license_records_client_id_idx" ON "asset_license_records"("client_id");
+
+      CREATE TABLE IF NOT EXISTS "platform_policy_configs" (
+        "id" serial PRIMARY KEY,
+        "client_id" integer NOT NULL REFERENCES "clients"("id") ON DELETE CASCADE,
+        "platform" text NOT NULL,
+        "strictness" text NOT NULL DEFAULT 'standard',
+        "ai_content_allowed" boolean NOT NULL DEFAULT true,
+        "disclosure_required" boolean NOT NULL DEFAULT true,
+        "similarity_threshold" numeric NOT NULL DEFAULT '0.72',
+        "prohibited_keywords" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "notes" text,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+        CONSTRAINT "platform_policy_client_platform_unique" UNIQUE ("client_id", "platform")
+      );
+      CREATE INDEX IF NOT EXISTS "platform_policy_configs_client_id_idx" ON "platform_policy_configs"("client_id");
+    `);
+    console.log("[startup] Firewall (compliance/IP gate) tables ensured");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[startup] ensureFirewallTables failed: ${msg}`);
+  }
+}
+
 async function validateDatabaseTables() {
   try {
     const { rows } = await pool.query(
@@ -433,6 +499,7 @@ const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
   await ensureOllamaTables();
   await ensureCrmTables();
+  await ensureFirewallTables();
   await validateDatabaseTables();
   await ensurePirateMonsterPartnerRegistered();
   await startScheduler();

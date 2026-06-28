@@ -23,6 +23,7 @@ import { registerAssetRoutes } from "./assets";
 import { registerDocumentAssetRoutes } from "./document-assets";
 import { registerMicroToolsRoutes } from "./micro-tools";
 import { registerAssetReviewRoutes } from "./assets-review";
+import { registerFirewallRoutes } from "./firewall";
 
 const router: IRouter = Router();
 
@@ -49,5 +50,6 @@ registerAssetReviewRoutes(router);
 registerAssetRoutes(router);
 registerDocumentAssetRoutes(router);
 registerMicroToolsRoutes(router);
+registerFirewallRoutes(router);
 
 export default router;

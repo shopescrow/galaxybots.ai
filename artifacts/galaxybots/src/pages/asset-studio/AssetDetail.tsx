@@ -43,6 +43,7 @@ import {
   ASSET_TYPE_LABELS,
   type AssetDetail as AssetDetailType,
 } from "@/lib/asset-fetch";
+import { AssetComplianceCard } from "./AssetComplianceCard";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API_PREFIX = `${BASE}/api/assets`;
@@ -744,6 +745,8 @@ export default function AssetDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ListingCopyCard asset={asset} />
+          <AssetComplianceCard assetId={asset.id} />
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
