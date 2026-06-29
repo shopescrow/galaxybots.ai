@@ -21,6 +21,8 @@ import { seedAssetBots } from "./services/platform/seed-asset-bots";
 import { seedFacelessVideoBots } from "./services/platform/seed-faceless-video-bots";
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { initRedis, closeRedis } from "./services/scaling/redis-store";
+import { rebuildRateLimiters } from "./middleware/rate-limit";
 
 const EXPECTED_TABLES = [
   "aeo_recommendation_cache",
@@ -491,12 +493,21 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
     console.error("[shutdown] Error closing database pool:", err);
   }
 
+  try {
+    await closeRedis();
+    console.log("[shutdown] Redis shared store closed");
+  } catch (err) {
+    console.error("[shutdown] Error closing Redis:", err);
+  }
+
   console.log("[shutdown] Graceful shutdown complete");
   process.exit(0);
 }
 
 const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
+  await initRedis();
+  rebuildRateLimiters();
   await ensureOllamaTables();
   await ensureCrmTables();
   await ensureFirewallTables();

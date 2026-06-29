@@ -1,5 +1,5 @@
 import type { LLMProvider, LLMCompletionOptions, LLMCompletion } from "../ports/index.js";
-import { recordSuccess, recordError, isCircuitOpen } from "../../services/ai-safety/circuit-breaker.js";
+import { recordSuccess, recordError, isCircuitOpen, syncCircuitFromRedis } from "../../services/ai-safety/circuit-breaker.js";
 import { logLlmUsage } from "../../services/analytics/llm-usage.js";
 import { ModelTier } from "../../services/ai-safety/model-fallback.js";
 
@@ -103,6 +103,13 @@ export class OllamaAdapter implements LLMProvider {
   }
 
   async complete(options: LLMCompletionOptions): Promise<LLMCompletion> {
+    // Sync circuit state from Redis before proceeding so that a breaker tripped
+    // on any other instance is respected here even if the local cache is stale.
+    await syncCircuitFromRedis(OLLAMA_CIRCUIT_KEY);
+    if (isCircuitOpen(OLLAMA_CIRCUIT_KEY)) {
+      throw new Error(`[OllamaAdapter] Circuit breaker open for ${OLLAMA_CIRCUIT_KEY}`);
+    }
+
     const model = _config.model;
     const callStart = Date.now();
 
@@ -168,7 +175,7 @@ export class OllamaAdapter implements LLMProvider {
       }).catch(() => {});
     }
 
-    recordSuccess(OLLAMA_CIRCUIT_KEY);
+    recordSuccess(OLLAMA_CIRCUIT_KEY).catch((e) => console.warn("[OllamaAdapter] circuit record failed:", (e as Error).message));
 
     return {
       content: data.message.content ?? null,

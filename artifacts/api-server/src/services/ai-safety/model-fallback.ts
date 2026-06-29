@@ -3,7 +3,7 @@ type ChatCompletionMessageParam = OpenAI.ChatCompletionMessageParam;
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { isRateLimitError } from "@workspace/integrations-openai-ai-server";
 import { adaptOpenAIToAnthropic } from "./prompt-adapter";
-import { recordSuccess, recordError, isCircuitOpen } from "./circuit-breaker";
+import { recordSuccess, recordError, isCircuitOpen, isCircuitOpenAsync } from "./circuit-breaker";
 import { logLlmUsage } from "../analytics/llm-usage";
 import { GLM52Adapter, GLM_CIRCUIT_KEY, isGlmModel } from "../../agent-core/adapters/glm52-adapter";
 
@@ -136,9 +136,9 @@ export async function callWithFallback(options: {
 
   if (preferredTier === ModelTier.LOCAL) {
     const { checkOllamaHealth, ollamaAdapter, OLLAMA_CIRCUIT_KEY } = await import("../../agent-core/adapters/ollama-adapter.js");
-    const { isCircuitOpen: cbOpen } = await import("./circuit-breaker.js");
+    const { isCircuitOpenAsync: cbOpenAsync } = await import("./circuit-breaker.js");
 
-    const localAvailable = !cbOpen(OLLAMA_CIRCUIT_KEY) && await checkOllamaHealth();
+    const localAvailable = !(await cbOpenAsync(OLLAMA_CIRCUIT_KEY)) && await checkOllamaHealth();
 
     if (localAvailable) {
       try {
@@ -179,7 +179,7 @@ export async function callWithFallback(options: {
         };
       } catch (err) {
         const { recordError } = await import("./circuit-breaker.js");
-        recordError(OLLAMA_CIRCUIT_KEY);
+        recordError(OLLAMA_CIRCUIT_KEY).catch((e) => console.warn("[ModelFallback] circuit record failed:", (e as Error).message));
         console.warn("[ModelFallback] LOCAL tier (Ollama) failed, falling back to EFFICIENT:", err instanceof Error ? err.message : err);
       }
     } else {
@@ -198,7 +198,7 @@ export async function callWithFallback(options: {
     const model = chain[i];
     const provider = getProvider(model);
 
-    if (isCircuitOpen(provider)) {
+    if (await isCircuitOpenAsync(provider)) {
       console.log(`[ModelFallback] Skipping ${model} (${provider} circuit open)`);
       continue;
     }
@@ -278,7 +278,7 @@ export async function callWithFallback(options: {
       }
 
       const latencyMs = Date.now() - callStart;
-      recordSuccess(provider);
+      recordSuccess(provider).catch((e) => console.warn("[ModelFallback] circuit record failed:", (e as Error).message));
 
       const tier = preferredTier ?? inferTierForModel(model);
 
@@ -306,7 +306,7 @@ export async function callWithFallback(options: {
       };
     } catch (err) {
       lastError = err;
-      recordError(provider);
+      recordError(provider).catch((e) => console.warn("[ModelFallback] circuit record failed:", (e as Error).message));
       console.error(`[ModelFallback] ${model} (${provider}) failed:`, err instanceof Error ? err.message : err);
 
       if (!isRetryableError(err) && i === 0) {

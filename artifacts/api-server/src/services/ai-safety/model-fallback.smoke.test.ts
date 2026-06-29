@@ -117,7 +117,7 @@ describe("callWithFallback — GLM 5.2 lead-model failover", () => {
   it("degrades to GPT when the GLM circuit is open", async () => {
     // Open the GLM circuit: ≥3 calls in window with ≥50% errors.
     const { recordError } = await import("./circuit-breaker");
-    for (let i = 0; i < 5; i++) recordError("glm");
+    for (let i = 0; i < 5; i++) await recordError("glm");
 
     const result = await callWithFallback({ model: "gpt-4o", messages, clientId: 1 });
 
