@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { db, usersTable } from "@workspace/db";
+import { pool, usersTable, withBypassRLS } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 export interface AuthUser {
@@ -29,7 +29,11 @@ async function isUserActive(userId: number): Promise<boolean> {
   if (cached && Date.now() - cached.checkedAt < ACTIVE_CHECK_TTL) {
     return cached.isActive;
   }
-  const [user] = await db.select({ isActive: usersTable.isActive }).from(usersTable).where(eq(usersTable.id, userId));
+  // withBypassRLS: isUserActive runs before any tenant context is established.
+  // FORCE RLS would return 0 rows for the users table without explicit bypass.
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb.select({ isActive: usersTable.isActive }).from(usersTable).where(eq(usersTable.id, userId)),
+  );
   const isActive = user?.isActive ?? false;
   activeStatusCache.set(userId, { isActive, checkedAt: Date.now() });
   return isActive;

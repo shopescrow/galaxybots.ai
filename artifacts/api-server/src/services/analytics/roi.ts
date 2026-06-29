@@ -1,9 +1,11 @@
 import {
   db,
+  pool,
   sessionOutcomesTable,
   clientsTable,
   roiShareableReportsTable,
   proposalsTable,
+  withBypassRLS,
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -305,10 +307,14 @@ export async function createShareableReport(
 }
 
 export async function getShareableReport(shareToken: string) {
-  const [report] = await db
-    .select()
-    .from(roiShareableReportsTable)
-    .where(eq(roiShareableReportsTable.shareToken, shareToken));
+  // withBypassRLS: called from a public route (no ALS tenant context).
+  // FORCE RLS returns 0 rows without bypass; the share-token is the credential.
+  const [report] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(roiShareableReportsTable)
+      .where(eq(roiShareableReportsTable.shareToken, shareToken)),
+  );
 
   return report || null;
 }

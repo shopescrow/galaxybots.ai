@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
 import {
   db,
+  pool,
   proposalsTable,
+  withBypassRLS,
 } from "@workspace/db";
 import type { ProposalSection } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
@@ -216,10 +218,15 @@ router.get("/proposals/shared/:token", async (req, res): Promise<void> => {
   const token = req.params.token;
   if (!token || token.length < 10) { res.status(400).json({ error: "Invalid token" }); return; }
 
-  const [proposal] = await db
-    .select()
-    .from(proposalsTable)
-    .where(eq(proposalsTable.shareToken, token));
+  // withBypassRLS: this is a public route (no req.user). FORCE RLS would
+  // return 0 rows without an explicit bypass. The share-token acts as the
+  // authorization credential; the bypass is narrowly scoped to this query.
+  const [proposal] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(proposalsTable)
+      .where(eq(proposalsTable.shareToken, token)),
+  );
 
   if (!proposal) { res.status(404).json({ error: "Proposal not found" }); return; }
 

@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { db, developerApiKeysTable, developerApiUsageLogTable } from "@workspace/db";
+import { db, pool, developerApiKeysTable, developerApiUsageLogTable, withBypassRLS } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -24,10 +24,14 @@ export async function developerApiKeyAuth(req: Request, res: Response, next: Nex
   const keyHash = hashKey(rawKey);
   const startTime = Date.now();
 
-  const [keyRecord] = await db
-    .select()
-    .from(developerApiKeysTable)
-    .where(eq(developerApiKeysTable.keyHash, keyHash));
+  // withBypassRLS: developer_api_keys lookup happens before any tenant context
+  // is established. FORCE RLS would block the lookup without explicit bypass.
+  const [keyRecord] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(developerApiKeysTable)
+      .where(eq(developerApiKeysTable.keyHash, keyHash)),
+  );
 
   if (!keyRecord) {
     res.status(401).json({ error: "Invalid developer API key" });
@@ -65,25 +69,34 @@ export async function developerApiKeyAuth(req: Request, res: Response, next: Nex
 
   res.on("finish", () => {
     const latencyMs = Date.now() - startTime;
-    db.update(developerApiKeysTable)
-      .set({
-        totalCalls: keyRecord.totalCalls + 1,
-        lastUsedAt: new Date(),
-      })
-      .where(eq(developerApiKeysTable.id, keyRecord.id))
+    // Fire-and-forget auditing: these run after the request handler completes
+    // (outside any ALS tenant context). withBypassRLS provides the explicit
+    // bypass needed since FORCE RLS would otherwise block them.
+    withBypassRLS(pool, (bypassDb) =>
+      bypassDb
+        .update(developerApiKeysTable)
+        .set({
+          totalCalls: keyRecord.totalCalls + 1,
+          lastUsedAt: new Date(),
+        })
+        .where(eq(developerApiKeysTable.id, keyRecord.id)),
+    )
       .then(() => {})
       .catch(() => {});
 
-    db.insert(developerApiUsageLogTable)
-      .values({
-        keyId: keyRecord.id,
-        clientId: keyRecord.clientId,
-        endpoint: req.path,
-        method: req.method,
-        statusCode: res.statusCode,
-        latencyMs,
-        tokensConsumed: 0,
-      })
+    withBypassRLS(pool, (bypassDb) =>
+      bypassDb
+        .insert(developerApiUsageLogTable)
+        .values({
+          keyId: keyRecord.id,
+          clientId: keyRecord.clientId,
+          endpoint: req.path,
+          method: req.method,
+          statusCode: res.statusCode,
+          latencyMs,
+          tokensConsumed: 0,
+        }),
+    )
       .then(() => {})
       .catch(() => {});
   });

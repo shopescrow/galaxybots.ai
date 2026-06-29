@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import {
   db,
+  pool,
   clientsTable,
   botsTable,
   taskSessionsTable,
@@ -10,6 +11,8 @@ import {
   pipelineTriggersTable,
   triggerEventsTable,
   pipelinesTable,
+  withBypassRLS,
+  tenantContextStore,
 } from "@workspace/db";
 import { eq, ilike, and } from "drizzle-orm";
 import crypto from "crypto";
@@ -49,10 +52,14 @@ router.post("/webhooks/lead/:clientId", async (req, res): Promise<void> => {
   }
   const token = authHeader.slice(7);
 
-  const [client] = await db
-    .select()
-    .from(clientsTable)
-    .where(eq(clientsTable.id, clientId));
+  // withBypassRLS: public webhook endpoint; lookup needed to validate the bearer
+  // token before any ALS tenant context can be established.
+  const [client] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(clientsTable)
+      .where(eq(clientsTable.id, clientId)),
+  );
 
   if (!client) {
     res.status(404).json({ error: "Client not found" });
@@ -72,101 +79,105 @@ router.post("/webhooks/lead/:clientId", async (req, res): Promise<void> => {
     return;
   }
 
-  const parsed = LeadPayload.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  // Token validated — we now know the tenant. Establish ALS tenant context so
+  // all downstream db calls (including findOrCreateLeadTrigger, executePipelineRun,
+  // runAgenticLoop) are automatically scoped to this client's rows under FORCE RLS.
+  await tenantContextStore.run({ type: "tenant", clientId }, async () => {
+    const parsed = LeadPayload.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
-  const { name, contact, serviceInterest, message } = parsed.data;
+    const { name, contact, serviceInterest, message } = parsed.data;
 
-  const leadTrigger = await findOrCreateLeadTrigger(clientId);
+    const leadTrigger = await findOrCreateLeadTrigger(clientId);
 
-  if (leadTrigger) {
-    const payloadPreview = JSON.stringify(parsed.data).substring(0, 500);
-    const [event] = await db
-      .insert(triggerEventsTable)
-      .values({
-        triggerId: leadTrigger.triggerId,
-        pipelineId: leadTrigger.pipelineId,
-        status: "pending",
-        payloadPreview,
-      })
+    if (leadTrigger) {
+      const payloadPreview = JSON.stringify(parsed.data).substring(0, 500);
+      const [event] = await db
+        .insert(triggerEventsTable)
+        .values({
+          triggerId: leadTrigger.triggerId,
+          pipelineId: leadTrigger.pipelineId,
+          status: "pending",
+          payloadPreview,
+        })
+        .returning();
+
+      try {
+        const run = await executePipelineRun(leadTrigger.pipelineId, "generic", {
+          ...parsed.data,
+          _trigger: {
+            type: "generic",
+            slug: leadTrigger.slug,
+            eventId: event.id,
+            source: "legacy_lead_webhook",
+          },
+        });
+
+        await db
+          .update(triggerEventsTable)
+          .set({ status: "success", runId: run.id })
+          .where(eq(triggerEventsTable.id, event.id));
+
+        res.status(201).json({
+          runId: run.id,
+          eventId: event.id,
+          message: "Lead ingested via unified trigger system",
+        });
+        return;
+      } catch (err) {
+        await db
+          .update(triggerEventsTable)
+          .set({
+            status: "failed",
+            errorMessage: err instanceof Error ? err.message : "Pipeline execution failed",
+          })
+          .where(eq(triggerEventsTable.id, event.id));
+      }
+    }
+
+    const objective = `New lead inquiry from ${name} (${contact}).${serviceInterest ? ` Service interest: ${serviceInterest}.` : ""}${message ? ` Message: ${message}` : ""} — Qualify this lead, assess their needs, and prepare a follow-up plan for ${client.companyName}.`;
+
+    const [session] = await db
+      .insert(taskSessionsTable)
+      .values({ objective, clientId })
       .returning();
 
-    try {
-      const run = await executePipelineRun(leadTrigger.pipelineId, "generic", {
-        ...parsed.data,
-        _trigger: {
-          type: "generic",
-          slug: leadTrigger.slug,
-          eventId: event.id,
-          source: "legacy_lead_webhook",
-        },
-      });
+    const salesBots = await db
+      .select()
+      .from(botsTable)
+      .where(ilike(botsTable.department, "%sales%"));
 
-      await db
-        .update(triggerEventsTable)
-        .set({ status: "success", runId: run.id })
-        .where(eq(triggerEventsTable.id, event.id));
-
-      res.status(201).json({
-        runId: run.id,
-        eventId: event.id,
-        message: "Lead ingested via unified trigger system",
-      });
-      return;
-    } catch (err) {
-      await db
-        .update(triggerEventsTable)
-        .set({
-          status: "failed",
-          errorMessage: err instanceof Error ? err.message : "Pipeline execution failed",
-        })
-        .where(eq(triggerEventsTable.id, event.id));
+    let assignedBots = salesBots;
+    if (assignedBots.length === 0) {
+      const allBots = await db.select().from(botsTable).limit(3);
+      assignedBots = allBots;
     }
-  }
 
-  const objective = `New lead inquiry from ${name} (${contact}).${serviceInterest ? ` Service interest: ${serviceInterest}.` : ""}${message ? ` Message: ${message}` : ""} — Qualify this lead, assess their needs, and prepare a follow-up plan for ${client.companyName}.`;
+    if (assignedBots.length > 0) {
+      await db.insert(taskSessionBotsTable).values(
+        assignedBots.map((bot) => ({
+          sessionId: session.id,
+          botId: bot.id,
+        })),
+      );
+    }
 
-  const [session] = await db
-    .insert(taskSessionsTable)
-    .values({ objective, clientId })
-    .returning();
+    res.status(201).json({
+      sessionId: session.id,
+      objective,
+      assignedBots: assignedBots.map((b) => ({ id: b.id, name: b.name, title: b.title })),
+      message: "Lead ingested and bot mission triggered",
+    });
 
-  const salesBots = await db
-    .select()
-    .from(botsTable)
-    .where(ilike(botsTable.department, "%sales%"));
+    const clientContext = await buildClientContext(clientId);
 
-  let assignedBots = salesBots;
-  if (assignedBots.length === 0) {
-    const allBots = await db.select().from(botsTable).limit(3);
-    assignedBots = allBots;
-  }
+    const teamRoster = assignedBots.map((b) => `${b.name} (${b.title})`).join(", ");
 
-  if (assignedBots.length > 0) {
-    await db.insert(taskSessionBotsTable).values(
-      assignedBots.map((bot) => ({
-        sessionId: session.id,
-        botId: bot.id,
-      })),
-    );
-  }
-
-  res.status(201).json({
-    sessionId: session.id,
-    objective,
-    assignedBots: assignedBots.map((b) => ({ id: b.id, name: b.name, title: b.title })),
-    message: "Lead ingested and bot mission triggered",
-  });
-
-  const clientContext = await buildClientContext(clientId);
-
-  const teamRoster = assignedBots.map((b) => `${b.name} (${b.title})`).join(", ");
-
-  for (const bot of assignedBots) {
-    const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
+    for (const bot of assignedBots) {
+      const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 ${clientContext}
@@ -181,53 +192,56 @@ You are working on a lead qualification mission. A new inquiry has come in via t
 
 Keep responses focused and actionable (3-5 sentences per point).`;
 
-    try {
-      const { finalContent } = await runAgenticLoop({
-        model: "gpt-5-mini", // high-volume lead ingestion, cost-efficient
-        maxIterations: 5,
-        maxTokens: 500,
-        systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: `New lead from ${client.companyName}'s website:\nName: ${name}\nContact: ${contact}${serviceInterest ? `\nService Interest: ${serviceInterest}` : ""}${message ? `\nMessage: ${message}` : ""}\n\nPlease qualify this lead and prepare a follow-up plan.`,
+      try {
+        const { finalContent } = await runAgenticLoop({
+          model: "gpt-5-mini",
+          maxIterations: 5,
+          maxTokens: 500,
+          systemPrompt,
+          messages: [
+            {
+              role: "user",
+              content: `New lead from ${client.companyName}'s website:\nName: ${name}\nContact: ${contact}${serviceInterest ? `\nService Interest: ${serviceInterest}` : ""}${message ? `\nMessage: ${message}` : ""}\n\nPlease qualify this lead and prepare a follow-up plan.`,
+            },
+          ],
+          context: {
+            sessionId: session.id,
+            botId: bot.id,
+            botName: bot.name,
+            clientId,
+            depth: webhookDepthHeader ? parseInt(String(webhookDepthHeader), 10) : 0,
           },
-        ],
-        context: {
+        });
+
+        const content = finalContent || "Lead acknowledged. Preparing qualification analysis.";
+
+        await db.insert(taskSessionMessagesTable).values({
           sessionId: session.id,
           botId: bot.id,
           botName: bot.name,
-          clientId,
-          depth: webhookDepthHeader ? parseInt(String(webhookDepthHeader), 10) : 0,
-        },
-      });
-
-      const content = finalContent || "Lead acknowledged. Preparing qualification analysis.";
-
-      await db.insert(taskSessionMessagesTable).values({
-        sessionId: session.id,
-        botId: bot.id,
-        botName: bot.name,
-        botTitle: bot.title,
-        role: "bot",
-        content,
-        messageType: "text",
-      });
-    } catch (err) {
-      console.error(`Webhook bot execution error for bot ${bot.name}:`, err);
-      await db.insert(taskSessionMessagesTable).values({
-        sessionId: session.id,
-        botId: bot.id,
-        botName: bot.name,
-        botTitle: bot.title,
-        role: "bot",
-        content: "Lead received. Manual follow-up required due to processing error.",
-        messageType: "text",
-      });
+          botTitle: bot.title,
+          role: "bot",
+          content,
+          messageType: "text",
+        });
+      } catch (err) {
+        console.error(`Webhook bot execution error for bot ${bot.name}:`, err);
+        await db.insert(taskSessionMessagesTable).values({
+          sessionId: session.id,
+          botId: bot.id,
+          botName: bot.name,
+          botTitle: bot.title,
+          role: "bot",
+          content: "Lead received. Manual follow-up required due to processing error.",
+          messageType: "text",
+        });
+      }
     }
-  }
+  });
 });
 
+// findOrCreateLeadTrigger uses global db. When called from inside tenantContextStore.run(),
+// the ALS context propagates automatically so all queries are tenant-scoped.
 async function findOrCreateLeadTrigger(clientId: number): Promise<{ triggerId: number; pipelineId: number; slug: string } | null> {
   try {
     const clientPipelines = await db

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   db,
+  pool,
   pipelinesTable,
   pipelineStepsTable,
   pipelineRunsTable,
@@ -9,6 +10,8 @@ import {
   triggerEventsTable,
   botsTable,
   clientsTable,
+  withBypassRLS,
+  tenantContextStore,
 } from "@workspace/db";
 import { eq, desc, asc, and } from "drizzle-orm";
 import { z } from "zod";
@@ -592,10 +595,14 @@ router.post("/webhooks/pipeline/:pipelineId", async (req, res): Promise<void> =>
     return;
   }
 
-  const [pipeline] = await db
-    .select()
-    .from(pipelinesTable)
-    .where(eq(pipelinesTable.id, pipelineId));
+  // withBypassRLS: public webhook endpoint (no auth user). The pipeline
+  // lookup must succeed before we can validate the bearer token in the body.
+  const [pipeline] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(pipelinesTable)
+      .where(eq(pipelinesTable.id, pipelineId)),
+  );
 
   if (!pipeline) {
     res.status(404).json({ error: "Pipeline not found" });
@@ -619,29 +626,34 @@ router.post("/webhooks/pipeline/:pipelineId", async (req, res): Promise<void> =>
   }
   const token = authHeader.slice(7);
 
-  const [client] = await db
-    .select()
-    .from(clientsTable)
-    .where(eq(clientsTable.id, pipeline.clientId));
+  // Validate webhook token + run pipeline inside bypass context.
+  // clientsTable has RLS on `id`; since this is a system-level webhook
+  // (no authenticated user), use withBypassRLS for all remaining DB access.
+  await withBypassRLS(pool, async (bypassDb) => {
+    const [client] = await bypassDb
+      .select()
+      .from(clientsTable)
+      .where(eq(clientsTable.id, pipeline.clientId));
 
-  if (!client || !client.webhookSecret) {
-    res.status(403).json({ error: "Webhook not configured" });
-    return;
-  }
+    if (!client || !client.webhookSecret) {
+      res.status(403).json({ error: "Webhook not configured" });
+      return;
+    }
 
-  const tokenBuf = Buffer.from(token);
-  const secretBuf = Buffer.from(client.webhookSecret);
-  if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
-    res.status(403).json({ error: "Invalid webhook token" });
-    return;
-  }
+    const tokenBuf = Buffer.from(token);
+    const secretBuf = Buffer.from(client.webhookSecret);
+    if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
+      res.status(403).json({ error: "Invalid webhook token" });
+      return;
+    }
 
-  try {
-    const run = await executePipelineRun(pipelineId, "webhook", req.body || {});
-    res.status(201).json({ runId: run.id, status: run.status, message: "Pipeline run started" });
-  } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : "Failed to start pipeline run" });
-  }
+    try {
+      const run = await executePipelineRun(pipelineId, "webhook", req.body || {});
+      res.status(201).json({ runId: run.id, status: run.status, message: "Pipeline run started" });
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Failed to start pipeline run" });
+    }
+  });
 });
 
 export default router;

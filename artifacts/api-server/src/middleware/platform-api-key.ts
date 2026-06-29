@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { db, platformApiKeysTable } from "@workspace/db";
+import { db, pool, platformApiKeysTable, withBypassRLS } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -15,18 +15,26 @@ export async function platformApiKeyAuth(req: Request, res: Response, next: Next
   }
 
   const keyHash = hashKey(platformKey);
-  const [keyRecord] = await db
-    .select()
-    .from(platformApiKeysTable)
-    .where(eq(platformApiKeysTable.keyHash, keyHash));
+
+  // withBypassRLS: platform_api_keys is a system table accessed before any
+  // tenant context is established. FORCE RLS would block the lookup without
+  // an explicit bypass here.
+  const [keyRecord] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(platformApiKeysTable)
+      .where(eq(platformApiKeysTable.keyHash, keyHash)),
+  );
 
   if (!keyRecord) {
     // Check previous key hash for rotation grace period
-    const [prevKeyRecord] = await db
-      .select()
-      .from(platformApiKeysTable)
-      .where(eq(platformApiKeysTable.previousKeyHash, keyHash));
-    
+    const [prevKeyRecord] = await withBypassRLS(pool, (bypassDb) =>
+      bypassDb
+        .select()
+        .from(platformApiKeysTable)
+        .where(eq(platformApiKeysTable.previousKeyHash, keyHash)),
+    );
+
     if (!prevKeyRecord) {
       res.status(401).json({ error: "Invalid platform API key" });
       return;
@@ -64,10 +72,13 @@ async function validateAndAuthorize(keyRecord: any, req: Request, res: Response,
     return;
   }
 
-  // Increment request count
-  await db.update(platformApiKeysTable)
-    .set({ requestCount: sql`${platformApiKeysTable.requestCount} + 1` })
-    .where(eq(platformApiKeysTable.id, keyRecord.id));
+  // Increment request count — system table write, needs bypass.
+  await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .update(platformApiKeysTable)
+      .set({ requestCount: sql`${platformApiKeysTable.requestCount} + 1` })
+      .where(eq(platformApiKeysTable.id, keyRecord.id)),
+  );
 
   req.user = {
     userId: 0,

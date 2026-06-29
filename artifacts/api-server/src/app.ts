@@ -11,6 +11,7 @@ import { analyticsApiKeyAuth } from "./middleware/analytics-api-key";
 import { instrumentHealthSignals } from "./middleware/health-signals";
 import { developerApiKeyAuth } from "./middleware/developer-api-key";
 import { platformApiKeyAuth } from "./middleware/platform-api-key";
+import { attachTenantDbContext } from "./middleware/tenant";
 
 let shuttingDown = false;
 
@@ -232,6 +233,7 @@ function createAuthMiddleware(prefix: string) {
 const SUNSET_DATE = "2026-10-05";
 
 app.use("/api/v1", createAuthMiddleware("/api/v1"));
+app.use("/api/v1", attachTenantDbContext());
 app.use("/api/v1", instrumentHealthSignals);
 app.use("/api/v1", router);
 
@@ -246,6 +248,7 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use("/api", createAuthMiddleware("/api"));
+app.use("/api", attachTenantDbContext());
 app.use("/api", instrumentHealthSignals);
 app.use("/api", router);
 

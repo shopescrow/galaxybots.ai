@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, clientsTable, ssoConfigsTable } from "@workspace/db";
+import { pool, usersTable, clientsTable, ssoConfigsTable, withBypassRLS } from "@workspace/db";
 import { eq, or, ilike, and } from "drizzle-orm";
 import { signToken, authenticate } from "../../middleware/auth";
 import { recordLoginSignal } from "../../middleware/health-signals";
@@ -38,6 +38,10 @@ const ResetPasswordBody = z.object({
   newPassword: z.string().min(8, "New password must be at least 8 characters"),
 });
 
+// ── /auth/register ────────────────────────────────────────────────────────────
+// Public route — no ALS tenant context. All DB calls use withBypassRLS so that
+// FORCE RLS does not deny the INSERT into clients/users or the duplicate-check
+// SELECT. The bypass is narrowly scoped to each individual query here.
 router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
@@ -47,10 +51,12 @@ router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => 
 
   const { email, password, companyName, contactName, displayName } = parsed.data;
 
-  const [existingUser] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()));
+  const [existingUser] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase())),
+  );
 
   if (existingUser) {
     res.status(409).json({ error: "Email already registered" });
@@ -59,25 +65,29 @@ router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => 
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const [client] = await db
-    .insert(clientsTable)
-    .values({
-      companyName,
-      contactName,
-      contactEmail: email.toLowerCase(),
-    })
-    .returning();
+  const [client] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .insert(clientsTable)
+      .values({
+        companyName,
+        contactName,
+        contactEmail: email.toLowerCase(),
+      })
+      .returning(),
+  );
 
-  const [user] = await db
-    .insert(usersTable)
-    .values({
-      email: email.toLowerCase(),
-      passwordHash,
-      clientId: client.id,
-      role: "owner",
-      displayName: displayName || contactName,
-    })
-    .returning();
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .insert(usersTable)
+      .values({
+        email: email.toLowerCase(),
+        passwordHash,
+        clientId: client.id,
+        role: "owner",
+        displayName: displayName || contactName,
+      })
+      .returning(),
+  );
 
   const token = signToken({
     userId: user.id,
@@ -120,6 +130,7 @@ router.post("/auth/register", authRateLimit, async (req, res): Promise<void> => 
     .catch((e) => console.error("[auth] Failed to seed workflows or trigger new_client_created:", e));
 });
 
+// ── /auth/login ───────────────────────────────────────────────────────────────
 router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
@@ -132,14 +143,16 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
   const identifier = String(email).trim();
   const isEmail = identifier.includes("@");
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(
-      isEmail
-        ? eq(usersTable.email, identifier.toLowerCase())
-        : ilike(usersTable.displayName, identifier)
-    );
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(usersTable)
+      .where(
+        isEmail
+          ? eq(usersTable.email, identifier.toLowerCase())
+          : ilike(usersTable.displayName, identifier),
+      ),
+  );
 
   if (!user) {
     res.status(401).json({ error: "Invalid email, username, or password" });
@@ -151,16 +164,18 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
-  const [ssoConfig] = await db
-    .select()
-    .from(ssoConfigsTable)
-    .where(
-      and(
-        eq(ssoConfigsTable.clientId, user.clientId),
-        eq(ssoConfigsTable.enabled, true),
-        eq(ssoConfigsTable.forceSso, true),
+  const [ssoConfig] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(ssoConfigsTable)
+      .where(
+        and(
+          eq(ssoConfigsTable.clientId, user.clientId),
+          eq(ssoConfigsTable.enabled, true),
+          eq(ssoConfigsTable.forceSso, true),
+        ),
       ),
-    );
+  );
   if (ssoConfig) {
     res.status(403).json({ error: "Password login is disabled for your organization. Please use SSO." });
     return;
@@ -172,15 +187,19 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
-  await db
-    .update(usersTable)
-    .set({ lastLoginAt: new Date() })
-    .where(eq(usersTable.id, user.id));
+  await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .update(usersTable)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(usersTable.id, user.id)),
+  );
 
-  const [client] = await db
-    .select()
-    .from(clientsTable)
-    .where(eq(clientsTable.id, user.clientId));
+  const [client] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(clientsTable)
+      .where(eq(clientsTable.id, user.clientId)),
+  );
 
   const token = signToken({
     userId: user.id,
@@ -214,6 +233,7 @@ router.post("/auth/login", authRateLimit, async (req, res): Promise<void> => {
   });
 });
 
+// ── /auth/forgot-username ─────────────────────────────────────────────────────
 router.post("/auth/forgot-username", authRateLimit, async (req, res): Promise<void> => {
   const parsed = ForgotUsernameBody.safeParse(req.body);
   if (!parsed.success) {
@@ -223,10 +243,12 @@ router.post("/auth/forgot-username", authRateLimit, async (req, res): Promise<vo
 
   const { companyName, contactName } = parsed.data;
 
-  const clients = await db
-    .select()
-    .from(clientsTable)
-    .where(eq(clientsTable.companyName, companyName));
+  const clients = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(clientsTable)
+      .where(eq(clientsTable.companyName, companyName)),
+  );
 
   const matchedClient = clients.find(
     (c) => c.contactName.toLowerCase() === contactName.toLowerCase(),
@@ -237,10 +259,12 @@ router.post("/auth/forgot-username", authRateLimit, async (req, res): Promise<vo
     return;
   }
 
-  const [user] = await db
-    .select({ email: usersTable.email })
-    .from(usersTable)
-    .where(eq(usersTable.clientId, matchedClient.id));
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({ email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.clientId, matchedClient.id)),
+  );
 
   if (!user) {
     res.json({ message: "If a matching account exists, the associated email will be shown.", email: null });
@@ -254,6 +278,7 @@ router.post("/auth/forgot-username", authRateLimit, async (req, res): Promise<vo
   res.json({ message: "Account found.", email: masked });
 });
 
+// ── /auth/request-password-reset ──────────────────────────────────────────────
 router.post("/auth/request-password-reset", authRateLimit, async (req, res): Promise<void> => {
   const parsed = RequestPasswordResetBody.safeParse(req.body);
   if (!parsed.success) {
@@ -263,10 +288,12 @@ router.post("/auth/request-password-reset", authRateLimit, async (req, res): Pro
 
   const { email } = parsed.data;
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()));
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase())),
+  );
 
   if (user) {
     const secret = process.env["JWT_SECRET"];
@@ -284,6 +311,7 @@ router.post("/auth/request-password-reset", authRateLimit, async (req, res): Pro
   res.json({ message: "If an account with that email exists, a password reset link has been sent." });
 });
 
+// ── /auth/reset-password ──────────────────────────────────────────────────────
 router.post("/auth/reset-password", authRateLimit, async (req, res): Promise<void> => {
   const parsed = ResetPasswordBody.safeParse(req.body);
   if (!parsed.success) {
@@ -314,14 +342,17 @@ router.post("/auth/reset-password", authRateLimit, async (req, res): Promise<voi
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  await db
-    .update(usersTable)
-    .set({ passwordHash })
-    .where(eq(usersTable.id, decoded.userId));
+  await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .update(usersTable)
+      .set({ passwordHash })
+      .where(eq(usersTable.id, decoded.userId)),
+  );
 
   res.json({ message: "Password has been reset successfully. You can now log in.", success: true });
 });
 
+// ── /auth/logout (authenticated — ALS context set by attachTenantDbContext) ───
 router.post("/auth/logout", authenticate, async (req, res): Promise<void> => {
   const email = req.user!.email;
 
@@ -330,22 +361,26 @@ router.post("/auth/logout", authenticate, async (req, res): Promise<void> => {
   revokeUserSessions(email);
   res.clearCookie("token", { path: "/" });
 
-  const [user] = await db
-    .select({ ssoProvider: usersTable.ssoProvider, clientId: usersTable.clientId })
-    .from(usersTable)
-    .where(eq(usersTable.email, email));
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({ ssoProvider: usersTable.ssoProvider, clientId: usersTable.clientId })
+      .from(usersTable)
+      .where(eq(usersTable.email, email)),
+  );
 
   let idpLogoutUrl: string | null = null;
   if (user?.ssoProvider === "saml") {
-    const [config] = await db
-      .select()
-      .from(ssoConfigsTable)
-      .where(
-        and(
-          eq(ssoConfigsTable.clientId, user.clientId),
-          eq(ssoConfigsTable.providerType, "saml"),
+    const [config] = await withBypassRLS(pool, (bypassDb) =>
+      bypassDb
+        .select()
+        .from(ssoConfigsTable)
+        .where(
+          and(
+            eq(ssoConfigsTable.clientId, user.clientId),
+            eq(ssoConfigsTable.providerType, "saml"),
+          ),
         ),
-      );
+    );
     if (config?.idpSsoUrl) {
       const sloUrl = config.idpSsoUrl.replace(/\/sso\//, "/slo/").replace(/SSO/, "SLO");
       if (sloUrl !== config.idpSsoUrl) {
@@ -357,30 +392,35 @@ router.post("/auth/logout", authenticate, async (req, res): Promise<void> => {
   res.json({ success: true, idpLogoutUrl });
 });
 
+// ── /auth/me (authenticated — ALS context set by attachTenantDbContext) ───────
 router.get("/auth/me", authenticate, async (req, res): Promise<void> => {
-  const [user] = await db
-    .select({
-      id: usersTable.id,
-      email: usersTable.email,
-      clientId: usersTable.clientId,
-      role: usersTable.role,
-      displayName: usersTable.displayName,
-      bypassPayment: usersTable.bypassPayment,
-      onboarding: usersTable.onboarding,
-      createdAt: usersTable.createdAt,
-    })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.user!.userId));
+  const [user] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        clientId: usersTable.clientId,
+        role: usersTable.role,
+        displayName: usersTable.displayName,
+        bypassPayment: usersTable.bypassPayment,
+        onboarding: usersTable.onboarding,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, req.user!.userId)),
+  );
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const [client] = await db
-    .select({ plan: clientsTable.plan })
-    .from(clientsTable)
-    .where(eq(clientsTable.id, user.clientId));
+  const [client] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({ plan: clientsTable.plan })
+      .from(clientsTable)
+      .where(eq(clientsTable.id, user.clientId)),
+  );
 
   res.json({ ...user, plan: client?.plan ?? "trial" });
 });

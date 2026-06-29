@@ -1,16 +1,12 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-import * as schema from "./schema";
+import * as schema from "./schema/index.js";
+import { pool } from "./pool.js";
 
-const { Pool } = pg;
+export { pool } from "./pool.js";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
-}
-
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 export const db = drizzle(pool, { schema });
 
-export * from "./schema";
+export * from "./schema/index.js";
+export { tenantContextStore } from "./tenant-context.js";
+export { createRlsHelpers, withTenantContext, withBypassRLS } from "./rls-context.js";
+export type { TenantDb } from "./rls-context.js";
