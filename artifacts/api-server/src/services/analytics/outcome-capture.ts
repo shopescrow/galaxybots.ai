@@ -223,10 +223,11 @@ export async function captureSessionOutcome(
         recordExperimentResult(clientId, String(sessionId), finalQuality, storedVariant ?? undefined).catch(() => {});
       }
 
-      // ── Model-selection reward signal (task #231) ──────────────────────
+      // ── Model-selection reward signal (task #231 / task #259) ─────────
       // Resolve the reward for every model-selection telemetry row attached to
-      // this session: quality (finalQuality), the session's actual LLM cost,
-      // and total latency, blended by the owner's quality-vs-cost weight.
+      // this session. Quality is the BLEND of self-reported quality and the
+      // independent judge score (scoreWithJudge), making the reward resistant
+      // to self-reporting gaming without blocking the path on judge failures.
       try {
         const [costRow] = await db
           .select({
@@ -236,6 +237,30 @@ export async function captureSessionOutcome(
           .from(llmUsageLogTable)
           .where(eq(llmUsageLogTable.sessionId, sessionId));
         const settings = await getModelOptimizerSettings(clientId ?? null);
+
+        // Attempt independent judge scoring (non-blocking — falls back to null on failure).
+        // responseForJudge is the session's bot output that the judge will score.
+        // Primary: contextForSummary (last 5 bot messages, assembled above).
+        // Fallback: last message of any role, so judge scoring fires even when the
+        // role column differs from "bot" (e.g. migrated sessions).
+        let judgeQualityScore: number | null = null;
+        let judgeModel: string | null = null;
+        try {
+          const { scoreWithJudge, JUDGE_MODEL } = await import("../ai-safety/reward-judge.js");
+          const responseForJudge: string = (
+            contextForSummary.trim() ||
+            messages[messages.length - 1]?.content ||
+            ""
+          );
+          if (responseForJudge) {
+            const judgeResult = await scoreWithJudge(objective, responseForJudge, "task_session");
+            judgeQualityScore = judgeResult.score;
+            judgeModel = JUDGE_MODEL;
+          }
+        } catch (judgeErr) {
+          console.warn("[outcome-capture] judge scoring skipped (non-fatal):", judgeErr instanceof Error ? judgeErr.message : judgeErr);
+        }
+
         await recordSessionModelOutcomes({
           sessionId,
           quality: finalQuality,
@@ -244,6 +269,8 @@ export async function captureSessionOutcome(
           taskDifficulty: taskDifficultyScore,
           promptQuality: promptQualityScore,
           qualityWeight: settings.qualityWeight,
+          judgeQualityScore,
+          judgeModel,
         });
       } catch (modelErr) {
         console.warn("[outcome-capture] model reward wiring failed (non-fatal):", modelErr instanceof Error ? modelErr.message : modelErr);

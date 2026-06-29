@@ -729,7 +729,36 @@ router.get("/analytics/model-optimizer", async (req, res): Promise<void> => {
         modelSelectionTelemetryTable.chosenModel,
       );
 
-    // Learned reputation table (the bandit's current beliefs).
+    // Reward component breakdown: quality, judge quality, cost, latency averages.
+    const rewardComponents = await db
+      .select({
+        taskCategory: modelSelectionTelemetryTable.taskCategory,
+        model: modelSelectionTelemetryTable.model,
+        difficultyBucket: modelSelectionTelemetryTable.difficultyBucket,
+        avgQuality: sql<number>`avg(${modelSelectionTelemetryTable.qualityScore})`,
+        avgJudgeQuality: sql<number>`avg(${modelSelectionTelemetryTable.judgeQualityScore})`,
+        avgCost: sql<number>`avg(${modelSelectionTelemetryTable.costUsd})`,
+        avgLatency: sql<number>`avg(${modelSelectionTelemetryTable.latencyMs})`,
+        avgReward: sql<number>`avg(${modelSelectionTelemetryTable.rewardScore})`,
+        judgedCount: sql<number>`count(${modelSelectionTelemetryTable.judgeQualityScore})`,
+        totalCount: sql<number>`count(*)`,
+      })
+      .from(modelSelectionTelemetryTable)
+      .where(
+        and(
+          eq(modelSelectionTelemetryTable.clientId, clientId),
+          eq(modelSelectionTelemetryTable.shadow, false),
+          isNotNull(modelSelectionTelemetryTable.rewardScore),
+          gte(modelSelectionTelemetryTable.createdAt, since),
+        ),
+      )
+      .groupBy(
+        modelSelectionTelemetryTable.taskCategory,
+        modelSelectionTelemetryTable.model,
+        modelSelectionTelemetryTable.difficultyBucket,
+      );
+
+    // Learned reputation table with skew/outlier flags and judge quality.
     const reputation = await db
       .select({
         taskCategory: modelReputationTable.taskCategory,
@@ -737,11 +766,32 @@ router.get("/analytics/model-optimizer", async (req, res): Promise<void> => {
         difficultyBucket: modelReputationTable.difficultyBucket,
         avgReward: modelReputationTable.avgReward,
         avgQuality: modelReputationTable.avgQuality,
+        avgJudgeQuality: modelReputationTable.avgJudgeQuality,
         avgCostUsd: modelReputationTable.avgCostUsd,
         avgLatencyMs: modelReputationTable.avgLatencyMs,
         sampleCount: modelReputationTable.sampleCount,
+        tenantCount: modelReputationTable.tenantCount,
+        maxTenantFraction: modelReputationTable.maxTenantFraction,
+        skewFlag: modelReputationTable.skewFlag,
+        promoted: modelReputationTable.promoted,
       })
       .from(modelReputationTable);
+
+    // Golden eval results (latest per model).
+    let goldenEvalResults: Array<{
+      model: string;
+      meanJudgeScore: number;
+      promptCount: number;
+      regressionFlag: boolean;
+      runDate: Date;
+    }> = [];
+    try {
+      const { getLatestGoldenEvalResults } = await import("../../services/ai-safety/golden-eval.js");
+      goldenEvalResults = await getLatestGoldenEvalResults();
+    } catch { }
+
+    // Skew summary: segments with dominant tenants.
+    const skewedSegments = reputation.filter((r) => r.skewFlag);
 
     res.json({
       windowDays,
@@ -770,10 +820,43 @@ router.get("/analytics/model-optimizer", async (req, res): Promise<void> => {
         difficultyBucket: r.difficultyBucket,
         avgReward: r.avgReward != null ? Number(r.avgReward) : null,
         avgQuality: r.avgQuality != null ? Number(r.avgQuality) : null,
+        avgJudgeQuality: r.avgJudgeQuality != null ? Number(r.avgJudgeQuality) : null,
         avgCostUsd: r.avgCostUsd != null ? Number(r.avgCostUsd) : null,
         avgLatencyMs: r.avgLatencyMs != null ? Number(r.avgLatencyMs) : null,
         sampleCount: Number(r.sampleCount),
+        tenantCount: Number(r.tenantCount),
+        maxTenantFraction: r.maxTenantFraction != null ? Number(r.maxTenantFraction) : null,
+        skewFlag: Boolean(r.skewFlag),
+        promoted: Boolean(r.promoted),
       })),
+      rewardComponents: rewardComponents.map((r) => ({
+        taskCategory: r.taskCategory,
+        model: r.model,
+        difficultyBucket: r.difficultyBucket,
+        avgQuality: r.avgQuality != null ? Number(r.avgQuality) : null,
+        avgJudgeQuality: r.avgJudgeQuality != null ? Number(r.avgJudgeQuality) : null,
+        avgCostUsd: r.avgCost != null ? Number(r.avgCost) : null,
+        avgLatencyMs: r.avgLatency != null ? Number(r.avgLatency) : null,
+        avgReward: r.avgReward != null ? Number(r.avgReward) : null,
+        judgedFraction: Number(r.totalCount) > 0 ? Number(r.judgedCount) / Number(r.totalCount) : 0,
+      })),
+      goldenEval: goldenEvalResults.map((r) => ({
+        model: r.model,
+        meanJudgeScore: r.meanJudgeScore,
+        promptCount: r.promptCount,
+        regressionFlag: r.regressionFlag,
+        runDate: r.runDate,
+      })),
+      skewSummary: {
+        skewedSegmentCount: skewedSegments.length,
+        skewedSegments: skewedSegments.map((r) => ({
+          model: r.model,
+          taskCategory: r.taskCategory,
+          difficultyBucket: r.difficultyBucket,
+          maxTenantFraction: r.maxTenantFraction != null ? Number(r.maxTenantFraction) : null,
+          tenantCount: Number(r.tenantCount),
+        })),
+      },
     });
   } catch (err) {
     console.error("Model optimizer analytics error:", err);

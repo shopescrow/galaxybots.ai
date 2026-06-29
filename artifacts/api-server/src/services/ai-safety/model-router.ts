@@ -10,6 +10,7 @@ import { ModelTier } from "./model-fallback";
 import { estimateCost } from "../analytics/llm-usage";
 import { checkCostCapAlerts } from "../analytics/cost-caps";
 import { writeAuditEntry } from "../audit/audit-ledger";
+import { JUDGE_MODEL } from "./reward-judge";
 
 /**
  * Model-selection bandit (task #231).
@@ -48,6 +49,21 @@ export const FRONTIER_CANDIDATE_MODELS = ["gpt-5.4", "glm-5.2-ultra", "gpt-4o", 
 export const EFFICIENT_CANDIDATE_MODELS = ["gpt-5-mini", "glm-5.2-flash"];
 /** Cheapest model used as a cost-relief valve when a client nears its cap. */
 export const COST_RELIEF_MODEL = "glm-5.2-flash";
+
+// ── Judge-independence invariant (enforced at module load) ───────────────────
+// The reward judge must score candidate models from the outside — if it were
+// itself a candidate, it could inflate its own scores. This assertion fails
+// hard at startup so any accidental addition of the judge to a candidate pool
+// is caught immediately rather than silently degrading reward integrity.
+const ALL_CANDIDATE_MODELS = [...FRONTIER_CANDIDATE_MODELS, ...EFFICIENT_CANDIDATE_MODELS];
+if (ALL_CANDIDATE_MODELS.includes(JUDGE_MODEL)) {
+  throw new Error(
+    `[model-router] Integrity violation: JUDGE_MODEL "${JUDGE_MODEL}" is in the ` +
+    `candidate model pool. The judge must be independent of all candidates. ` +
+    `Remove "${JUDGE_MODEL}" from FRONTIER_CANDIDATE_MODELS or ` +
+    `EFFICIENT_CANDIDATE_MODELS, or update JUDGE_MODEL in reward-judge.ts.`,
+  );
+}
 
 // ── Owner-control setting keys (stored in coordinator_client_settings) ──────
 export const MODEL_OPTIMIZER_SETTING_KEYS = {
@@ -183,56 +199,130 @@ interface ModelPrior {
 }
 
 /**
- * Compute per-model priors for a (category, candidate-set) from live telemetry.
- * Unseen candidates get the optimistic prior (avgReward 0.5, runCount 0 →
- * UCB1=∞) so a newly added model like GLM is actually tried rather than left
- * dormant. Reads only NON-shadow, reward-resolved rows.
+ * Return Winsorized per-(category, model, difficulty) priors for live selection.
+ *
+ * Source of truth is the `model_reputation` table, which is recomputed
+ * periodically by `recomputeModelReputations()` using the iterative
+ * simplex-projection tenant-weighting algorithm. This guarantees that no
+ * single tenant's heavy usage can dominate the shared routing prior — the
+ * skew protection actually applies to the values the bandit uses, not just
+ * to an observability report.
+ *
+ * Fall-through: if model_reputation has no row for a (category, model, bucket)
+ * tuple (e.g. a brand-new model or a fresh deployment), the function falls back
+ * to a raw-telemetry aggregate for that model only, so exploration still works
+ * for unseen combinations without losing skew protection on seen ones.
  */
 export async function getModelReputationPriors(
   taskCategory: string,
   candidateModels: string[],
   difficultyBucket?: DifficultyBucket,
 ): Promise<ModelPrior[]> {
-  let rows: Array<{ model: string; avgReward: number | null; avgQuality: number | null; avgCost: number | null; avgLatency: number | null; runCount: number }> = [];
+  // ── 1. Primary path: Winsorized priors from model_reputation ────────────
+  let reputationRows: Array<{
+    model: string;
+    avgReward: number | null;
+    avgQuality: number | null;
+    avgCostUsd: number | null;
+    avgLatencyMs: number | null;
+    sampleCount: number;
+  }> = [];
   try {
-    const conditions = [
-      eq(modelSelectionTelemetryTable.taskCategory, taskCategory),
-      eq(modelSelectionTelemetryTable.shadow, false),
-      isNotNull(modelSelectionTelemetryTable.rewardScore),
+    const repConditions = [
+      eq(modelReputationTable.taskCategory, taskCategory),
     ];
-    if (difficultyBucket) {
-      conditions.push(eq(modelSelectionTelemetryTable.difficultyBucket, difficultyBucket));
-    }
-    rows = await db
+    // Use the exact bucket when provided; otherwise accept the "all" rollup row.
+    repConditions.push(
+      difficultyBucket
+        ? eq(modelReputationTable.difficultyBucket, difficultyBucket)
+        : eq(modelReputationTable.difficultyBucket, "all"),
+    );
+    reputationRows = await db
       .select({
-        model: modelSelectionTelemetryTable.model,
-        avgReward: sql<number>`avg(${modelSelectionTelemetryTable.rewardScore})`,
-        avgQuality: sql<number>`avg(${modelSelectionTelemetryTable.qualityScore})`,
-        avgCost: sql<number>`avg(${modelSelectionTelemetryTable.costUsd})`,
-        avgLatency: sql<number>`avg(${modelSelectionTelemetryTable.latencyMs})`,
-        runCount: sql<number>`count(*)`,
+        model: modelReputationTable.model,
+        avgReward: modelReputationTable.avgReward,
+        avgQuality: modelReputationTable.avgQuality,
+        avgCostUsd: modelReputationTable.avgCostUsd,
+        avgLatencyMs: modelReputationTable.avgLatencyMs,
+        sampleCount: modelReputationTable.sampleCount,
       })
-      .from(modelSelectionTelemetryTable)
-      .where(and(...conditions))
-      .groupBy(modelSelectionTelemetryTable.model);
+      .from(modelReputationTable)
+      .where(and(...repConditions));
   } catch (err) {
-    console.warn("[ModelRouter] getModelReputationPriors query failed:", err instanceof Error ? err.message : err);
-    rows = [];
+    console.warn("[ModelRouter] model_reputation query failed:", err instanceof Error ? err.message : err);
   }
 
-  const byModel = new Map(rows.map((r) => [r.model, r]));
-  const totalTrials = rows.reduce((s, r) => s + Number(r.runCount), 0);
+  const byModelRep = new Map(reputationRows.map((r) => [r.model, r]));
+
+  // ── 2. Fall-through: raw-telemetry average for models missing from reputation ──
+  // Only query telemetry for models that have NO reputation row yet.
+  const missingModels = candidateModels.filter((m) => !byModelRep.has(m));
+  const rawByModel = new Map<string, { avgReward: number | null; avgQuality: number | null; avgCost: number | null; avgLatency: number | null; runCount: number }>();
+  if (missingModels.length > 0) {
+    try {
+      // Drizzle's inArray works cleanly for this case.
+      // We query telemetry for the specific task+bucket only, then filter by
+      // missing model names in JS. Note: this raw path is ONLY used for models
+      // that have no reputation row yet — existing models always use the
+      // Winsorized reputation path above.
+      const rawRows = await db
+        .select({
+          model: modelSelectionTelemetryTable.model,
+          avgReward: sql<number>`avg(${modelSelectionTelemetryTable.rewardScore})`,
+          avgQuality: sql<number>`avg(${modelSelectionTelemetryTable.qualityScore})`,
+          avgCost: sql<number>`avg(${modelSelectionTelemetryTable.costUsd})`,
+          avgLatency: sql<number>`avg(${modelSelectionTelemetryTable.latencyMs})`,
+          runCount: sql<number>`count(*)`,
+        })
+        .from(modelSelectionTelemetryTable)
+        .where(and(
+          eq(modelSelectionTelemetryTable.taskCategory, taskCategory),
+          eq(modelSelectionTelemetryTable.shadow, false),
+          isNotNull(modelSelectionTelemetryTable.rewardScore),
+          ...(difficultyBucket ? [eq(modelSelectionTelemetryTable.difficultyBucket, difficultyBucket)] : []),
+        ))
+        .groupBy(modelSelectionTelemetryTable.model);
+
+      for (const r of rawRows) {
+        if (missingModels.includes(r.model)) {
+          rawByModel.set(r.model, r);
+        }
+      }
+    } catch (err) {
+      console.warn("[ModelRouter] raw-telemetry fallback query failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  // ── 3. Assemble ModelPrior[] for the bandit ──────────────────────────────
+  const totalTrials = reputationRows.reduce((s, r) => s + Number(r.sampleCount), 0)
+    + [...rawByModel.values()].reduce((s, r) => s + Number(r.runCount), 0);
 
   return candidateModels.map((model) => {
-    const r = byModel.get(model);
-    const runCount = r ? Number(r.runCount) : 0;
-    const avgReward = r && r.avgReward != null ? Number(r.avgReward) : OPTIMISTIC_PRIOR_REWARD;
+    const rep = byModelRep.get(model);
+    if (rep) {
+      // Use the Winsorized, skew-protected reputation row.
+      const runCount = Number(rep.sampleCount);
+      const avgReward = rep.avgReward != null ? Number(rep.avgReward) : OPTIMISTIC_PRIOR_REWARD;
+      return {
+        model,
+        avgReward,
+        avgQuality: rep.avgQuality != null ? Number(rep.avgQuality) : OPTIMISTIC_PRIOR_REWARD,
+        avgCostUsd: rep.avgCostUsd != null ? Number(rep.avgCostUsd) : 0,
+        avgLatencyMs: rep.avgLatencyMs != null ? Number(rep.avgLatencyMs) : 0,
+        runCount,
+        ucb1: computeUcb1(avgReward, runCount, totalTrials),
+      };
+    }
+    // Fall-through: new model not yet in reputation table.
+    const raw = rawByModel.get(model);
+    const runCount = raw ? Number(raw.runCount) : 0;
+    const avgReward = raw && raw.avgReward != null ? Number(raw.avgReward) : OPTIMISTIC_PRIOR_REWARD;
     return {
       model,
       avgReward,
-      avgQuality: r && r.avgQuality != null ? Number(r.avgQuality) : OPTIMISTIC_PRIOR_REWARD,
-      avgCostUsd: r && r.avgCost != null ? Number(r.avgCost) : 0,
-      avgLatencyMs: r && r.avgLatency != null ? Number(r.avgLatency) : 0,
+      avgQuality: raw && raw.avgQuality != null ? Number(raw.avgQuality) : OPTIMISTIC_PRIOR_REWARD,
+      avgCostUsd: raw && raw.avgCost != null ? Number(raw.avgCost) : 0,
+      avgLatencyMs: raw && raw.avgLatency != null ? Number(raw.avgLatency) : 0,
       runCount,
       ucb1: computeUcb1(avgReward, runCount, totalTrials),
     };
@@ -466,10 +556,23 @@ export async function recordModelSelection(params: RecordSelectionParams): Promi
  * quality+cost+latency into the reward via the same formula as the bandit, and
  * applies the Bayesian moving-average update (lr = 0.1/sqrt(n+1)) exactly like
  * the conductor's recordStrategyOutcome.
+ *
+ * When `judgeQualityScore` is provided (from the independent judge), it is
+ * blended with the self-reported quality score (60% judge / 40% self-report)
+ * before computing the reward, making the signal manipulation-resistant.
  */
 export async function recordModelOutcome(
   telemetryId: number,
-  params: { quality: number; costUsd: number; latencyMs: number; taskDifficulty?: number; promptQuality?: number; qualityWeight?: number },
+  params: {
+    quality: number;
+    costUsd: number;
+    latencyMs: number;
+    taskDifficulty?: number;
+    promptQuality?: number;
+    qualityWeight?: number;
+    judgeQualityScore?: number | null;
+    judgeModel?: string | null;
+  },
 ): Promise<void> {
   if (telemetryId < 0) return;
   try {
@@ -478,8 +581,13 @@ export async function recordModelOutcome(
       .from(modelSelectionTelemetryTable)
       .where(eq(modelSelectionTelemetryTable.id, telemetryId));
 
+    // Blend judge quality (independent) with self-reported quality.
+    const effectiveQuality = params.judgeQualityScore != null
+      ? clamp01(0.6 * params.judgeQualityScore + 0.4 * params.quality)
+      : clamp01(params.quality);
+
     const reward = computeReward({
-      quality: params.quality,
+      quality: effectiveQuality,
       costUsd: params.costUsd,
       latencyMs: params.latencyMs,
       qualityWeight: params.qualityWeight,
@@ -494,6 +602,8 @@ export async function recordModelOutcome(
       .update(modelSelectionTelemetryTable)
       .set({
         qualityScore: clamp01(params.quality),
+        judgeQualityScore: params.judgeQualityScore != null ? clamp01(params.judgeQualityScore) : undefined,
+        judgeModel: params.judgeModel ?? undefined,
         costUsd: params.costUsd,
         latencyMs: Math.round(params.latencyMs),
         taskDifficultyScore: params.taskDifficulty != null ? clamp01(params.taskDifficulty) : undefined,
@@ -511,6 +621,10 @@ export async function recordModelOutcome(
  * Resolve rewards for all telemetry rows attached to a session once its outcome
  * is captured. Distributes the session's actual LLM cost across the rows. This
  * is the per-session reward hook called from outcome-capture.
+ *
+ * The `judgeQualityScore` and `judgeModel` from the independent judge are
+ * threaded through to each telemetry row so the reward is based on the blended
+ * (manipulation-resistant) quality signal.
  */
 export async function recordSessionModelOutcomes(params: {
   sessionId: number;
@@ -520,6 +634,8 @@ export async function recordSessionModelOutcomes(params: {
   taskDifficulty?: number;
   promptQuality?: number;
   qualityWeight?: number;
+  judgeQualityScore?: number | null;
+  judgeModel?: string | null;
 }): Promise<void> {
   try {
     const rows = await db
@@ -542,6 +658,8 @@ export async function recordSessionModelOutcomes(params: {
         taskDifficulty: params.taskDifficulty,
         promptQuality: params.promptQuality,
         qualityWeight: params.qualityWeight,
+        judgeQualityScore: params.judgeQualityScore,
+        judgeModel: params.judgeModel,
       });
     }
   } catch (err) {

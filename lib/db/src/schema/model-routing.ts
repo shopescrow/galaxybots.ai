@@ -35,6 +35,10 @@ export const modelSelectionTelemetryTable = pgTable("model_selection_telemetry",
   chosenModel: text("chosen_model"),
   // ── Reward components (filled at outcome capture; null until then) ──
   qualityScore: real("quality_score"),
+  /** Independent judge quality score (0-1) assigned by a separate model, not self-reported. */
+  judgeQualityScore: real("judge_quality_score"),
+  /** Which model performed the independent quality judgment. */
+  judgeModel: text("judge_model"),
   costUsd: real("cost_usd"),
   latencyMs: integer("latency_ms"),
   taskDifficultyScore: real("task_difficulty_score"),
@@ -67,9 +71,20 @@ export const modelReputationTable = pgTable("model_reputation", {
   difficultyBucket: text("difficulty_bucket").notNull().default("all"),
   avgReward: real("avg_reward"),
   avgQuality: real("avg_quality"),
+  /** Weighted-average judge quality (from independent scorer, not self-reported). */
+  avgJudgeQuality: real("avg_judge_quality"),
   avgCostUsd: real("avg_cost_usd"),
   avgLatencyMs: real("avg_latency_ms"),
   sampleCount: integer("sample_count").notNull().default(0),
+  /** Number of distinct tenants contributing to this reputation row. */
+  tenantCount: integer("tenant_count").notNull().default(0),
+  /**
+   * Fraction of samples contributed by the single largest tenant (0-1).
+   * High values (>0.5) indicate skew risk — one tenant dominates the prior.
+   */
+  maxTenantFraction: real("max_tenant_fraction"),
+  /** Raised when maxTenantFraction > 0.5 (one tenant dominates). */
+  skewFlag: boolean("skew_flag").notNull().default(false),
   /** Set true when a shadow candidate has cleared the promotion threshold. */
   promoted: boolean("promoted").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
