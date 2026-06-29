@@ -461,7 +461,7 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
   console.log(`[shutdown] Received ${signal}, starting graceful shutdown...`);
   setShuttingDown(true);
 
-  stopScheduler();
+  await stopScheduler();
   console.log("[shutdown] Scheduler stopped (new ticks halted)");
 
   ProspectingWorker.stop();

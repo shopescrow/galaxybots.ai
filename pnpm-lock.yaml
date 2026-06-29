@@ -224,6 +224,9 @@ importers:
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
       playwright-core:
         specifier: ^1.59.1
         version: 1.59.1
@@ -270,6 +273,9 @@ importers:
       '@types/pdf-parse':
         specifier: ^1.1.5
         version: 1.1.5
+      '@types/pg':
+        specifier: ^8.18.0
+        version: 8.18.0
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3

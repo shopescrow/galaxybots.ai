@@ -9,7 +9,61 @@ if (!process.env["DATABASE_URL"]) {
   );
 }
 
-const _pool = new Pool({ connectionString: process.env["DATABASE_URL"] });
+/**
+ * Per-instance pool ceiling.
+ *
+ * When running behind a transaction-mode connection pooler (PgBouncer), this
+ * controls how many *pooler* connections each API instance holds open.
+ * PgBouncer then multiplexes those onto a much smaller set of real Postgres
+ * backends.  Keep this at 10–20 so that `instances × DB_POOL_MAX` never
+ * exceeds the pooler's `max_client_conn` limit.
+ *
+ * Without a pooler (e.g. local dev / CI) the value directly limits how many
+ * Postgres backend connections this process opens.  Default is 10, which is
+ * safe even for a single-instance deployment where Postgres max_connections
+ * is 100.
+ */
+const POOL_MAX = Number(process.env["DB_POOL_MAX"] ?? "10");
+
+/**
+ * How long (ms) to wait for an available connection before throwing.
+ * A clear error is far more useful than a silent hang.  5 s is enough for
+ * transient bursts; if you see this error regularly, raise DB_POOL_MAX or
+ * scale the pooler.
+ */
+const POOL_ACQUIRE_TIMEOUT_MS = Number(
+  process.env["DB_POOL_ACQUIRE_TIMEOUT_MS"] ?? "5000",
+);
+
+/**
+ * How long (ms) an idle connection is kept open before being closed.
+ * 30 s strikes a balance: short enough to shed connections during lulls,
+ * long enough to avoid churn on steady workloads.
+ */
+const POOL_IDLE_TIMEOUT_MS = Number(
+  process.env["DB_POOL_IDLE_TIMEOUT_MS"] ?? "30000",
+);
+
+const _pool = new Pool({
+  connectionString: process.env["DATABASE_URL"],
+  max: POOL_MAX,
+  connectionTimeoutMillis: POOL_ACQUIRE_TIMEOUT_MS,
+  idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS,
+  allowExitOnIdle: true,
+});
+
+_pool.on("error", (err) => {
+  console.error("[db-pool] Unexpected idle-client error:", err.message);
+});
+
+_pool.on("connect", (_client) => {
+  const { totalCount, idleCount, waitingCount } = _pool;
+  if (waitingCount > 0) {
+    console.warn(
+      `[db-pool] Connection acquired — pool stats: total=${totalCount} idle=${idleCount} waiting=${waitingCount}`,
+    );
+  }
+});
 
 /**
  * Pool interceptor: automatic per-request RLS enforcement via AsyncLocalStorage.

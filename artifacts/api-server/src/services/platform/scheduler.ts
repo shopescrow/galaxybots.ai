@@ -1,3 +1,4 @@
+import pg from "pg";
 import { pool, db, aeoScanRequestsTable, workflowsTable, partnersTable, partnerRegistrationsTable, partnerTierReviewLogTable, clientIntegrationsTable, bingolingoContentTable, platformApiKeysTable } from "@workspace/db";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { executeWorkflow } from "../missions/workflow-engine";
@@ -184,16 +185,62 @@ function staggerJobs(jobs: Job[], intervalMs: number) {
   }
 }
 
+/**
+ * Session-level advisory locks (pg_try_advisory_lock) are bound to a Postgres
+ * backend *session*, not to a transaction.  In transaction-mode PgBouncer, a
+ * long-lived pooled connection does NOT pin a backend session — PgBouncer may
+ * hand the same application connection to a different Postgres backend on the
+ * next transaction.  This makes session-level locks acquired through the pool
+ * (or through a pooled PoolClient) unreliable.
+ *
+ * The correct solution is a dedicated direct connection that bypasses the
+ * pooler.  Set DATABASE_DIRECT_URL to the Postgres address (not PgBouncer)
+ * for the lock client.  In development / environments without a pooler,
+ * DATABASE_URL works fine as both values are identical.
+ *
+ * This single direct connection is held open for the lifetime of the
+ * scheduler process and is never shared with the pool.
+ */
+let _schedulerLockDirectClient: pg.Client | null = null;
+
 async function tryAcquireSchedulerLock(): Promise<boolean> {
+  const directUrl =
+    process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
+  if (!directUrl) {
+    console.error("[scheduler] No DATABASE_DIRECT_URL or DATABASE_URL set; cannot acquire lock");
+    return false;
+  }
   try {
-    const result = await pool.query(
+    const client = new pg.Client({ connectionString: directUrl });
+    await client.connect();
+    const result = await client.query(
       `SELECT pg_try_advisory_lock($1) AS acquired`,
       [SCHEDULER_LOCK_ID],
     );
-    return result.rows[0]?.acquired === true;
+    const acquired: boolean = result.rows[0]?.acquired === true;
+    if (acquired) {
+      _schedulerLockDirectClient = client;
+    } else {
+      await client.end();
+    }
+    return acquired;
   } catch (err) {
     console.error("[scheduler] Failed to acquire advisory lock:", err);
     return false;
+  }
+}
+
+async function releaseSchedulerLock(): Promise<void> {
+  if (!_schedulerLockDirectClient) return;
+  try {
+    await _schedulerLockDirectClient.query(
+      `SELECT pg_advisory_unlock($1)`,
+      [SCHEDULER_LOCK_ID],
+    );
+  } catch {
+  } finally {
+    try { await _schedulerLockDirectClient.end(); } catch { }
+    _schedulerLockDirectClient = null;
   }
 }
 
@@ -724,6 +771,15 @@ export async function startScheduler() {
   }, 5 * 60 * 1000);
 }
 
-export function stopScheduler() {
+export async function stopScheduler(): Promise<void> {
   started = false;
+  if (slaBreachInterval) {
+    clearInterval(slaBreachInterval);
+    slaBreachInterval = null;
+  }
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+    schedulerInterval = null;
+  }
+  await releaseSchedulerLock();
 }

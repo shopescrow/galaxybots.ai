@@ -1,0 +1,126 @@
+; PgBouncer configuration for GalaxyBots API
+;
+; OVERVIEW
+; --------
+; This file documents the recommended PgBouncer setup for running the API at
+; scale.  Copy it to pgbouncer.ini (never commit that copy — it may contain
+; credentials) and adjust the values for your environment.
+;
+; TRANSACTION MODE is required.  Session-mode pooling provides no meaningful
+; reduction in backend connections, and statement-mode breaks multi-statement
+; transactions.  See "Compatibility Notes" below for features that require
+; special handling.
+;
+; CONNECTION URL PATTERN
+; ----------------------
+; Set two environment variables:
+;
+;   DATABASE_URL        → postgresql://user:pass@pgbouncer-host:5433/galaxybots
+;                         All application traffic goes through PgBouncer.
+;
+;   DATABASE_DIRECT_URL → postgresql://user:pass@postgres-host:5432/galaxybots
+;                         Used ONLY for features that require a true session-
+;                         pinned Postgres connection that bypasses the pooler
+;                         (see "Session-level advisory lock" below).
+;                         In development without a pooler, set this to the same
+;                         value as DATABASE_URL.
+;
+; This is the same two-URL pattern used by Prisma Accelerate, Supabase, and
+; other tools that need session-level access alongside a pooler.
+;
+; SIZING GUIDE
+; ------------
+; Postgres default max_connections is typically 100 (Replit managed: check
+; your plan).  Reserve a few for superuser/admin connections:
+;
+;   postgres_max = 100
+;   reserve_for_admin = 5
+;   available_for_app = postgres_max - reserve_for_admin  ; = 95
+;
+; With N API instances each holding DB_POOL_MAX=10 connections to PgBouncer:
+;
+;   max_client_conn = N × 10 + headroom   (set DB_POOL_MAX env var per instance)
+;   pool_size       = available_for_app    ; hard cap on Postgres backends
+;
+; Example for 4 instances × 10 connections each + scheduler direct connection:
+;   max_client_conn = 60   (40 app + 20 headroom for healthchecks / admin)
+;   pool_size       = 90   (leaves 10 for superuser / migrations)
+;
+; COMPATIBILITY NOTES
+; -------------------
+; Transaction-mode pooling prohibits session-scoped Postgres features because
+; the backend session changes between transactions.  Here is the full audit of
+; this codebase:
+;
+; 1. Session-level advisory locks (pg_try_advisory_lock / pg_advisory_lock)
+;
+;    IMPORTANT: A session-level advisory lock is bound to a Postgres *backend*,
+;    not to an application connection.  In transaction mode, PgBouncer may
+;    assign a different Postgres backend on every transaction — even for the
+;    same application connection.  A "dedicated PoolClient" does NOT fix this;
+;    the session changes as soon as the transaction ends.
+;
+;    FIX applied: the scheduler creates a dedicated pg.Client connected via
+;    DATABASE_DIRECT_URL, bypassing PgBouncer entirely.  That connection is
+;    held open for the scheduler process lifetime, so the session (and lock)
+;    never moves.  All other DB access goes through the pool as normal.
+;
+;    Relevant code: artifacts/api-server/src/services/platform/scheduler.ts —
+;    tryAcquireSchedulerLock / releaseSchedulerLock.
+;
+; 2. Prepared statements (PREPARE / EXECUTE) — not used; node-postgres does
+;    not send named prepared statements by default.
+;
+; 3. LISTEN / NOTIFY — not used in the hot path.  If added in future, use a
+;    dedicated direct connection (same pattern as the scheduler lock).
+;
+; 4. Temporary tables — not used.
+;
+; 5. SET / RESET session parameters — not used in the hot path.
+
+[databases]
+; Each entry here tells PgBouncer how to reach the *Postgres backend* (not the
+; PgBouncer host itself).  Replace <postgres-host>, <postgres-port>, and
+; <dbname> with the address of your actual Postgres server.
+;
+; Application connections point to PgBouncer (listen_addr:listen_port below).
+; PgBouncer then forwards them to the backend defined here.
+galaxybots = host=<postgres-host> port=5432 dbname=<dbname>
+
+[pgbouncer]
+listen_addr = 127.0.0.1
+listen_port = 5433
+
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+
+; Transaction-mode pooling — required for this application.
+pool_mode = transaction
+
+; Hard cap on Postgres backend connections PgBouncer will open.
+; Must be <= postgres max_connections minus admin/replication slots.
+default_pool_size = 90
+
+; Maximum simultaneous client connections (app + healthchecks + migrations).
+max_client_conn = 200
+
+; Reserve some connections for superuser / emergency admin access.
+reserve_pool_size = 5
+reserve_pool_timeout = 3
+
+; How long a client waits before PgBouncer returns an error.
+; Should be slightly longer than DB_POOL_ACQUIRE_TIMEOUT_MS in the app (default 5 s).
+server_connect_timeout = 10
+query_wait_timeout = 8
+
+; Silently drop idle server connections after this many seconds.
+server_idle_timeout = 60
+client_idle_timeout = 120
+
+; Logging
+log_connections = 0
+log_disconnections = 0
+log_pooler_errors = 1
+
+; Stats
+stats_period = 60

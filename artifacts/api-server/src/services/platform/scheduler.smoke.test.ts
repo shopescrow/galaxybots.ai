@@ -1,11 +1,9 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { createTestUser, cleanupTestUser, type TestUser } from "../../test-utils";
-import { db, pool, botAssignmentsTable, botsTable, backgroundReportsTable, pendingApprovalsTable, llmUsageLogTable, clientCostCapsTable } from "@workspace/db";
+import { db, botAssignmentsTable, botsTable, backgroundReportsTable, pendingApprovalsTable, llmUsageLogTable, clientCostCapsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { checkApprovalSLAs, checkDueAssignments, startScheduler, stopScheduler } from "./scheduler";
 import { upsertCostCap } from "../analytics/cost-caps";
-
-const SCHEDULER_LOCK_ID = 999999;
 
 describe("Scheduler smoke tests", () => {
   const testUsers: TestUser[] = [];
@@ -14,7 +12,10 @@ describe("Scheduler smoke tests", () => {
   const createdApprovalIds: number[] = [];
 
   afterAll(async () => {
-    stopScheduler();
+    // stopScheduler releases the dedicated advisory-lock client cleanly.
+    // Do NOT call pool.query(pg_advisory_unlock) here — that would target
+    // a random pool connection, not the one holding the session-level lock.
+    await stopScheduler();
     for (const id of createdApprovalIds) {
       await db.delete(pendingApprovalsTable).where(eq(pendingApprovalsTable.id, id)).catch(() => {});
     }
@@ -28,7 +29,6 @@ describe("Scheduler smoke tests", () => {
     for (const u of testUsers) {
       await cleanupTestUser(u);
     }
-    await pool.query(`SELECT pg_advisory_unlock($1)`, [SCHEDULER_LOCK_ID]).catch(() => {});
   });
 
   async function createBotAndAssignment(
@@ -293,18 +293,10 @@ describe("Scheduler smoke tests", () => {
   });
 
   it("should acquire scheduler advisory lock and start/stop without error", async () => {
-    const lockResult = await pool.query(
-      `SELECT pg_try_advisory_lock($1) AS acquired`,
-      [SCHEDULER_LOCK_ID],
-    );
-    const acquired = lockResult.rows[0]?.acquired;
-    expect(typeof acquired).toBe("boolean");
-
-    if (acquired) {
-      await pool.query(`SELECT pg_advisory_unlock($1)`, [SCHEDULER_LOCK_ID]);
-    }
-
+    // startScheduler acquires the advisory lock on a dedicated PoolClient.
+    // stopScheduler releases that lock and the client.  We just verify the
+    // round-trip completes without throwing.
     await startScheduler();
-    stopScheduler();
+    await stopScheduler();
   });
 });
