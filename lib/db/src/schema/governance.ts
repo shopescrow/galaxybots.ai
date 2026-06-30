@@ -25,6 +25,9 @@ export const insertBotToolPermissionSchema = createInsertSchema(botToolPermissio
 export type BotToolPermission = typeof botToolPermissionsTable.$inferSelect;
 export type InsertBotToolPermission = z.infer<typeof insertBotToolPermissionSchema>;
 
+export const APPROVAL_CONTEXT_TYPES = ["coordinator_gate", "tool_gate", "consequence_gate"] as const;
+export type ApprovalContextType = (typeof APPROVAL_CONTEXT_TYPES)[number];
+
 export const pendingApprovalsTable = pgTable("pending_approvals", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull(),
@@ -36,13 +39,19 @@ export const pendingApprovalsTable = pgTable("pending_approvals", {
   resolvedBy: integer("resolved_by"),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason"),
+  approvalReason: text("approval_reason"),
   toolResult: jsonb("tool_result"),
   pausedLoopContext: jsonb("paused_loop_context"),
   sessionId: integer("session_id"),
   conversationId: integer("conversation_id"),
   slaDeadline: timestamp("sla_deadline", { withTimezone: true }),
   escalatedAt: timestamp("escalated_at", { withTimezone: true }),
+  escalatedTo: integer("escalated_to"),
   isTimeSensitive: boolean("is_time_sensitive").notNull().default(false),
+  contextType: text("context_type"),
+  requiredApproverRole: text("required_approver_role").notNull().default("any"),
+  consequenceRiskScore: integer("consequence_risk_score"),
+  confidenceScore: integer("confidence_score"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

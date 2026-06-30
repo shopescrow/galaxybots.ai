@@ -826,6 +826,8 @@ async function _runAgenticLoopEngine(options: AgenticLoopEngineOptions, rootSpan
               toolCallId: toolCall.id,
               allToolCallIds: normalized.tool_calls!.map((tc) => tc.id),
             },
+            contextType: "tool_gate",
+            requiredApproverRole: "any",
           });
 
           const approvalEv: AgenticEvent = {
@@ -874,6 +876,8 @@ async function _runAgenticLoopEngine(options: AgenticLoopEngineOptions, rootSpan
               tool_calls: normalized.tool_calls as OpenAI.ChatCompletionMessageToolCall[],
             });
 
+            const consequenceRiskScoreInt = Math.round((consequenceRisk.riskScore ?? 0) * 100);
+            const consequenceApproverRole: "owner" | "any" = consequenceRiskScoreInt >= 70 ? "owner" : "any";
             const approvalId = await createPendingApproval({
               clientId: context.clientId,
               botId: context.botId,
@@ -892,6 +896,9 @@ async function _runAgenticLoopEngine(options: AgenticLoopEngineOptions, rootSpan
                 toolCallId: toolCall.id,
                 allToolCallIds: normalized.tool_calls!.map((tc) => tc.id),
               },
+              contextType: "consequence_gate",
+              requiredApproverRole: consequenceApproverRole,
+              consequenceRiskScore: consequenceRiskScoreInt,
             });
 
             // Build evidence summary from top harmful outcome examples stored with the risk score

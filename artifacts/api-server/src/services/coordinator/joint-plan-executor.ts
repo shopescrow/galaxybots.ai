@@ -42,6 +42,7 @@ import {
 } from "./orchestration-circuit-breaker.js";
 import { guardStrategy } from "../conductor/strategy-budget-guard.js";
 import { writeAuditEntry } from "../audit/audit-ledger.js";
+import { createPendingApproval } from "../platform/governance.js";
 import { estimateRunTree } from "../billing/tree-cost-estimator.js";
 import { reconcileRunCredits } from "../billing/run-reconciliation.js";
 import { getRunRevenueUsd, evaluateMargin } from "../ai-safety/margin-guard.js";
@@ -601,27 +602,30 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
           humanApprovalOverridden: true,
         };
 
-        const [pendingRow] = await db
-          .insert(pendingApprovalsTable)
-          .values({
-            clientId,
-            botId: agents[0]?.botId ?? 0,
-            botName: agents[0]?.botName ?? "GalaxyMind",
-            sessionId: typeof sessionId === "number" ? sessionId : null,
-            conversationId: conversationId ?? null,
-            toolName: "galaxy_mind_strategy",
-            toolInput: {
-              strategy: jointPlan.communicationStrategy,
-              confidenceScore: score,
-              requireHumanApproval,
-              humanApprovalThreshold,
-              taskDescription: taskDescription.slice(0, 200),
-            },
-            pausedLoopContext: resumeContext as Record<string, unknown>,
-          })
-          .returning({ id: pendingApprovalsTable.id });
+        const coordinatorApproverRole: "owner" | "any" = score >= 70 ? "owner" : "any";
 
-        pendingApprovalId = pendingRow?.id ?? null;
+        // Route through the shared createPendingApproval so the coordinator gate
+        // gets the same SLA initialization, in-app notification, activity event,
+        // and email notification (with one-click approve/reject links) as tool gates.
+        pendingApprovalId = await createPendingApproval({
+          clientId,
+          botId: agents[0]?.botId ?? 0,
+          botName: agents[0]?.botName ?? "GalaxyMind",
+          sessionId: typeof sessionId === "number" ? sessionId : undefined,
+          conversationId: conversationId ?? undefined,
+          toolName: "galaxy_mind_strategy",
+          toolInput: {
+            strategy: jointPlan.communicationStrategy,
+            confidenceScore: score,
+            requireHumanApproval,
+            humanApprovalThreshold,
+            taskDescription: taskDescription.slice(0, 200),
+          },
+          pausedLoopContext: resumeContext as Parameters<typeof createPendingApproval>[0]["pausedLoopContext"],
+          contextType: "coordinator_gate",
+          requiredApproverRole: coordinatorApproverRole,
+          confidenceScore: score,
+        });
 
         writeAuditEntry({
           clientId,
@@ -639,16 +643,6 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
             reason: requireHumanApproval ? "require_human_approval_enabled" : "confidence_below_threshold",
             pipelineRunId,
           },
-        }).catch(() => {});
-
-        createNotification({
-          clientId,
-          category: "approval",
-          severity: "warning",
-          title: "GalaxyMind Strategy Requires Approval",
-          body: `Confidence score ${score}/100 ${requireHumanApproval ? "(require_human_approval enabled)" : "is below threshold " + String(humanApprovalThreshold)}. Strategy: ${jointPlan.communicationStrategy.replace(/_/g, " ")}.`,
-          metadata: { pendingApprovalId, sessionId: sessionKey, strategy: jointPlan.communicationStrategy },
-          isApproval: true,
         }).catch(() => {});
 
         // Push notification to client for immediate awareness

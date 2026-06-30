@@ -13,6 +13,7 @@ import {
   botModelPoliciesTable,
 } from "@workspace/db";
 import { eq, and, sql, gte, or, isNull } from "drizzle-orm";
+import crypto from "crypto";
 import { requireRole } from "../../middleware/auth";
 import { requireTenantAccess } from "../../middleware/tenant";
 import {
@@ -31,6 +32,7 @@ import { checkWorkflowTriggers } from "../../services/missions/workflow-engine";
 import { emitActivityEvent } from "../../services/analytics/activity-events";
 import { createNotification } from "../../services/admin/notifications";
 import { getAuditHealth, writeAuditEntry } from "../../services/audit/audit-ledger";
+import { signApprovalToken, verifyApprovalToken } from "../../services/platform/approval-token";
 
 async function persistResumedOutput(
   approval: { conversationId: number | null; sessionId: number | null; botId: number; botName: string | null },
@@ -67,7 +69,10 @@ async function executeApprovalAndResume(
   let toolResult: unknown = null;
   let resumeResult: { finalContent?: string; error?: string } | null = null;
 
-  if (approval.toolName === "galaxy_mind_strategy") {
+  // Dispatch on contextType first (explicit gate type), fall back to toolName heuristic
+  const isCoordinatorGate = approval.contextType === "coordinator_gate" || approval.toolName === "galaxy_mind_strategy";
+
+  if (isCoordinatorGate) {
     const resumeCtx = approval.pausedLoopContext as Omit<JointPlanExecutorInput, "onProgress"> | null;
     if (resumeCtx) {
       try {
@@ -78,12 +83,12 @@ async function executeApprovalAndResume(
         toolResult = { strategy: planResult.plan.communicationStrategy, agentsUsed: planResult.agentsUsed };
         resumeResult = { finalContent: guardedContent };
       } catch (err) {
-        console.error("[governance] Failed to resume GalaxyMind pipeline after approval:", err);
+        console.error("[governance] Failed to resume coordinator gate after approval:", err);
         toolResult = { error: err instanceof Error ? err.message : "Pipeline resume failed" };
         resumeResult = { error: "Pipeline resume failed" };
       }
     } else {
-      toolResult = { error: "No execution context stored — cannot resume pipeline" };
+      toolResult = { error: "No execution context stored — cannot resume coordinator gate" };
       resumeResult = { error: "Missing pausedLoopContext" };
     }
     return { toolResult, resumeResult };
@@ -306,6 +311,15 @@ router.get("/governance/approvals", requireRole("owner", "admin"), requireTenant
     conditions.push(eq(pendingApprovalsTable.status, status));
   }
 
+  // Eligibility filtering: non-owner admins only see items they can actually act on.
+  // Owner-only approvals are invisible to plain admins — surfacing them would be
+  // misleading since any action they take would 403.
+  const isOwner = req.user!.role === "owner";
+  if (!isOwner) {
+    const { ne } = await import("drizzle-orm");
+    conditions.push(ne(pendingApprovalsTable.requiredApproverRole, "owner"));
+  }
+
   const approvals = await db
     .select()
     .from(pendingApprovalsTable)
@@ -319,9 +333,29 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
   const rawSub = (req.body as Record<string, unknown>)?.subClientId;
   const sub = rawSub ? Number(rawSub) : NaN;
   const clientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
+  const approvalReason = ((req.body as Record<string, unknown>)?.reason as string | undefined)?.trim();
 
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid approval ID" });
+    return;
+  }
+
+  if (!approvalReason) {
+    res.status(400).json({ error: "reason is required when approving an action" });
+    return;
+  }
+
+  // Pre-fetch to check existence and owner-only requirement before mutating
+  const [existing] = await db
+    .select({ id: pendingApprovalsTable.id, status: pendingApprovalsTable.status, requiredApproverRole: pendingApprovalsTable.requiredApproverRole })
+    .from(pendingApprovalsTable)
+    .where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId)))
+    .limit(1);
+
+  if (!existing) { res.status(404).json({ error: "Approval not found" }); return; }
+  if (existing.status !== "pending") { res.status(409).json({ error: `Approval already ${existing.status}` }); return; }
+  if (existing.requiredApproverRole === "owner" && req.user!.role !== "owner") {
+    res.status(403).json({ error: "This approval requires an owner-level decision" });
     return;
   }
 
@@ -331,6 +365,7 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
       status: "approved",
       resolvedBy: req.user!.userId,
       resolvedAt: new Date(),
+      approvalReason,
     })
     .where(
       and(
@@ -342,12 +377,7 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
     .returning();
 
   if (!claimed) {
-    const [existing] = await db.select().from(pendingApprovalsTable).where(eq(pendingApprovalsTable.id, id));
-    if (!existing) {
-      res.status(404).json({ error: "Approval not found" });
-    } else {
-      res.status(409).json({ error: `Approval already ${existing.status}` });
-    }
+    res.status(409).json({ error: "Approval was resolved concurrently — please refresh" });
     return;
   }
 
@@ -374,6 +404,7 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
       toolName: approval.toolName,
       botId: approval.botId,
       botName: approval.botName,
+      approvalReason,
       resolvedBy: req.user!.userId,
       resolvedAt: new Date().toISOString(),
     },
@@ -433,7 +464,13 @@ router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), 
 // the approval was created, so this only resolves human review in bulk.
 router.post("/governance/approvals/batch-approve", requireRole("owner", "admin"), async (req, res): Promise<void> => {
   const clientId = req.user!.clientId;
-  const body = (req.body ?? {}) as { approvalIds?: unknown; all?: unknown };
+  const body = (req.body ?? {}) as { approvalIds?: unknown; all?: unknown; reason?: string };
+  const batchApprovalReason = (body.reason ?? "").trim();
+
+  if (!batchApprovalReason) {
+    res.status(400).json({ error: "reason is required for batch approve" });
+    return;
+  }
 
   let targetIds: number[];
   if (body.all === true) {
@@ -463,11 +500,25 @@ router.post("/governance/approvals/batch-approve", requireRole("owner", "admin")
 
   const approved: Array<{ id: number; toolName: string }> = [];
   const failed: Array<{ id: number; reason: string }> = [];
+  const isOwnerBatch = req.user!.role === "owner";
 
   for (const id of targetIds) {
+    // Enforce owner-only requirement per row
+    if (!isOwnerBatch) {
+      const [row] = await db
+        .select({ requiredApproverRole: pendingApprovalsTable.requiredApproverRole })
+        .from(pendingApprovalsTable)
+        .where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId)))
+        .limit(1);
+      if (row?.requiredApproverRole === "owner") {
+        failed.push({ id, reason: "owner-only approval — requires owner role" });
+        continue;
+      }
+    }
+
     const [claimed] = await db
       .update(pendingApprovalsTable)
-      .set({ status: "approved", resolvedBy: req.user!.userId, resolvedAt: new Date() })
+      .set({ status: "approved", resolvedBy: req.user!.userId, resolvedAt: new Date(), approvalReason: batchApprovalReason })
       .where(
         and(
           eq(pendingApprovalsTable.id, id),
@@ -501,6 +552,7 @@ router.post("/governance/approvals/batch-approve", requireRole("owner", "admin")
           toolName: claimed.toolName,
           botId: claimed.botId,
           botName: claimed.botName,
+          approvalReason: batchApprovalReason,
           resolvedBy: req.user!.userId,
           resolvedAt: new Date().toISOString(),
         },
@@ -513,7 +565,7 @@ router.post("/governance/approvals/batch-approve", requireRole("owner", "admin")
         severity: "info",
         title: `Tool approved (batch): ${claimed.toolName}`,
         description: `${claimed.botName ?? "Bot"} was approved to use "${claimed.toolName}" via batch approval`,
-        metadata: { approvalId: claimed.id, toolName: claimed.toolName, resolvedBy: req.user!.userId, batch: true },
+        metadata: { approvalId: claimed.id, toolName: claimed.toolName, approvalReason: batchApprovalReason, resolvedBy: req.user!.userId, batch: true },
       });
 
       approved.push({ id, toolName: claimed.toolName });
@@ -538,6 +590,110 @@ router.post("/governance/approvals/batch-approve", requireRole("owner", "admin")
   res.json({ approved, failed, total: targetIds.length });
 });
 
+router.post("/governance/approvals/batch-reject", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  const body = (req.body ?? {}) as { approvalIds?: unknown; all?: unknown; reason?: string };
+  const rejectionReason = (body.reason ?? "").trim();
+
+  if (!rejectionReason) {
+    res.status(400).json({ error: "reason is required for batch reject" });
+    return;
+  }
+
+  let targetIds: number[];
+  if (body.all === true) {
+    const pending = await db
+      .select({ id: pendingApprovalsTable.id })
+      .from(pendingApprovalsTable)
+      .where(and(eq(pendingApprovalsTable.clientId, clientId), eq(pendingApprovalsTable.status, "pending")));
+    targetIds = pending.map((p) => p.id);
+  } else if (Array.isArray(body.approvalIds)) {
+    targetIds = body.approvalIds.map((v) => Number(v)).filter((n) => Number.isInteger(n) && n > 0);
+  } else {
+    res.status(400).json({ error: "Provide approvalIds: number[] or all: true" });
+    return;
+  }
+
+  if (targetIds.length === 0) {
+    res.json({ rejected: [], failed: [], total: 0 });
+    return;
+  }
+
+  const rejected: Array<{ id: number; toolName: string }> = [];
+  const failed: Array<{ id: number; reason: string }> = [];
+
+  const isOwner = req.user!.role === "owner";
+
+  for (const id of targetIds) {
+    // Enforce owner-only requirement per row (non-owner admins cannot resolve owner-only items)
+    if (!isOwner) {
+      const [row] = await db
+        .select({ requiredApproverRole: pendingApprovalsTable.requiredApproverRole })
+        .from(pendingApprovalsTable)
+        .where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId)))
+        .limit(1);
+      if (row?.requiredApproverRole === "owner") {
+        failed.push({ id, reason: "owner-only approval — requires owner role" });
+        continue;
+      }
+    }
+
+    const [claimed] = await db
+      .update(pendingApprovalsTable)
+      .set({ status: "rejected", resolvedBy: req.user!.userId, resolvedAt: new Date(), rejectionReason })
+      .where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId), eq(pendingApprovalsTable.status, "pending")))
+      .returning();
+
+    if (!claimed) {
+      failed.push({ id, reason: "not found or already resolved" });
+      continue;
+    }
+
+    try {
+      const pausedCtx = claimed.pausedLoopContext as Parameters<typeof resumeAgenticLoopWithRejection>[0]["pausedLoopContext"] | null;
+      if (pausedCtx) {
+        resumeAgenticLoopWithRejection({
+          pausedLoopContext: pausedCtx,
+          toolName: claimed.toolName,
+          rejectionReason,
+          context: { clientId: claimed.clientId, botId: claimed.botId, botName: claimed.botName ?? undefined, sessionId: claimed.sessionId ?? undefined, conversationId: claimed.conversationId ?? undefined },
+        }).catch(() => {});
+      }
+
+      writeAuditEntry({
+        clientId: claimed.clientId,
+        sessionId: claimed.sessionId ? String(claimed.sessionId) : null,
+        engine: "coordinator",
+        decisionType: "human_approval_outcome",
+        payload: { outcome: "rejected", batch: true, approvalId: claimed.id, toolName: claimed.toolName, botId: claimed.botId, botName: claimed.botName, rejectionReason, resolvedBy: req.user!.userId, resolvedAt: new Date().toISOString() },
+      }).catch(() => {});
+
+      emitActivityEvent({
+        clientId: claimed.clientId,
+        eventType: "approval",
+        source: "system",
+        severity: "warning",
+        title: `Tool rejected (batch): ${claimed.toolName}`,
+        description: `${claimed.botName ?? "Bot"}'s request to use "${claimed.toolName}" was rejected — ${rejectionReason}`,
+        metadata: { approvalId: claimed.id, toolName: claimed.toolName, rejectionReason, resolvedBy: req.user!.userId, batch: true },
+      });
+
+      rejected.push({ id, toolName: claimed.toolName });
+    } catch (err) {
+      failed.push({ id, reason: err instanceof Error ? err.message : "failed" });
+    }
+  }
+
+  const pendingCount = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingApprovalsTable)
+    .where(and(eq(pendingApprovalsTable.clientId, clientId), eq(pendingApprovalsTable.status, "pending")));
+  const badge = pendingCount[0]?.count ?? 0;
+  sendPushToClient(clientId, { title: "", body: "", badge, isApproval: true }).catch(() => {});
+
+  res.json({ rejected, failed, total: targetIds.length });
+});
+
 router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const rawSub = (req.body as Record<string, unknown>)?.subClientId;
@@ -549,7 +705,25 @@ router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), r
     return;
   }
 
-  const rejectionReason = (req.body as { reason?: string })?.reason || "Owner declined this action.";
+  const rejectionReason = ((req.body as { reason?: string })?.reason ?? "").trim();
+  if (!rejectionReason) {
+    res.status(400).json({ error: "reason is required when rejecting an action" });
+    return;
+  }
+
+  // Pre-fetch to check existence and owner-only requirement before mutating
+  const [existingForReject] = await db
+    .select({ id: pendingApprovalsTable.id, status: pendingApprovalsTable.status, requiredApproverRole: pendingApprovalsTable.requiredApproverRole })
+    .from(pendingApprovalsTable)
+    .where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId)))
+    .limit(1);
+
+  if (!existingForReject) { res.status(404).json({ error: "Approval not found" }); return; }
+  if (existingForReject.status !== "pending") { res.status(409).json({ error: `Approval already ${existingForReject.status}` }); return; }
+  if (existingForReject.requiredApproverRole === "owner" && req.user!.role !== "owner") {
+    res.status(403).json({ error: "This approval requires an owner-level decision" });
+    return;
+  }
 
   const [claimed] = await db
     .update(pendingApprovalsTable)
@@ -569,12 +743,7 @@ router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), r
     .returning();
 
   if (!claimed) {
-    const [existing] = await db.select().from(pendingApprovalsTable).where(eq(pendingApprovalsTable.id, id));
-    if (!existing) {
-      res.status(404).json({ error: "Approval not found" });
-    } else {
-      res.status(409).json({ error: `Approval already ${existing.status}` });
-    }
+    res.status(409).json({ error: "Approval was resolved concurrently — please refresh" });
     return;
   }
 
@@ -1031,6 +1200,220 @@ router.put("/governance/ai-trust-settings", requireRole("owner", "admin"), async
   } catch (err) {
     console.error("[GovernanceRoutes] ai-trust-settings PUT error:", err);
     res.status(500).json({ error: "Failed to save AI trust settings" });
+  }
+});
+
+// ── Signed one-click approve/reject links ─────────────────────────────────────
+// signApprovalToken / verifyApprovalToken are now in
+// ../../services/platform/approval-token (imported above).
+// The shared module handles APPROVAL_LINK_SECRET initialization.
+
+// Convenience wrappers — email templates call these directly
+router.post("/governance/approvals/:id/approve-link", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  req.body = { ...(req.body ?? {}), action: "approve" };
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid approval ID" }); return; }
+  const clientId = req.user!.clientId;
+  const [approval] = await db
+    .select({ id: pendingApprovalsTable.id, status: pendingApprovalsTable.status, slaDeadline: pendingApprovalsTable.slaDeadline })
+    .from(pendingApprovalsTable).where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId))).limit(1);
+  if (!approval) { res.status(404).json({ error: "Approval not found" }); return; }
+  if (approval.status !== "pending") { res.status(409).json({ error: `Approval already ${approval.status}` }); return; }
+  const exp = approval.slaDeadline ? approval.slaDeadline.getTime() : Date.now() + 30 * 60 * 1000;
+  const token = signApprovalToken({ id, action: "approve", exp });
+  const appUrl = process.env.APP_URL ?? "https://galaxybots.app";
+  res.json({ url: `${appUrl}/api/v1/governance/approvals/action?token=${token}`, expiresAt: new Date(exp).toISOString(), action: "approve", approvalId: id });
+});
+
+router.post("/governance/approvals/:id/reject-link", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid approval ID" }); return; }
+  const clientId = req.user!.clientId;
+  const [approval] = await db
+    .select({ id: pendingApprovalsTable.id, status: pendingApprovalsTable.status, slaDeadline: pendingApprovalsTable.slaDeadline })
+    .from(pendingApprovalsTable).where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId))).limit(1);
+  if (!approval) { res.status(404).json({ error: "Approval not found" }); return; }
+  if (approval.status !== "pending") { res.status(409).json({ error: `Approval already ${approval.status}` }); return; }
+  const exp = approval.slaDeadline ? approval.slaDeadline.getTime() : Date.now() + 30 * 60 * 1000;
+  const token = signApprovalToken({ id, action: "reject", exp });
+  const appUrl = process.env.APP_URL ?? "https://galaxybots.app";
+  res.json({ url: `${appUrl}/api/v1/governance/approvals/action?token=${token}`, expiresAt: new Date(exp).toISOString(), action: "reject", approvalId: id });
+});
+
+// GET endpoint — handles the browser click from an approval email.
+// Verifies the token from the query string and renders a minimal HTML confirmation
+// page with the outcome. The POST /action endpoint handles form re-submissions.
+router.get("/governance/approvals/action", async (req, res): Promise<void> => {
+  const token = req.query["token"] as string | undefined;
+  if (!token) {
+    res.status(400).send("<h2>Missing token</h2><p>This link is incomplete. Please request a new approval link.</p>");
+    return;
+  }
+
+  const payload = verifyApprovalToken(token);
+  if (!payload) {
+    res.status(401).send("<h2>Link expired or invalid</h2><p>This approval link has expired or was tampered with. Please request a new one from the GalaxyBots dashboard.</p>");
+    return;
+  }
+
+  const [approval] = await db
+    .select({ id: pendingApprovalsTable.id, status: pendingApprovalsTable.status, toolName: pendingApprovalsTable.toolName, botName: pendingApprovalsTable.botName })
+    .from(pendingApprovalsTable).where(eq(pendingApprovalsTable.id, payload.id)).limit(1);
+
+  if (!approval) {
+    res.status(404).send("<h2>Approval not found</h2>");
+    return;
+  }
+
+  if (approval.status !== "pending") {
+    const safeToolName = (approval.toolName ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
+    res.status(200).send(`<h2>Already ${approval.status}</h2><p>This approval request for <strong>${safeToolName}</strong> has already been ${approval.status}.</p>`);
+    return;
+  }
+
+  // HTML-escape user-supplied fields to prevent XSS
+  function htmlEscape(s: string | null | undefined): string {
+    return (s ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
+  }
+
+  const expiresAt = new Date(payload.exp).toLocaleString();
+  const actionLabel = payload.action === "approve" ? "Approve" : "Reject";
+  const accentColor = payload.action === "approve" ? "#22c55e" : "#ef4444";
+  const safeBotName = htmlEscape(approval.botName ?? "Unknown bot");
+  const safeToolNameEscaped = htmlEscape(approval.toolName);
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${actionLabel} Action &mdash; GalaxyBots</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0f172a;color:#f1f5f9;max-width:480px;margin:60px auto;padding:24px}
+  h1{font-size:1.4rem;margin-bottom:8px}
+  .card{background:#1e293b;border-radius:12px;padding:24px;margin:16px 0}
+  label{display:block;margin-bottom:6px;font-size:.9rem;color:#94a3b8}
+  textarea{width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;border-radius:8px;padding:10px;font-size:.9rem;resize:vertical;box-sizing:border-box}
+  button{display:block;width:100%;padding:12px;background:${accentColor};color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:12px}
+  .meta{font-size:.8rem;color:#64748b;margin-top:16px}
+  .req{color:#f87171;font-size:.8rem;margin-left:4px}
+</style>
+</head>
+<body>
+<h1>GalaxyBots Approval Request</h1>
+<div class="card">
+  <p><strong>Bot:</strong> ${safeBotName}</p>
+  <p><strong>Action:</strong> ${safeToolNameEscaped}</p>
+  <p><strong>Your decision:</strong> ${actionLabel}</p>
+</div>
+<form method="POST" action="/api/v1/governance/approvals/action">
+  <input type="hidden" name="token" value="${token}">
+  <label for="reason">Reason <span class="req">* required</span></label>
+  <textarea id="reason" name="reason" rows="3" required minlength="3"
+    placeholder="${payload.action === "approve" ? "e.g., Reviewed and confirmed safe" : "e.g., Too risky — revisit tomorrow"}"></textarea>
+  <button type="submit">${actionLabel} this action</button>
+</form>
+<p class="meta">Link expires: ${expiresAt}</p>
+</body>
+</html>`);
+});
+
+router.post("/governance/approvals/:id/generate-action-link", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const { action } = req.body as { action?: "approve" | "reject" };
+
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid approval ID" }); return; }
+  if (action !== "approve" && action !== "reject") { res.status(400).json({ error: "action must be 'approve' or 'reject'" }); return; }
+
+  const clientId = req.user!.clientId;
+  const [approval] = await db
+    .select({ id: pendingApprovalsTable.id, status: pendingApprovalsTable.status, slaDeadline: pendingApprovalsTable.slaDeadline, clientId: pendingApprovalsTable.clientId })
+    .from(pendingApprovalsTable)
+    .where(and(eq(pendingApprovalsTable.id, id), eq(pendingApprovalsTable.clientId, clientId)))
+    .limit(1);
+
+  if (!approval) { res.status(404).json({ error: "Approval not found" }); return; }
+  if (approval.status !== "pending") { res.status(409).json({ error: `Approval already ${approval.status}` }); return; }
+
+  const exp = approval.slaDeadline ? approval.slaDeadline.getTime() : Date.now() + 30 * 60 * 1000;
+  const token = signApprovalToken({ id, action, exp });
+  const appUrl = process.env.APP_URL ?? "https://galaxybots.app";
+  const url = `${appUrl}/api/v1/governance/approvals/action?token=${token}`;
+
+  res.json({ url, expiresAt: new Date(exp).toISOString(), action, approvalId: id });
+});
+
+router.post("/governance/approvals/action", async (req, res): Promise<void> => {
+  // Accepts both JSON (API calls) and form-encoded bodies (email link clicks)
+  const body = req.body as { token?: string; reason?: string };
+  const token = body?.token;
+  const approvalReason = (body?.reason ?? "").trim();
+
+  if (!token) { res.status(400).json({ error: "token is required" }); return; }
+  if (!approvalReason) { res.status(400).json({ error: "reason is required" }); return; }
+
+  const payload = verifyApprovalToken(token);
+  if (!payload) { res.status(401).json({ error: "Invalid or expired action token" }); return; }
+
+  const resolvedAt = new Date();
+
+  // Atomic claim — single conditional UPDATE prevents races and replay attacks.
+  // If the row was already resolved (status != 'pending') or doesn't exist,
+  // returning() returns an empty array and we abort without executing any side effects.
+  if (payload.action === "approve") {
+    const [claimed] = await db
+      .update(pendingApprovalsTable)
+      .set({ status: "approved", resolvedAt, approvalReason, resolvedBy: null })
+      .where(and(eq(pendingApprovalsTable.id, payload.id), eq(pendingApprovalsTable.status, "pending")))
+      .returning();
+
+    if (!claimed) {
+      const [check] = await db.select({ status: pendingApprovalsTable.status }).from(pendingApprovalsTable).where(eq(pendingApprovalsTable.id, payload.id)).limit(1);
+      if (!check) { res.status(404).json({ error: "Approval not found" }); return; }
+      res.status(409).json({ error: `Approval already ${check.status}` }); return;
+    }
+
+    writeAuditEntry({
+      clientId: claimed.clientId,
+      sessionId: claimed.sessionId ? String(claimed.sessionId) : null,
+      engine: "coordinator",
+      decisionType: "human_approval_outcome",
+      payload: { outcome: "approved", approvalId: claimed.id, toolName: claimed.toolName, approvalReason, via: "email_link", resolvedAt: resolvedAt.toISOString() },
+    }).catch(() => {});
+
+    try {
+      const { toolResult, resumeResult } = await executeApprovalAndResume(claimed);
+      await db.update(pendingApprovalsTable).set({ toolResult }).where(eq(pendingApprovalsTable.id, payload.id));
+      res.json({ ok: true, action: "approved", approvalId: claimed.id, resumeResult });
+    } catch (err) {
+      res.json({ ok: true, action: "approved", approvalId: claimed.id, resumeError: err instanceof Error ? err.message : "resume failed" });
+    }
+  } else {
+    const [claimed] = await db
+      .update(pendingApprovalsTable)
+      .set({ status: "rejected", resolvedAt, rejectionReason: approvalReason, resolvedBy: null })
+      .where(and(eq(pendingApprovalsTable.id, payload.id), eq(pendingApprovalsTable.status, "pending")))
+      .returning();
+
+    if (!claimed) {
+      const [check] = await db.select({ status: pendingApprovalsTable.status }).from(pendingApprovalsTable).where(eq(pendingApprovalsTable.id, payload.id)).limit(1);
+      if (!check) { res.status(404).json({ error: "Approval not found" }); return; }
+      res.status(409).json({ error: `Approval already ${check.status}` }); return;
+    }
+
+    writeAuditEntry({
+      clientId: claimed.clientId,
+      sessionId: claimed.sessionId ? String(claimed.sessionId) : null,
+      engine: "coordinator",
+      decisionType: "human_approval_outcome",
+      payload: { outcome: "rejected", approvalId: claimed.id, toolName: claimed.toolName, rejectionReason: approvalReason, via: "email_link", resolvedAt: resolvedAt.toISOString() },
+    }).catch(() => {});
+
+    const pausedCtx = claimed.pausedLoopContext as Parameters<typeof resumeAgenticLoopWithRejection>[0]["pausedLoopContext"] | null;
+    if (pausedCtx) {
+      resumeAgenticLoopWithRejection({ pausedLoopContext: pausedCtx, toolName: claimed.toolName, rejectionReason: approvalReason, context: { clientId: claimed.clientId, botId: claimed.botId, botName: claimed.botName ?? undefined, sessionId: claimed.sessionId ?? undefined, conversationId: claimed.conversationId ?? undefined } }).catch(() => {});
+    }
+
+    res.json({ ok: true, action: "rejected", approvalId: claimed.id });
   }
 });
 

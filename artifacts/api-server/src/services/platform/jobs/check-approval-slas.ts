@@ -56,19 +56,22 @@ export async function checkApprovalSLAs() {
       const doubleDeadline = new Date(slaDeadline.getTime() + slaMinutes * 60 * 1000);
 
       if (now >= doubleDeadline) {
+        // Use "timed_out" status (distinct from "rejected") so the outcome is
+        // auditable and dashboards can show it separately. Store escalatedTo
+        // to identify which approver should have acted.
+        const timedOutReason = "SLA timeout — no decision recorded within the allowed window";
         const updated = await db
           .update(pendingApprovalsTable)
           .set({
-            status: "rejected",
+            status: "timed_out",
             resolvedAt: now,
-            rejectionReason: "SLA timeout — rejected automatically",
+            rejectionReason: timedOutReason,
+            escalatedTo: config?.secondaryApproverEmail ? -1 : null, // -1 = escalated to secondary (email stored in config)
           })
           .where(and(eq(pendingApprovalsTable.id, approval.id), eq(pendingApprovalsTable.status, "pending")))
           .returning();
 
         if (updated.length === 0) continue;
-
-        const rejectionReason = "SLA timeout — rejected automatically";
 
         const pausedCtx = approval.pausedLoopContext as {
           model: string;
@@ -92,38 +95,38 @@ export async function checkApprovalSLAs() {
           resumeAgenticLoopWithRejection({
             pausedLoopContext: pausedCtx,
             toolName: approval.toolName,
-            rejectionReason,
+            rejectionReason: timedOutReason,
             context: toolContext,
-          }).catch((e) => console.error("[sla] Failed to resume agentic loop after SLA rejection:", e));
+          }).catch((e) => console.error("[sla] Failed to resume agentic loop after SLA timeout:", e));
         }
 
         createNotification({
           clientId: approval.clientId,
           category: "system",
           severity: "critical",
-          title: "Approval auto-rejected (SLA timeout)",
-          body: `${approval.botName ?? "Bot"}'s request to use "${approval.toolName}" was auto-rejected after ${slaMinutes * 2} minutes without a decision.`,
+          title: "Approval timed out (SLA expired)",
+          body: `${approval.botName ?? "Bot"}'s request to use "${approval.toolName}" timed out after ${slaMinutes * 2} minutes without a decision.`,
           link: "/command-center",
           metadata: { approvalId: approval.id, toolName: approval.toolName },
-        }).catch((e) => console.error("[sla] Failed to create auto-reject notification:", e));
+        }).catch((e) => console.error("[sla] Failed to create SLA timeout notification:", e));
 
         broadcastSSE("activity", {
-          id: `sla-reject-${approval.id}-${Date.now()}`,
+          id: `sla-timeout-${approval.id}-${Date.now()}`,
           timestamp: new Date().toISOString(),
           clientId: approval.clientId,
           source: "system",
           eventType: "approval",
           severity: "critical",
-          title: "Approval auto-rejected (SLA timeout)",
-          description: `Tool "${approval.toolName}" request was auto-rejected after ${slaMinutes * 2} minutes`,
-          metadata: { approvalId: approval.id, toolName: approval.toolName, reason: rejectionReason },
+          title: "Approval timed out (SLA expired)",
+          description: `Tool "${approval.toolName}" request timed out after ${slaMinutes * 2} minutes`,
+          metadata: { approvalId: approval.id, toolName: approval.toolName, reason: timedOutReason },
         });
 
-        broadcastSSE("approval-sla-rejected", {
+        broadcastSSE("approval-sla-timed-out", {
           clientId: approval.clientId,
           approvalId: approval.id,
           toolName: approval.toolName,
-          reason: rejectionReason,
+          reason: timedOutReason,
         });
       } else if (!approval.escalatedAt) {
         await db

@@ -13,6 +13,8 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { createNotification } from "../admin/notifications";
 import { emitActivityEvent } from "../analytics/activity-events";
+import { signApprovalToken } from "./approval-token";
+import nodemailer from "nodemailer";
 
 export interface PermissionCheckResult {
   allowed: boolean;
@@ -86,6 +88,10 @@ export async function createPendingApproval(params: {
   sessionId?: number;
   conversationId?: number;
   pausedLoopContext?: PausedLoopContext;
+  contextType?: "coordinator_gate" | "tool_gate" | "consequence_gate";
+  requiredApproverRole?: "any" | "owner";
+  consequenceRiskScore?: number;
+  confidenceScore?: number;
 }): Promise<number> {
   const timeSensitiveTools = [
     "send_email",
@@ -121,6 +127,10 @@ export async function createPendingApproval(params: {
       pausedLoopContext: params.pausedLoopContext ?? null,
       slaDeadline,
       isTimeSensitive,
+      contextType: params.contextType ?? null,
+      requiredApproverRole: params.requiredApproverRole ?? "any",
+      consequenceRiskScore: params.consequenceRiskScore ?? null,
+      confidenceScore: params.confidenceScore ?? null,
     })
     .returning();
 
@@ -156,6 +166,73 @@ export async function createPendingApproval(params: {
     metadata: { approvalId: approval.id, toolName: params.toolName, botId: params.botId },
     link: `/command-center`,
   });
+
+  // Email notification with one-click approve/reject links — best-effort, never throws
+  try {
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (smtpUser && smtpPass) {
+      // Fetch the client's owner email to send the notification to
+      const [client] = await db
+        .select({ contactEmail: clientsTable.contactEmail })
+        .from(clientsTable)
+        .where(eq(clientsTable.id, params.clientId))
+        .limit(1);
+
+      const recipientEmail = client?.contactEmail;
+      if (recipientEmail) {
+        const appUrl = process.env.APP_URL ?? "https://galaxybots.app";
+        const exp = slaDeadline.getTime();
+        const approveToken = signApprovalToken({ id: approval.id, action: "approve", exp });
+        const rejectToken = signApprovalToken({ id: approval.id, action: "reject", exp });
+        const approveUrl = `${appUrl}/api/v1/governance/approvals/action?token=${approveToken}`;
+        const rejectUrl = `${appUrl}/api/v1/governance/approvals/action?token=${rejectToken}`;
+
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+          port: Number(process.env.SMTP_PORT ?? 587),
+          secure: false,
+          auth: { user: smtpUser, pass: smtpPass },
+        });
+
+        await transporter.sendMail({
+          from: `"GalaxyBots" <${smtpUser}>`,
+          to: recipientEmail,
+          subject: `[Action Required] ${params.botName ?? "A bot"} needs approval to use ${params.toolName}`,
+          text: [
+            `${params.botName ?? "A bot"} is requesting permission to use "${params.toolName}".`,
+            ``,
+            `Please review and take action:`,
+            ``,
+            `✅ Approve: ${approveUrl}`,
+            `❌ Reject:  ${rejectUrl}`,
+            ``,
+            `These links expire at: ${slaDeadline.toISOString()}`,
+            ``,
+            `You can also manage approvals in the GalaxyBots dashboard:`,
+            `${appUrl}/command-center`,
+          ].join("\n"),
+          html: [
+            `<p><strong>${params.botName ?? "A bot"}</strong> is requesting permission to use <strong>${params.toolName}</strong>.</p>`,
+            `<table cellpadding="0" cellspacing="0" style="margin:24px 0">`,
+            `  <tr>`,
+            `    <td style="padding:0 8px 0 0">`,
+            `      <a href="${approveUrl}" style="display:inline-block;padding:12px 24px;background:#22c55e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">✅ Approve</a>`,
+            `    </td>`,
+            `    <td>`,
+            `      <a href="${rejectUrl}" style="display:inline-block;padding:12px 24px;background:#ef4444;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">❌ Reject</a>`,
+            `    </td>`,
+            `  </tr>`,
+            `</table>`,
+            `<p style="color:#64748b;font-size:.85rem">Links expire at ${slaDeadline.toISOString()}</p>`,
+          ].join("\n"),
+        });
+      }
+    }
+  } catch (emailErr) {
+    console.error("[governance] Failed to send approval notification email:", emailErr);
+  }
 
   return approval.id;
 }

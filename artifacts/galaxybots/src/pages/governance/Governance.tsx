@@ -1,5 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -269,40 +269,229 @@ function PermissionsTab() {
   );
 }
 
+type ApprovalExtended = Approval & {
+  slaDeadline?: string | null;
+  contextType?: string | null;
+  requiredApproverRole?: string;
+  consequenceRiskScore?: number | null;
+  confidenceScore?: number | null;
+  approvalReason?: string | null;
+};
+
+function SlaCountdown({ deadline }: { deadline: string }) {
+  const [remaining, setRemaining] = useState(() => new Date(deadline).getTime() - Date.now());
+
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setRemaining(new Date(deadline).getTime() - Date.now());
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [deadline]);
+
+  if (remaining <= 0) return <span className="text-red-400 text-xs font-medium">SLA expired</span>;
+  const h = Math.floor(remaining / 3600000);
+  const m = Math.floor((remaining % 3600000) / 60000);
+  const s = Math.floor((remaining % 60000) / 1000);
+  const urgent = remaining < 5 * 60 * 1000;
+  return (
+    <span className={`text-xs font-mono font-medium ${urgent ? "text-red-400 animate-pulse" : "text-amber-400"}`}>
+      {h > 0 ? `${h}h ` : ""}{m}m {s}s
+    </span>
+  );
+}
+
+function ApprovalReasonDialog({
+  open,
+  onOpenChange,
+  action,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  action: "approve" | "reject";
+  onConfirm: (reason: string) => void;
+  isPending: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-slate-800 border-slate-700 text-white">
+        <DialogHeader>
+          <DialogTitle>{action === "approve" ? "Approve Action" : "Reject Action"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label className="text-slate-300">Reason (required)</Label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={action === "approve" ? "e.g., Reviewed and confirmed safe to proceed" : "e.g., Too risky at this time — retry after review"}
+            className="bg-slate-700 border-slate-600 text-white"
+            rows={3}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            variant={action === "approve" ? "default" : "destructive"}
+            onClick={() => { if (reason.trim()) { onConfirm(reason.trim()); setReason(""); } }}
+            disabled={!reason.trim() || isPending}
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            {action === "approve" ? "Confirm Approve" : "Confirm Reject"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ApprovalsTab() {
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [dialogState, setDialogState] = useState<{ open: boolean; action: "approve" | "reject"; targetId: number | null; bulk: boolean }>({ open: false, action: "approve", targetId: null, bulk: false });
   const queryClient = useQueryClient();
 
-  const { data: approvals, isLoading } = useQuery<Approval[]>({
+  const { data: approvals, isLoading } = useQuery<ApprovalExtended[]>({
     queryKey: ["approvals", statusFilter],
     queryFn: () => apiFetch(`/governance/approvals?status=${statusFilter}`),
+    refetchInterval: statusFilter === "pending" ? 30000 : false,
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: number) => apiFetch(`/governance/approvals/${id}/approve`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      apiFetch(`/governance/approvals/${id}/approve`, { method: "POST", body: JSON.stringify({ reason }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["approvals"] }); setSelectedIds(new Set()); },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (id: number) =>
-      apiFetch(`/governance/approvals/${id}/reject`, { method: "POST", body: JSON.stringify({ reason: "Rejected by owner" }) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      apiFetch(`/governance/approvals/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["approvals"] }); setSelectedIds(new Set()); },
   });
+
+  const batchApproveMutation = useMutation({
+    mutationFn: ({ ids, reason }: { ids: number[]; reason: string }) =>
+      apiFetch(`/governance/approvals/batch-approve`, { method: "POST", body: JSON.stringify({ approvalIds: ids, reason }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["approvals"] }); setSelectedIds(new Set()); },
+  });
+
+  const batchRejectMutation = useMutation({
+    mutationFn: ({ ids, reason }: { ids: number[]; reason: string }) =>
+      apiFetch(`/governance/approvals/batch-reject`, { method: "POST", body: JSON.stringify({ approvalIds: ids, reason }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["approvals"] }); setSelectedIds(new Set()); },
+  });
+
+  const pendingList = (approvals || []).filter((a) => a.status === "pending");
+  const allSelected = pendingList.length > 0 && pendingList.every((a) => selectedIds.has(a.id));
+
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingList.map((a) => a.id)));
+    }
+  }
+
+  function openDialog(action: "approve" | "reject", id: number | null, bulk: boolean) {
+    setDialogState({ open: true, action, targetId: id, bulk });
+  }
+
+  function handleConfirm(reason: string) {
+    if (dialogState.bulk) {
+      const ids = Array.from(selectedIds);
+      if (dialogState.action === "approve") {
+        batchApproveMutation.mutate({ ids, reason });
+      } else {
+        batchRejectMutation.mutate({ ids, reason });
+      }
+    } else if (dialogState.targetId !== null) {
+      if (dialogState.action === "approve") {
+        approveMutation.mutate({ id: dialogState.targetId, reason });
+      } else {
+        rejectMutation.mutate({ id: dialogState.targetId, reason });
+      }
+    }
+    setDialogState((d) => ({ ...d, open: false }));
+  }
+
+  const contextBadge = (a: ApprovalExtended) => {
+    if (!a.contextType) return null;
+    const labels: Record<string, string> = { coordinator_gate: "Strategy", tool_gate: "Tool", consequence_gate: "Risk" };
+    return <Badge variant="outline" className="text-xs border-slate-600 text-slate-400">{labels[a.contextType] ?? a.contextType}</Badge>;
+  };
+
+  const riskBadge = (a: ApprovalExtended) => {
+    if (a.consequenceRiskScore == null && a.confidenceScore == null) return null;
+    if (a.consequenceRiskScore != null) {
+      const risk = a.consequenceRiskScore;
+      const cls = risk >= 70 ? "bg-red-900/50 text-red-300 border-red-700" : risk >= 40 ? "bg-amber-900/50 text-amber-300 border-amber-700" : "bg-green-900/50 text-green-300 border-green-700";
+      return <Badge variant="outline" className={`text-xs ${cls}`}>Risk {risk}%</Badge>;
+    }
+    if (a.confidenceScore != null) {
+      const conf = a.confidenceScore;
+      const cls = conf >= 60 ? "bg-green-900/50 text-green-300 border-green-700" : conf >= 30 ? "bg-amber-900/50 text-amber-300 border-amber-700" : "bg-red-900/50 text-red-300 border-red-700";
+      return <Badge variant="outline" className={`text-xs ${cls}`}>Confidence {conf}/100</Badge>;
+    }
+    return null;
+  };
+
+  const ownerOnly = (a: ApprovalExtended) =>
+    a.requiredApproverRole === "owner" ? (
+      <Badge variant="outline" className="text-xs border-amber-600 text-amber-400">Owner only</Badge>
+    ) : null;
+
+  const isMutating = approveMutation.isPending || rejectMutation.isPending || batchApproveMutation.isPending || batchRejectMutation.isPending;
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        {["pending", "approved", "rejected"].map((s) => (
+      <div className="flex items-center gap-2 flex-wrap">
+        {["pending", "approved", "rejected", "all"].map((s) => (
           <Button
             key={s}
             variant={statusFilter === s ? "default" : "outline"}
             size="sm"
-            onClick={() => setStatusFilter(s)}
+            onClick={() => { setStatusFilter(s); setSelectedIds(new Set()); }}
           >
             {s.charAt(0).toUpperCase() + s.slice(1)}
           </Button>
         ))}
+        {statusFilter === "pending" && (
+          <span className="ml-auto text-xs text-slate-500 flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />Auto-refreshing every 30s
+          </span>
+        )}
       </div>
+
+      {statusFilter === "pending" && pendingList.length > 0 && (
+        <div className="flex items-center gap-2 p-2 bg-slate-800/70 rounded-lg border border-slate-700/50">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleAll}
+            className="accent-blue-500 w-4 h-4"
+          />
+          <span className="text-slate-400 text-sm">{selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}</span>
+          {selectedIds.size > 0 && (
+            <>
+              <Button size="sm" variant="default" className="ml-auto" onClick={() => openDialog("approve", null, true)} disabled={isMutating}>
+                <CheckCircle className="w-4 h-4 mr-1" />Bulk Approve ({selectedIds.size})
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => openDialog("reject", null, true)} disabled={isMutating}>
+                <XCircle className="w-4 h-4 mr-1" />Bulk Reject ({selectedIds.size})
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
@@ -320,21 +509,41 @@ function ApprovalsTab() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <Card className="bg-slate-800/50 border-slate-700/50">
+              <Card className={`bg-slate-800/50 border-slate-700/50 ${selectedIds.has(approval.id) ? "border-blue-600/50 ring-1 ring-blue-600/30" : ""}`}>
                 <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-3">
+                    {approval.status === "pending" && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(approval.id)}
+                        onChange={() => toggleSelect(approval.id)}
+                        className="accent-blue-500 w-4 h-4 mt-1 shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-white font-medium">{approval.toolName}</span>
                         <Badge variant={approval.status === "pending" ? "secondary" : approval.status === "approved" ? "default" : "destructive"}>
                           {approval.status}
                         </Badge>
+                        {contextBadge(approval)}
+                        {riskBadge(approval)}
+                        {ownerOnly(approval)}
                       </div>
                       <p className="text-slate-400 text-sm mt-1">
                         Requested by <span className="text-blue-400">{approval.botName || `Bot #${approval.botId}`}</span>
                         {" · "}
                         {new Date(approval.createdAt).toLocaleString()}
                       </p>
+                      {approval.slaDeadline && approval.status === "pending" && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-slate-500 text-xs">SLA:</span>
+                          <SlaCountdown deadline={approval.slaDeadline} />
+                        </div>
+                      )}
+                      {approval.approvalReason && (
+                        <p className="text-xs text-green-400 mt-1">Reason: {approval.approvalReason}</p>
+                      )}
                       {approval.toolInput && (
                         <pre className="text-xs text-slate-500 mt-2 bg-slate-900/50 p-2 rounded max-h-20 overflow-auto">
                           {JSON.stringify(approval.toolInput, null, 2)}
@@ -342,20 +551,20 @@ function ApprovalsTab() {
                       )}
                     </div>
                     {approval.status === "pending" && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0">
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => approveMutation.mutate(approval.id)}
-                          disabled={approveMutation.isPending}
+                          onClick={() => openDialog("approve", approval.id, false)}
+                          disabled={isMutating}
                         >
                           <CheckCircle className="w-4 h-4 mr-1" />Approve
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => rejectMutation.mutate(approval.id)}
-                          disabled={rejectMutation.isPending}
+                          onClick={() => openDialog("reject", approval.id, false)}
+                          disabled={isMutating}
                         >
                           <XCircle className="w-4 h-4 mr-1" />Reject
                         </Button>
@@ -368,6 +577,14 @@ function ApprovalsTab() {
           ))}
         </div>
       )}
+
+      <ApprovalReasonDialog
+        open={dialogState.open}
+        onOpenChange={(v) => setDialogState((d) => ({ ...d, open: v }))}
+        action={dialogState.action}
+        onConfirm={handleConfirm}
+        isPending={isMutating}
+      />
     </div>
   );
 }
