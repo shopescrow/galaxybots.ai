@@ -61,6 +61,7 @@ import { runMonthlyComplianceReports } from "./jobs/monthly-compliance-report";
 import { runGaaTick } from "./jobs/gaa-cycle";
 import { runConstitutionDriftCheck } from "./jobs/gaa-constitution-drift";
 import { runSelfActualizationCycle } from "./jobs/self-actualization";
+import { runBeliefConflictResolution } from "./jobs/resolve-belief-conflicts";
 import { checkMoltbookHeartbeats } from "./jobs/check-moltbook-heartbeats";
 import { runAssetManagementCycle } from "./jobs/asset-lifecycle";
 import { runDemandRefresh } from "./jobs/demand-refresh";
@@ -111,6 +112,7 @@ const mediumFreqJobs: Job[] = [
 const lowFreqJobs: Job[] = [
   { name: "gaa-constitution-drift", fn: runConstitutionDriftCheck },
   { name: "self-actualization", fn: runSelfActualizationCycle },
+  { name: "belief-conflict-resolution", fn: runBeliefConflictResolution },
   { name: "competitor alerts", fn: checkCompetitorAlerts },
   { name: "BingoLingo auto-content", fn: checkBingolingoAutoContent },
   { name: "content newsletters", fn: checkContentNewsletters },

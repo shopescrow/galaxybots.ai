@@ -10,3 +10,4 @@ export * from "./practice";
 export * from "./knowledge-transfer";
 export * from "./self-modification";
 export * from "./metrics";
+export * from "./belief-conflict-resolution";

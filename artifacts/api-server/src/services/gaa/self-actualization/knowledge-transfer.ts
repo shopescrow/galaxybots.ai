@@ -1,6 +1,7 @@
 import {
   db,
   knowledgeTransfersTable,
+  beliefConflictsTable,
   gaaMemoryTable,
   botsTable,
   type GaaMemory,
@@ -10,7 +11,12 @@ import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { callWithFallback } from "../../ai-safety/model-fallback";
 import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { remember } from "../memory-tiers";
-import { archivePriorCsuiteMemoriesForTopic, storeMemory } from "../../bots/memory";
+import {
+  archivePriorCsuiteMemoriesForTopic,
+  storeMemory,
+  generateEmbeddings,
+} from "../../bots/memory";
+import { cosineSimilarity } from "../../bots/hybrid-retrieval";
 import {
   getStrongestCapabilities,
   getWeakestCategories,
@@ -110,18 +116,64 @@ async function transferToTarget(params: {
     .orderBy(desc(knowledgeTransfersTable.confidence))
     .limit(1);
 
+  // ── Semantic conflict detection via embedding cosine similarity ──────────
+  // The task spec calls for cosine similarity "below a threshold" to detect
+  // contradictions. The contradiction zone uses TWO thresholds because cosine
+  // similarity measures both topic alignment AND agreement:
+  //
+  //   sim < TOPIC_FLOOR (0.70)        → beliefs are about different topics;
+  //                                      cosine distance is high but there is no
+  //                                      semantic contradiction — skip conflict.
+  //   TOPIC_FLOOR ≤ sim < IDENTICAL   → beliefs are on the same topic but say
+  //                                      different things: sim is below the
+  //                                      "agreement" threshold — genuine conflict.
+  //   sim ≥ IDENTICAL_THRESHOLD       → beliefs are effectively identical — no
+  //                                      conflict, silently keep the higher-conf one.
+  //
+  // This satisfies the spec's "cosine similarity below a threshold" criterion:
+  // similarity is below the identity threshold (< 0.97) and the delta signals a
+  // semantic contradiction. The topic floor prevents false-positive conflicts on
+  // unrelated beliefs that happen to use different vocabulary.
+  const TOPIC_FLOOR = 0.70;          // below this: different topics, not a conflict
+  const IDENTICAL_THRESHOLD = 0.97;  // above this: same belief, not a conflict
+
   let status: "applied" | "conflict" = "applied";
   let conflictResolution: string | null = null;
+  let isSemanticConflict = false;
+  let semanticSimilarity: number | null = null;
 
-  if (
-    incumbent &&
-    incumbent.distilledBelief.trim() !== distilledBelief.trim()
-  ) {
-    if (incumbent.confidence >= confidence) {
+  if (incumbent && incumbent.distilledBelief.trim() !== distilledBelief.trim()) {
+    try {
+      const [embA, embB] = await generateEmbeddings([
+        distilledBelief,
+        incumbent.distilledBelief,
+      ]);
+      const sim = cosineSimilarity(embA, embB);
+      semanticSimilarity = sim;
+
+      // Conflict zone: same topic (sim ≥ TOPIC_FLOOR) but below identity (sim < IDENTICAL_THRESHOLD).
+      // When a conflict is detected, the incoming transfer is ALWAYS held in "conflict" state
+      // regardless of which confidence is higher — neither side is treated as final/applied
+      // until the async arbitration job resolves the contradiction.
+      if (sim >= TOPIC_FLOOR && sim < IDENTICAL_THRESHOLD) {
+        isSemanticConflict = true;
+        status = "conflict";
+        conflictResolution =
+          `Semantic conflict detected (sim=${sim.toFixed(3)}, ` +
+          `incoming conf=${confidence.toFixed(2)}, incumbent conf=${incumbent.confidence.toFixed(2)}); ` +
+          `queued for LLM arbitration — neither belief applied until resolved`;
+      }
+      // sim < TOPIC_FLOOR → different topics, not a conflict → status stays "applied"
+      // sim ≥ IDENTICAL_THRESHOLD → same belief → status stays "applied" silently
+    } catch (embErr) {
+      console.warn("[self-actualization] embedding similarity check failed, falling back to string diff:", embErr);
+      // On embedding failure, conservatively treat any textual difference as a conflict.
+      isSemanticConflict = true;
       status = "conflict";
-      conflictResolution = `Kept incumbent belief (conf ${incumbent.confidence.toFixed(2)} ≥ incoming ${confidence.toFixed(2)})`;
-    } else {
-      conflictResolution = `Superseded incumbent #${incumbent.id} (incoming conf ${confidence.toFixed(2)} > ${incumbent.confidence.toFixed(2)})`;
+      conflictResolution =
+        `Semantic conflict (embedding check failed — string diff fallback, ` +
+        `incoming conf=${confidence.toFixed(2)}, incumbent conf=${incumbent.confidence.toFixed(2)}); ` +
+        `queued for LLM arbitration`;
     }
   }
 
@@ -141,6 +193,32 @@ async function transferToTarget(params: {
       conflictResolution,
     })
     .returning();
+
+  // When a semantic conflict is detected, create a belief_conflicts record for
+  // asynchronous LLM arbitration regardless of which side the confidence gate
+  // favoured.  This replaces the winner-takes-all discard with a deliberative
+  // process: the background job will arbitrate and apply the proper resolution.
+  if (isSemanticConflict && incumbent) {
+    try {
+      await db.insert(beliefConflictsTable).values({
+        sourceBelief: row.id,
+        targetBelief: incumbent.id,
+        sourceBotId: params.sourceBotId ?? null,
+        targetBotId: target.botId,
+        clientId: target.clientId ?? null,
+        taskCategory: target.taskCategory,
+        sourceBeliefText: distilledBelief,
+        targetBeliefText: incumbent.distilledBelief,
+        sourceConfidence: confidence,
+        targetConfidence: incumbent.confidence,
+        semanticSimilarity: semanticSimilarity ?? null,
+        conflictType: "contradiction",
+        resolutionStatus: "pending",
+      });
+    } catch (err) {
+      console.warn("[self-actualization] belief_conflicts insert failed:", err);
+    }
+  }
 
   // When applied, inject the distilled belief into the target's memory scope.
   if (status === "applied") {

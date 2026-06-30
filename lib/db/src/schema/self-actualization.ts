@@ -170,6 +170,9 @@ export const knowledgeTransfersTable = pgTable(
     status: text("status").notNull().default("proposed"),
     conflictResolution: text("conflict_resolution"),
     targetBeliefId: integer("target_belief_id"),
+    // Soft-archive timestamp: set when the belief loses arbitration or is
+    // superseded. Never deleted so provenance is always inspectable.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -285,6 +288,74 @@ export const selfActualizationControlTable = pgTable(
   },
   (t) => [uniqueIndex("self_actualization_control_key_idx").on(t.key)],
 );
+
+// 7. Belief conflicts — semantic contradictions between agent beliefs, pending
+//    LLM-mediated arbitration. Created when an incoming knowledge transfer
+//    contradicts an existing applied belief; resolved asynchronously.
+export const beliefConflictsTable = pgTable(
+  "belief_conflicts",
+  {
+    id: serial("id").primaryKey(),
+    // The incoming knowledge transfer whose distilled_belief triggered the conflict.
+    sourceBelief: integer("source_belief_id").references(
+      () => knowledgeTransfersTable.id,
+      { onDelete: "set null" },
+    ),
+    // The incumbent applied knowledge transfer that was contradicted.
+    targetBelief: integer("target_belief_id").references(
+      () => knowledgeTransfersTable.id,
+      { onDelete: "set null" },
+    ),
+    sourceBotId: integer("source_bot_id").references(() => botsTable.id, {
+      onDelete: "set null",
+    }),
+    targetBotId: integer("target_bot_id")
+      .notNull()
+      .references(() => botsTable.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clientsTable.id, {
+      onDelete: "cascade",
+    }),
+    taskCategory: text("task_category"),
+    // Verbatim belief texts captured at conflict time (survive transfer deletion).
+    sourceBeliefText: text("source_belief_text").notNull(),
+    targetBeliefText: text("target_belief_text").notNull(),
+    sourceConfidence: real("source_confidence").notNull(),
+    targetConfidence: real("target_confidence").notNull(),
+    // Cosine similarity between the two belief embeddings (0..1).
+    // Higher means the beliefs are semantically closer despite contradicting.
+    semanticSimilarity: real("semantic_similarity"),
+    // contradiction | partial_overlap | context_dependent
+    conflictType: text("conflict_type").notNull().default("contradiction"),
+    // pending | resolved | human_review
+    resolutionStatus: text("resolution_status").notNull().default("pending"),
+    // Arbitration outputs (populated after LLM resolution).
+    synthesizedBelief: text("synthesized_belief"),
+    dissentingNote: text("dissenting_note"),
+    // merged | first_wins | second_wins | context_dependent
+    resolutionType: text("resolution_type"),
+    // Full chain-of-thought reasoning from the arbitration LLM call.
+    arbitrationReasoning: text("arbitration_reasoning"),
+    // Condition tag when resolution_type = 'context_dependent'.
+    conditionTag: text("condition_tag"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("belief_conflicts_target_bot_id_idx").on(t.targetBotId),
+    index("belief_conflicts_resolution_status_idx").on(t.resolutionStatus),
+    index("belief_conflicts_created_at_idx").on(t.createdAt),
+    index("belief_conflicts_task_category_idx").on(t.taskCategory),
+  ],
+);
+
+export const insertBeliefConflictSchema = createInsertSchema(
+  beliefConflictsTable,
+).omit({ id: true, createdAt: true });
+
+export type BeliefConflict = typeof beliefConflictsTable.$inferSelect;
+export type InsertBeliefConflict = z.infer<typeof insertBeliefConflictSchema>;
 
 export const insertBotCapabilityModelSchema = createInsertSchema(
   botCapabilityModelTable,

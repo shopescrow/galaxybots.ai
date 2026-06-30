@@ -8,7 +8,8 @@ import {
 } from "@workspace/db";
 import { eq, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { requireRole } from "../../middleware/auth";
+import { authenticate, requireRole } from "../../middleware/auth";
+import { isCsuiteInDomain } from "../../services/gaa/self-actualization";
 import {
   getConstitution,
   listEscalations,
@@ -40,6 +41,7 @@ import {
   rejectSelfModification,
   rollbackSelfModification,
   rollbackAllPromoted,
+  listBeliefConflicts,
 } from "../../services/gaa/self-actualization";
 import { db as _db, botCapabilityModelTable } from "@workspace/db";
 import { desc as _desc } from "drizzle-orm";
@@ -483,6 +485,70 @@ router.get(
     const rows = await listKnowledgeTransfers(
       Number.isFinite(limit) ? limit : 50,
     );
+    res.json(rows);
+  },
+);
+
+// --- Belief conflict history -----------------------------------------------
+// Access control:
+//   • owner role — full access; results unscoped (cross-domain visibility).
+//   • Non-owner authenticated users — C-suite domain access:
+//       The caller must supply a `botId` that (a) belongs to their clientId
+//       and (b) is identified as a C-suite bot. Results are hard-scoped to
+//       the caller's clientId so they can never read another tenant's beliefs.
+router.get(
+  "/gaa/conflicts/history",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const caller = req.user!;
+    const isOwner = caller.role === "owner";
+
+    const botId =
+      typeof req.query.botId === "string" ? Number(req.query.botId) : undefined;
+    const status =
+      typeof req.query.status === "string" ? req.query.status : undefined;
+    const limit =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const offset =
+      typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+
+    if (botId != null && !Number.isFinite(botId)) {
+      res.status(400).json({ error: "Invalid botId" });
+      return;
+    }
+    if (status && !["pending", "resolved", "human_review"].includes(status)) {
+      res.status(400).json({ error: "Invalid status — must be pending | resolved | human_review" });
+      return;
+    }
+
+    // Non-owner path: require a botId and verify it's a C-suite bot in the
+    // caller's domain.  Owners skip this gate and may query across all domains.
+    let scopeClientId: number | undefined;
+    if (!isOwner) {
+      if (botId == null) {
+        res.status(403).json({
+          error: "Non-owner callers must supply a botId scoped to a C-suite bot in their domain",
+        });
+        return;
+      }
+      const allowed = await isCsuiteInDomain(botId, caller.clientId);
+      if (!allowed) {
+        res.status(403).json({
+          error: "The requested botId is not a C-suite bot in your client domain",
+        });
+        return;
+      }
+      // Hard-scope to the caller's clientId regardless of what other filters say.
+      scopeClientId = caller.clientId;
+    }
+
+    const rows = await listBeliefConflicts({
+      botId: Number.isFinite(botId) ? botId : undefined,
+      status,
+      limit: Number.isFinite(limit) ? Math.min(limit, 200) : 50,
+      offset: Number.isFinite(offset) ? offset : 0,
+      scopeClientId,
+    });
     res.json(rows);
   },
 );
