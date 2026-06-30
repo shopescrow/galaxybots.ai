@@ -306,6 +306,22 @@ export async function syncCircuitFromRedis(provider: string): Promise<void> {
   local.openedAt = remote.openedAt;
 }
 
+/**
+ * Record a rate-limit (429) signal for a provider WITHOUT incrementing the
+ * global error counter that drives the circuit-breaker trip logic.
+ *
+ * Rate limits are a capacity signal, not an outage: the provider is healthy
+ * but temporarily throttling this key/tenant. Tripping the global breaker on
+ * every 429 would cascade the problem to all tenants even though the backend
+ * is reachable. Instead, a 429 is handled by the provider-key-pool (backing
+ * off the specific key) and the per-key backoff in the adapter. True outages
+ * (5xx, timeouts, network errors) continue to use recordError() so the
+ * breaker trips appropriately when the backend is genuinely unavailable.
+ */
+export function recordRateLimit(provider: string): void {
+  console.log(`[CircuitBreaker] ${provider}: 429 rate-limit received — skipping error counter (capacity signal, not outage)`);
+}
+
 export function resetCircuit(provider: string): void {
   circuits.delete(provider);
   withRedis(async (r) => {

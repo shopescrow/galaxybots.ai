@@ -1,4 +1,5 @@
 import type { LLMProvider, LLMCompletionOptions, LLMCompletion } from "../ports/index.js";
+import { pickGlmKey, glmPoolHasKeys, markGlmKeyRateLimited } from "../../services/ai-safety/provider-key-pool.js";
 
 const GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
 
@@ -65,9 +66,19 @@ interface GLMErrorResponse {
   error?: { message?: string; code?: string };
 }
 
+/** True when the HTTP status or error message signals a rate-limit (not an outage). */
+export function isGlmRateLimitError(err: unknown): boolean {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    if (msg.includes("429") || msg.includes("rate limit") || msg.includes("rate_limit") || msg.includes("quota")) return true;
+  }
+  const status = (err as { status?: number })?.status;
+  return status === 429;
+}
+
 async function withExponentialBackoff<T>(
   fn: () => Promise<T>,
-  maxRetries = 3,
+  maxRetries = 2,
   baseDelayMs = 1000,
 ): Promise<T> {
   let lastError: unknown;
@@ -77,7 +88,6 @@ async function withExponentialBackoff<T>(
     } catch (err) {
       lastError = err;
       const isRetryable = err instanceof Error && (
-        err.message.includes("429") ||
         err.message.includes("503") ||
         err.message.includes("timeout")
       );
@@ -107,19 +117,39 @@ function recoverJsonMode(content: string): Record<string, unknown> | null {
 
 export class GLM52Adapter implements LLMProvider {
   private readonly apiKey: string;
+  private readonly keyLabel: string;
   private _available = true;
 
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey ?? process.env.ZHIPU_API_KEY ?? "";
+  /**
+   * Construct the adapter.
+   *
+   * When called without arguments the adapter picks the best available key from
+   * the multi-key pool (ZHIPU_API_KEY, ZHIPU_API_KEY_1, …). You can pass an
+   * explicit key to pin to a specific pool entry (used by model-fallback when it
+   * needs to know which key was used for rate-limit attribution).
+   */
+  constructor(apiKey?: string, keyLabel?: string) {
+    if (apiKey) {
+      this.apiKey = apiKey;
+      this.keyLabel = keyLabel ?? "explicit";
+    } else {
+      const picked = pickGlmKey();
+      this.apiKey = picked?.key ?? process.env.ZHIPU_API_KEY ?? "";
+      this.keyLabel = picked?.label ?? "ZHIPU_API_KEY";
+    }
   }
 
   isAvailable(): boolean {
-    return this._available && this.apiKey.length > 0;
+    return this._available && (this.apiKey.length > 0 || glmPoolHasKeys());
+  }
+
+  static isPoolAvailable(): boolean {
+    return glmPoolHasKeys();
   }
 
   async complete(options: LLMCompletionOptions): Promise<LLMCompletion> {
-    if (!this.isAvailable()) {
-      throw new Error("GLM 5.2 adapter is not available: missing API key or circuit open");
+    if (!this.apiKey) {
+      throw new Error("GLM 5.2 adapter is not available: no API key available in pool");
     }
 
     const routedModel = GLM_MODEL_ROUTING[options.model] ?? "glm-4.5-flash";
@@ -134,12 +164,15 @@ export class GLM52Adapter implements LLMProvider {
       body.tools = options.tools;
     }
 
+    const keyLabel = this.keyLabel;
+    const apiKey = this.apiKey;
+
     return withExponentialBackoff(async () => {
       const response = await fetch(`${GLM_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.apiKey}`,
+          "Authorization": `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(60_000),
@@ -148,6 +181,14 @@ export class GLM52Adapter implements LLMProvider {
       if (!response.ok) {
         const errBody = await response.json().catch(() => ({})) as GLMErrorResponse;
         const msg = errBody?.error?.message ?? `HTTP ${response.status}`;
+
+        if (response.status === 429) {
+          markGlmKeyRateLimited(apiKey);
+          const rateLimitErr = new Error(`GLM API rate limit (${keyLabel}): ${msg}`);
+          Object.assign(rateLimitErr, { status: 429 });
+          throw rateLimitErr;
+        }
+
         throw new Error(`GLM API error: ${msg}`);
       }
 

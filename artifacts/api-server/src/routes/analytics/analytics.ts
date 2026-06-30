@@ -25,6 +25,10 @@ import {
   upsertCostCap,
   checkCostCapAlerts,
 } from "../../services/analytics/cost-caps";
+import { clientTokenQuotasTable, platformAuditLogTable } from "@workspace/db";
+import { getTokenQuotaConfig, invalidateTokenQuotaCache } from "../../services/ai-safety/tenant-quota";
+import { getGlmPoolStatus } from "../../services/ai-safety/provider-key-pool";
+import { invalidateBudgetCache } from "../../services/ai-safety/budget-enforcer";
 import { hashApiKey } from "../../middleware/analytics-api-key";
 
 const router: IRouter = Router();
@@ -861,6 +865,173 @@ router.get("/analytics/model-optimizer", async (req, res): Promise<void> => {
   } catch (err) {
     console.error("Model optimizer analytics error:", err);
     res.status(500).json({ error: "Failed to fetch model optimizer analytics" });
+  }
+});
+
+// ── LLM Capacity & Real-Time Cost Governance ─────────────────────────────────
+
+/**
+ * GET /analytics/capacity-config
+ * Returns the tenant's current token quota, spend cap, and GLM key pool status.
+ */
+router.get("/analytics/capacity-config", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  try {
+    const [quota, cap, spend, poolStatus] = await Promise.all([
+      getTokenQuotaConfig(clientId),
+      getCostCap(clientId),
+      getMonthlySpend(clientId),
+      Promise.resolve(getGlmPoolStatus()),
+    ]);
+
+    res.json({
+      tokenQuota: quota
+        ? {
+            monthlyTokenCap: quota.monthlyTokenCap,
+            softLimitPct: quota.softLimitPct,
+            degradationPolicy: quota.degradationPolicy,
+            alertAt80Pct: quota.alertAt80Pct,
+          }
+        : null,
+      budgetCap: cap
+        ? {
+            monthlyCapUsd: parseFloat(cap.monthlyCapUsd),
+            alertAt80Pct: cap.alertAt80Pct,
+            pauseAutonomousOnExhaust: cap.pauseAutonomousOnExhaust,
+          }
+        : null,
+      currentMonthlySpendUsd: spend,
+      glmKeyPool: poolStatus,
+    });
+  } catch (err) {
+    console.error("Capacity config fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch capacity config" });
+  }
+});
+
+/**
+ * PUT /analytics/capacity-config/token-quota
+ * Set (or update) the per-tenant monthly token quota and degradation policy.
+ * Audited like other governance changes.
+ */
+router.put("/analytics/capacity-config/token-quota", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  const schema = z.object({
+    monthlyTokenCap: z.number().int().min(0),
+    softLimitPct: z.number().int().min(50).max(99).optional().default(80),
+    degradationPolicy: z.enum(["downgrade", "shed", "reject"]).optional().default("downgrade"),
+    alertAt80Pct: z.boolean().optional().default(true),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  try {
+    const existing = await db
+      .select()
+      .from(clientTokenQuotasTable)
+      .where(eq(clientTokenQuotasTable.clientId, clientId));
+
+    let result;
+    if (existing.length > 0) {
+      [result] = await db
+        .update(clientTokenQuotasTable)
+        .set({
+          monthlyTokenCap: parsed.data.monthlyTokenCap,
+          softLimitPct: parsed.data.softLimitPct,
+          degradationPolicy: parsed.data.degradationPolicy,
+          alertAt80Pct: parsed.data.alertAt80Pct,
+          updatedAt: new Date(),
+        })
+        .where(eq(clientTokenQuotasTable.clientId, clientId))
+        .returning();
+    } else {
+      [result] = await db
+        .insert(clientTokenQuotasTable)
+        .values({
+          clientId,
+          monthlyTokenCap: parsed.data.monthlyTokenCap,
+          softLimitPct: parsed.data.softLimitPct,
+          degradationPolicy: parsed.data.degradationPolicy,
+          alertAt80Pct: parsed.data.alertAt80Pct,
+        })
+        .returning();
+    }
+
+    invalidateTokenQuotaCache(clientId);
+
+    await db.insert(platformAuditLogTable).values({
+      clientId,
+      userId: req.user!.userId ?? null,
+      action: "token_quota_updated",
+      resource: "client_token_quotas",
+      resourceId: String(clientId),
+      metadata: {
+        monthlyTokenCap: parsed.data.monthlyTokenCap,
+        softLimitPct: parsed.data.softLimitPct,
+        degradationPolicy: parsed.data.degradationPolicy,
+        alertAt80Pct: parsed.data.alertAt80Pct,
+      },
+      ipAddress: req.ip ?? null,
+    }).catch((e) => console.error("[analytics] Audit insert failed:", e));
+
+    res.json(result);
+  } catch (err) {
+    console.error("Token quota update error:", err);
+    res.status(500).json({ error: "Failed to update token quota" });
+  }
+});
+
+/**
+ * PUT /analytics/capacity-config/budget-cap
+ * Update the monthly spend cap and degradation behaviour.
+ * Proxies to the existing cost-cap service and also audits the change.
+ */
+router.put("/analytics/capacity-config/budget-cap", async (req, res): Promise<void> => {
+  const clientId = req.user!.clientId;
+  if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
+
+  const schema = z.object({
+    monthlyCapUsd: z.number().min(0),
+    alertAt80Pct: z.boolean().optional().default(true),
+    pauseAutonomousOnExhaust: z.boolean().optional().default(false),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  try {
+    const result = await upsertCostCap(
+      clientId,
+      parsed.data.monthlyCapUsd,
+      parsed.data.alertAt80Pct,
+      parsed.data.pauseAutonomousOnExhaust,
+    );
+
+    invalidateBudgetCache(clientId);
+
+    await db.insert(platformAuditLogTable).values({
+      clientId,
+      userId: req.user!.userId ?? null,
+      action: "budget_cap_updated",
+      resource: "client_cost_caps",
+      resourceId: String(clientId),
+      metadata: {
+        monthlyCapUsd: parsed.data.monthlyCapUsd,
+        alertAt80Pct: parsed.data.alertAt80Pct,
+        pauseAutonomousOnExhaust: parsed.data.pauseAutonomousOnExhaust,
+      },
+      ipAddress: req.ip ?? null,
+    }).catch((e) => console.error("[analytics] Audit insert failed:", e));
+
+    res.json(result);
+  } catch (err) {
+    console.error("Budget cap update error:", err);
+    res.status(500).json({ error: "Failed to update budget cap" });
   }
 });
 
