@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { pool, usersTable, withBypassRLS } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { pool, usersTable, accountSubscriptionsTable, withBypassRLS } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 export interface AuthUser {
   userId: number;
@@ -149,7 +149,7 @@ export function isGuestSession(req: Request): boolean {
   return req.user?.role === "guest";
 }
 
-export function requirePayment(req: Request, res: Response, next: NextFunction): void {
+export async function requirePayment(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -158,7 +158,25 @@ export function requirePayment(req: Request, res: Response, next: NextFunction):
     next();
     return;
   }
-  // TODO: check active subscription / payment status from DB when payment system is integrated
-  // For now, allow access — this middleware is a hook for future payment gating
+  const [subscription] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({ id: accountSubscriptionsTable.id, status: accountSubscriptionsTable.status })
+      .from(accountSubscriptionsTable)
+      .where(
+        and(
+          eq(accountSubscriptionsTable.clientId, req.user!.clientId),
+          eq(accountSubscriptionsTable.status, "active"),
+        ),
+      )
+      .limit(1),
+  );
+  if (!subscription) {
+    res.status(402).json({
+      error: "subscription_required",
+      message: "An active subscription is required to access this feature.",
+      upgradeUrl: "/billing",
+    });
+    return;
+  }
   next();
 }

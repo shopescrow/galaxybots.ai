@@ -7,6 +7,7 @@ import { recordLoginSignal } from "../../middleware/health-signals";
 import { authRateLimit } from "../../middleware/rate-limit";
 import { sendValidationError } from "../../utils/validation";
 import { checkWorkflowTriggers, seedBuiltInWorkflows } from "../../services/missions/workflow-engine";
+import { sendEmail } from "../../utils/email";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -304,7 +305,25 @@ router.post("/auth/request-password-reset", authRateLimit, async (req, res): Pro
         secret,
         { expiresIn: "15m" }
       );
-      // TODO: Send resetToken via email delivery service
+      const appUrl = process.env.APP_URL || "https://galaxybots.ai";
+      const resetLink = `${appUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+      try {
+        await sendEmail({
+          to: email.toLowerCase(),
+          subject: "Reset your GalaxyBots password",
+          html: `
+            <p>Hi ${user.displayName || user.email},</p>
+            <p>We received a request to reset your password. Click the link below to set a new password. This link expires in 15 minutes.</p>
+            <p><a href="${resetLink}">Reset my password</a></p>
+            <p>If you did not request a password reset, you can safely ignore this email.</p>
+          `,
+          text: `Reset your GalaxyBots password\n\nClick the following link to reset your password (expires in 15 minutes):\n${resetLink}\n\nIf you did not request a reset, ignore this email.`,
+        });
+      } catch (err) {
+        console.error("[auth] Failed to deliver password reset email:", err);
+        res.status(500).json({ error: "Failed to send password reset email. Please try again later or contact support." });
+        return;
+      }
     }
   }
 

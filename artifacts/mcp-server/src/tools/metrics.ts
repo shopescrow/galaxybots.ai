@@ -14,21 +14,17 @@ export function registerMetricsTool(server: McpServer): void {
         const stripeKey = process.env.STRIPE_SECRET_KEY;
 
         if (!stripeKey) {
-          console.log("[MCP] get_metrics: STRIPE_SECRET_KEY not set, returning stub response");
+          console.warn("[MCP] get_metrics: STRIPE_SECRET_KEY not configured");
           return {
             content: [{
               type: "text" as const,
               text: JSON.stringify({
-                mode: "dev-stub",
-                message: "STRIPE_SECRET_KEY is not set. In production, this would return live Stripe metrics.",
-                clientId,
-                metrics: {
-                  subscriptionCount: 0,
-                  mrr: 0,
-                  currency: "usd",
-                },
+                error: "integration_not_configured",
+                missing: "STRIPE_SECRET_KEY",
+                message: "Billing metrics are not available because STRIPE_SECRET_KEY is not set. Ask your administrator to configure it.",
               }, null, 2),
             }],
+            isError: true,
           };
         }
 

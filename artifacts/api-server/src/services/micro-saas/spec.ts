@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pool, accountSubscriptionsTable, subscriptionPlansTable, withBypassRLS } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import { callWithFallback, ModelTier } from "../ai-safety/model-fallback";
 import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
@@ -65,30 +67,88 @@ export const microSaasSpecSchema = z.object({
 export type MicroSaasSpec = z.infer<typeof microSaasSpecSchema>;
 
 /**
- * Placeholder subscription/revenue tracking record stored alongside an asset's
- * spec. Real billing integration is out of scope for this phase (tracked as a
- * follow-up); these fields stub the numbers the Asset Studio surfaces.
+ * Subscription/revenue tracking record stored alongside an asset's spec.
+ * When `live` is false, figures come from the spec definition (new assets).
+ * When `live` is true, figures reflect the client's actual active subscription.
  */
-export interface SubscriptionTrackingPlaceholder {
+export interface SubscriptionStatus {
   enabled: boolean;
   model: PricingModel;
   monthlyPriceUsd: number;
   activeSubscribers: number;
   mrrUsd: number;
-  /** Marks the figures as not-yet-wired to a real billing provider. */
-  placeholder: true;
+  live: boolean;
 }
 
+/** Build initial subscription metadata from a spec (no live data yet). */
 export function buildSubscriptionPlaceholder(
   spec: MicroSaasSpec,
-): SubscriptionTrackingPlaceholder {
+): SubscriptionStatus {
   return {
     enabled: false,
     model: spec.pricing.model,
     monthlyPriceUsd: spec.pricing.monthlyPriceUsd,
     activeSubscribers: 0,
     mrrUsd: 0,
-    placeholder: true,
+    live: false,
+  };
+}
+
+/**
+ * Look up real subscription status for a client from the database.
+ * Returns a live SubscriptionStatus when an active subscription exists,
+ * or a zeroed record with live=false when the client has no active plan.
+ */
+export async function getSubscriptionStatus(
+  clientId: number,
+  spec: MicroSaasSpec,
+): Promise<SubscriptionStatus> {
+  const [sub] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({
+        id: accountSubscriptionsTable.id,
+        status: accountSubscriptionsTable.status,
+        planId: accountSubscriptionsTable.planId,
+        creditBalance: accountSubscriptionsTable.creditBalance,
+      })
+      .from(accountSubscriptionsTable)
+      .where(
+        and(
+          eq(accountSubscriptionsTable.clientId, clientId),
+          eq(accountSubscriptionsTable.status, "active"),
+        ),
+      )
+      .limit(1),
+  );
+
+  if (!sub) {
+    return {
+      enabled: false,
+      model: spec.pricing.model,
+      monthlyPriceUsd: spec.pricing.monthlyPriceUsd,
+      activeSubscribers: 0,
+      mrrUsd: 0,
+      live: true,
+    };
+  }
+
+  const [plan] = await withBypassRLS(pool, (bypassDb) =>
+    bypassDb
+      .select({ monthlyPrice: subscriptionPlansTable.monthlyPrice })
+      .from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.id, sub.planId))
+      .limit(1),
+  );
+
+  const monthlyPriceUsd = plan ? Number(plan.monthlyPrice) : spec.pricing.monthlyPriceUsd;
+
+  return {
+    enabled: true,
+    model: spec.pricing.model,
+    monthlyPriceUsd,
+    activeSubscribers: 1,
+    mrrUsd: monthlyPriceUsd,
+    live: true,
   };
 }
 

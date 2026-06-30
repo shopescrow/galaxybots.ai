@@ -4,7 +4,7 @@ import { db, assetsTable, type AssetStatusEvent } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   generateMicroSaasSpec,
-  buildSubscriptionPlaceholder,
+  getSubscriptionStatus,
   type MicroSaasSpec,
 } from "../services/micro-saas/spec";
 import { buildScaffoldPlan } from "../services/micro-saas/scaffold";
@@ -59,7 +59,7 @@ registerTool({
       botId: context.botId,
     });
 
-    const subscription = buildSubscriptionPlaceholder(spec);
+    const subscription = await getSubscriptionStatus(clientId, spec);
     const changedBy = `bot:${context.botName ?? context.botId ?? "builder"}`;
 
     const [asset] = await db

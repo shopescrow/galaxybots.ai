@@ -1237,6 +1237,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.27.1
         version: 1.27.1(zod@3.25.76)
+      '@types/nodemailer':
+        specifier: ^7.0.11
+        version: 7.0.11
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
@@ -1252,6 +1255,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      nodemailer:
+        specifier: ^9.0.1
+        version: 9.0.1
       zod:
         specifier: 'catalog:'
         version: 3.25.76

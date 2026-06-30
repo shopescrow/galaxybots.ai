@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { sendEmail } from "../../utils/email";
+import { sendSms } from "../../utils/sms";
 import {
   db,
   clientStakeholdersTable,
@@ -111,9 +113,51 @@ router.post("/client-portal/request-pin", async (req, res): Promise<void> => {
       .where(eq(clientStakeholdersTable.id, stakeholder.id));
   }
 
-  // TODO: integrate email/SMS delivery service to send PIN
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[client-portal] PIN generated for ${parsed.data.email || parsed.data.phone}`);
+  const pinHtml = `
+    <p>Your one-time PIN for the GalaxyBots client portal is:</p>
+    <p style="font-size:2em;font-weight:bold;letter-spacing:0.15em;">${pin}</p>
+    <p>This PIN expires in 10 minutes. Do not share it with anyone.</p>
+  `;
+  const pinText = `Your GalaxyBots client portal PIN is: ${pin}\n\nThis PIN expires in 10 minutes. Do not share it with anyone.`;
+
+  const smsConfigured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+  let deliveryFailed = false;
+
+  if (parsed.data.email) {
+    try {
+      await sendEmail({
+        to: parsed.data.email,
+        subject: "Your GalaxyBots client portal PIN",
+        html: pinHtml,
+        text: pinText,
+      });
+      console.log(`[client-portal] PIN delivered via email to ${parsed.data.email}`);
+    } catch (err) {
+      console.error(`[client-portal] Failed to deliver PIN via email to ${parsed.data.email}:`, err);
+      deliveryFailed = true;
+    }
+  }
+
+  if (parsed.data.phone && smsConfigured) {
+    try {
+      await sendSms(parsed.data.phone, pinText);
+      console.log(`[client-portal] PIN delivered via SMS to ${parsed.data.phone}`);
+      deliveryFailed = false;
+    } catch (err) {
+      console.error(`[client-portal] Failed to deliver PIN via SMS to ${parsed.data.phone}:`, err);
+      if (!parsed.data.email) deliveryFailed = true;
+    }
+  } else if (!parsed.data.email && parsed.data.phone) {
+    console.warn(`[client-portal] SMS not configured — PIN for ${parsed.data.phone} not delivered`);
+    deliveryFailed = true;
+  }
+
+  if (deliveryFailed) {
+    res.status(503).json({
+      error: "delivery_failed",
+      message: "Failed to deliver your PIN. Please contact support.",
+    });
+    return;
   }
 
   res.json({ message: "If an account exists, a PIN has been sent." });
@@ -537,12 +581,58 @@ router.post("/client-portal/stakeholders/:id/resend-pin", requireRole("owner", "
     .set({ lastPin: hashedPin, pinExpiry })
     .where(eq(clientStakeholdersTable.id, id));
 
-  // TODO: integrate email/SMS delivery service to send PIN
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[client-portal] PIN resent for ${stakeholder.email}`);
+  const pinText = `Your GalaxyBots client portal PIN is: ${pin}\n\nThis PIN expires in 10 minutes. Do not share it with anyone.`;
+  const smsConfigured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+
+  if (!stakeholder.email && !stakeholder.phone) {
+    res.status(422).json({ error: "stakeholder_no_contact", message: "This stakeholder has no email or phone number on file." });
+    return;
   }
 
-  res.json({ message: `PIN sent to ${stakeholder.email}` });
+  let deliveryFailed = false;
+
+  if (stakeholder.email) {
+    try {
+      await sendEmail({
+        to: stakeholder.email,
+        subject: "Your GalaxyBots client portal PIN",
+        html: `
+          <p>Your one-time PIN for the GalaxyBots client portal is:</p>
+          <p style="font-size:2em;font-weight:bold;letter-spacing:0.15em;">${pin}</p>
+          <p>This PIN expires in 10 minutes. Do not share it with anyone.</p>
+        `,
+        text: pinText,
+      });
+      console.log(`[client-portal] PIN redelivered via email to ${stakeholder.email}`);
+    } catch (err) {
+      console.error(`[client-portal] Failed to redeliver PIN via email to ${stakeholder.email}:`, err);
+      deliveryFailed = true;
+    }
+  }
+
+  if (stakeholder.phone && smsConfigured) {
+    try {
+      await sendSms(stakeholder.phone, pinText);
+      console.log(`[client-portal] PIN redelivered via SMS to ${stakeholder.phone}`);
+      deliveryFailed = false;
+    } catch (err) {
+      console.error(`[client-portal] Failed to redeliver PIN via SMS to ${stakeholder.phone}:`, err);
+      if (!stakeholder.email) deliveryFailed = true;
+    }
+  } else if (!stakeholder.email && stakeholder.phone) {
+    console.warn(`[client-portal] SMS not configured — PIN for ${stakeholder.phone} not delivered`);
+    deliveryFailed = true;
+  }
+
+  if (deliveryFailed) {
+    res.status(503).json({
+      error: "delivery_failed",
+      message: "Failed to send the PIN. Please check your configuration or contact support.",
+    });
+    return;
+  }
+
+  res.json({ message: `PIN sent to ${stakeholder.email || stakeholder.phone}` });
 });
 
 export default router;

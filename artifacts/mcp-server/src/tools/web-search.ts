@@ -15,23 +15,17 @@ export function registerWebSearchTool(server: McpServer): void {
         const serpApiKey = process.env.SERPAPI_KEY;
 
         if (!serpApiKey) {
-          console.log("[MCP] web_search: SERPAPI_KEY not set, returning stub response");
+          console.warn("[MCP] web_search: SERPAPI_KEY not configured");
           return {
             content: [{
               type: "text" as const,
               text: JSON.stringify({
-                mode: "dev-stub",
-                message: "SERPAPI_KEY is not set. In production, this would return live search results.",
-                query,
-                results: [
-                  {
-                    title: `[Stub] Result for "${query}"`,
-                    link: "https://example.com",
-                    snippet: `This is a placeholder result for the query "${query}". Set SERPAPI_KEY to enable live search.`,
-                  },
-                ],
+                error: "integration_not_configured",
+                missing: "SERPAPI_KEY",
+                message: "Web search is not available because SERPAPI_KEY is not set. Ask your administrator to configure it.",
               }, null, 2),
             }],
+            isError: true,
           };
         }
 

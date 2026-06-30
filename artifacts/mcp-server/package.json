@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@types/nodemailer": "^7.0.11",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-openai-ai-server": "workspace:*",
     "drizzle-orm": "catalog:",
     "express": "^5",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^9.0.1",
     "zod": "catalog:"
   },
   "devDependencies": {
