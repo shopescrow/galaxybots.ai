@@ -5,6 +5,7 @@ import { getBeesForDomain } from "./bee-types";
 import type { BeeType, ThreatBrief, BeeFinding } from "./bee-types";
 import { broadcastSSEToAll } from "../platform/sse";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { registerDynamicJob } from "../platform/guardian-dynamic-jobs";
 import { selectStrategy, recordStrategyRun } from "../conductor/galaxy-conductor";
 import { treeAggregate } from "../scaling/scaling-primitives";
@@ -67,7 +68,7 @@ function renderFinding(f: BeeFinding): string {
 async function summariseFindingCluster(lines: string[]): Promise<string> {
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 600,
       messages: [
         { role: "system", content: "You are the Guardian Queen consolidating worker-bee incident findings. Preserve every distinct issue, proposed fix, and the highest relevant confidence. Be terse and technical." },
@@ -134,7 +135,7 @@ Return a JSON object with exactly these keys:
 Format for KiloPro SOC 2 / GDPR audit compatibility. Be precise and technical.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 800,
       messages: [
         { role: "system", content: "You are the Guardian Queen's post-mortem analyst. Return only valid JSON." },

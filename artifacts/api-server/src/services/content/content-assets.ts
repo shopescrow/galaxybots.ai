@@ -25,6 +25,7 @@ import {
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { callWithFallback, ModelTier } from "../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { applyBrandVoiceGuardrails } from "../platform/governance";
 import { ObjectStorageService } from "../../lib/objectStorage";
 
@@ -76,7 +77,7 @@ async function generateMarkdown(params: {
   tier?: ModelTier;
 }): Promise<string> {
   const result = await callWithFallback({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     preferredTier: params.tier ?? ModelTier.EFFICIENT,
     maxCompletionTokens: params.maxTokens ?? 3000,
     clientId: params.clientId,

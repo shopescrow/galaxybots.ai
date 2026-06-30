@@ -1,5 +1,6 @@
 import { isStuckOutput } from "../ai-safety/loop-detection";
 import { callWithFallback } from "../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import type { CommunicationStrategy } from "@workspace/db";
 
 export interface SanitizedRelay {
@@ -23,7 +24,7 @@ const INJECTION_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: "jailbreak_prefix", pattern: /(?:DAN mode|developer mode|unrestricted mode|god mode)/gi },
 ];
 
-const SUMMARY_MODEL = "gpt-5-mini";
+const SUMMARY_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
 
 async function summarizeIfOverBudget(content: string, fromAgent: string): Promise<{ content: string; summarized: boolean }> {
   if (content.length <= MAX_RELAY_CHARS) {

@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, crmRecordsTable, crmBlueprintsTable, type CrmBlueprintDef, type CrmEntityDef, type CrmFieldDef } from "@workspace/db";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 /* -------------------------------------------------------------------- */
 /* DSL types — strict allow-list. The validator rejects anything else.   */
@@ -429,7 +430,7 @@ export async function translateNLToDSL(question: string, def: CrmBlueprintDef): 
   const userMsg = `SCHEMA:\n${schemaJson}\n\nQUESTION:\n${question}\n\nReturn ONLY the DSL JSON.`;
 
   const resp = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 1024,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },

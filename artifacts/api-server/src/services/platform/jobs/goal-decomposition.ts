@@ -5,6 +5,7 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { scheduleUncertaintyGathering } from "./uncertainty-scheduler";
 import { checkGoalConflicts } from "./goal-conflict-resolver";
 
@@ -47,7 +48,7 @@ Respond with JSON array:
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 800,
       messages: [
         {

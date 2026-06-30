@@ -1,4 +1,5 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 export const CONTENT_TYPES = ["blog", "linkedin", "twitter", "email", "press_release", "case_study"] as const;
 export const TONES = ["professional", "conversational", "thought_leadership", "educational", "bold"] as const;
@@ -95,7 +96,7 @@ ${keywordList ? `Keywords to incorporate: ${keywordList}` : ""}
 Generate the content now.`;
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 3000,
     messages: [
       { role: "system", content: systemPrompt },

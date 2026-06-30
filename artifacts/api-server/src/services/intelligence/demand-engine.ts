@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 export const DEMAND_RESEARCH_BOT_NAME = "Demand Oracle";
 
@@ -127,7 +128,7 @@ Only return genuine opportunities grounded in the signals. Prefer high-demand, l
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 2500,
       messages: [
         {

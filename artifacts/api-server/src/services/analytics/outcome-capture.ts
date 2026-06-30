@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { eq, inArray, sql, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { estimateHoursSaved } from "./roi";
 import { createNotification } from "../admin/notifications";
 import { recordStrategyOutcome, setStrategyConfoundScores } from "../conductor/galaxy-conductor";
@@ -34,7 +35,7 @@ async function scorePromptQuality(
 ): Promise<number> {
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 60,
       messages: [
         {
@@ -136,7 +137,7 @@ export async function captureSessionOutcome(
   let outcomeSummary = "";
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 200,
       messages: [
         {

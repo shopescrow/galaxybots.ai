@@ -1,6 +1,7 @@
 import { db, subscriptionPlansTable, accountSubscriptionsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { ModelTier } from "./model-fallback.js";
+import { ModelCapability, resolveCapability } from "./model-router.js";
 
 /**
  * Margin-aware routing + real-time margin guard.
@@ -46,13 +47,13 @@ export function selectTierForCategory(taskCategory: string): ModelTier {
 export function modelForTier(tier: ModelTier): string {
   switch (tier) {
     case ModelTier.FRONTIER:
-      return "gpt-5.4";
+      return resolveCapability(ModelCapability.REASONING_PREMIUM);
     case ModelTier.EFFICIENT:
-      return "gpt-5-mini";
+      return resolveCapability(ModelCapability.REASONING_EFFICIENT);
     case ModelTier.LOCAL:
-      return "gpt-5-mini";
+      return resolveCapability(ModelCapability.REASONING_EFFICIENT);
     default:
-      return "gpt-5-mini";
+      return resolveCapability(ModelCapability.REASONING_EFFICIENT);
   }
 }
 

@@ -8,7 +8,8 @@
     "build": "tsx ./build.ts",
     "start": "node dist/index.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:smoke": "NODE_OPTIONS='--max-old-space-size=512' vitest run --config vitest.config.ts"
+    "test:smoke": "NODE_OPTIONS='--max-old-space-size=512' vitest run --config vitest.config.ts",
+    "lint:no-hardcoded-models": "bash src/scripts/check-hardcoded-models.sh"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

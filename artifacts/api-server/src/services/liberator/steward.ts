@@ -9,6 +9,7 @@ import {
   type CrmBlueprintDef,
 } from "@workspace/db";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { executeQueryDSL, type QueryDSL } from "./nl-query";
 
 interface StewardPersona {
@@ -35,7 +36,7 @@ export async function generateStewardPersona(crmName: string, def: CrmBlueprintD
   const sampleStr = JSON.stringify(sample.slice(0, 3));
   try {
     const resp = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 600,
       response_format: { type: "json_object" },
       messages: [

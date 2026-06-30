@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, gte, isNotNull, sql } from "drizzle-orm";
 import { callWithFallback } from "../../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { remember } from "../memory-tiers";
 
 // ---------------------------------------------------------------------------
@@ -92,7 +93,7 @@ export async function reflectOnOutcome(
 
   try {
     const result = await callWithFallback({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       temperature: 0.2,
       maxCompletionTokens: 600,
       messages: [

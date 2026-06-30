@@ -25,8 +25,10 @@ import { resolveSplit } from "../intelligence/ab-experiment";
 import { getConfoundCoefficients, computeResidualQuality } from "../intelligence/intelligence-cycle";
 import type { CoordinatorPlan } from "@workspace/db";
 
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
+
 const DEFAULT_MAX_GATE_RETRIES = 2;
-const PIPELINE_EXECUTION_MODEL = process.env.LLM_MODEL_VERSION ?? "gpt-5-mini";
+const PIPELINE_EXECUTION_MODEL = process.env.LLM_MODEL_VERSION ?? resolveCapability(ModelCapability.REASONING_EFFICIENT);
 
 export async function executePipelineRun(pipelineId: number, triggerType: string, triggerData: Record<string, unknown> = {}) {
   const [pipeline] = await db
@@ -261,7 +263,7 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
           const evaluation = await evaluateOutput(
             latestWorkerOutput,
             subjectInstruction,
-            "gpt-5-mini",
+            resolveCapability(ModelCapability.REASONING_EFFICIENT),
             qualityThreshold,
             verifierCtx,
           );
@@ -296,7 +298,7 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
                 .where(eq(pipelineRunStepsTable.id, workerRunStepId));
 
               const { finalContent: rerunContent } = await runAgenticLoop({
-                model: "gpt-5-mini",
+                model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
                 maxIterations: 10,
                 maxTokens: 1000,
                 systemPrompt: buildWorkerPrompt(critiqueCtx),
@@ -332,7 +334,7 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
       } else {
         // ── Standard generative step (Thinker or Worker) ─────────────────────────
         const { finalContent } = await runAgenticLoop({
-          model: "gpt-5-mini",
+          model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
           maxIterations: 10,
           maxTokens: 1000,
           systemPrompt: buildSystemPrompt(),
@@ -390,7 +392,7 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
         const outcomeEval = await evaluateOutput(
           previousOutput,
           pipelineObjective,
-          "gpt-5-mini",
+          resolveCapability(ModelCapability.REASONING_EFFICIENT),
           COORDINATOR_QUALITY_THRESHOLD,
           "Post-run outcome quality assessment for coordinator learning signal",
         );

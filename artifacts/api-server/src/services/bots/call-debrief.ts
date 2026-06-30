@@ -7,6 +7,7 @@ import {
 import { eq, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logLlmUsage } from "../analytics/llm-usage";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { executePipelineRun } from "../missions/pipeline-engine";
 
 async function findBotByTitle(titleFragment: string): Promise<{ id: number; name: string; title: string } | null> {
@@ -86,7 +87,7 @@ isNewProspect should be true if the caller appears to be a new potential custome
 
     const startMs = Date.now();
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: resolveCapability(ModelCapability.MULTIMODAL),
       messages: [{ role: "user", content: debriefPrompt }],
       max_tokens: 1000,
       temperature: 0.3,
@@ -99,7 +100,7 @@ isNewProspect should be true if the caller appears to be a new potential custome
       logLlmUsage({
         clientId,
         botId: salesBot?.id ?? null,
-        model: "gpt-4o",
+        model: resolveCapability(ModelCapability.MULTIMODAL),
         promptTokens: usage.prompt_tokens ?? 0,
         completionTokens: usage.completion_tokens ?? 0,
         latencyMs,

@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { eq, sql, gte } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { broadcastSSE } from "../sse";
 import { shouldPauseAutonomous } from "../../analytics/cost-caps";
 import { createNotification } from "../../admin/notifications";
@@ -116,7 +117,7 @@ async function hasRecentActivity(clientId: number, since: Date): Promise<boolean
 
 async function runPassiveAssignment(assignment: typeof botAssignmentsTable.$inferSelect, bot: typeof botsTable.$inferSelect) {
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 2000,
     messages: [
       {
@@ -137,7 +138,7 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
   const content = completion.choices[0]?.message?.content ?? "Report generation failed.";
 
   const summaryCompletion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 200,
     messages: [
       {
@@ -163,7 +164,7 @@ Your responsibilities: ${bot.responsibilities.join("; ")}
 You are executing a standing order autonomously. Use your available tools to complete the mission objective below. Take real actions — post messages, send emails, create documents, look up data — whatever is needed to fulfill the order. When done, provide a concise summary of what you accomplished.`;
 
   const result = await runAgenticLoop({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     maxIterations: 10,
     maxTokens: 1500,
     systemPrompt,
@@ -204,7 +205,7 @@ You are executing a standing order autonomously. Use your available tools to com
   const content = result.finalContent || "Active execution completed but produced no output.";
 
   const summaryCompletion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 200,
     messages: [
       {

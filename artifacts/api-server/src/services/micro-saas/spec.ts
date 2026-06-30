@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { callWithFallback, ModelTier } from "../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 /**
  * Micro-SaaS spec service (task #264).
@@ -139,7 +140,7 @@ export async function generateMicroSaasSpec(
   if (!trimmed) throw new Error("A non-empty tool concept is required");
 
   const result = await callWithFallback({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     preferredTier: opts.tier ?? ModelTier.EFFICIENT,
     clientId: opts.clientId,
     botId: opts.botId,

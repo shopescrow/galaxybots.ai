@@ -1,6 +1,7 @@
 import { db, clientBotsTable, episodicSummariesTable, conversations, messages } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { GLM52Adapter } from "../../../agent-core/adapters/glm52-adapter.js";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import type { ChatCompletionMessageParam } from "openai/resources/index.mjs";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -85,7 +86,7 @@ Return ONLY valid JSON:
   }
 
   try {
-    const result = await glm.complete({ model: "glm-5.2-long", messages: chatMessages, maxTokens: 2000 });
+    const result = await glm.complete({ model: resolveCapability(ModelCapability.MEMORY_LONG), messages: chatMessages, maxTokens: 2000 });
 
     const rawContent = result.content;
     if (!rawContent) return null;
@@ -124,7 +125,7 @@ export async function runEpisodicMemoryForBot(
     decisions: narrative.decisions,
     outcomes: narrative.outcomes,
     forwardImplications: narrative.forward_implications,
-    modelUsed: "glm-5.2-long",
+    modelUsed: resolveCapability(ModelCapability.MEMORY_LONG),
   });
 
   console.log(`[episodic-memory] Created episodic summary for bot ${botId} (${periodStart.toISOString()} – ${periodEnd.toISOString()})`);

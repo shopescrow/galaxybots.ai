@@ -1,3 +1,4 @@
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { assignRoles } from "./galaxy-coordinator";
 import { selectStrategy, recordStrategyRun, recordStrategyOutcome, recordRunTelemetry, deriveModelTier } from "../conductor/galaxy-conductor";
 import { resolveSplit } from "../intelligence/ab-experiment";
@@ -89,7 +90,7 @@ export interface JointPlanExecutorResult {
   aggregationTrace?: AggregationTrace;
 }
 
-const DEFAULT_TARGET_MODEL = "gpt-5-mini";
+const DEFAULT_TARGET_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
 
 export async function execute(input: JointPlanExecutorInput): Promise<JointPlanExecutorResult> {
   const start = Date.now();

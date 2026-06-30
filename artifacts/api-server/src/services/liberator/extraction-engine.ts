@@ -1,5 +1,6 @@
 import { chromium, type Browser, type Page } from "playwright-core";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { db, extractionJobsTable, extractionPagesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 const logger = {
@@ -65,7 +66,7 @@ Rules:
   }
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: resolveCapability(ModelCapability.MULTIMODAL),
     max_completion_tokens: 8192,
     messages: [
       { role: "system", content: systemPrompt },

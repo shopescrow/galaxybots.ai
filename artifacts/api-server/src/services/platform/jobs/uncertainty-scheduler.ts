@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, and, isNull, lt } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { createNotification } from "../../admin/notifications";
 
 const REQUIRED_CONFIDENCE_DEFAULT = 0.7;
@@ -41,7 +42,7 @@ Return empty array [] if the goal has no critical belief dependencies.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 800,
       messages: [
         { role: "system", content: "Identify belief dependencies for AI agent goals. Respond only with valid JSON." },

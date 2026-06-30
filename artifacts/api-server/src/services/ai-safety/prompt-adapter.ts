@@ -70,7 +70,7 @@ export function adaptAnthropicToolSchema(openaiTools: unknown[]): unknown[] {
 }
 
 export function getModelContextLimit(model: string): number {
-  const limits: Record<string, number> = {
+  const limits: Record<string, number> = { // model-router-lint-ignore — lookup table, not a routing decision
     "gpt-5.4": 128_000,
     "gpt-4o": 128_000,
     "gpt-5-mini": 128_000,

@@ -13,6 +13,7 @@ import { eq, and, desc, gte, isNull } from "drizzle-orm";
 import { decomposeGoal } from "./goal-decomposition";
 import { checkGoalConflicts } from "./goal-conflict-resolver";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { createNotification } from "../../admin/notifications";
 import { broadcastSSE } from "../sse";
 
@@ -121,7 +122,7 @@ Generate 1-3 autonomous goal proposals. Respond with a JSON array:
 Only propose goals with clear evidence support. Focus on high-impact, achievable objectives.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 1500,
     messages: [
       { role: "system", content: "You generate autonomous goal proposals for AI agents. Respond only with valid JSON." },

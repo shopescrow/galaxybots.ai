@@ -1,4 +1,5 @@
 import { callWithFallback, ModelTier } from "../../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { trimToFitContextWindow, estimateTokens } from "../../ai-safety/context-window";
 import { runFanOut } from "../../ai-safety/internal-concurrency";
 import { checkCostCapAlerts } from "../../analytics/cost-caps";
@@ -83,8 +84,8 @@ export interface StrategyResult {
   aggregationTrace?: AggregationTrace;
 }
 
-const MODEL = "gpt-5.4";
-const FALLBACK_MODEL = "gpt-5-mini";
+const MODEL = resolveCapability(ModelCapability.REASONING_PREMIUM);
+const FALLBACK_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
 
 // ── Semantic cache helpers (task #216) ───────────────────────────────────────
 

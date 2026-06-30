@@ -28,6 +28,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, sql, desc, avg } from "drizzle-orm";
 import { callWithFallback } from "../../ai-safety/model-fallback.js";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router.js";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 let lastOracleRun = 0;
@@ -310,8 +311,8 @@ export async function runOracleReportGenerator() {
       const oracleResponse = await callWithFallback({
         // Oracle meta-reasoning uses the highest-capability model available via the
         // platform proxy. GLM 5.2 Ultra is not available in the proxy's fallback chains;
-        // gpt-4o is used as the equivalent critical-reasoning model.
-        model: "gpt-4o",
+        // resolved via model-router MULTIMODAL capability (highest-capability model).
+        model: resolveCapability(ModelCapability.MULTIMODAL),
         messages: [
           {
             role: "system",

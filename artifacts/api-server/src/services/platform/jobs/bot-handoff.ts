@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { createNotification } from "../../admin/notifications";
 import { broadcastSSE } from "../sse";
 
@@ -50,7 +51,7 @@ Respond with JSON: { "botId": <id>, "reasoning": "why this bot" }`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 200,
       messages: [
         { role: "system", content: "Select the best bot for a task handoff. Respond only with valid JSON." },

@@ -1,12 +1,13 @@
 import type { TaskCategory } from "@workspace/db";
 import { callWithFallback, ModelTier } from "../../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { trimToFitContextWindow } from "../../ai-safety/context-window";
 import { computeDivergence, computePairwiseDivergence } from "./divergence";
 import { getAggregationConfig, type AggregationFidelityConfig } from "./fidelity-config";
 import { type AggregationTrace, type AggregationClusterTrace, emptyAggregationTrace } from "./aggregation-trace";
 
-const SYNTH_MODEL = "gpt-5.4";
-const EFFICIENT_MODEL = "gpt-5-mini";
+const SYNTH_MODEL = resolveCapability(ModelCapability.REASONING_PREMIUM);
+const EFFICIENT_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
 
 /**
  * Injectable side-effecting dependencies. Production wires these to real LLM

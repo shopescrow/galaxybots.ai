@@ -7,6 +7,7 @@ import {
   textToSpeech,
 } from "@workspace/integrations-openai-ai-server";
 import { callWithFallback } from "../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 /**
  * Faceless video & social content engine (task #263).
@@ -24,8 +25,8 @@ import { callWithFallback } from "../ai-safety/model-fallback";
  */
 
 // ── Model routing ───────────────────────────────────────────────────────────
-// Frontier lead model; callWithFallback degrades through its safe chain.
-const SCRIPT_MODEL = "gpt-5.4";
+// Frontier lead model resolved via model-router; callWithFallback degrades through its safe chain.
+const SCRIPT_MODEL = resolveCapability(ModelCapability.REASONING_PREMIUM);
 
 export type VideoOrientation = "landscape" | "vertical";
 export type VideoScriptFormat = "long" | "short";

@@ -1,4 +1,5 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { db, mcpToolCallsTable, aeoScoresTable } from "@workspace/db";
 import { gt, sql, desc } from "drizzle-orm";
 import type { BeeType, ThreatBrief, BeeFinding } from "./bee-types";
@@ -121,7 +122,7 @@ Return ONLY a valid JSON object with keys: finding, rootCause, proposedFix, conf
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 600,
       messages: [
         { role: "system", content: systemPrompt },

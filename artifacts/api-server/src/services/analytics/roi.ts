@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import crypto from "crypto";
 
 const TOOL_HOUR_MULTIPLIERS: Record<string, number> = {
@@ -201,7 +202,7 @@ export async function generateWeeklyBriefing(clientId: number) {
   }
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 1000,
     messages: [
       {
@@ -269,7 +270,7 @@ export async function createShareableReport(
   if (roi.totalSessions > 0) {
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-5-mini",
+        model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
         max_completion_tokens: 300,
         messages: [
           {

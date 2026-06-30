@@ -65,6 +65,50 @@ if (ALL_CANDIDATE_MODELS.includes(JUDGE_MODEL)) {
   );
 }
 
+// ── Semantic capability descriptors ─────────────────────────────────────────
+/**
+ * Capability-based model selection. Services should reference a ModelCapability
+ * rather than a literal model string so that a single change here propagates
+ * everywhere. Each capability maps to the head of an established fallback chain
+ * in model-fallback.ts — callWithFallback handles degradation automatically.
+ *
+ * Exempt from the hardcoded-model CI guard: this file IS the router.
+ * model-router-lint-ignore
+ */
+export enum ModelCapability {
+  /** Best frontier reasoning — long-horizon planning, synthesis, complex JSON. */
+  REASONING_PREMIUM = "reasoning_premium",
+  /** Cheap efficient reasoning — summaries, classifications, short JSON. */
+  REASONING_EFFICIENT = "reasoning_efficient",
+  /** Frontier multimodal — vision + reasoning (gpt-4o family). */
+  MULTIMODAL = "multimodal",
+  /** Long-context memory tasks — episodic storage, document-length recall. */
+  MEMORY_LONG = "memory_long",
+}
+
+/**
+ * Resolve a capability descriptor to the canonical model string that heads its
+ * fallback chain. Services call this instead of hardcoding model names.
+ * If the router's model list changes, only this function needs updating.
+ */
+export function resolveCapability(capability: ModelCapability): string {
+  switch (capability) {
+    case ModelCapability.REASONING_PREMIUM:
+      return FRONTIER_CANDIDATE_MODELS[0]; // gpt-5.4 → fallback chain in model-fallback.ts
+    case ModelCapability.REASONING_EFFICIENT:
+      return EFFICIENT_CANDIDATE_MODELS[0]; // gpt-5-mini → fallback chain in model-fallback.ts
+    case ModelCapability.MULTIMODAL:
+      return "gpt-4o"; // multimodal frontier; fallback chain: gpt-4o → claude-sonnet-4-6
+    case ModelCapability.MEMORY_LONG:
+      return "glm-5.2-long"; // long-context GLM; fallback chain: glm-5.2-long → gpt-4o
+    default: {
+      const _exhaustive: never = capability;
+      void _exhaustive;
+      return EFFICIENT_CANDIDATE_MODELS[0];
+    }
+  }
+}
+
 // ── Owner-control setting keys (stored in coordinator_client_settings) ──────
 export const MODEL_OPTIMIZER_SETTING_KEYS = {
   enabled: "model_optimizer_enabled",

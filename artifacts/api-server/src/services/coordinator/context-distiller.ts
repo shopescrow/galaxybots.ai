@@ -1,4 +1,5 @@
 import { callWithFallback, ModelTier } from "../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { generateEmbeddings } from "../bots/memory";
 import { topKBySimilarity } from "../scaling/scaling-primitives";
 import { scalingConfig, isScalingActive } from "../scaling/scaling-config";
@@ -39,7 +40,7 @@ export interface DistilledContext {
   role: CoordinatorRole;
 }
 
-const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+const MODEL_CONTEXT_WINDOWS: Record<string, number> = { // model-router-lint-ignore — lookup table, not a routing decision
   "gpt-5.4": 128_000,
   "gpt-4o": 128_000,
   "gpt-5-mini": 128_000,
@@ -51,7 +52,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 const DEFAULT_CONTEXT_WINDOW = 32_000;
 const CONTEXT_BUDGET_RATIO = 0.60;
 const APPROX_CHARS_PER_TOKEN = 4;
-const SUMMARY_MODEL = "gpt-5-mini";
+const SUMMARY_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
 
 function getContextWindowSize(targetModel: string): number {
   return MODEL_CONTEXT_WINDOWS[targetModel] ?? DEFAULT_CONTEXT_WINDOW;

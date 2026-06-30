@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { createNotification } from "../admin/notifications";
 import { emitActivityEvent } from "../analytics/activity-events";
 
@@ -212,7 +213,7 @@ ${violations.length > 0 ? `Current violations found: ${violations.join("; ")}` :
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 2000,
       messages: [
         { role: "system", content: systemPrompt },

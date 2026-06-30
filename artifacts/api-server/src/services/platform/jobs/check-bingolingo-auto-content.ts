@@ -1,6 +1,7 @@
 import { db, bingolingoClientsTable, bingolingoContentTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { broadcastSSE } from "../sse";
 
 function errMsg(err: unknown): string {
@@ -24,7 +25,7 @@ export async function checkBingolingoAutoContent() {
     for (const client of clients) {
       try {
         const topicCompletion = await openai.chat.completions.create({
-          model: "gpt-5-mini",
+          model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
           max_completion_tokens: 200,
           messages: [
             {
@@ -38,7 +39,7 @@ export async function checkBingolingoAutoContent() {
 
         const systemPrompt = `You are an expert SEO content writer. Generate a well-structured blog post with an engaging H1 title, clear H2/H3 subheadings, SEO-optimized content, and a strong conclusion. Return in markdown format.`;
         const completion = await openai.chat.completions.create({
-          model: "gpt-5-mini",
+          model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
           max_completion_tokens: 3000,
           messages: [
             { role: "system", content: systemPrompt },

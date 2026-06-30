@@ -10,6 +10,8 @@ import {
   recordModelSelection,
   recordModelOutcome,
   estimateDifficultyFromInput,
+  ModelCapability,
+  resolveCapability,
 } from "../ai-safety/model-router";
 import { callWithFallback, ModelTier } from "../ai-safety/model-fallback";
 import { estimateCost } from "../analytics/llm-usage";
@@ -95,7 +97,7 @@ async function runLlm(opts: {
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
-  const fallbackModel = opts.fallbackModel ?? "gpt-4o";
+  const fallbackModel = opts.fallbackModel ?? resolveCapability(ModelCapability.MULTIMODAL);
   const fallbackTier = opts.tier ?? ModelTier.FRONTIER;
   const difficultyScore = estimateDifficultyFromInput(
     Math.ceil((opts.system.length + opts.user.length) / 4),
@@ -338,7 +340,7 @@ async function generateListingCopy(
       "You are a marketplace listing copywriter optimizing for Etsy/Gumroad/KDP search and conversion. " +
       "Respond ONLY with JSON.",
     tier: ModelTier.EFFICIENT,
-    fallbackModel: "gpt-5-mini",
+    fallbackModel: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     temperature: 0.5,
     user: `Write marketplace listing metadata for this digital product.
 

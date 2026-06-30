@@ -2,6 +2,7 @@ import { db, conductorStrategiesTable } from "@workspace/db";
 import { eq, and, avg, sql, lt } from "drizzle-orm";
 import type { CommunicationStrategy, ConductorMeta } from "@workspace/db";
 import { callWithFallback, ModelTier } from "../../services/ai-safety/model-fallback.js";
+import { ModelCapability, resolveCapability } from "../../services/ai-safety/model-router.js";
 import type { StrategyTelemetry } from "./strategies/index.js";
 import { getStrategyProfitPriors, fleetSizeBucket } from "../analytics/scaling-telemetry.js";
 
@@ -289,7 +290,7 @@ Return a JSON object with exactly:
 
   try {
     const result = await callWithFallback({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       messages: [
         { role: "system", content: "You are GalaxyConductor. Return only valid JSON." },
         { role: "user", content: prompt },

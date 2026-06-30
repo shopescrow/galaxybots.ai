@@ -1,6 +1,7 @@
 import { db, callLogsTable, receptionistConfigsTable, callImprovementRunsTable, toolActivityLogTable, botsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { storeMemory, retrieveMemories } from "./memory";
 import type { ReceptionistConfig } from "@workspace/db";
 
@@ -115,7 +116,7 @@ Return your response in this JSON format:
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       messages: [{ role: "user", content: improvementPrompt }],
       max_tokens: 2000,
       temperature: 0.3,

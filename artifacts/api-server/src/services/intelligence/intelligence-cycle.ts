@@ -10,6 +10,7 @@ import { eq, and, gte, sql, desc, lt } from "drizzle-orm";
 import type { CommunicationStrategy, TaskCategory } from "@workspace/db";
 import { detectModelVersionChange, archiveAndRebaseWeights } from "../coordinator/galaxy-coordinator";
 import { deriveModelTier } from "../conductor/galaxy-conductor";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 const DEFAULT_DAYS = 7;
 const Z_SCORE_THRESHOLD = 1.5;
@@ -309,7 +310,7 @@ async function findStrategyWinners(
 }
 
 function getActiveModelVersion(): string {
-  return process.env.LLM_MODEL_VERSION ?? "gpt-5-mini";
+  return process.env.LLM_MODEL_VERSION ?? resolveCapability(ModelCapability.REASONING_EFFICIENT);
 }
 
 async function computeAvgQuality(since: Date, until: Date, clientId?: number): Promise<number | null> {

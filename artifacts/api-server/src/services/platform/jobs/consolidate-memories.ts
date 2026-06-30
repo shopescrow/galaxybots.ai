@@ -1,6 +1,7 @@
 import { db, botMemoriesTable, botBeliefsTable, clientBotsTable } from "@workspace/db";
 import { eq, isNull, gte, and, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { CATEGORY_HALF_LIFE_DAYS as BELIEF_HALF_LIFE_DAYS, type BeliefCategory } from "../../../agent-core/value-objects/index.js";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -112,7 +113,7 @@ Return a JSON object:
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       messages: [
         { role: "system", content: "You are a strict JSON-only responder." },
         { role: "user", content: prompt },

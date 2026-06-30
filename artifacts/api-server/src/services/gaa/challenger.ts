@@ -1,4 +1,5 @@
 import { callWithFallback } from "../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 
 // ---------------------------------------------------------------------------
 // Adversarial self-probing ("red team") pass. Before a high-stakes plan is
@@ -48,7 +49,7 @@ export async function runChallenger(
 ): Promise<ChallengeResult> {
   try {
     const result = await callWithFallback({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       temperature: 0.3,
       maxCompletionTokens: 500,
       messages: [

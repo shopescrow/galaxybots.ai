@@ -23,10 +23,11 @@
  */
 
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import type { Bot } from "@workspace/db";
 import type { MoltbookCatalogEntry } from "./moltbook-bizdev";
 
-const CONTENT_MODEL = "gpt-5-mini";
+const CONTENT_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
 const MAX_COMMENT_LEN = 1000;
 const MAX_POST_LEN = 1500;
 

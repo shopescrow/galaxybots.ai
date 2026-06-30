@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { callWithFallback } from "../../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { remember } from "../memory-tiers";
 import {
   getStrongestCapabilities,
@@ -45,7 +46,7 @@ function categoryFromMemory(mem: GaaMemory): string | null {
 async function distillBelief(lesson: string, taskCategory: string): Promise<string> {
   try {
     const result = await callWithFallback({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       temperature: 0.2,
       maxCompletionTokens: 200,
       messages: [

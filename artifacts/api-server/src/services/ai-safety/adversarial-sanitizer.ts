@@ -1,5 +1,6 @@
 import { db, securityEventsTable } from "@workspace/db";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "./model-router";
 import crypto from "crypto";
 
 const PROMPT_INJECTION_PATTERNS: RegExp[] = [
@@ -43,7 +44,7 @@ async function scoreAdversarialContent(content: string): Promise<number> {
   const preview = content.slice(0, 1500);
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       messages: [
         {
           role: "system",

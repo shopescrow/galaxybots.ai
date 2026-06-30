@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import type { WebsiteIntel } from "@workspace/db";
 
 function errMsg(err: unknown): string {
@@ -166,7 +167,7 @@ export async function checkActivationNurture() {
         if (websiteIntel?.summary || client.industry) {
           try {
             const insightCompletion = await openai.chat.completions.create({
-              model: "gpt-5-mini",
+              model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
               max_completion_tokens: 150,
               messages: [
                 {

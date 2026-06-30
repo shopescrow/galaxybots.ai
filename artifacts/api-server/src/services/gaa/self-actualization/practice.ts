@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { callWithFallback } from "../../ai-safety/model-fallback";
+import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { remember } from "../memory-tiers";
 import { getWeakestCategories } from "./capability-model";
 import { checkFidelity, checkMargin } from "./guardrails";
@@ -49,7 +50,7 @@ async function runSandboxPractice(
 ): Promise<GradedAttempt | null> {
   try {
     const result = await callWithFallback({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       temperature: 0.4,
       maxCompletionTokens: 900,
       messages: [

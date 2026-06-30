@@ -5,6 +5,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import {
   rerankMemories,
   DEFAULT_CANDIDATE_POOL,
@@ -289,7 +290,7 @@ export async function consolidateSession(params: {
     .join("\n");
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 1500,
     messages: [
       {

@@ -1,8 +1,9 @@
 import type { OpenAI } from "@workspace/integrations-openai-ai-server";
 type ChatCompletionMessageParam = OpenAI.ChatCompletionMessageParam;
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "./model-router";
 
-const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+const MODEL_CONTEXT_WINDOWS: Record<string, number> = { // model-router-lint-ignore — lookup table, not a routing decision
   "gpt-5.4": 128_000,
   "gpt-4o": 128_000,
   "gpt-5-mini": 128_000,
@@ -68,7 +69,7 @@ export async function summarizeOlderMessages(
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
       max_completion_tokens: 400,
       messages: [
         {

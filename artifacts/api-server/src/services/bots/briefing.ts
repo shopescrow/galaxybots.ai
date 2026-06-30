@@ -15,6 +15,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, gte, isNull, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { decryptCredential } from "../../utils/credential-encryption";
 import nodemailer from "nodemailer";
 
@@ -360,7 +361,7 @@ export async function generateBriefForClient(clientId: number, briefType: "morni
   const prompt = buildBriefPrompt(ctx, briefType);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: resolveCapability(ModelCapability.REASONING_EFFICIENT),
     max_completion_tokens: 1500,
     messages: [
       { role: "system", content: "You are a professional executive briefing AI. Be concise, specific, and actionable. Return plain text only — no HTML or markdown formatting." },
