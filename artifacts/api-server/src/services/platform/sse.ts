@@ -40,7 +40,9 @@ export function broadcastSSE(event: string, data: Record<string, unknown>) {
     if (client.clientId !== targetClientId) continue;
     try {
       client.res.write(payload);
-    } catch (_e) {}
+    } catch (err) {
+      console.warn("[sse] broadcastSSE write failed for client", client.id, ":", err instanceof Error ? err.message : err);
+    }
   }
 }
 
@@ -49,7 +51,9 @@ export function broadcastSSEToAll(event: string, data: Record<string, unknown>) 
   for (const client of sseClients) {
     try {
       client.res.write(payload);
-    } catch (_e) {}
+    } catch (err) {
+      console.warn("[sse] broadcastSSEToAll write failed for client", client.id, ":", err instanceof Error ? err.message : err);
+    }
   }
 }
 
@@ -64,7 +68,8 @@ function startHeartbeat() {
           continue;
         }
         client.res.write(`:heartbeat\n\n`);
-      } catch (_e) {
+      } catch (err) {
+        console.warn("[sse] heartbeat write failed for client", client.id, ":", err instanceof Error ? err.message : err);
         deadClients.push(client.id);
       }
     }
@@ -91,7 +96,9 @@ export function closeAllSSEClients() {
   for (const client of sseClients) {
     try {
       client.res.end();
-    } catch (_e) {}
+    } catch (err) {
+      console.warn("[sse] closeAllSSEClients end failed for client", client.id, ":", err instanceof Error ? err.message : err);
+    }
   }
   sseClients = [];
   stopHeartbeat();

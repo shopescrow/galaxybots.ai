@@ -312,21 +312,28 @@ router.post(
     const msgContextClientId = session.clientId ?? req.user!.clientId;
     const clientContext = await buildClientContext(msgContextClientId);
 
+    const msgRequestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined ?? "unknown";
     let taskKbContext = "";
     try {
       taskKbContext = await buildKnowledgeBaseContext(msgContextClientId, `${session.objective} ${body.data.content}`);
-    } catch (_e) {}
+    } catch (err) {
+      console.error(`[task-sessions/messages] POST /task-sessions/${params.data.id}/messages requestId=${msgRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+    }
 
     for (const bot of teamBots) {
       let memoryContext = "";
       try {
         memoryContext = await buildMemoryContext(bot.id, `${session.objective} ${body.data.content}`, msgContextClientId);
-      } catch (_e) {}
+      } catch (err) {
+        console.error(`[task-sessions/messages] POST /task-sessions/${params.data.id}/messages botId=${bot.id} requestId=${msgRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+      }
 
       let packOverlay = "";
       try {
         packOverlay = await getPackOverlayForBot(msgContextClientId, bot.title);
-      } catch (_e) {}
+      } catch (err) {
+        console.error(`[task-sessions/messages] POST /task-sessions/${params.data.id}/messages botId=${bot.id} requestId=${msgRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+      }
 
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
@@ -515,10 +522,13 @@ router.post(
       const streamContextClientId = session.clientId ?? req.user!.clientId;
       const clientContext = await buildClientContext(streamContextClientId);
 
+      const streamRequestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined ?? "unknown";
       let streamTaskKbContext = "";
       try {
         streamTaskKbContext = await buildKnowledgeBaseContext(streamContextClientId, `${session.objective} ${body.data.content}`);
-      } catch (_e) {}
+      } catch (err) {
+        console.error(`[task-sessions/messages/stream] POST /task-sessions/${params.data.id}/messages/stream requestId=${streamRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+      }
 
       await batchProcessWithSSE(
         teamBots,
@@ -526,7 +536,9 @@ router.post(
           let packOverlay = "";
           try {
             packOverlay = await getPackOverlayForBot(streamContextClientId, bot.title);
-          } catch (_e) {}
+          } catch (err) {
+            console.error(`[task-sessions/messages/stream] POST /task-sessions/${params.data.id}/messages/stream botId=${bot.id} requestId=${streamRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+          }
 
           const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}

@@ -168,20 +168,27 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     ? `\n\nIMPORTANT: Respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Do not use English unless quoting a specific term.`
     : "";
 
+  const convRequestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined ?? "unknown";
   let memoryContext = "";
   try {
     memoryContext = await buildMemoryContext(bot.id, body.data.content, req.user!.clientId);
-  } catch (_e) {}
+  } catch (err) {
+    console.error(`[conversations/messages] POST /conversations/${params.data.id}/messages botId=${bot.id} requestId=${convRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+  }
 
   let kbContext = "";
   try {
     kbContext = await buildKnowledgeBaseContext(req.user!.clientId, body.data.content);
-  } catch (_e) {}
+  } catch (err) {
+    console.error(`[conversations/messages] POST /conversations/${params.data.id}/messages requestId=${convRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+  }
 
   let packOverlay = "";
   try {
     packOverlay = await getPackOverlayForBot(req.user!.clientId, bot.title);
-  } catch (_e) {}
+  } catch (err) {
+    console.error(`[conversations/messages] POST /conversations/${params.data.id}/messages botId=${bot.id} requestId=${convRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+  }
 
   const isGuardianQueen = (bot as { rank?: string }).rank === "guardian_queen";
 
@@ -389,20 +396,27 @@ router.post("/conversations/:id/messages/stream", async (req, res): Promise<void
       ? `\n\nIMPORTANT: Respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Do not use English unless quoting a specific term.`
       : "";
 
+    const streamConvRequestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined ?? "unknown";
     let streamMemoryContext = "";
     try {
       streamMemoryContext = await buildMemoryContext(bot.id, body.data.content, req.user!.clientId);
-    } catch (_e) {}
+    } catch (err) {
+      console.error(`[conversations/messages/stream] POST /conversations/${params.data.id}/messages/stream botId=${bot.id} requestId=${streamConvRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+    }
 
     let streamKbContext = "";
     try {
       streamKbContext = await buildKnowledgeBaseContext(req.user!.clientId, body.data.content);
-    } catch (_e) {}
+    } catch (err) {
+      console.error(`[conversations/messages/stream] POST /conversations/${params.data.id}/messages/stream requestId=${streamConvRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+    }
 
     let streamPackOverlay = "";
     try {
       streamPackOverlay = await getPackOverlayForBot(req.user!.clientId, bot.title);
-    } catch (_e) {}
+    } catch (err) {
+      console.error(`[conversations/messages/stream] POST /conversations/${params.data.id}/messages/stream botId=${bot.id} requestId=${streamConvRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+    }
 
     const systemPrompt = `You are ${bot.name}, the ${bot.title} at GalaxyBots.ai — a world-class AI corporate director.
 

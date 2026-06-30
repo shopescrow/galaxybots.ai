@@ -342,9 +342,13 @@ router.post("/proposals/generate", requireRole("owner", "admin"), llmRateLimit, 
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  const requestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined ?? "unknown";
+
   try {
     let clientContext = "";
-    try { clientContext = await buildClientContext(clientId); } catch (_e) {}
+    try { clientContext = await buildClientContext(clientId); } catch (err) {
+      console.error(`[proposals/generate] POST /proposals/generate requestId=${requestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+    }
 
     let kbContext = "";
     try {
@@ -352,7 +356,9 @@ router.post("/proposals/generate", requireRole("owner", "admin"), llmRateLimit, 
         clientId,
         `${prospectName} ${prospectIndustry || ""} ${servicePitch || ""} proposal`
       );
-    } catch (_e) {}
+    } catch (err) {
+      console.error(`[proposals/generate] POST /proposals/generate requestId=${requestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+    }
 
     const sectionTemplates = proposalType === "pitch" ? PITCH_SLIDES : PROPOSAL_SECTIONS;
     const rfpContextBlock = buildGenerationContext(proposalType, clientContext, kbContext, rfpText, rfpAnalysis);
@@ -430,8 +436,11 @@ router.post("/proposals/analyze-rfp", requireRole("owner", "admin"), llmRateLimi
   }
 
   const clientId = req.user!.clientId;
+  const analyzeRfpRequestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined ?? "unknown";
   let clientContext = "";
-  try { clientContext = await buildClientContext(clientId); } catch (_e) {}
+  try { clientContext = await buildClientContext(clientId); } catch (err) {
+    console.error(`[proposals/analyze-rfp] POST /proposals/analyze-rfp requestId=${analyzeRfpRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
+  }
 
   try {
     const completion = await openai.chat.completions.create({

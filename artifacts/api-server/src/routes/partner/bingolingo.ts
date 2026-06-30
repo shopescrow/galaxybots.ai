@@ -327,7 +327,9 @@ router.put("/bingolingo/content/:id", authenticate, async (req, res): Promise<vo
 
   const wasJustPublished = status === "published" && existing?.status !== "published";
   if (wasJustPublished && updated.publishedUrl) {
-    queueAeoScanForContent(updated.id, updated.publishedUrl, updated.clientId).catch(() => {});
+    queueAeoScanForContent(updated.id, updated.publishedUrl, updated.clientId).catch((err) =>
+      console.error(`[bingolingo/content] job=aeo-scan contentId=${updated.id} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err)
+    );
   }
 
   res.json(updated);
@@ -382,7 +384,9 @@ router.post("/bingolingo/content/:id/publish", authenticate, async (req, res): P
   }
 
   if (updated.publishedUrl) {
-    queueAeoScanForContent(updated.id, updated.publishedUrl, updated.clientId).catch(() => {});
+    queueAeoScanForContent(updated.id, updated.publishedUrl, updated.clientId).catch((err) =>
+      console.error(`[bingolingo/publish] job=aeo-scan contentId=${updated.id} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err)
+    );
   }
 
   res.json(updated);
