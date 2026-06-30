@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { db, extractionJobsTable, extractionPagesTable } from "@workspace/db";
 import {
   CreateExtractionJobBody,
@@ -11,16 +11,19 @@ import {
   DeleteExtractionJobParams,
 } from "@workspace/api-zod";
 import { runExtractionForJob } from "../../services/liberator/extraction-engine";
+import { assertSafeUrl } from "../../lib/ssrf-guard";
 import { registerCrmRoutes } from "./crms";
 import { registerSyncRoutes } from "./syncs";
 import { registerAskRoutes } from "./ask";
 
 const router: IRouter = Router();
 
-router.get("/liberator/jobs", async (_req: Request, res: Response): Promise<void> => {
+router.get("/liberator/jobs", async (req: Request, res: Response): Promise<void> => {
+  const clientId = req.user!.clientId;
   const jobs = await db
     .select()
     .from(extractionJobsTable)
+    .where(eq(extractionJobsTable.clientId, clientId))
     .orderBy(desc(extractionJobsTable.createdAt));
   res.json(jobs);
 });
@@ -34,9 +37,14 @@ router.post("/liberator/jobs", async (req: Request, res: Response): Promise<void
 
   const { name, sourceUrl, extractionType, fields, instructions } = parsed.data;
 
+  await assertSafeUrl(sourceUrl);
+
+  const clientId = req.user!.clientId;
+
   const [job] = await db
     .insert(extractionJobsTable)
     .values({
+      clientId,
       name,
       sourceUrl,
       extractionType: extractionType ?? "custom",
@@ -54,10 +62,12 @@ router.get("/liberator/jobs/:id", async (req: Request, res: Response): Promise<v
     return;
   }
 
+  const clientId = req.user!.clientId;
+
   const [job] = await db
     .select()
     .from(extractionJobsTable)
-    .where(eq(extractionJobsTable.id, params.data.id));
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
 
   if (!job) {
     res.status(404).json({ error: "Extraction job not found" });
@@ -95,9 +105,21 @@ router.delete("/liberator/jobs/:id", async (req: Request, res: Response): Promis
     return;
   }
 
+  const clientId = req.user!.clientId;
+
+  const [existing] = await db
+    .select({ id: extractionJobsTable.id })
+    .from(extractionJobsTable)
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
+
+  if (!existing) {
+    res.status(404).json({ error: "Extraction job not found" });
+    return;
+  }
+
   await db
     .delete(extractionJobsTable)
-    .where(eq(extractionJobsTable.id, params.data.id));
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
 
   res.sendStatus(204);
 });
@@ -109,22 +131,26 @@ router.post("/liberator/jobs/:id/run", async (req: Request, res: Response): Prom
     return;
   }
 
+  const clientId = req.user!.clientId;
+
   const [job] = await db
     .select()
     .from(extractionJobsTable)
-    .where(eq(extractionJobsTable.id, params.data.id));
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
 
   if (!job) {
     res.status(404).json({ error: "Extraction job not found" });
     return;
   }
 
+  await assertSafeUrl(job.sourceUrl);
+
   runExtractionForJob(params.data.id).catch(() => {});
 
   const [updated] = await db
     .select()
     .from(extractionJobsTable)
-    .where(eq(extractionJobsTable.id, params.data.id));
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
 
   res.json(updated);
 });
@@ -136,10 +162,12 @@ router.get("/liberator/jobs/:id/preview", async (req: Request, res: Response): P
     return;
   }
 
+  const clientId = req.user!.clientId;
+
   const [job] = await db
     .select()
     .from(extractionJobsTable)
-    .where(eq(extractionJobsTable.id, params.data.id));
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
 
   if (!job) {
     res.status(404).json({ error: "Extraction job not found" });
@@ -167,10 +195,12 @@ router.get("/liberator/jobs/:id/download", async (req: Request, res: Response): 
   const queryParsed = DownloadExtractionDataQueryParams.safeParse(req.query);
   const format = queryParsed.success ? queryParsed.data.format : "csv";
 
+  const clientId = req.user!.clientId;
+
   const [job] = await db
     .select()
     .from(extractionJobsTable)
-    .where(eq(extractionJobsTable.id, params.data.id));
+    .where(and(eq(extractionJobsTable.id, params.data.id), eq(extractionJobsTable.clientId, clientId)));
 
   if (!job) {
     res.status(404).json({ error: "Extraction job not found" });
@@ -214,10 +244,12 @@ router.get("/liberator/jobs/:id/download", async (req: Request, res: Response): 
   res.send(csvRows.join("\n"));
 });
 
-router.get("/liberator/stats", async (_req: Request, res: Response): Promise<void> => {
+router.get("/liberator/stats", async (req: Request, res: Response): Promise<void> => {
+  const clientId = req.user!.clientId;
   const allJobs = await db
     .select()
     .from(extractionJobsTable)
+    .where(eq(extractionJobsTable.clientId, clientId))
     .orderBy(desc(extractionJobsTable.createdAt));
 
   const totalJobs = allJobs.length;

@@ -173,8 +173,6 @@ const PUBLIC_SUFFIXES = [
   "/mcp-marketing/download-extension",
   "/pdf/health",
   "/data-export",
-  "/liberator/stats",
-  "/liberator/jobs",
   "/liberator/transforms",
 ];
 
@@ -192,7 +190,6 @@ const PUBLIC_PREFIX_SUFFIXES = [
   "/sso/saml/",
   "/sso/oidc/",
   "/scim/v2/",
-  "/liberator/jobs/",
   "/proposals/shared/",
   "/roi/shared/",
   "/micro-tools/",

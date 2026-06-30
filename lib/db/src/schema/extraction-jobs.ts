@@ -1,7 +1,9 @@
 import { pgTable, serial, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
 
 export const extractionJobsTable = pgTable("extraction_jobs", {
   id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }).notNull().default(0),
   name: text("name").notNull(),
   sourceUrl: text("source_url").notNull(),
   status: text("status", { enum: ["pending", "running", "paused", "completed", "failed"] }).notNull().default("pending"),
