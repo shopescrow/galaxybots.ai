@@ -13,9 +13,10 @@
 4. Never repeat a mistake that has already been recorded as a decision or instruction.
 
 ## User Preferences
-- Iterative development — ask before major changes.
-- Agent must be honest about bugs it can prevent and bugs it overlooks prior to every build.
-- A bug assessment must also be performed after every analysis, question, or proposal.
+  - Iterative development — ask before major changes.
+  - Agent must be honest about bugs it can prevent and bugs it overlooks prior to every build.
+  - A bug assessment must also be performed after every analysis, question, or proposal.
+  - **Markovian coding style (FIRM RULE):** Every unit of code must look back at its neighbor. Each new line, variable, function, or pattern must be locally consistent with what immediately precedes it — naming conventions, casing, type style, ORM call shape, error handling style. No sudden jumps in convention mid-file. Drift = defect.
 
 ## Pre-Deploy Checklist
 **Always run before deploying:**
