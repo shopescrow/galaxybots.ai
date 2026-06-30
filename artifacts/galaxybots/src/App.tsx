@@ -9,6 +9,7 @@ import { UserPreferencesProvider } from "@/contexts/UserPreferencesContext";
 import { PartnerProvider } from "@/contexts/PartnerContext";
 import { ActiveClientProvider } from "@/contexts/ActiveClientContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { PageSkeleton } from "@/components/skeletons/PageSkeletons";
 
 // ─── Lazy page imports ──────────────────────────────────────────────────────
 const OnboardingWizard    = lazy(() => import("@/components/onboarding/OnboardingWizard"));
@@ -115,13 +116,9 @@ const PlatformIntelligence = lazy(() => import("@/pages/platform-intelligence/Pl
 const GalaxyIntelligence  = lazy(() => import("@/pages/intelligence/GalaxyIntelligence"));
 const DemandEngine        = lazy(() => import("@/pages/intelligence/DemandEngine"));
 
-// ─── Minimal inline fallback — zero external deps ───────────────────────────
+// ─── Skeleton fallback used by all Suspense boundaries ───────────────────────
 function PageLoader() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-    </div>
-  );
+  return <PageSkeleton />;
 }
 
 // ─── Auto-recover from stale lazy chunks after a new deploy ──────────────────

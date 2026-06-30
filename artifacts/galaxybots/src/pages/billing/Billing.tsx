@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Zap, Building, Globe, CreditCard, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { BillingSkeleton } from "@/components/skeletons/PageSkeletons";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -157,6 +158,14 @@ export default function Billing() {
     ? "https://www.godaddy.com/payments"
     : "https://stripe.com";
 
+  if (loading) {
+    return (
+      <AppLayout>
+        <BillingSkeleton />
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="container mx-auto px-4 py-16 sm:py-24">
@@ -188,9 +197,6 @@ export default function Billing() {
           )}
         </div>
 
-        {loading && (
-          <div className="text-center text-muted-foreground py-16">Loading plans…</div>
-        )}
 
         {error && (
           <div className="text-center text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-6 py-4 max-w-md mx-auto">
@@ -198,7 +204,7 @@ export default function Billing() {
           </div>
         )}
 
-        {!loading && !error && links && (
+        {!error && links && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {planKeys.map((key) => {
               const plan = links.plans[key];

@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Search, History, Loader2, ListChecks, ExternalLink, Activity, BarChart3, TrendingUp, AlertTriangle, Lightbulb, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ProspectorSkeleton, ObservabilityTabSkeleton } from "@/components/skeletons/PageSkeletons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { ReviewQueue } from "@/pages/prospecting/ReviewQueue";
@@ -38,7 +39,7 @@ export function ObservabilityTab() {
     fetchStats();
   }, []);
 
-  if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>;
+  if (loading) return <ObservabilityTabSkeleton />;
   if (!stats) return null;
 
   const successRate = stats.totalProspects > 0 ? (stats.qualifiedCount / stats.totalProspects) * 100 : 0;
@@ -319,6 +320,14 @@ export default function Prospector() {
     return "bg-red-500";
   };
 
+  if (loading) {
+    return (
+      <AppLayout>
+        <ProspectorSkeleton />
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="container mx-auto px-4 py-8">
@@ -442,9 +451,7 @@ export default function Prospector() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {loading ? (
-                    <div className="flex justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" /></div>
-                  ) : filteredProspects.length === 0 && prospects.length === 0 ? (
+                  {filteredProspects.length === 0 && prospects.length === 0 ? (
                     <div className="text-center py-12 border-2 border-dashed rounded-lg">
                       <Search className="w-12 h-12 mx-auto text-muted-foreground opacity-20 mb-4" />
                       <h3 className="text-lg font-medium">Pipeline Empty</h3>

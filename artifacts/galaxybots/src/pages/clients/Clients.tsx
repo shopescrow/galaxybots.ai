@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Building, Plus, Users, Link2, ExternalLink, FileText, Minus, AlertTriangle, Zap, ArrowUpRight, ArrowDownRight, Search, ArrowUp, ArrowDown, ArrowUpDown, Heart } from "lucide-react";
+import { ClientsSkeleton, ClientsCardsSkeleton, ReferralsTableSkeleton, AeoHealthTableSkeleton } from "@/components/skeletons/PageSkeletons";
 import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -199,9 +200,7 @@ export default function Clients() {
         {/* Clients Tab */}
         {tab === "clients" && (
           isLoading ? (
-            <div className="flex justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
+            <ClientsCardsSkeleton />
           ) : clients?.data?.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-border/40">
               <Users className="w-12 h-12 text-muted-foreground opacity-20 mb-4" />
@@ -385,9 +384,7 @@ function PartnersTab({
         {/* Referrals Table */}
         <div className="p-6">
           {referralsLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
+            <ReferralsTableSkeleton />
           ) : bingolingoReferrals.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
@@ -611,9 +608,7 @@ function AeoHealthPanel() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <AeoHealthTableSkeleton />
         ) : !health || health.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4">

@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
-import { Search, Loader2, BotIcon, Mic } from "lucide-react";
+import { Search, BotIcon, Mic } from "lucide-react";
 import { useState, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { BotRosterSkeleton } from "@/components/skeletons/PageSkeletons";
 
 export default function BotRoster() {
   const { data: bots, isLoading } = useBots();
@@ -29,6 +30,14 @@ export default function BotRoster() {
       return matchesSearch && matchesCat;
     });
   }, [bots, search, categoryFilter]);
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <BotRosterSkeleton />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -71,13 +80,8 @@ export default function BotRoster() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="h-64 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredBots.map((bot, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredBots.map((bot, i) => (
               <motion.div
                 key={bot.id}
                 initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95 }}
@@ -125,7 +129,6 @@ export default function BotRoster() {
               </motion.div>
             ))}
           </div>
-        )}
       </div>
     </AppLayout>
   );

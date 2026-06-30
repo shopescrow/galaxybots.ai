@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
-import { useState, useEffect, useRef, useCallback, KeyboardEvent } from "react";
+import { useState, useEffect, useRef, useCallback, memo, KeyboardEvent } from "react";
 import { NAV_GROUPS, type NavGroup } from "./navConfig";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -224,7 +224,7 @@ interface AccordionGroupProps {
   showDistrictLabel: boolean;
 }
 
-function AccordionGroup({
+const AccordionGroup = memo(function AccordionGroup({
   group,
   isOpen,
   isActive,
@@ -358,7 +358,12 @@ function AccordionGroup({
       )}
     </div>
   );
-}
+}, (prev, next) =>
+  prev.isOpen === next.isOpen &&
+  prev.isActive === next.isActive &&
+  prev.activeChildHref === next.activeChildHref &&
+  prev.showDistrictLabel === next.showDistrictLabel
+);
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: SidebarProps) {
@@ -371,10 +376,10 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
     return user && g.roles.includes(user.role);
   });
 
-  const handleLinkClick = () => {
+  const handleLinkClick = useCallback(() => {
     onCloseMobile();
     onLinkClick?.();
-  };
+  }, [onCloseMobile, onLinkClick]);
 
   const sidebarStyle = {
     background: "linear-gradient(180deg, hsl(230 50% 3.5%) 0%, hsl(245 42% 5%) 50%, hsl(230 50% 3.5%) 100%)",

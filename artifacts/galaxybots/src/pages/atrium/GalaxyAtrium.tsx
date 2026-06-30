@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Zap, LayoutGrid } from "lucide-react";
@@ -23,10 +23,115 @@ function dco(color?: string) {
   return (color && DISTRICT_COLORS[color]) || DEFAULT_DC;
 }
 
+type NavGroup = (typeof NAV_GROUPS)[number];
+
+interface DistrictCardProps {
+  group: NavGroup;
+  idx: number;
+  prefersReducedMotion: boolean | null;
+}
+
+function DistrictCard({ group, idx, prefersReducedMotion }: DistrictCardProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const d = dco(group.color);
+  const Icon = group.icon;
+  const quickLinks = group.children.slice(0, 5);
+
+  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
+  const handleMouseLeave = useCallback(() => setIsHovered(false), []);
+
+  return (
+    <motion.div
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: idx * 0.055, ease: [0.16, 1, 0.3, 1] }}
+      className="relative rounded-2xl p-5 flex flex-col gap-4 overflow-hidden"
+      style={{
+        background: `linear-gradient(145deg, hsl(230 48% 5%) 0%, ${d.gradientStop} 100%)`,
+        border: `1px solid ${isHovered ? d.border : d.border.replace("0.2", "0.12")}`,
+        boxShadow: isHovered
+          ? `${d.glow}, 0 12px 40px hsl(230 50% 2% / 0.5)`
+          : "0 4px 20px hsl(230 50% 2% / 0.35)",
+        transform: isHovered ? "translateY(-2px)" : "translateY(0)",
+        transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+        cursor: "default",
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Decorative corner glow */}
+      <div
+        className="absolute top-0 right-0 w-20 h-20 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle at top right, ${d.color}, transparent 70%)`,
+          opacity: isHovered ? 0.18 : 0.1,
+          transition: "opacity 0.25s ease",
+        }}
+      />
+
+      {/* District header */}
+      <div className="flex items-center gap-3 relative z-10">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300"
+          style={{
+            background: d.bg,
+            border: `1px solid ${d.border}`,
+            boxShadow: isHovered ? `0 0 20px ${d.color}40` : "none",
+          }}
+        >
+          <Icon style={{ color: d.color, width: "18px", height: "18px" }} />
+        </div>
+        <div className="min-w-0">
+          <div
+            className="text-[9px] font-tech font-bold uppercase tracking-[0.22em] opacity-50"
+            style={{ color: d.color }}
+          >
+            {group.district || "District"}
+          </div>
+          <div
+            className="text-sm font-display font-bold tracking-wide"
+            style={{ color: d.color }}
+          >
+            {group.label}
+          </div>
+        </div>
+      </div>
+
+      {/* Separator */}
+      <div className="h-px" style={{ background: `${d.border}` }} />
+
+      {/* Quick links */}
+      <div className="flex flex-col gap-0.5 relative z-10">
+        {quickLinks.map((child) => (
+          <Link
+            key={child.href}
+            href={child.href}
+            className="group/link flex items-center justify-between px-2.5 py-1.5 rounded-lg font-tech text-sm text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-white/[0.04]"
+          >
+            <span className="truncate">{child.label}</span>
+            <ArrowUpRight
+              className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover/link:opacity-50 transition-opacity duration-150 ml-1"
+              style={{ color: d.color }}
+            />
+          </Link>
+        ))}
+        {group.children.length > 5 && (
+          <Link
+            href={group.children[0].href}
+            className="flex items-center gap-1 px-2.5 py-1 font-tech text-xs transition-colors"
+            style={{ color: d.color, opacity: 0.5 }}
+          >
+            +{group.children.length - 5} more
+          </Link>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function GalaxyAtrium() {
   const { user } = useAuth();
   const prefersReducedMotion = useReducedMotion();
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   const displayName = user?.displayName?.split(" ")[0] || user?.email?.split("@")[0] || "Commander";
 
   const visibleGroups = NAV_GROUPS.filter((g) => {
@@ -144,101 +249,14 @@ export default function GalaxyAtrium() {
           </motion.div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {visibleGroups.map((group, idx) => {
-              const d = dco(group.color);
-              const Icon = group.icon;
-              const isHovered = hoveredGroup === group.id;
-              const quickLinks = group.children.slice(0, 5);
-
-              return (
-                <motion.div
-                  key={group.id}
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: idx * 0.055, ease: [0.16, 1, 0.3, 1] }}
-                  className="relative rounded-2xl p-5 flex flex-col gap-4 overflow-hidden"
-                  style={{
-                    background: `linear-gradient(145deg, hsl(230 48% 5%) 0%, ${d.gradientStop} 100%)`,
-                    border: `1px solid ${isHovered ? d.border : d.border.replace("0.2", "0.12")}`,
-                    boxShadow: isHovered
-                      ? `${d.glow}, 0 12px 40px hsl(230 50% 2% / 0.5)`
-                      : "0 4px 20px hsl(230 50% 2% / 0.35)",
-                    transform: isHovered ? "translateY(-2px)" : "translateY(0)",
-                    transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-                    cursor: "default",
-                  }}
-                  onMouseEnter={() => setHoveredGroup(group.id)}
-                  onMouseLeave={() => setHoveredGroup(null)}
-                >
-                  {/* Decorative corner glow */}
-                  <div
-                    className="absolute top-0 right-0 w-20 h-20 pointer-events-none"
-                    style={{
-                      background: `radial-gradient(circle at top right, ${d.color}, transparent 70%)`,
-                      opacity: isHovered ? 0.18 : 0.1,
-                      transition: "opacity 0.25s ease",
-                    }}
-                  />
-
-                  {/* District header */}
-                  <div className="flex items-center gap-3 relative z-10">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300"
-                      style={{
-                        background: d.bg,
-                        border: `1px solid ${d.border}`,
-                        boxShadow: isHovered ? `0 0 20px ${d.color}40` : "none",
-                      }}
-                    >
-                      <Icon style={{ color: d.color, width: "18px", height: "18px" }} />
-                    </div>
-                    <div className="min-w-0">
-                      <div
-                        className="text-[9px] font-tech font-bold uppercase tracking-[0.22em] opacity-50"
-                        style={{ color: d.color }}
-                      >
-                        {group.district || "District"}
-                      </div>
-                      <div
-                        className="text-sm font-display font-bold tracking-wide"
-                        style={{ color: d.color }}
-                      >
-                        {group.label}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Separator */}
-                  <div className="h-px" style={{ background: `${d.border}` }} />
-
-                  {/* Quick links */}
-                  <div className="flex flex-col gap-0.5 relative z-10">
-                    {quickLinks.map((child) => (
-                      <Link
-                        key={child.href}
-                        href={child.href}
-                        className="group/link flex items-center justify-between px-2.5 py-1.5 rounded-lg font-tech text-sm text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-white/[0.04]"
-                      >
-                        <span className="truncate">{child.label}</span>
-                        <ArrowUpRight
-                          className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover/link:opacity-50 transition-opacity duration-150 ml-1"
-                          style={{ color: d.color }}
-                        />
-                      </Link>
-                    ))}
-                    {group.children.length > 5 && (
-                      <Link
-                        href={group.children[0].href}
-                        className="flex items-center gap-1 px-2.5 py-1 font-tech text-xs transition-colors"
-                        style={{ color: d.color, opacity: 0.5 }}
-                      >
-                        +{group.children.length - 5} more
-                      </Link>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
+            {visibleGroups.map((group, idx) => (
+              <DistrictCard
+                key={group.id}
+                group={group}
+                idx={idx}
+                prefersReducedMotion={prefersReducedMotion}
+              />
+            ))}
           </div>
         )}
 
