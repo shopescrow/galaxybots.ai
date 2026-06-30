@@ -39,14 +39,14 @@ const OPTIMISTIC_PRIOR_REWARD = 0.5;
 // run that costs ~$0.05 or takes ~30s scores near 0 on the efficiency axis.
 const REWARD_COST_CEILING_USD = 0.05;
 const REWARD_LATENCY_CEILING_MS = 30_000;
-const DEFAULT_QUALITY_WEIGHT = 0.7;
+const DEFAULT_QUALITY_WEIGHT = 0.60;
 
 // ── Candidate model pools per tier (all have safe fallback chains) ──────────
 // These are the models the optimizer may choose among. Every one is the head of
 // a FALLBACK_CHAINS entry in model-fallback.ts, so selecting it never creates a
 // new/unsafe path — it just reorders which safe chain leads.
 export const FRONTIER_CANDIDATE_MODELS = ["gpt-5.4", "glm-5.2-ultra", "gpt-4o", "claude-sonnet-4-6"];
-export const EFFICIENT_CANDIDATE_MODELS = ["gpt-5-mini", "glm-5.2-flash"];
+export const EFFICIENT_CANDIDATE_MODELS = ["glm-5.2-flash", "gpt-5-mini"];
 /** Cheapest model used as a cost-relief valve when a client nears its cap. */
 export const COST_RELIEF_MODEL = "glm-5.2-flash";
 
@@ -129,7 +129,7 @@ export interface ModelOptimizerSettings {
 }
 
 const DEFAULT_SETTINGS: ModelOptimizerSettings = {
-  enabled: false,
+  enabled: true,
   qualityWeight: DEFAULT_QUALITY_WEIGHT,
   requireApproval: false,
   shadowEnabled: false,

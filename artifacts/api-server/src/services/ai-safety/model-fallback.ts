@@ -95,9 +95,10 @@ const FALLBACK_CHAINS: Record<string, string[]> = {
 // EFFICIENT fallback chains — these start from cheap models only so admission
 // enforcement that forces EFFICIENT tier doesn't re-enter the FRONTIER chain.
 const EFFICIENT_FALLBACK_CHAINS: Record<string, string[]> = {
-  "gpt-5-mini": ["gpt-5-mini", "claude-haiku-4-6"],
-  "claude-haiku-4-6": ["claude-haiku-4-6", "gpt-5-mini"],
-};
+    "glm-5.2-flash": ["glm-5.2-flash", "gpt-5-mini"],
+    "gpt-5-mini": ["gpt-5-mini", "claude-haiku-4-6"],
+    "claude-haiku-4-6": ["claude-haiku-4-6", "gpt-5-mini"],
+  };
 
 function getProvider(model: string): string {
   if (isGlmModel(model)) return GLM_CIRCUIT_KEY;
