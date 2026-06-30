@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   FileText,
@@ -15,6 +15,9 @@ import {
   Receipt,
   ArrowLeft,
   Lock,
+  CreditCard,
+  Clock,
+  Ban,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -82,6 +85,7 @@ interface InvoiceSummary {
   issuedAt: string | null;
   dueAt: string | null;
   paidAt: string | null;
+  dunningStep?: number;
 }
 
 const money = (n: number) =>
@@ -93,17 +97,64 @@ const STATUS_STYLES: Record<string, string> = {
   draft: "bg-amber-500/10 border-amber-500/30 text-amber-400",
   finalized: "bg-purple-500/10 border-purple-500/30 text-purple-300",
   paid: "bg-green-500/10 border-green-500/30 text-green-400",
-  void: "bg-red-500/10 border-red-500/30 text-red-400",
+  void: "bg-zinc-500/10 border-zinc-500/30 text-zinc-400",
+  failed: "bg-red-500/10 border-red-500/30 text-red-400",
+  pending_3ds: "bg-amber-600/10 border-amber-600/30 text-amber-300",
+  dunning: "bg-orange-500/10 border-orange-500/30 text-orange-400",
+  restricted: "bg-red-600/10 border-red-600/30 text-red-400",
 };
 
-function StatusBadge({ status }: { status: string }) {
+const STATUS_ICONS: Record<string, typeof CheckCircle2> = {
+  paid: CheckCircle2,
+  finalized: Clock,
+  draft: Clock,
+  failed: AlertTriangle,
+  pending_3ds: CreditCard,
+  dunning: AlertTriangle,
+  restricted: Ban,
+  void: Ban,
+};
+
+function getDisplayStatus(inv: InvoiceSummary): string {
+  if (inv.status === "paid") return "paid";
+  if (inv.status === "void") return "void";
+  if (inv.status === "pending_3ds") return "pending_3ds";
+  if (inv.status === "failed" && (!inv.dunningStep || inv.dunningStep === 0)) return "failed";
+  if (inv.status === "finalized" || inv.status === "failed") {
+    if (inv.dunningStep && inv.dunningStep >= 4) return "restricted";
+    if (inv.dunningStep && inv.dunningStep >= 1) return "dunning";
+    return "unpaid";
+  }
+  return inv.status;
+}
+
+function StatusBadge({ status, dunningStep }: { status: string; dunningStep?: number }) {
+  const displayStatus = getDisplayStatus({ status, dunningStep } as InvoiceSummary);
+
+  const styleKey = displayStatus === "unpaid" ? "finalized" : displayStatus;
+  const Icon = STATUS_ICONS[styleKey] ?? Clock;
+
+  const LABELS: Record<string, string> = {
+    unpaid: "Unpaid",
+    paid: "Paid",
+    void: "Void",
+    failed: "Declined",
+    pending_3ds: "Action Required",
+    dunning: "Past Due",
+    restricted: "Restricted",
+    draft: "Draft",
+    finalized: "Unpaid",
+  };
+  const label = LABELS[displayStatus] ?? (displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1));
+
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-tech uppercase tracking-wide border ${
-        STATUS_STYLES[status] ?? "bg-muted text-muted-foreground border-border"
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-tech uppercase tracking-wide border ${
+        STATUS_STYLES[styleKey] ?? "bg-muted text-muted-foreground border-border"
       }`}
     >
-      {status}
+      <Icon className="w-3 h-3" />
+      {label}
     </span>
   );
 }
@@ -148,18 +199,26 @@ function AttributionTable({
 
 function InvoiceDetail({
   invoice,
+  invoiceId,
   onDownload,
   downloading,
+  onPayNow,
+  payingNow,
 }: {
   invoice: ComposedInvoice;
+  invoiceId?: number;
   onDownload: () => void;
   downloading: boolean;
+  onPayNow?: () => void;
+  payingNow?: boolean;
 }) {
   const overagePct =
     invoice.usedCredits > 0 ? Math.round((invoice.overageCredits / invoice.usedCredits) * 100) : 0;
   const charges = invoice.lineItems.filter(
     (li) => li.lineType === "base" || li.lineType === "addon" || li.lineType === "overage",
   );
+  const isUnpaid = ["finalized", "failed", "pending_3ds"].includes(invoice.status);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -175,10 +234,18 @@ function InvoiceDetail({
             {invoice.planTier ? ` · ${invoice.planTier.toUpperCase()} plan` : ""}
           </p>
         </div>
-        <Button onClick={onDownload} disabled={downloading} className="gap-2">
-          {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          Download PDF
-        </Button>
+        <div className="flex items-center gap-3">
+          {isUnpaid && onPayNow && invoiceId && (
+            <Button onClick={onPayNow} disabled={payingNow} className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+              {payingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+              Pay Now — {money(invoice.total)}
+            </Button>
+          )}
+          <Button onClick={onDownload} disabled={downloading} variant="outline" className="gap-2">
+            {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Download PDF
+          </Button>
+        </div>
       </div>
 
       {invoice.overageCredits > 0 ? (
@@ -296,10 +363,12 @@ export default function Statements() {
   const [draft, setDraft] = useState<ComposedInvoice | null>(null);
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [selected, setSelected] = useState<ComposedInvoice | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [payingNow, setPayingNow] = useState<number | null>(null);
 
   const authHeaders = useCallback(() => {
     const h: Record<string, string> = {};
@@ -363,12 +432,39 @@ export default function Statements() {
       try {
         const res = await fetch(`${BASE}/api/billing/invoices/${id}`, { headers: authHeaders() });
         const data = await res.json();
-        if (res.ok) setSelected(data.invoice);
-        else setError(data.error ?? "Failed to load invoice");
+        if (res.ok) {
+          setSelected(data.invoice);
+          setSelectedId(id);
+        } else {
+          setError(data.error ?? "Failed to load invoice");
+        }
       } catch {
         setError("Failed to load invoice");
       } finally {
         setLoading(false);
+      }
+    },
+    [authHeaders],
+  );
+
+  const handlePayNow = useCallback(
+    async (invoiceId: number) => {
+      setPayingNow(invoiceId);
+      try {
+        const res = await fetch(`${BASE}/api/billing/invoices/${invoiceId}/pay`, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          window.location.href = data.url;
+        } else {
+          setError(data.error ?? "Failed to create payment session");
+        }
+      } catch {
+        setError("Failed to initiate payment");
+      } finally {
+        setPayingNow(null);
       }
     },
     [authHeaders],
@@ -422,7 +518,7 @@ export default function Statements() {
             </Button>
           )}
           {selected && (
-            <Button variant="outline" onClick={() => setSelected(null)} className="gap-2">
+            <Button variant="outline" onClick={() => { setSelected(null); setSelectedId(null); }} className="gap-2">
               <ArrowLeft className="w-4 h-4" /> Back to Statements
             </Button>
           )}
@@ -443,11 +539,13 @@ export default function Statements() {
         {!loading && selected && (
           <InvoiceDetail
             invoice={selected}
-            downloading={downloading === String(invoices.find((i) => i.invoiceNumber === selected.invoiceNumber)?.id)}
+            invoiceId={selectedId ?? undefined}
+            downloading={downloading === String(selectedId)}
             onDownload={() => {
-              const match = invoices.find((i) => i.invoiceNumber === selected.invoiceNumber);
-              if (match) downloadPdf(match.id, selected.invoiceNumber ?? "statement");
+              if (selectedId) downloadPdf(selectedId, selected.invoiceNumber ?? "statement");
             }}
+            onPayNow={["finalized","failed","pending_3ds"].includes(selected.status) && selectedId ? () => handlePayNow(selectedId) : undefined}
+            payingNow={payingNow === selectedId}
           />
         )}
 
@@ -478,48 +576,69 @@ export default function Statements() {
                 </Card>
               ) : (
                 <div className="space-y-3">
-                  {invoices.map((inv) => (
-                    <Card key={inv.id} className="transition-colors hover:border-primary/40">
-                      <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
-                        <div className="flex items-center gap-4">
-                          <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5">
-                            <FileText className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-tech font-semibold">{inv.invoiceNumber}</span>
-                              <StatusBadge status={inv.status} />
+                  {invoices.map((inv) => {
+                    const displayStatus = getDisplayStatus(inv);
+                    const isUnpaid = ["finalized", "failed", "pending_3ds"].includes(inv.status);
+                    return (
+                      <Card key={inv.id} className="transition-colors hover:border-primary/40">
+                        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5">
+                              <FileText className="w-5 h-5 text-primary" />
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              {fmtDate(inv.periodStart)} — {fmtDate(inv.periodEnd)}
-                            </p>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-tech font-semibold">{inv.invoiceNumber}</span>
+                                <StatusBadge status={inv.status} dunningStep={inv.dunningStep} />
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {fmtDate(inv.periodStart)} — {fmtDate(inv.periodEnd)}
+                                {inv.dueAt && !inv.paidAt ? ` · Due ${fmtDate(inv.dueAt)}` : ""}
+                                {inv.paidAt ? ` · Paid ${fmtDate(inv.paidAt)}` : ""}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-lg font-bold tabular-nums">
-                            {money(parseFloat(inv.total))}
-                          </span>
-                          <Button variant="outline" size="sm" onClick={() => openInvoice(inv.id)}>
-                            View
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1.5"
-                            disabled={downloading === String(inv.id)}
-                            onClick={() => downloadPdf(inv.id, inv.invoiceNumber)}
-                          >
-                            {downloading === String(inv.id) ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Download className="w-4 h-4" />
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg font-bold tabular-nums">
+                              {money(parseFloat(inv.total))}
+                            </span>
+                            {isUnpaid && (
+                              <Button
+                                size="sm"
+                                className="gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                                disabled={payingNow === inv.id}
+                                onClick={() => handlePayNow(inv.id)}
+                              >
+                                {payingNow === inv.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <CreditCard className="w-3 h-3" />
+                                )}
+                                Pay Now
+                              </Button>
                             )}
-                            PDF
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                            <Button variant="outline" size="sm" onClick={() => openInvoice(inv.id)}>
+                              View
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1.5"
+                              disabled={downloading === String(inv.id)}
+                              onClick={() => downloadPdf(inv.id, inv.invoiceNumber)}
+                            >
+                              {downloading === String(inv.id) ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
+                              PDF
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </section>

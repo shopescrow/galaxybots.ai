@@ -99,19 +99,150 @@ router.post("/billing/stripe/checkout", authenticate, async (req, res): Promise<
     return;
   }
 
+  const clientId = req.user!.clientId;
+  const appUrl = process.env["APP_URL"] || req.headers.origin || "";
+  const billingUrl = `${appUrl}/billing`;
+
+  const [activeSub] = await db
+    .select({
+      id: accountSubscriptionsTable.id,
+      planId: accountSubscriptionsTable.planId,
+      billingCycleStart: accountSubscriptionsTable.billingCycleStart,
+      billingCycleEnd: accountSubscriptionsTable.billingCycleEnd,
+      creditBalance: accountSubscriptionsTable.creditBalance,
+      stripeCustomerId: accountSubscriptionsTable.stripeCustomerId,
+      currentPrice: subscriptionPlansTable.monthlyPrice,
+      currentTier: subscriptionPlansTable.tier,
+      includedCredits: subscriptionPlansTable.includedCredits,
+    })
+    .from(accountSubscriptionsTable)
+    .innerJoin(subscriptionPlansTable, eq(accountSubscriptionsTable.planId, subscriptionPlansTable.id))
+    .where(and(eq(accountSubscriptionsTable.clientId, clientId), eq(accountSubscriptionsTable.status, "active")));
+
+  const [newPlan] = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .where(and(eq(subscriptionPlansTable.tier, plan), eq(subscriptionPlansTable.isActive, true)));
+
+  if (!newPlan) {
+    res.status(404).json({ error: `Plan '${plan}' not found` });
+    return;
+  }
+
+  if (activeSub) {
+    const currentPrice = parseFloat(activeSub.currentPrice);
+    const newPrice = parseFloat(newPlan.monthlyPrice);
+
+    if (newPrice <= currentPrice) {
+      // Schedule downgrade for the next billing cycle — persist it so cycle-close can apply it.
+      await db
+        .update(accountSubscriptionsTable)
+        .set({ pendingPlanTier: plan, pendingPlanChangeAt: new Date(activeSub.billingCycleEnd), updatedAt: new Date() })
+        .where(eq(accountSubscriptionsTable.id, activeSub.id));
+      res.json({
+        downgrade: true,
+        message: `Downgrade to ${plan} scheduled for next billing cycle. Your current plan remains active until then.`,
+        effectiveDate: activeSub.billingCycleEnd,
+      });
+      return;
+    }
+
+    const now = new Date();
+    const cycleStart = new Date(activeSub.billingCycleStart);
+    const cycleEnd = new Date(activeSub.billingCycleEnd);
+    const totalDays = Math.max(1, Math.round((cycleEnd.getTime() - cycleStart.getTime()) / (24 * 60 * 60 * 1000)));
+    const remainingDays = Math.max(0, Math.round((cycleEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+    const proratedAmount = Math.round(((newPrice - currentPrice) * (remainingDays / totalDays)) * 100) / 100;
+    const proratedCents = Math.round(proratedAmount * 100);
+
+    if (proratedCents <= 0) {
+      // Upgrade is effectively free for the remainder of this cycle — apply immediately.
+      const incrementalCredits = Math.max(0, newPlan.includedCredits - activeSub.includedCredits);
+      await db
+        .update(accountSubscriptionsTable)
+        .set({
+          planId: newPlan.id,
+          creditBalance: activeSub.creditBalance + incrementalCredits,
+          pendingPlanTier: null,
+          pendingPlanChangeAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(accountSubscriptionsTable.id, activeSub.id));
+      await db.update(clientsTable).set({ plan }).where(eq(clientsTable.id, clientId));
+      res.json({
+        upgrade: true,
+        noCharge: true,
+        message: `Plan upgraded to ${plan} immediately. ${incrementalCredits > 0 ? `${incrementalCredits.toLocaleString()} bonus credits added.` : ""}`,
+        creditsAdded: incrementalCredits,
+      });
+      return;
+    }
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        ...(activeSub.stripeCustomerId ? { customer: activeSub.stripeCustomerId } : {}),
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            product_data: { name: `Upgrade to ${plan} plan — prorated for ${remainingDays} remaining days` },
+            unit_amount: proratedCents,
+          },
+          quantity: 1,
+        }],
+        metadata: {
+          clientId: String(clientId),
+          plan,
+          subscriptionId: String(activeSub.id),
+          prorationUpgrade: "true",
+        },
+        success_url: `${billingUrl}?checkout=success&upgrade=${plan}`,
+        cancel_url: `${billingUrl}?checkout=cancelled`,
+      });
+
+      if (!session.url) {
+        res.status(500).json({ error: "Stripe did not return a checkout URL" });
+        return;
+      }
+      res.json({ url: session.url, prorated: true, proratedAmount, remainingDays });
+      return;
+    } catch (error: unknown) {
+      console.error("Stripe prorated checkout failed:", getErrorMessage(error));
+      res.status(500).json({ error: "Failed to create prorated checkout session" });
+      return;
+    }
+  }
+
   const priceId = STRIPE_PRICE_IDS[plan];
   if (!priceId) {
     res.status(503).json({ error: `Stripe Price ID not configured for the ${plan} plan` });
     return;
   }
 
-  const clientId = req.user!.clientId;
-  const appUrl = process.env["APP_URL"] || req.headers.origin || "";
-  const billingUrl = `${appUrl}/billing`;
+  // Create (or retrieve) a Stripe customer before opening a new subscription Checkout.
+  // This ensures stripeCustomerId is persisted from the very first interaction so
+  // future off-session charges and dunning retries can use the saved payment method.
+  let stripeCustomerId: string | undefined;
+  try {
+    const { ensureStripeCustomer } = await import("../../services/billing/stripe-customer.js");
+    // We may not have an account_subscription row yet — pass clientId only so
+    // ensureStripeCustomer can create the customer even without a subscription ID.
+    // Resolve an existing sub if present, otherwise create Stripe customer directly.
+    const [existingSub] = await db
+      .select({ id: accountSubscriptionsTable.id })
+      .from(accountSubscriptionsTable)
+      .where(eq(accountSubscriptionsTable.clientId, clientId));
+    if (existingSub) {
+      stripeCustomerId = await ensureStripeCustomer(existingSub.id, clientId) ?? undefined;
+    }
+  } catch {
+    // Non-fatal — proceed without customer ID and the webhook will save it later.
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
+      ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { clientId: String(clientId), plan },
       success_url: `${billingUrl}?checkout=success`,

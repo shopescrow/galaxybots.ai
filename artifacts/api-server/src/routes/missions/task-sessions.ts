@@ -28,6 +28,7 @@ import { buildKnowledgeBaseContext } from "../../services/content/knowledge-base
 import { requireRole } from "../../middleware/auth";
 import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
 import { requireTenantAccess } from "../../middleware/tenant";
+import { requireUnrestricted } from "../../middleware/require-active-subscription";
 import { sendValidationError, sendParamError } from "../../utils/validation";
 import { buildClientContext } from "../../services/clients/client-context";
 import { applyBrandVoiceGuardrails } from "../../services/platform/governance";
@@ -128,7 +129,7 @@ Select 3-6 bots total. Only propose new bots if truly no existing bot covers a c
   });
 });
 
-router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
+router.post("/bots/fabricate", requireRole("owner", "admin"), requireUnrestricted, llmRateLimit, tenantFairShareConcurrency, async (req, res): Promise<void> => {
   const body = FabricateBotBody.safeParse(req.body);
   if (!body.success) {
     sendValidationError(res, body.error);

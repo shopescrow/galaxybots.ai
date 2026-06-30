@@ -381,6 +381,13 @@ export async function finalizeInvoice(
     await db.insert(invoiceLineItemsTable).values(rows);
   }
 
+  // Fire-and-forget invoice email — errors are logged but never surface to the caller.
+  import("./billing-emails.js").then(({ sendInvoiceEmail }) => {
+    sendInvoiceEmail(invoice.id).catch((err) => {
+      console.error(`[invoice-builder] Failed to send invoice email for #${invoice.id}:`, err);
+    });
+  }).catch(() => {});
+
   return { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, composed };
 }
 

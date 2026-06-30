@@ -21,6 +21,8 @@ async function getSubscription(clientId: number) {
       creditBalance: accountSubscriptionsTable.creditBalance,
       status: accountSubscriptionsTable.status,
       planTier: subscriptionPlansTable.tier,
+      includedCredits: subscriptionPlansTable.includedCredits,
+      lastUsageAlertThreshold: accountSubscriptionsTable.lastUsageAlertThreshold,
     })
     .from(accountSubscriptionsTable)
     .innerJoin(subscriptionPlansTable, eq(accountSubscriptionsTable.planId, subscriptionPlansTable.id))
@@ -31,6 +33,38 @@ async function getSubscription(clientId: number) {
       )
     );
   return sub ?? null;
+}
+
+async function checkAndSendUsageAlert(
+  clientId: number,
+  subId: number,
+  newBalance: number,
+  includedCredits: number,
+  lastAlertThreshold: number,
+): Promise<void> {
+  if (includedCredits <= 0) return;
+  const used = includedCredits - newBalance;
+  const pct = (used / includedCredits) * 100;
+
+  let newThreshold: number | null = null;
+  if (pct >= 100 && lastAlertThreshold < 100) {
+    newThreshold = 100;
+  } else if (pct >= 80 && lastAlertThreshold < 80) {
+    newThreshold = 80;
+  }
+
+  if (newThreshold === null) return;
+
+  await db
+    .update(accountSubscriptionsTable)
+    .set({ lastUsageAlertThreshold: newThreshold, updatedAt: new Date() })
+    .where(eq(accountSubscriptionsTable.id, subId));
+
+  import("../services/billing/billing-emails.js").then(({ sendUsageAlertEmail }) => {
+    sendUsageAlertEmail(clientId, newThreshold!, used, includedCredits).catch((err) => {
+      console.error(`[credit-meter] Usage alert email failed for client ${clientId}:`, err);
+    });
+  }).catch(() => {});
 }
 
 export function creditMeter(modelHint = "gpt-5-mini") {
@@ -62,9 +96,11 @@ export function creditMeter(modelHint = "gpt-5-mini") {
         return;
       }
 
+      const newBalance = Math.max(0, sub.creditBalance - credits);
+
       await db
         .update(accountSubscriptionsTable)
-        .set({ creditBalance: Math.max(0, sub.creditBalance - credits), updatedAt: new Date() })
+        .set({ creditBalance: newBalance, updatedAt: new Date() })
         .where(eq(accountSubscriptionsTable.id, sub.id));
 
       await db.insert(usageEventsTable).values({
@@ -75,7 +111,17 @@ export function creditMeter(modelHint = "gpt-5-mini") {
         route: req.path,
       });
 
-      req.user = { ...req.user, creditBalance: Math.max(0, sub.creditBalance - credits) } as typeof req.user;
+      req.user = { ...req.user, creditBalance: newBalance } as typeof req.user;
+
+      checkAndSendUsageAlert(
+        clientId,
+        sub.id,
+        newBalance,
+        sub.includedCredits,
+        sub.lastUsageAlertThreshold ?? 0,
+      ).catch((err) => {
+        console.error("[credit-meter] Usage alert check failed:", err);
+      });
 
       next();
     } catch (err) {

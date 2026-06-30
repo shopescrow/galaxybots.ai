@@ -32,6 +32,7 @@ import { getTokenQuotaConfig, invalidateTokenQuotaCache } from "../../services/a
 import { getGlmPoolStatus } from "../../services/ai-safety/provider-key-pool";
 import { invalidateBudgetCache } from "../../services/ai-safety/budget-enforcer";
 import { hashApiKey } from "../../middleware/analytics-api-key";
+import { requireUnrestricted } from "../../middleware/require-active-subscription";
 
 const router: IRouter = Router();
 
@@ -566,7 +567,7 @@ router.get("/analytics/export/:dataset", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/analytics/api-keys", async (req, res): Promise<void> => {
+router.post("/analytics/api-keys", requireUnrestricted, async (req, res): Promise<void> => {
   const clientId = req.user!.clientId;
   if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
 

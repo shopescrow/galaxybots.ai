@@ -20,6 +20,10 @@ export const accountSubscriptionsTable = pgTable("account_subscriptions", {
   billingCycleStart: timestamp("billing_cycle_start", { withTimezone: true }).notNull().defaultNow(),
   billingCycleEnd: timestamp("billing_cycle_end", { withTimezone: true }).notNull(),
   status: text("status").notNull().default("active"),
+  stripeCustomerId: text("stripe_customer_id"),
+  lastUsageAlertThreshold: integer("last_usage_alert_threshold").default(0),
+  pendingPlanTier: text("pending_plan_tier"),
+  pendingPlanChangeAt: timestamp("pending_plan_change_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

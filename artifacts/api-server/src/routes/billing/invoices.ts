@@ -1,98 +1,15 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, invoicesTable, invoiceLineItemsTable, clientsTable } from "@workspace/db";
+import Stripe from "stripe";
+import { db, invoicesTable, invoiceLineItemsTable, clientsTable, accountSubscriptionsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../../middleware/auth.js";
-import { composeInvoice, finalizeInvoice, type ComposedInvoice } from "../../services/billing/invoice-builder.js";
+import { composeInvoice, finalizeInvoice } from "../../services/billing/invoice-builder.js";
 import { closeCycleForSubscription } from "../../services/billing/cycle-close.js";
 import { generateInvoicePdf, type InvoicePdfMeta } from "../../services/billing/invoice-pdf.js";
-import type { Invoice, InvoiceLineItem } from "@workspace/db";
+import { storedToComposed } from "../../services/billing/invoice-helpers.js";
+import { getStripeClient } from "../../services/billing/stripe-customer.js";
 
 const router: IRouter = Router();
-
-function lineItemsToAttribution(lineItems: InvoiceLineItem[]): ComposedInvoice["attribution"] {
-  const byBot = lineItems
-    .filter((li) => li.lineType === "usage_bot")
-    .map((li) => ({
-      botId: li.botId,
-      botName: li.botName ?? "Platform / Unattributed",
-      credits: Number(li.quantity),
-      llmCalls: 0,
-      llmCostUsd: 0,
-    }));
-  const byModel = lineItems
-    .filter((li) => li.lineType === "usage_model")
-    .map((li) => ({
-      model: li.model ?? "unknown",
-      modelTier: li.modelTier ?? "frontier",
-      credits: Number(li.quantity),
-      events: 0,
-      llmCostUsd: 0,
-    }));
-  const byRoute = lineItems
-    .filter((li) => li.lineType === "usage_route")
-    .map((li) => ({ route: li.serviceRoute ?? "unknown", credits: Number(li.quantity), events: 0 }));
-  const byDay = lineItems
-    .filter((li) => li.lineType === "usage_day")
-    .map((li) => ({ day: li.usageDay ?? "", credits: Number(li.quantity), events: 0 }));
-  return {
-    periodStart: "",
-    periodEnd: "",
-    totals: { totalCredits: 0, totalEvents: 0, llmCalls: 0, llmCostUsd: 0, toolCalls: 0 },
-    byBot,
-    byModel,
-    byTier: [],
-    byRoute,
-    byDay,
-    toolActivity: [],
-  };
-}
-
-function storedToComposed(invoice: Invoice, lineItems: InvoiceLineItem[]): ComposedInvoice {
-  const attribution = lineItemsToAttribution(lineItems);
-  attribution.periodStart = invoice.periodStart.toISOString();
-  attribution.periodEnd = invoice.periodEnd.toISOString();
-  attribution.totals.totalCredits = invoice.usedCredits;
-  return {
-    clientId: invoice.clientId,
-    subscriptionId: invoice.subscriptionId,
-    planId: invoice.planId,
-    planTier: invoice.planTier,
-    status: invoice.status === "finalized" || invoice.status === "draft" ? invoice.status : "finalized",
-    invoiceNumber: invoice.invoiceNumber,
-    periodStart: invoice.periodStart.toISOString(),
-    periodEnd: invoice.periodEnd.toISOString(),
-    includedCredits: invoice.includedCredits,
-    usedCredits: invoice.usedCredits,
-    overageCredits: invoice.overageCredits,
-    overageRatePerCredit: parseFloat(invoice.overageRatePerCredit),
-    baseSubtotal: parseFloat(invoice.baseSubtotal),
-    addonSubtotal: parseFloat(invoice.addonSubtotal),
-    usageSubtotal: parseFloat(invoice.usageSubtotal),
-    overageSubtotal: parseFloat(invoice.overageSubtotal),
-    subtotal: parseFloat(invoice.subtotal),
-    taxRate: parseFloat(invoice.taxRate),
-    taxAmount: parseFloat(invoice.taxAmount),
-    total: parseFloat(invoice.total),
-    currency: invoice.currency,
-    lineItems: lineItems
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((li) => ({
-        lineType: li.lineType,
-        description: li.description,
-        botId: li.botId,
-        botName: li.botName,
-        model: li.model,
-        modelTier: li.modelTier,
-        serviceRoute: li.serviceRoute,
-        usageDay: li.usageDay,
-        quantity: Number(li.quantity),
-        unitRate: Number(li.unitRate),
-        amount: Number(li.amount),
-        sortOrder: li.sortOrder,
-      })),
-    attribution,
-  };
-}
 
 async function getClientName(clientId: number): Promise<string | null> {
   const [c] = await db
@@ -102,8 +19,8 @@ async function getClientName(clientId: number): Promise<string | null> {
   return c?.name ?? null;
 }
 
-// List a client's invoices.
-router.get("/billing/invoices", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+// List a client's invoices (owner, admin, or client role can view their own).
+router.get("/billing/invoices", authenticate, requireRole("owner", "admin", "client"), async (req, res): Promise<void> => {
   try {
     const clientId = req.user!.clientId;
     const invoices = await db
@@ -118,6 +35,7 @@ router.get("/billing/invoices", authenticate, requireRole("owner", "admin"), asy
         issuedAt: invoicesTable.issuedAt,
         dueAt: invoicesTable.dueAt,
         paidAt: invoicesTable.paidAt,
+        dunningStep: invoicesTable.dunningStep,
       })
       .from(invoicesTable)
       .where(eq(invoicesTable.clientId, clientId))
@@ -130,7 +48,7 @@ router.get("/billing/invoices", authenticate, requireRole("owner", "admin"), asy
 });
 
 // Live "current cycle to date" draft estimate.
-router.get("/billing/invoices/draft", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.get("/billing/invoices/draft", authenticate, requireRole("owner", "admin", "client"), async (req, res): Promise<void> => {
   try {
     const clientId = req.user!.clientId;
     const composed = await composeInvoice(clientId);
@@ -144,7 +62,7 @@ router.get("/billing/invoices/draft", authenticate, requireRole("owner", "admin"
 });
 
 // Fetch a single finalized invoice with full line-item detail.
-router.get("/billing/invoices/:id", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.get("/billing/invoices/:id", authenticate, requireRole("owner", "admin", "client"), async (req, res): Promise<void> => {
   try {
     const clientId = req.user!.clientId;
     const id = Number(req.params.id);
@@ -172,9 +90,83 @@ router.get("/billing/invoices/:id", authenticate, requireRole("owner", "admin"),
   }
 });
 
+// Create a Stripe-hosted checkout session to pay a specific unpaid invoice.
+router.post("/billing/invoices/:id/pay", authenticate, requireRole("owner", "admin", "client"), async (req, res): Promise<void> => {
+  try {
+    const clientId = req.user!.clientId;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "Invalid invoice id" });
+      return;
+    }
+
+    const [invoice] = await db
+      .select()
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.clientId, clientId)));
+
+    if (!invoice) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+
+    // Only block payment if already settled or voided — allow finalized, failed, pending_3ds.
+    if (invoice.status === "paid" || invoice.status === "void") {
+      res.status(409).json({ error: `Invoice is already ${invoice.status}` });
+      return;
+    }
+
+    // Sanity guard: only payable statuses.
+    const payableStatuses = ["finalized", "failed", "pending_3ds"];
+    if (!payableStatuses.includes(invoice.status)) {
+      res.status(409).json({ error: `Invoice status '${invoice.status}' is not payable` });
+      return;
+    }
+
+    const stripe = getStripeClient();
+    if (!stripe) {
+      res.status(503).json({ error: "Stripe is not configured" });
+      return;
+    }
+
+    const appUrl = process.env["APP_URL"] || req.headers.origin || "";
+    const totalCents = Math.round(parseFloat(invoice.total) * 100);
+
+    const [sub] = await db
+      .select({ stripeCustomerId: accountSubscriptionsTable.stripeCustomerId })
+      .from(accountSubscriptionsTable)
+      .where(eq(accountSubscriptionsTable.clientId, clientId));
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      ...(sub?.stripeCustomerId ? { customer: sub.stripeCustomerId } : {}),
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: { name: `Invoice ${invoice.invoiceNumber}` },
+          unit_amount: totalCents,
+        },
+        quantity: 1,
+      }],
+      metadata: { invoiceId: String(id), clientId: String(clientId) },
+      success_url: `${appUrl}/billing/statements?checkout=success&invoiceId=${id}`,
+      cancel_url: `${appUrl}/billing/statements?checkout=cancelled`,
+    });
+
+    if (!session.url) {
+      res.status(500).json({ error: "Stripe did not return a checkout URL" });
+      return;
+    }
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Error creating invoice pay session:", err);
+    res.status(500).json({ error: "Failed to create payment session" });
+  }
+});
+
 // Close the current billing cycle: finalize an immutable invoice, reset credits
-// to the allotment, advance the cycle window, optionally settle. `/finalize` is
-// an alias so callers cannot finalize-without-settling and strand the credits.
+// to the allotment, advance the cycle window, optionally settle.
 async function handleCloseCycle(req: Request, res: Response): Promise<void> {
   try {
     const clientId = req.user!.clientId;
@@ -199,7 +191,7 @@ router.post("/billing/invoices/close-cycle", authenticate, requireRole("owner", 
 router.post("/billing/invoices/finalize", authenticate, requireRole("owner", "admin"), handleCloseCycle);
 
 // Download a branded PDF for a finalized invoice (or the live draft).
-router.get("/billing/invoices/:id/pdf", authenticate, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.get("/billing/invoices/:id/pdf", authenticate, requireRole("owner", "admin", "client"), async (req, res): Promise<void> => {
   try {
     const clientId = req.user!.clientId;
     const clientName = await getClientName(clientId);

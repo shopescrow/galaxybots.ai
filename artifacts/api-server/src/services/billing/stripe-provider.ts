@@ -21,8 +21,54 @@ export function parseStripePayload(rawBody: Buffer | string, signature: string):
 
   if (stripeEvent.type === "checkout.session.completed") {
     const session = stripeEvent.data.object as Stripe.Checkout.Session;
-    const clientId = session.metadata?.clientId;
-    const plan = session.metadata?.plan;
+    const meta = session.metadata ?? {};
+    const clientId = meta["clientId"];
+    const plan = meta["plan"];
+    const invoiceId = meta["invoiceId"];
+    const prorationUpgrade = meta["prorationUpgrade"];
+    const subscriptionId = meta["subscriptionId"];
+
+    const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
+
+    // ── Case 1: Invoice payment (self-serve Pay Now) ────────────────────────
+    if (clientId && invoiceId && !prorationUpgrade) {
+      return {
+        received: true,
+        event: {
+          type: "invoice_paid",
+          clientId: Number(clientId),
+          plan: plan ?? "",
+          metadata: {
+            invoiceId: Number(invoiceId),
+            stripeSessionId: session.id,
+            paymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : null,
+            stripeCustomerId,
+            provider: "stripe",
+          },
+        },
+      };
+    }
+
+    // ── Case 2: Prorated plan upgrade ───────────────────────────────────────
+    if (clientId && prorationUpgrade === "true" && subscriptionId && plan) {
+      return {
+        received: true,
+        event: {
+          type: "subscription_upgraded",
+          clientId: Number(clientId),
+          plan,
+          metadata: {
+            subscriptionId: Number(subscriptionId),
+            stripeSessionId: session.id,
+            paymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : null,
+            stripeCustomerId,
+            provider: "stripe",
+          },
+        },
+      };
+    }
+
+    // ── Case 3: Initial subscription activation ─────────────────────────────
     if (clientId && plan) {
       return {
         received: true,
@@ -30,11 +76,12 @@ export function parseStripePayload(rawBody: Buffer | string, signature: string):
           type: "plan_activated",
           clientId: Number(clientId),
           plan,
-          metadata: { stripeSessionId: session.id },
+          metadata: { stripeSessionId: session.id, stripeCustomerId, provider: "stripe" },
         },
       };
     }
-    console.error("Stripe webhook: missing or invalid metadata", { clientId, plan });
+
+    console.error("Stripe webhook: checkout.session.completed missing required metadata", meta);
   }
 
   return { received: true };

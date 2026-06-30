@@ -13,6 +13,7 @@ import { requireRole } from "../../middleware/auth";
 import { sendValidationError } from "../../utils/validation";
 import { getAllTools } from "../../tools";
 import { SAFE_READ_TOOLS, DEPARTMENT_TOOL_DEFAULTS } from "../../services/platform/governance";
+import { requireUnrestricted } from "../../middleware/require-active-subscription";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import dns from "dns/promises";
 
@@ -240,7 +241,7 @@ router.get("/clients/:id/bots", async (req, res): Promise<void> => {
   res.json(GetClientBotsResponse.parse(hiredBots.map(r => r.bot)));
 });
 
-router.post("/clients/:id/bots", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.post("/clients/:id/bots", requireRole("owner", "admin"), requireUnrestricted, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id) || (!isPlatformAdmin(req) && id !== req.user!.clientId)) {
     res.status(403).json({ error: "Access denied" });
