@@ -31,6 +31,7 @@ import { checkMemoryEmbeddingBackfill } from "./jobs/backfill-memory-embeddings"
 import { checkEpisodicMemory } from "./jobs/episodic-memory";
 import { checkBeliefDecay } from "./jobs/belief-decay";
 import { checkStaleBeliefUpdates } from "../../services/ai-safety/belief-anomaly";
+import { areSweepQueuesActive } from "./queue/sweep-queues.js";
 import { runGoalGeneration } from "./jobs/goal-generation";
 import { runCounterfactualAttribution } from "./jobs/counterfactual-attribution";
 import { runOpportunityDetection } from "./jobs/opportunity-detection";
@@ -116,15 +117,15 @@ const lowFreqJobs: Job[] = [
   { name: "opportunity-detection", fn: runOpportunityDetection },
   { name: "uncertainty-schedules", fn: checkUncertaintySchedules },
   { name: "memory-consolidation", fn: checkMemoryConsolidation },
-  { name: "memory-embedding-backfill", fn: checkMemoryEmbeddingBackfill },
-  { name: "episodic-memory", fn: checkEpisodicMemory },
+  { name: "memory-embedding-backfill", fn: async () => { if (!areSweepQueuesActive()) await checkMemoryEmbeddingBackfill(); } },
+  { name: "episodic-memory", fn: async () => { if (!areSweepQueuesActive()) await checkEpisodicMemory(); } },
   { name: "belief-decay", fn: checkBeliefDecay },
   { name: "stale-belief-updates", fn: checkStaleBeliefUpdates },
   { name: "synthetic-control-scan", fn: runSyntheticControlScan },
   { name: "calibration-pipeline", fn: runCalibrationPipeline },
   { name: "prompt-evolution", fn: runPromptEvolution },
   { name: "prompt-shadow-promotion", fn: runPromptShadowPromotion },
-  { name: "model-reputation-reeval", fn: runModelReputationReeval },
+  { name: "model-reputation-reeval", fn: async () => { if (!areSweepQueuesActive()) await runModelReputationReeval(); } },
   { name: "model-golden-eval", fn: runScheduledGoldenEval },
   { name: "tool-heuristics-update", fn: runToolHeuristicsUpdate },
   { name: "alignment-harvester", fn: runAlignmentHarvester },

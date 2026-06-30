@@ -23,6 +23,7 @@ import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { initRedis, closeRedis } from "./services/scaling/redis-store";
 import { rebuildRateLimiters } from "./middleware/rate-limit";
+import { startSweepQueues, stopSweepQueues } from "./services/platform/queue/sweep-queues";
 
 const EXPECTED_TABLES = [
   "aeo_recommendation_cache",
@@ -494,6 +495,13 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
   }
 
   try {
+    await stopSweepQueues();
+    console.log("[shutdown] Sweep queues closed");
+  } catch (err) {
+    console.error("[shutdown] Error closing sweep queues:", err);
+  }
+
+  try {
     await closeRedis();
     console.log("[shutdown] Redis shared store closed");
   } catch (err) {
@@ -508,6 +516,7 @@ const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
   await initRedis();
   rebuildRateLimiters();
+  await startSweepQueues();
   await ensureOllamaTables();
   await ensureCrmTables();
   await ensureFirewallTables();

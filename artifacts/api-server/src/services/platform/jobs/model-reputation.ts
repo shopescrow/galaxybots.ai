@@ -87,27 +87,16 @@ function winsorizedWeights(sampleCounts: number[], maxFraction: number): number[
 }
 
 /**
- * Periodic model-reputation re-evaluation (task #231 step 6, task #259).
+ * Phase 1 of model-reputation re-eval: recomputes the global per-(category,
+ * model, difficulty) reputation summary from live, reward-resolved telemetry
+ * using skew-aware winsorized blending so no single tenant dominates.
  *
- * Recomputes the per-(category, model, difficulty) reputation summary from
- * live, reward-resolved telemetry with two new properties vs the original:
- *
- * 1. **Per-tenant skew protection** — each tenant's contribution to the global
- *    aggregate is capped at MAX_TENANT_FRACTION (50%) of total samples in each
- *    segment. Heavy tenants can't dominate global priors; the skewFlag is
- *    raised on rows where the cap was applied.
- *
- * 2. **Judge-quality tracking** — the independent judge quality score
- *    (judgeQualityScore) is averaged separately from the self-reported quality
- *    and stored in avgJudgeQuality so owners can distinguish the two.
- *
- * Shadow promotion behavior is unchanged from the original implementation.
+ * Called directly by the distributed queue's fanout handler. Also called by
+ * the legacy recomputeModelReputations() for the single-node scheduler path.
  */
-export async function recomputeModelReputations(): Promise<void> {
-  // ── 1. Per-tenant aggregation for skew-aware weighting ────────────────────
-  // We aggregate by (taskCategory, model, difficultyBucket, clientId) first,
-  // then re-blend tenant averages with outlier clamping, rather than using a
-  // single global AVG (which is dominated by tenants with high call volume).
+export async function computeGlobalModelReputations(): Promise<void> {
+  // Aggregate by (taskCategory, model, difficultyBucket, clientId) first,
+  // then re-blend with outlier clamping rather than using a single global AVG.
   const perTenantRows = await db
     .select({
       taskCategory: modelSelectionTelemetryTable.taskCategory,
@@ -135,7 +124,6 @@ export async function recomputeModelReputations(): Promise<void> {
       modelSelectionTelemetryTable.clientId,
     );
 
-  // Group per-tenant rows by (category, model, difficulty) segment key.
   type SegmentKey = string;
   type TenantEntry = {
     clientId: number | null;
@@ -174,20 +162,14 @@ export async function recomputeModelReputations(): Promise<void> {
     });
   }
 
-  // ── 2. Winsorized blend across tenants ────────────────────────────────────
   for (const [, seg] of segments) {
     const totalSamples = seg.tenants.reduce((s, t) => s + t.sampleCount, 0);
     if (totalSamples === 0) continue;
 
-    // Compute the raw (pre-capping) max tenant fraction for the skewFlag.
     const maxTenantSamples = Math.max(...seg.tenants.map((t) => t.sampleCount));
     const maxTenantFraction = maxTenantSamples / totalSamples;
     const skewFlag = maxTenantFraction > MAX_TENANT_FRACTION;
 
-    // Compute post-normalization weights with the iterative clipping algorithm.
-    // This guarantees no tenant's effective weight exceeds MAX_TENANT_FRACTION
-    // after normalization — unlike naive count-capping which doesn't enforce
-    // the post-normalization bound.
     const sampleCounts = seg.tenants.map((t) => t.sampleCount);
     const weights = winsorizedWeights(sampleCounts, MAX_TENANT_FRACTION);
 
@@ -201,12 +183,12 @@ export async function recomputeModelReputations(): Promise<void> {
     for (let i = 0; i < seg.tenants.length; i++) {
       const t = seg.tenants[i];
       const w = weights[i];
-      weightedReward += w * t.avgReward;
+      weightedReward  += w * t.avgReward;
       weightedQuality += w * t.avgQuality;
-      weightedCost += w * t.avgCost;
+      weightedCost    += w * t.avgCost;
       weightedLatency += w * t.avgLatency;
       if (t.avgJudgeQuality != null) {
-        judgeQualitySum += w * t.avgJudgeQuality;
+        judgeQualitySum    += w * t.avgJudgeQuality;
         judgeQualityWeight += w;
       }
     }
@@ -257,8 +239,134 @@ export async function recomputeModelReputations(): Promise<void> {
       );
     }
   }
+}
 
-  // ── 3. Evaluate shadow candidates for promotion, per client ───────────────
+/**
+ * Phase 2 of model-reputation re-eval: evaluates shadow-model promotion for a
+ * single client. Designed to be called per-tenant from the distributed queue.
+ * Idempotent — repeated calls only update DB rows if thresholds are cleared.
+ */
+export async function evaluateShadowPromotionForClient(clientId: number): Promise<void> {
+  const shadowRows = await db
+    .select({
+      taskCategory: modelSelectionTelemetryTable.taskCategory,
+      candidateModel: modelSelectionTelemetryTable.model,
+      servedModel: modelSelectionTelemetryTable.chosenModel,
+      avgCandidateReward: sql<number>`avg(${modelSelectionTelemetryTable.rewardScore})`,
+      samples: sql<number>`count(*)`,
+    })
+    .from(modelSelectionTelemetryTable)
+    .where(
+      and(
+        eq(modelSelectionTelemetryTable.clientId, clientId),
+        eq(modelSelectionTelemetryTable.shadow, true),
+        isNotNull(modelSelectionTelemetryTable.rewardScore),
+      ),
+    )
+    .groupBy(
+      modelSelectionTelemetryTable.taskCategory,
+      modelSelectionTelemetryTable.model,
+      modelSelectionTelemetryTable.chosenModel,
+    );
+
+  if (shadowRows.length === 0) return;
+
+  const MIN_SHADOW_SAMPLES = 5;
+  const settings = await getModelOptimizerSettings(clientId);
+  if (!settings.enabled) return;
+
+  for (const s of shadowRows) {
+    if (Number(s.samples) < MIN_SHADOW_SAMPLES) continue;
+    if (!s.servedModel || s.servedModel === s.candidateModel) continue;
+
+    const [served] = await db
+      .select({
+        avgReward: sql<number>`avg(${modelSelectionTelemetryTable.rewardScore})`,
+        samples: sql<number>`count(*)`,
+      })
+      .from(modelSelectionTelemetryTable)
+      .where(
+        and(
+          eq(modelSelectionTelemetryTable.clientId, clientId),
+          eq(modelSelectionTelemetryTable.taskCategory, s.taskCategory),
+          eq(modelSelectionTelemetryTable.model, s.servedModel),
+          eq(modelSelectionTelemetryTable.shadow, false),
+          isNotNull(modelSelectionTelemetryTable.rewardScore),
+        ),
+      );
+
+    const candidateReward = s.avgCandidateReward != null ? Number(s.avgCandidateReward) : 0;
+    const servedReward = served?.avgReward != null ? Number(served.avgReward) : 0;
+    const margin = candidateReward - servedReward;
+    if (margin < settings.shadowThreshold) continue;
+
+    await db
+      .update(modelReputationTable)
+      .set({ promoted: true, updatedAt: new Date() })
+      .where(
+        and(
+          eq(modelReputationTable.taskCategory, s.taskCategory),
+          eq(modelReputationTable.model, s.candidateModel),
+        ),
+      );
+
+    await writeAuditEntry({
+      clientId,
+      engine: "model_router",
+      decisionType: "model_selection",
+      payload: {
+        action: "shadow_promotion",
+        taskCategory: s.taskCategory,
+        candidateModel: s.candidateModel,
+        servedModel: s.servedModel,
+        candidateReward,
+        servedReward,
+        margin,
+        threshold: settings.shadowThreshold,
+        samples: Number(s.samples),
+      },
+    }).catch(() => {});
+
+    console.log(
+      `[ModelReputation] shadow promotion: ${s.candidateModel} beat ${s.servedModel} by ${margin.toFixed(3)} in ${s.taskCategory} (client ${clientId})`,
+    );
+  }
+}
+
+/**
+ * Returns the distinct clientIds that have unresolved shadow telemetry.
+ * Used by the distributed queue to enumerate per-tenant shadow-promote jobs.
+ */
+export async function getClientsWithShadowTelemetry(): Promise<number[]> {
+  const rows = await db
+    .selectDistinct({ clientId: modelSelectionTelemetryTable.clientId })
+    .from(modelSelectionTelemetryTable)
+    .where(
+      and(
+        eq(modelSelectionTelemetryTable.shadow, true),
+        isNotNull(modelSelectionTelemetryTable.rewardScore),
+        isNotNull(modelSelectionTelemetryTable.clientId),
+      ),
+    );
+  return rows.map((r) => r.clientId).filter((id): id is number => id != null);
+}
+
+/**
+ * Periodic model-reputation re-evaluation (task #231 step 6, task #259).
+ *
+ * Delegates to computeGlobalModelReputations() for the skew-aware global
+ * aggregation (with per-tenant winsorized blending and judge-quality tracking),
+ * then runs shadow-promotion evaluation serially across all clients.
+ *
+ * Used by the legacy single-node scheduler path. The distributed queue path
+ * calls computeGlobalModelReputations() + per-client evaluateShadowPromotionForClient()
+ * separately for horizontal scaling.
+ */
+export async function recomputeModelReputations(): Promise<void> {
+  // Phase 1: skew-aware global reputation aggregation.
+  await computeGlobalModelReputations();
+
+  // Phase 2: shadow-promotion evaluation across all clients (serial, legacy path).
   const shadowRows = await db
     .select({
       clientId: modelSelectionTelemetryTable.clientId,
