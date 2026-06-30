@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Check, Zap, Building, Globe, CreditCard, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -74,6 +75,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 export default function Billing() {
   const { token } = useAuth();
+  const { toast } = useToast();
   const [links, setLinks] = useState<BillingLinks | null>(null);
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,7 +110,11 @@ export default function Billing() {
           window.location.href = plan.link;
           return;
         }
-        alert(`Payment link not configured for the ${planName} plan. Please contact support.`);
+        toast({
+          variant: "destructive",
+          title: "Payment link not configured",
+          description: `The ${planName} plan payment link is not set up yet. Please contact support.`,
+        });
         return;
       }
 
@@ -124,14 +130,22 @@ export default function Billing() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || `Failed to start checkout for the ${planName} plan. Please try again.`);
+        toast({
+          variant: "destructive",
+          title: "Checkout failed",
+          description: data.error || `Failed to start checkout for the ${planName} plan. Please try again.`,
+        });
         return;
       }
       if (data.url) {
         window.location.href = data.url;
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Something went wrong",
+        description: "Unable to initiate checkout. Please try again.",
+      });
     } finally {
       setSubscribing(null);
     }

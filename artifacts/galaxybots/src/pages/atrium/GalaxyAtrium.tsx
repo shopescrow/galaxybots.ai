@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, Zap } from "lucide-react";
+import { ArrowUpRight, Zap, LayoutGrid } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { NAV_GROUPS } from "@/components/layout/navConfig";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const DISTRICT_COLORS: Record<string, {
   color: string; bg: string; glow: string; border: string; gradientStop: string;
@@ -115,104 +116,131 @@ export default function GalaxyAtrium() {
           <div className="flex-1 h-px" style={{ background: "hsl(270 80% 60% / 0.08)" }} />
         </div>
 
-        {/* ── District cards grid ────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleGroups.map((group, idx) => {
-            const d = dco(group.color);
-            const Icon = group.icon;
-            const isHovered = hoveredGroup === group.id;
-            const quickLinks = group.children.slice(0, 5);
+        {/* ── District cards grid or empty state ─────────────────────── */}
+        {visibleGroups.length === 0 ? (
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-border/40"
+            style={{ background: "hsl(230 52% 4%)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+              style={{ background: "hsl(270 80% 60% / 0.08)", border: "1px solid hsl(270 80% 60% / 0.2)" }}
+            >
+              <LayoutGrid className="w-8 h-8" style={{ color: "hsl(270 80% 60%)" }} />
+            </div>
+            <h2 className="text-xl font-display font-bold mb-2">No Districts Configured</h2>
+            <p className="text-sm text-muted-foreground font-tech text-center max-w-xs mb-6">
+              Your account doesn't have any districts visible yet. Configure your navigation groups in Settings to unlock your workspace.
+            </p>
+            <Link href="/settings">
+              <Button variant="outline" className="font-tech gap-2">
+                Go to Settings
+                <ArrowUpRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {visibleGroups.map((group, idx) => {
+              const d = dco(group.color);
+              const Icon = group.icon;
+              const isHovered = hoveredGroup === group.id;
+              const quickLinks = group.children.slice(0, 5);
 
-            return (
-              <motion.div
-                key={group.id}
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: idx * 0.055, ease: [0.16, 1, 0.3, 1] }}
-                className="relative rounded-2xl p-5 flex flex-col gap-4 overflow-hidden"
-                style={{
-                  background: `linear-gradient(145deg, hsl(230 48% 5%) 0%, ${d.gradientStop} 100%)`,
-                  border: `1px solid ${isHovered ? d.border : d.border.replace("0.2", "0.12")}`,
-                  boxShadow: isHovered
-                    ? `${d.glow}, 0 12px 40px hsl(230 50% 2% / 0.5)`
-                    : "0 4px 20px hsl(230 50% 2% / 0.35)",
-                  transform: isHovered ? "translateY(-2px)" : "translateY(0)",
-                  transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-                  cursor: "default",
-                }}
-                onMouseEnter={() => setHoveredGroup(group.id)}
-                onMouseLeave={() => setHoveredGroup(null)}
-              >
-                {/* Decorative corner glow */}
-                <div
-                  className="absolute top-0 right-0 w-20 h-20 pointer-events-none"
+              return (
+                <motion.div
+                  key={group.id}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: idx * 0.055, ease: [0.16, 1, 0.3, 1] }}
+                  className="relative rounded-2xl p-5 flex flex-col gap-4 overflow-hidden"
                   style={{
-                    background: `radial-gradient(circle at top right, ${d.color}, transparent 70%)`,
-                    opacity: isHovered ? 0.18 : 0.1,
-                    transition: "opacity 0.25s ease",
+                    background: `linear-gradient(145deg, hsl(230 48% 5%) 0%, ${d.gradientStop} 100%)`,
+                    border: `1px solid ${isHovered ? d.border : d.border.replace("0.2", "0.12")}`,
+                    boxShadow: isHovered
+                      ? `${d.glow}, 0 12px 40px hsl(230 50% 2% / 0.5)`
+                      : "0 4px 20px hsl(230 50% 2% / 0.35)",
+                    transform: isHovered ? "translateY(-2px)" : "translateY(0)",
+                    transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+                    cursor: "default",
                   }}
-                />
-
-                {/* District header */}
-                <div className="flex items-center gap-3 relative z-10">
+                  onMouseEnter={() => setHoveredGroup(group.id)}
+                  onMouseLeave={() => setHoveredGroup(null)}
+                >
+                  {/* Decorative corner glow */}
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300"
+                    className="absolute top-0 right-0 w-20 h-20 pointer-events-none"
                     style={{
-                      background: d.bg,
-                      border: `1px solid ${d.border}`,
-                      boxShadow: isHovered ? `0 0 20px ${d.color}40` : "none",
+                      background: `radial-gradient(circle at top right, ${d.color}, transparent 70%)`,
+                      opacity: isHovered ? 0.18 : 0.1,
+                      transition: "opacity 0.25s ease",
                     }}
-                  >
-                    <Icon style={{ color: d.color, width: "18px", height: "18px" }} />
-                  </div>
-                  <div className="min-w-0">
-                    <div
-                      className="text-[9px] font-tech font-bold uppercase tracking-[0.22em] opacity-50"
-                      style={{ color: d.color }}
-                    >
-                      {group.district || "District"}
-                    </div>
-                    <div
-                      className="text-sm font-display font-bold tracking-wide"
-                      style={{ color: d.color }}
-                    >
-                      {group.label}
-                    </div>
-                  </div>
-                </div>
+                  />
 
-                {/* Separator */}
-                <div className="h-px" style={{ background: `${d.border}` }} />
-
-                {/* Quick links */}
-                <div className="flex flex-col gap-0.5 relative z-10">
-                  {quickLinks.map((child) => (
-                    <Link
-                      key={child.href}
-                      href={child.href}
-                      className="group/link flex items-center justify-between px-2.5 py-1.5 rounded-lg font-tech text-sm text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-white/[0.04]"
+                  {/* District header */}
+                  <div className="flex items-center gap-3 relative z-10">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300"
+                      style={{
+                        background: d.bg,
+                        border: `1px solid ${d.border}`,
+                        boxShadow: isHovered ? `0 0 20px ${d.color}40` : "none",
+                      }}
                     >
-                      <span className="truncate">{child.label}</span>
-                      <ArrowUpRight
-                        className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover/link:opacity-50 transition-opacity duration-150 ml-1"
+                      <Icon style={{ color: d.color, width: "18px", height: "18px" }} />
+                    </div>
+                    <div className="min-w-0">
+                      <div
+                        className="text-[9px] font-tech font-bold uppercase tracking-[0.22em] opacity-50"
                         style={{ color: d.color }}
-                      />
-                    </Link>
-                  ))}
-                  {group.children.length > 5 && (
-                    <Link
-                      href={group.children[0].href}
-                      className="flex items-center gap-1 px-2.5 py-1 font-tech text-xs transition-colors"
-                      style={{ color: d.color, opacity: 0.5 }}
-                    >
-                      +{group.children.length - 5} more
-                    </Link>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+                      >
+                        {group.district || "District"}
+                      </div>
+                      <div
+                        className="text-sm font-display font-bold tracking-wide"
+                        style={{ color: d.color }}
+                      >
+                        {group.label}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Separator */}
+                  <div className="h-px" style={{ background: `${d.border}` }} />
+
+                  {/* Quick links */}
+                  <div className="flex flex-col gap-0.5 relative z-10">
+                    {quickLinks.map((child) => (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        className="group/link flex items-center justify-between px-2.5 py-1.5 rounded-lg font-tech text-sm text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-white/[0.04]"
+                      >
+                        <span className="truncate">{child.label}</span>
+                        <ArrowUpRight
+                          className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover/link:opacity-50 transition-opacity duration-150 ml-1"
+                          style={{ color: d.color }}
+                        />
+                      </Link>
+                    ))}
+                    {group.children.length > 5 && (
+                      <Link
+                        href={group.children[0].href}
+                        className="flex items-center gap-1 px-2.5 py-1 font-tech text-xs transition-colors"
+                        style={{ color: d.color, opacity: 0.5 }}
+                      >
+                        +{group.children.length - 5} more
+                      </Link>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Bottom spacer ──────────────────────────────────────────── */}
         <div className="h-4" />

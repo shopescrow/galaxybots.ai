@@ -4,10 +4,18 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { SAAS_DATA, CustomTooltip, InsightBar } from "./constants";
+import { useState } from "react";
+import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+
+type SortDir = "asc" | "desc" | null;
+type SortColIdx = number | null;
 
 export function CohortPanel() {
   const d = SAAS_DATA;
   const months = ["M0", "M1", "M2", "M3", "M4", "M5", "M6"];
+
+  const [sortColIdx, setSortColIdx] = useState<SortColIdx>(null);
+  const [sortDir, setSortDir] = useState<SortDir>(null);
 
   function getHeatColor(value: number) {
     if (value >= 90) return "bg-green-500/80 text-white";
@@ -15,6 +23,32 @@ export function CohortPanel() {
     if (value >= 70) return "bg-yellow-400/60 text-foreground";
     if (value >= 60) return "bg-orange-400/60 text-foreground";
     return "bg-red-500/60 text-white";
+  }
+
+  function handleSortCol(idx: number) {
+    if (sortColIdx === idx) {
+      if (sortDir === "desc") setSortDir("asc");
+      else if (sortDir === "asc") { setSortColIdx(null); setSortDir(null); }
+      else setSortDir("desc");
+    } else {
+      setSortColIdx(idx);
+      setSortDir("desc");
+    }
+  }
+
+  const sortedRows = [...d.cohortRetention].sort((a, b) => {
+    if (sortColIdx === null || sortDir === null) return 0;
+    const mKey = `m${sortColIdx}` as keyof typeof a;
+    const aVal = (a[mKey] as number | undefined) ?? -1;
+    const bVal = (b[mKey] as number | undefined) ?? -1;
+    return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+  });
+
+  function SortIndicator({ idx }: { idx: number }) {
+    if (sortColIdx !== idx) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30 inline" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="w-3 h-3 ml-1 text-primary inline" />
+      : <ArrowDown className="w-3 h-3 ml-1 text-primary inline" />;
   }
 
   const retentionCurveData = months.map((m, idx) => {
@@ -34,13 +68,22 @@ export function CohortPanel() {
             <thead>
               <tr>
                 <th className="text-left text-muted-foreground font-tech pb-2 pr-3">Cohort</th>
-                {months.map((m) => (
-                  <th key={m} className="text-center text-muted-foreground font-tech pb-2 px-1">{m}</th>
+                {months.map((m, idx) => (
+                  <th
+                    key={m}
+                    className="text-center text-muted-foreground font-tech pb-2 px-1 cursor-pointer select-none hover:text-foreground transition-colors"
+                    onClick={() => handleSortCol(idx)}
+                  >
+                    <span className="inline-flex items-center justify-center">
+                      {m}
+                      <SortIndicator idx={idx} />
+                    </span>
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="space-y-1">
-              {d.cohortRetention.map((row) => (
+              {sortedRows.map((row) => (
                 <tr key={row.cohort}>
                   <td className="text-muted-foreground pr-3 py-1 whitespace-nowrap">{row.cohort}</td>
                   {months.map((m, idx) => {

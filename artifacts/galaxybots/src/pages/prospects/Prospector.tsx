@@ -7,13 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useState, useEffect } from "react";
-import { Plus, Search, History, Loader2, ListChecks, ExternalLink, Activity, BarChart3, TrendingUp, AlertTriangle, Lightbulb } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Search, History, Loader2, ListChecks, ExternalLink, Activity, BarChart3, TrendingUp, AlertTriangle, Lightbulb, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { ReviewQueue } from "@/pages/prospecting/ReviewQueue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+
+type SortKey = "createdAt" | "icpScore" | "confidenceScore" | null;
+type SortDir = "asc" | "desc";
 
 export function ObservabilityTab() {
   const [stats, setStats] = useState<any>(null);
@@ -152,6 +156,15 @@ export function ObservabilityTab() {
   );
 }
 
+const PROSPECT_STATUSES = ["all", "new", "enriched", "qualified", "review_needed"];
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="w-3 h-3 ml-1 text-primary" />
+    : <ArrowDown className="w-3 h-3 ml-1 text-primary" />;
+}
+
 export default function Prospector() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -160,10 +173,16 @@ export default function Prospector() {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [limit, setLimit] = useState("50");
-  
+  const [formErrors, setFormErrors] = useState<{ query?: string; limit?: string }>({});
+
   const [prospects, setProspects] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [tableSearch, setTableSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const fetchData = async () => {
     try {
@@ -190,8 +209,62 @@ export default function Prospector() {
     return () => clearInterval(interval);
   }, [jobs]);
 
+  const filteredProspects = useMemo(() => {
+    let list = prospects;
+
+    if (tableSearch.trim()) {
+      const q = tableSearch.toLowerCase();
+      list = list.filter(p =>
+        (p.companyName || "").toLowerCase().includes(q) ||
+        (p.email || "").toLowerCase().includes(q) ||
+        (p.domain || "").toLowerCase().includes(q) ||
+        (p.status || "").toLowerCase().includes(q) ||
+        (p.jobTitle || "").toLowerCase().includes(q)
+      );
+    }
+
+    if (stageFilter !== "all") {
+      list = list.filter(p => p.status === stageFilter);
+    }
+
+    if (sortKey) {
+      list = [...list].sort((a, b) => {
+        let aVal: number, bVal: number;
+        if (sortKey === "createdAt") {
+          aVal = new Date(a.createdAt || 0).getTime();
+          bVal = new Date(b.createdAt || 0).getTime();
+        } else {
+          aVal = parseFloat(a[sortKey] ?? 0);
+          bVal = parseFloat(b[sortKey] ?? 0);
+        }
+        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      });
+    }
+
+    return list;
+  }, [prospects, tableSearch, stageFilter, sortKey, sortDir]);
+
+  function toggleSort(col: SortKey) {
+    if (sortKey === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(col);
+      setSortDir("desc");
+    }
+  }
+
+  const validateForm = () => {
+    const errors: { query?: string; limit?: string } = {};
+    if (!query.trim()) errors.query = "Search query is required.";
+    const lim = parseInt(limit);
+    if (isNaN(lim) || lim < 1 || lim > 1000) errors.limit = "Limit must be between 1 and 1000.";
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
     setIsSubmitting(true);
     try {
       const response = await fetch("/api/prospecting/jobs", {
@@ -217,6 +290,7 @@ export default function Prospector() {
       setIsModalOpen(false);
       setQuery("");
       setLocation("");
+      setFormErrors({});
       fetchData();
     } catch (error) {
       toast({
@@ -255,7 +329,7 @@ export default function Prospector() {
               Autonomous B2B intelligence engine discovering and qualifying leads 24/7.
             </p>
           </div>
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) { setFormErrors({}); } }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
@@ -272,14 +346,15 @@ export default function Prospector() {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="query">Search Query</Label>
+                    <Label htmlFor="query">Search Query <span className="text-destructive">*</span></Label>
                     <Input
                       id="query"
                       placeholder="e.g. SaaS companies in Austin"
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      required
+                      onChange={(e) => { setQuery(e.target.value); if (formErrors.query) setFormErrors(prev => ({ ...prev, query: undefined })); }}
+                      aria-invalid={!!formErrors.query}
                     />
+                    {formErrors.query && <p className="text-destructive text-xs">{formErrors.query}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="location">Location (Optional)</Label>
@@ -296,10 +371,12 @@ export default function Prospector() {
                       id="limit"
                       type="number"
                       value={limit}
-                      onChange={(e) => setLimit(e.target.value)}
+                      onChange={(e) => { setLimit(e.target.value); if (formErrors.limit) setFormErrors(prev => ({ ...prev, limit: undefined })); }}
                       min="1"
                       max="1000"
+                      aria-invalid={!!formErrors.limit}
                     />
+                    {formErrors.limit && <p className="text-destructive text-xs">{formErrors.limit}</p>}
                   </div>
                 </div>
                 <DialogFooter>
@@ -340,32 +417,91 @@ export default function Prospector() {
                   <CardDescription>
                     Live stream of discovered leads awaiting enrichment and qualification.
                   </CardDescription>
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by company, email, or domain…"
+                        value={tableSearch}
+                        onChange={(e) => setTableSearch(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                    <Select value={stageFilter} onValueChange={setStageFilter}>
+                      <SelectTrigger className="w-full sm:w-44">
+                        <SelectValue placeholder="All stages" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROSPECT_STATUSES.map(s => (
+                          <SelectItem key={s} value={s}>
+                            {s === "all" ? "All Stages" : s.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
                     <div className="flex justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" /></div>
-                  ) : prospects.length === 0 ? (
+                  ) : filteredProspects.length === 0 && prospects.length === 0 ? (
                     <div className="text-center py-12 border-2 border-dashed rounded-lg">
                       <Search className="w-12 h-12 mx-auto text-muted-foreground opacity-20 mb-4" />
                       <h3 className="text-lg font-medium">Pipeline Empty</h3>
-                      <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                      <p className="text-sm text-muted-foreground max-w-xs mx-auto mb-4">
                         No prospects discovered yet. Launch a discovery job to start populating your intelligence engine.
+                      </p>
+                      <Button onClick={() => setIsModalOpen(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Job
+                      </Button>
+                    </div>
+                  ) : filteredProspects.length === 0 ? (
+                    <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                      <Search className="w-12 h-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+                      <h3 className="text-lg font-medium">No Results</h3>
+                      <p className="text-sm text-muted-foreground">
+                        No prospects match your current search or filter.
                       </p>
                     </div>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Company</TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none"
+                            onClick={() => toggleSort("createdAt")}
+                          >
+                            <span className="flex items-center">
+                              Company
+                              <SortIcon col="createdAt" sortKey={sortKey} sortDir={sortDir} />
+                            </span>
+                          </TableHead>
                           <TableHead>Contact</TableHead>
-                          <TableHead>Confidence</TableHead>
-                          <TableHead>ICP Score</TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none"
+                            onClick={() => toggleSort("confidenceScore")}
+                          >
+                            <span className="flex items-center">
+                              Confidence
+                              <SortIcon col="confidenceScore" sortKey={sortKey} sortDir={sortDir} />
+                            </span>
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none"
+                            onClick={() => toggleSort("icpScore")}
+                          >
+                            <span className="flex items-center">
+                              ICP Score
+                              <SortIcon col="icpScore" sortKey={sortKey} sortDir={sortDir} />
+                            </span>
+                          </TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Credits</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {prospects.map((p) => (
+                        {filteredProspects.map((p) => (
                           <TableRow key={p.id}>
                             <TableCell>
                               <div className="font-medium">{p.companyName}</div>
@@ -422,9 +558,11 @@ export default function Prospector() {
                 <CardContent>
                   <div className="space-y-4">
                     {jobs.length === 0 ? (
-                      <p className="text-sm text-center text-muted-foreground py-8">
-                        No mission history found.
-                      </p>
+                      <div className="text-center py-10">
+                        <History className="w-10 h-10 mx-auto text-muted-foreground opacity-20 mb-3" />
+                        <p className="text-sm text-muted-foreground">No mission history yet.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Create your first job to get started.</p>
+                      </div>
                     ) : (
                       jobs.map((j) => (
                         <div key={j.id} className="p-3 rounded-lg border bg-card/50 space-y-2">
