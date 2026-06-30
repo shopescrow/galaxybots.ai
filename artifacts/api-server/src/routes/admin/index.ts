@@ -9,6 +9,7 @@ import modelCostsRouter from "./model-costs";
 import beliefsAdminRouter from "./beliefs";
 import ollamaRouter from "./ollama";
 import modelRouterAdminRouter from "./model-router";
+import observabilityRouter from "./observability";
 
 export function registerAdminRoutes(router: IRouter) {
   router.use(orgAdminRouter);
@@ -21,4 +22,5 @@ export function registerAdminRoutes(router: IRouter) {
   router.use(beliefsAdminRouter);
   router.use(ollamaRouter);
   router.use(modelRouterAdminRouter);
+  router.use(observabilityRouter);
 }

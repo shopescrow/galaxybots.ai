@@ -62,6 +62,7 @@ import { runSelfActualizationCycle } from "./jobs/self-actualization";
 import { checkMoltbookHeartbeats } from "./jobs/check-moltbook-heartbeats";
 import { runAssetManagementCycle } from "./jobs/asset-lifecycle";
 import { runDemandRefresh } from "./jobs/demand-refresh";
+import { runMetricRollupsAndSloEval } from "./jobs/compute-metric-rollups";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -83,6 +84,7 @@ const highFreqJobs: Job[] = [
   { name: "AEO scan queue", fn: checkAeoScanQueue },
   { name: "guardian-heartbeat", fn: runGuardianHeartbeat },
   { name: "moltbook-heartbeats", fn: checkMoltbookHeartbeats },
+  { name: "metric-rollups-slo-eval", fn: runMetricRollupsAndSloEval },
 ];
 
 const mediumFreqJobs: Job[] = [

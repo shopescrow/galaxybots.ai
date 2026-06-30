@@ -103,3 +103,4 @@ export * from "./golden-prompts";
 export * from "./assets";
 export * from "./asset-autonomy";
 export * from "./client-token-quotas";
+export * from "./tenant-observability";

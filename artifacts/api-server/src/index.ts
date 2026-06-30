@@ -24,6 +24,7 @@ import { eq } from "drizzle-orm";
 import { initRedis, closeRedis } from "./services/scaling/redis-store";
 import { rebuildRateLimiters } from "./middleware/rate-limit";
 import { startSweepQueues, stopSweepQueues } from "./services/platform/queue/sweep-queues";
+import { seedDefaultSlos } from "./services/observability/slo-evaluator";
 
 const EXPECTED_TABLES = [
   "aeo_recommendation_cache",
@@ -284,6 +285,68 @@ async function ensureCrmTables() {
   }
 }
 
+async function ensureObservabilityTables() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "tenant_metric_rollups" (
+        "id" serial PRIMARY KEY,
+        "client_id" integer NOT NULL,
+        "window_start" timestamp with time zone NOT NULL,
+        "window_end" timestamp with time zone NOT NULL,
+        "request_count" integer NOT NULL DEFAULT 0,
+        "error_count" integer NOT NULL DEFAULT 0,
+        "error_rate_pct" real NOT NULL DEFAULT 0,
+        "p50_latency_ms" real,
+        "p95_latency_ms" real,
+        "p99_latency_ms" real,
+        "spend_usd" numeric(18,6) NOT NULL DEFAULT 0,
+        "token_count" bigint NOT NULL DEFAULT 0,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+        CONSTRAINT "tenant_metric_rollups_client_window_ux" UNIQUE ("client_id", "window_start")
+      );
+      CREATE INDEX IF NOT EXISTS "tenant_metric_rollups_client_window_idx"
+        ON "tenant_metric_rollups"("client_id", "window_start");
+      CREATE INDEX IF NOT EXISTS "tenant_metric_rollups_window_idx"
+        ON "tenant_metric_rollups"("window_start");
+
+      CREATE TABLE IF NOT EXISTS "slo_definitions" (
+        "id" serial PRIMARY KEY,
+        "name" text NOT NULL,
+        "metric" text NOT NULL,
+        "operator" text NOT NULL,
+        "threshold" numeric(18,6) NOT NULL,
+        "window_hours" integer NOT NULL DEFAULT 1,
+        "severity" text NOT NULL DEFAULT 'warning',
+        "enabled" boolean NOT NULL DEFAULT true,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "updated_at" timestamp with time zone NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE IF NOT EXISTS "slo_breach_events" (
+        "id" serial PRIMARY KEY,
+        "slo_id" integer NOT NULL,
+        "client_id" integer,
+        "window_start" timestamp with time zone NOT NULL,
+        "window_end" timestamp with time zone NOT NULL,
+        "observed_value" numeric(18,6) NOT NULL,
+        "threshold_value" numeric(18,6) NOT NULL,
+        "resolved_at" timestamp with time zone,
+        "notified_at" timestamp with time zone,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS "slo_breach_events_slo_client_idx"
+        ON "slo_breach_events"("slo_id", "client_id", "window_start");
+      CREATE INDEX IF NOT EXISTS "slo_breach_events_created_idx"
+        ON "slo_breach_events"("created_at");
+    `);
+    console.log("[startup] Observability tables ensured");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[startup] ensureObservabilityTables failed: ${msg}`);
+  }
+}
+
 async function ensureFirewallTables() {
   // Idempotent DDL for the Compliance & IP firewall (pre-publish safety gate).
   // Mirrors lib/db/src/schema/compliance.ts. Safe to run on every startup.
@@ -520,11 +583,15 @@ const server = app.listen(port, async () => {
   await ensureOllamaTables();
   await ensureCrmTables();
   await ensureFirewallTables();
+  await ensureObservabilityTables();
   await validateDatabaseTables();
   await ensurePirateMonsterPartnerRegistered();
   await startScheduler();
   startWebhookDeliveryWorker();
   ProspectingWorker.start();
+  seedDefaultSlos().catch((err) => {
+    console.error("[seed] Default SLO seeding failed:", err);
+  });
   seedDefaultOutreachTemplates().catch((err) => {
     console.error("[seed] Outreach template seeding failed:", err);
   });
