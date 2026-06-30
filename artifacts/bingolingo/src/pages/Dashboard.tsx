@@ -78,7 +78,7 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground text-center py-8">No clients yet. Add your first client to get started.</p>
             ) : (
               <div className="space-y-3">
-                {clients.slice(0, 5).map((client: any) => (
+                {(clients as Array<{ id: number; name: string; industry: string; contentCount: number; lastPublishedAt?: string | null }>).slice(0, 5).map((client) => (
                   <Link key={client.id} href={`/clients/${client.id}`}>
                     <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer">
                       <div>
@@ -110,7 +110,7 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground text-center py-8">No content yet. Generate your first piece of content.</p>
             ) : (
               <div className="space-y-3">
-                {stats.recentContent.map((content: any) => (
+                {(stats.recentContent as Array<{ id: number; title: string; type: string; status: string; createdAt: string }>).map((content) => (
                   <div key={content.id} className="flex items-center justify-between p-3 rounded-lg border">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{content.title}</p>

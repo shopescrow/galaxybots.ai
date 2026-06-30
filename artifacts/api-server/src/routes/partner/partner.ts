@@ -33,8 +33,8 @@ router.post("/partner", requireRole("owner", "admin"), async (req, res) => {
       offer: partner.offer,
       isActive: partner.isActive,
     });
-  } catch (error: any) {
-    if (error?.code === "23505") {
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "23505") {
       res.status(409).json({ error: "A partner with this ref already exists" }); return;
     }
     console.error("Error creating partner:", error);

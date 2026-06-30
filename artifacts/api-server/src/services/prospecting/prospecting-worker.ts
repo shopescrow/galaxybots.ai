@@ -1,6 +1,9 @@
 import { db, prospectingJobsTable, prospectsTable, confidenceConfigsTable, prospectingPatternsTable } from "@workspace/db";
-import { eq, and, or, isNull, sql } from "drizzle-orm";
+import { eq, and, or, isNull, sql, type InferSelectModel } from "drizzle-orm";
 import { scoreConfidence } from "./score-confidence";
+
+type ProspectingJob = InferSelectModel<typeof prospectingJobsTable>;
+type Prospect = InferSelectModel<typeof prospectsTable>;
 
 export class ProspectingWorker {
   private static isRunning = false;
@@ -44,7 +47,7 @@ export class ProspectingWorker {
     }
   }
 
-  private static async processJob(job: any) {
+  private static async processJob(job: ProspectingJob) {
     await db.update(prospectingJobsTable)
       .set({ status: "running", updatedAt: new Date() } as any)
       .where(eq(prospectingJobsTable.id, job.id));
@@ -75,7 +78,7 @@ export class ProspectingWorker {
     }
   }
 
-  private static async processEnrichmentQueue(job: any) {
+  private static async processEnrichmentQueue(job: ProspectingJob) {
     const prospects = await db.select().from(prospectsTable)
       .where(and(eq(prospectsTable.jobId, job.id), eq(prospectsTable.status, "new")));
 
@@ -110,7 +113,7 @@ export class ProspectingWorker {
     }
   }
 
-  static async enrichProspect(prospect: any, job?: any) {
+  static async enrichProspect(prospect: Prospect, job?: ProspectingJob) {
     const clientId = prospect.clientId;
     let currentStep = "navigation";
     let cost = 0;
@@ -158,8 +161,8 @@ export class ProspectingWorker {
 
       // 3. Validation
       currentStep = "validation";
-      const [config] = await db.select().from(confidenceConfigsTable).where(eq(confidenceConfigsTable.clientId, clientId));
-      const confidence = scoreConfidence(extractedData, config || {});
+      const [config] = await db.select().from(confidenceConfigsTable).where(eq(confidenceConfigsTable.clientId, clientId as number));
+      const confidence = scoreConfidence(extractedData, config);
       
       if (confidence.score < 0.6) {
         await db.update(prospectsTable)
@@ -184,17 +187,20 @@ export class ProspectingWorker {
 
       // 5. ICP Scoring
       currentStep = "icp_scoring";
-      const icpCriteria = job?.checkpointData?.icpCriteria || {};
+      const checkpointData = job?.checkpointData as Record<string, unknown> | undefined;
+      const icpCriteria = (checkpointData?.icpCriteria as Record<string, unknown>) || {};
       const icpScore = this.calculateIcpScore(enrichmentData, icpCriteria);
 
-      await db.update(prospectingJobsTable)
-        .set({
-          processedCount: sql`processed_count + 1`,
-          successfulCount: sql`successful_count + 1`,
-          totalCostCredits: sql`total_cost_credits + ${cost}`,
-          updatedAt: new Date()
-        } as any)
-        .where(eq(prospectingJobsTable.id, job.id));
+      if (job) {
+        await db.update(prospectingJobsTable)
+          .set({
+            processedCount: sql`processed_count + 1`,
+            successfulCount: sql`successful_count + 1`,
+            totalCostCredits: sql`total_cost_credits + ${cost}`,
+            updatedAt: new Date()
+          } as any)
+          .where(eq(prospectingJobsTable.id, job.id));
+      }
 
       await db.update(prospectsTable)
         .set({
@@ -212,10 +218,10 @@ export class ProspectingWorker {
       if (pattern) {
         await db.update(prospectingPatternsTable)
           .set({ successAfterHint: sql`success_after_hint + 1`, updatedAt: new Date() } as any)
-          .where(eq(prospectingPatternsTable.id, (pattern as any).id));
+          .where(eq(prospectingPatternsTable.id, pattern.id));
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`Enrichment failed for prospect ${prospect.id}:`, err);
       const attemptCount = (prospect.attemptCount || 0) + 1;
       const status = attemptCount >= 3 ? "review_needed" : "new";
@@ -242,7 +248,7 @@ export class ProspectingWorker {
     }
   }
 
-  private static async updateProspectProgress(id: number, step: string, cost: number, data: any = {}) {
+  private static async updateProspectProgress(id: number, step: string, cost: number, data: Record<string, unknown> = {}) {
     await db.update(prospectsTable)
       .set({
         extractionNotes: sql`COALESCE(extraction_notes, '') || ${`Step ${step} completed\n`}`,
@@ -253,11 +259,11 @@ export class ProspectingWorker {
       .where(eq(prospectsTable.id, id));
   }
 
-  private static calculateIcpScore(data: any, criteria: any) {
+  private static calculateIcpScore(data: Record<string, unknown>, criteria: Record<string, unknown>) {
     // Simple mock ICP scoring
     let score = 0.5;
     if (criteria.industry && data.industry === criteria.industry) score += 0.2;
-    if (criteria.minSize && parseInt(data.size) >= parseInt(criteria.minSize)) score += 0.2;
+    if (criteria.minSize && parseInt(String(data.size)) >= parseInt(String(criteria.minSize))) score += 0.2;
     return Math.min(score, 1.0);
   }
 }

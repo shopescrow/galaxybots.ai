@@ -9,7 +9,7 @@ import {
   botsTable,
   clientsTable,
 } from "@workspace/db";
-import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireRole } from "../../middleware/auth";
@@ -92,7 +92,7 @@ router.get("/voice/calls/:clientId", requireRole("owner", "admin"), async (req, 
       return;
     }
 
-    const conditions: any[] = [eq(callLogsTable.configId, config.id)];
+    const conditions: SQL[] = [eq(callLogsTable.configId, config.id)];
     if (dateFrom) {
       const d = new Date(dateFrom);
       if (!isNaN(d.getTime())) conditions.push(gte(callLogsTable.createdAt, d));
@@ -566,7 +566,7 @@ router.get("/analytics/voice", requireRole("owner", "admin"), async (req, res): 
       return;
     }
 
-    const callConditions: any[] = [eq(callLogsTable.configId, config.id)];
+    const callConditions: SQL[] = [eq(callLogsTable.configId, config.id)];
     if (dateFrom) {
       const d = new Date(dateFrom);
       if (!isNaN(d.getTime())) callConditions.push(gte(callLogsTable.createdAt, d));
@@ -595,7 +595,7 @@ router.get("/analytics/voice", requireRole("owner", "admin"), async (req, res): 
       .groupBy(sql`DATE(${callLogsTable.createdAt})`)
       .orderBy(sql`DATE(${callLogsTable.createdAt})`);
 
-    const debriefConditions: any[] = [eq(callDebriefsTable.clientId, clientId)];
+    const debriefConditions: SQL[] = [eq(callDebriefsTable.clientId, clientId)];
     if (dateFrom) {
       const d = new Date(dateFrom);
       if (!isNaN(d.getTime())) debriefConditions.push(gte(callDebriefsTable.createdAt, d));

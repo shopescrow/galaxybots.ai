@@ -35,8 +35,8 @@ export default function ForgotUsername() {
       }
       const data = await res.json();
       setResult(data);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }

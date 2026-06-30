@@ -99,9 +99,10 @@ router.put("/assignments/:id/sub-tasks/:taskId/status", async (req, res): Promis
     );
   if (!assignment) { res.status(404).json({ error: "Not found" }); return; }
 
-  const subTasks = (assignment.subTasks ?? []).map((t: { id: string; title: string; dependsOn: string[]; status: string; completedAt?: string }) =>
+  type SubTask = { id: string; title: string; dependsOn: string[]; status: "blocked" | "pending" | "running" | "done"; completedAt?: string };
+  const subTasks = (assignment.subTasks ?? []).map((t: SubTask) =>
     t.id === taskId
-      ? { ...t, status, completedAt: status === "done" ? new Date().toISOString() : t.completedAt }
+      ? { ...t, status: status as SubTask["status"], completedAt: status === "done" ? new Date().toISOString() : t.completedAt }
       : t,
   );
 
@@ -185,7 +186,7 @@ router.post("/opportunity-signals/:id/approve", async (req, res): Promise<void> 
     .set({
       status: "approved",
       approvedAt: new Date(),
-      approvedByUserId: req.user!.id,
+      approvedByUserId: req.user!.userId,
       resultingAssignmentId: assignment.id,
     })
     .where(eq(opportunitySignalsTable.id, id));

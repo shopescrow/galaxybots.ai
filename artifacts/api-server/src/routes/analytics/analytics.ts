@@ -18,7 +18,7 @@ import {
   llmUsageDailyRollupTable,
   modelTelemetryDailyRollupTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "crypto";
 import {
@@ -69,7 +69,7 @@ router.get("/analytics/spend", async (req, res): Promise<void> => {
     // Use pre-aggregated rollup tables when the window is fully in the past
     // (rollup worker runs at 24 h cadence, so data is complete after 2 days).
     if (canUseRollup(dateFrom, dateTo)) {
-      const rollupConds: any[] = [eq(llmUsageDailyRollupTable.clientId, clientId)];
+      const rollupConds: SQL[] = [eq(llmUsageDailyRollupTable.clientId, clientId)];
       if (dateFrom) rollupConds.push(gte(llmUsageDailyRollupTable.rollupDate, dateFrom.toISOString().slice(0, 10)));
       if (dateTo)   rollupConds.push(lte(llmUsageDailyRollupTable.rollupDate, dateTo.toISOString().slice(0, 10)));
 
@@ -135,7 +135,7 @@ router.get("/analytics/spend", async (req, res): Promise<void> => {
     }
 
     // Recent data (includes today or yesterday): scan raw table.
-    const conditions: any[] = [eq(llmUsageLogTable.clientId, clientId)];
+    const conditions: SQL[] = [eq(llmUsageLogTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(llmUsageLogTable.calledAt, dateFrom));
     if (dateTo) conditions.push(lte(llmUsageLogTable.calledAt, dateTo));
 
@@ -212,7 +212,7 @@ router.get("/analytics/tokens", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = parseDateRange(req.query as Record<string, string>);
 
-    const conditions: any[] = [eq(llmUsageLogTable.clientId, clientId)];
+    const conditions: SQL[] = [eq(llmUsageLogTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(llmUsageLogTable.calledAt, dateFrom));
     if (dateTo) conditions.push(lte(llmUsageLogTable.calledAt, dateTo));
 
@@ -263,7 +263,7 @@ router.get("/analytics/tools", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = parseDateRange(req.query as Record<string, string>);
 
-    const conditions: any[] = [eq(toolActivityLogTable.clientId, clientId)];
+    const conditions: SQL[] = [eq(toolActivityLogTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(toolActivityLogTable.createdAt, dateFrom));
     if (dateTo) conditions.push(lte(toolActivityLogTable.createdAt, dateTo));
 
@@ -317,7 +317,7 @@ router.get("/analytics/sessions", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = parseDateRange(req.query as Record<string, string>);
 
-    const conditions: any[] = [eq(llmUsageLogTable.clientId, clientId)];
+    const conditions: SQL[] = [eq(llmUsageLogTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(llmUsageLogTable.calledAt, dateFrom));
     if (dateTo) conditions.push(lte(llmUsageLogTable.calledAt, dateTo));
 
@@ -350,7 +350,7 @@ router.get("/analytics/pipelines", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = parseDateRange(req.query as Record<string, string>);
 
-    const conditions: any[] = [eq(pipelinesTable.clientId, clientId)];
+    const conditions: SQL[] = [eq(pipelinesTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(pipelineRunsTable.startedAt, dateFrom));
     if (dateTo) conditions.push(lte(pipelineRunsTable.startedAt, dateTo));
 
@@ -382,7 +382,7 @@ router.get("/analytics/scheduler", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = parseDateRange(req.query as Record<string, string>);
 
-    const conditions: any[] = [eq(backgroundReportsTable.clientId, clientId)];
+    const conditions: SQL[] = [eq(backgroundReportsTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(backgroundReportsTable.createdAt, dateFrom));
     if (dateTo) conditions.push(lte(backgroundReportsTable.createdAt, dateTo));
 
@@ -507,7 +507,7 @@ router.get("/analytics/export/:dataset", async (req, res): Promise<void> => {
 
   try {
     if (dataset === "llm-usage") {
-      const conds: any[] = [eq(llmUsageLogTable.clientId, clientId)];
+      const conds: SQL[] = [eq(llmUsageLogTable.clientId, clientId)];
       if (dateFrom) conds.push(gte(llmUsageLogTable.calledAt, dateFrom));
       if (dateTo) conds.push(lte(llmUsageLogTable.calledAt, dateTo));
 
@@ -518,7 +518,7 @@ router.get("/analytics/export/:dataset", async (req, res): Promise<void> => {
         .orderBy(desc(llmUsageLogTable.calledAt));
       filename = "llm_usage.csv";
     } else if (dataset === "tool-activity") {
-      const conds: any[] = [eq(toolActivityLogTable.clientId, clientId)];
+      const conds: SQL[] = [eq(toolActivityLogTable.clientId, clientId)];
       if (dateFrom) conds.push(gte(toolActivityLogTable.createdAt, dateFrom));
       if (dateTo) conds.push(lte(toolActivityLogTable.createdAt, dateTo));
 

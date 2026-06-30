@@ -60,6 +60,9 @@
     }
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.62.0",
+    "@typescript-eslint/parser": "^8.62.0",
+    "eslint": "^10.6.0",
     "pdfkit": "^0.18.0",
     "playwright-chromium": "^1.58.2",
     "pptxgenjs": "^4.0.1",

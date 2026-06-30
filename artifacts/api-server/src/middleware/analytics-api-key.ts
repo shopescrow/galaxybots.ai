@@ -29,9 +29,10 @@ export async function analyticsApiKeyAuth(req: Request, res: Response, next: Nex
     return;
   }
 
-  (req as any).user = {
+  req.user = {
     clientId: keyRecord.clientId,
-    userId: null,
+    userId: 0,
+    email: "",
     role: "analytics_readonly",
   };
 
