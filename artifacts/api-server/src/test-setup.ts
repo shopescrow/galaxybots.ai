@@ -47,6 +47,18 @@ function defaultOpenAIResponse() {
   };
 }
 
+function defaultEmbeddingResponse() {
+  const vec = new Float32Array(1536);
+  vec[0] = 1;
+  const b64 = Buffer.from(vec.buffer).toString("base64");
+  return {
+    object: "list",
+    data: [{ object: "embedding", index: 0, embedding: b64 }],
+    model: "text-embedding-3-small",
+    usage: { prompt_tokens: 1, total_tokens: 1 },
+  };
+}
+
 export const anthropicHandlers = [
   http.post("https://api.anthropic.com/v1/messages", () => {
     return HttpResponse.json({
@@ -95,6 +107,8 @@ beforeAll(async () => {
       res.writeHead(200, { "Content-Type": "application/json" });
       if (openaiMockHandler) {
         res.end(JSON.stringify(openaiMockHandler(req, body)));
+      } else if (req.url?.includes("/embeddings")) {
+        res.end(JSON.stringify(defaultEmbeddingResponse()));
       } else {
         res.end(JSON.stringify(defaultOpenAIResponse()));
       }

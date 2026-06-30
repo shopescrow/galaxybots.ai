@@ -47,7 +47,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     model: "text-embedding-3-small",
     input: text,
   });
-  return response.data[0].embedding;
+  const embedding = response.data?.[0]?.embedding;
+  if (!embedding) {
+    throw new Error("generateEmbedding: unexpected response shape — no data[0].embedding");
+  }
+  return embedding;
 }
 
 /**
