@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
 export default function Billing() {
   const { token } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [links, setLinks] = useState<BillingLinks | null>(null);
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +86,13 @@ export default function Billing() {
   const [subscribing, setSubscribing] = useState<string | null>(null);
 
   useEffect(() => {
+      if (window.location.search.includes("checkout=success")) {
+        navigate("/welcome?checkout=success");
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+      useEffect(() => {
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
 

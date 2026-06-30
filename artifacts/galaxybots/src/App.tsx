@@ -115,6 +115,7 @@ const PromptVersionsPage  = lazy(() => import("@/pages/self-improvement/PromptVe
 const PlatformIntelligence = lazy(() => import("@/pages/platform-intelligence/PlatformIntelligence"));
 const GalaxyIntelligence  = lazy(() => import("@/pages/intelligence/GalaxyIntelligence"));
 const DemandEngine        = lazy(() => import("@/pages/intelligence/DemandEngine"));
+const WelcomePage         = lazy(() => import("@/pages/welcome/WelcomePage"));
 
 // ─── Skeleton fallback used by all Suspense boundaries ───────────────────────
 function PageLoader() {
@@ -281,6 +282,7 @@ function AuthenticatedRoutes() {
         <Route path="/platform-intelligence"  component={() => <AdminOnly component={PlatformIntelligence} />} />
         <Route path="/galaxy-intelligence"    component={() => <AdminOnly component={GalaxyIntelligence} />} />
         <Route path="/demand-intelligence"    component={() => <AdminOnly component={DemandEngine} />} />
+        <Route path="/welcome"                component={WelcomePage} />
         <Route component={NotFound} />
       </Switch>
     </>
