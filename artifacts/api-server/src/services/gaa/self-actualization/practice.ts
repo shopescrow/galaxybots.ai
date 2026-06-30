@@ -143,6 +143,7 @@ async function practiceOneCategory(
         scope: cap.clientId ? "client" : "platform",
         clientId: cap.clientId ?? null,
         confidence: 60,
+        botId,
       });
     } catch (err) {
       console.warn("[self-actualization] practice lesson write failed:", err);

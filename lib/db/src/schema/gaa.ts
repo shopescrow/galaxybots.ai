@@ -150,18 +150,23 @@ export const gaaActionLedgerTable = pgTable(
   ],
 );
 
-// Multi-horizon memory — hot / warm / cold tiers with promotion + GDPR delete.
+// Multi-horizon memory — hot / warm / cold / permanent tiers with promotion + GDPR delete.
+// permanent tier is reserved for C-Suite bot memories; records in this tier never expire
+// and are immune to consolidation cleanup.
 export const gaaMemoryTable = pgTable(
   "gaa_memory",
   {
     id: serial("id").primaryKey(),
-    // hot | warm | cold
+    // hot | warm | cold | permanent
     tier: text("tier").notNull().default("hot"),
     // platform | client
     scope: text("scope").notNull().default("platform"),
     clientId: integer("client_id").references(() => clientsTable.id, {
       onDelete: "cascade",
     }),
+    // Optional bot association — set for C-Suite bot memories so the
+    // consolidation job can promote them to the permanent tier.
+    botId: integer("bot_id"),
     goalId: integer("goal_id"),
     key: text("key").notNull(),
     content: text("content").notNull(),
@@ -181,6 +186,7 @@ export const gaaMemoryTable = pgTable(
     index("gaa_memory_tier_idx").on(table.tier),
     index("gaa_memory_scope_idx").on(table.scope),
     index("gaa_memory_client_id_idx").on(table.clientId),
+    index("gaa_memory_bot_id_idx").on(table.botId),
   ],
 );
 

@@ -155,6 +155,7 @@ export async function reflectOnOutcome(
       scope: outcome.clientId ? "client" : "platform",
       clientId: outcome.clientId ?? null,
       confidence: Math.round(confidence * 100),
+      botId: bot.botId,
     });
     memoryId = mem.id;
   } catch (err) {

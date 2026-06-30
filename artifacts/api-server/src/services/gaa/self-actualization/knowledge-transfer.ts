@@ -10,12 +10,29 @@ import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { callWithFallback } from "../../ai-safety/model-fallback";
 import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
 import { remember } from "../memory-tiers";
+import { archivePriorCsuiteMemoriesForTopic, storeMemory } from "../../bots/memory";
 import {
   getStrongestCapabilities,
   getWeakestCategories,
   getCapabilitySignal,
 } from "./capability-model";
 import { isKillSwitchActive } from "./config";
+
+const CSUITE_TITLE_KEYWORDS = ["Chief", "CEO", "CFO", "COO", "CMO", "CTO", "President"];
+const CSUITE_DEPT_KEYWORDS = ["executive", "c-suite", "c suite", "leadership"];
+
+async function isCsuiteBotLocal(botId: number): Promise<boolean> {
+  const [bot] = await db
+    .select({ title: botsTable.title, department: botsTable.department })
+    .from(botsTable)
+    .where(eq(botsTable.id, botId))
+    .limit(1);
+  if (!bot) return false;
+  return (
+    CSUITE_TITLE_KEYWORDS.some((kw) => bot.title.includes(kw)) ||
+    CSUITE_DEPT_KEYWORDS.some((kw) => bot.department.toLowerCase().includes(kw))
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Cross-agent knowledge distillation. High-confidence, durable (cold-tier)
@@ -135,7 +152,30 @@ async function transferToTarget(params: {
         scope: target.clientId ? "client" : "platform",
         clientId: target.clientId ?? null,
         confidence: Math.round(confidence * 100),
+        botId: target.botId,
       });
+
+      // For C-Suite targets: complete the supersession chain in bot_memories.
+      // Store the distilled belief as a bot_memory and archive any prior
+      // non-archived memories for this bot+category, so the reasoning history
+      // is always inspectable via the archived chain.
+      const csuite = await isCsuiteBotLocal(target.botId);
+      if (csuite && target.taskCategory) {
+        const topic = `transfer:${target.taskCategory}`;
+        const newMem = await storeMemory({
+          botId: target.botId,
+          clientId: target.clientId ?? undefined,
+          sourceType: "knowledge_transfer",
+          content: `Distilled from ${params.sourceBotId ? `bot ${params.sourceBotId}` : "fleet"}: ${params.lesson}`,
+          summary: distilledBelief,
+          topic,
+        });
+        await archivePriorCsuiteMemoriesForTopic({
+          botId: target.botId,
+          topic,
+          newMemoryId: newMem.id,
+        });
+      }
     } catch (err) {
       console.warn("[self-actualization] transfer memory write failed:", err);
     }

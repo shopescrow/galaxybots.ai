@@ -29,6 +29,7 @@ import { runDependencyVulnerabilityWatcher } from "./jobs/dependency-vulnerabili
 import { runGuardianInternalWatchers } from "./jobs/guardian-internal-watchers";
 import { checkMemoryConsolidation } from "./jobs/consolidate-memories";
 import { checkMemoryEmbeddingBackfill } from "./jobs/backfill-memory-embeddings";
+import { cleanupSupersededMemories } from "../bots/memory";
 import { checkEpisodicMemory } from "./jobs/episodic-memory";
 import { checkBeliefDecay } from "./jobs/belief-decay";
 import { checkStaleBeliefUpdates } from "../../services/ai-safety/belief-anomaly";
@@ -123,6 +124,7 @@ const lowFreqJobs: Job[] = [
   { name: "uncertainty-schedules", fn: checkUncertaintySchedules },
   { name: "memory-consolidation", fn: checkMemoryConsolidation },
   { name: "memory-embedding-backfill", fn: async () => { if (!areSweepQueuesActive()) await checkMemoryEmbeddingBackfill(); } },
+  { name: "cleanup-superseded-memories", fn: async () => { await cleanupSupersededMemories(); } },
   { name: "episodic-memory", fn: async () => { if (!areSweepQueuesActive()) await checkEpisodicMemory(); } },
   { name: "belief-decay", fn: checkBeliefDecay },
   { name: "stale-belief-updates", fn: checkStaleBeliefUpdates },
