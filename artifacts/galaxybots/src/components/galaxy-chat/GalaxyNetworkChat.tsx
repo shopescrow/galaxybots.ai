@@ -222,10 +222,13 @@ export function GalaxyNetworkChat() {
         {isOpen && (
           <motion.div
             key="panel"
+            id="galaxy-network-chat-panel"
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            role="region"
+            aria-label="Galaxy Network Chat"
             className="w-[370px] h-[540px] rounded-2xl flex flex-col overflow-hidden pointer-events-auto"
             style={{
               background: "linear-gradient(160deg, rgba(15,10,35,0.97) 0%, rgba(8,5,25,0.99) 100%)",
@@ -272,9 +275,10 @@ export function GalaxyNetworkChat() {
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
+                  aria-label="Close Galaxy Network Chat"
                   className="w-6 h-6 rounded-lg flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -299,7 +303,7 @@ export function GalaxyNetworkChat() {
             )}
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto py-2 scrollbar-hide">
+            <div ref={scrollRef} role="log" aria-live="polite" aria-label="Chat messages" className="flex-1 overflow-y-auto py-2 scrollbar-hide">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
                   <Wifi className="w-8 h-8 text-purple-500/30 animate-pulse" />
@@ -354,6 +358,7 @@ export function GalaxyNetworkChat() {
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || sendMessage.isPending}
+                  aria-label="Send message"
                   className={cn(
                     "w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0",
                     input.trim()
@@ -387,13 +392,14 @@ export function GalaxyNetworkChat() {
             ? "0 0 0 2px rgba(139,92,246,0.6), 0 0 30px rgba(139,92,246,0.5), 0 8px 32px rgba(0,0,0,0.6)"
             : "0 0 0 1px rgba(139,92,246,0.4), 0 0 20px rgba(139,92,246,0.35), 0 8px 24px rgba(0,0,0,0.5)",
         }}
-        title="Galaxy Network Chat"
-        aria-label="Toggle Galaxy Network Chat"
+        aria-label={isOpen ? "Close Galaxy Network Chat" : "Open Galaxy Network Chat"}
+        aria-expanded={isOpen}
+        aria-controls="galaxy-network-chat-panel"
       >
         {isOpen ? (
-          <X className="w-5 h-5 text-white" />
+          <X className="w-5 h-5 text-white" aria-hidden="true" />
         ) : (
-          <Radio className="w-5 h-5 text-white" />
+          <Radio className="w-5 h-5 text-white" aria-hidden="true" />
         )}
 
         {/* Pulse ring when closed */}

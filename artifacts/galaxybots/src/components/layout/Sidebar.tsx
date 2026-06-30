@@ -433,6 +433,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
 
       {/* Desktop sidebar */}
       <aside
+        id="galaxy-sidebar"
         className={cn(
           "fixed top-14 left-0 h-[calc(100vh-3.5rem)] z-40 flex flex-col transition-all duration-300",
           "hidden lg:flex",
@@ -446,6 +447,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
 
       {/* Mobile drawer */}
       <aside
+        id="mobile-nav"
         className={cn(
           "fixed top-0 left-0 h-full w-72 z-50 flex flex-col shadow-2xl transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"

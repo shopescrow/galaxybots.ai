@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Zap, LayoutGrid } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -33,6 +33,7 @@ interface DistrictCardProps {
 
 function DistrictCard({ group, idx, prefersReducedMotion }: DistrictCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [, navigate] = useLocation();
   const d = dco(group.color);
   const Icon = group.icon;
   const quickLinks = group.children.slice(0, 5);
@@ -45,6 +46,8 @@ function DistrictCard({ group, idx, prefersReducedMotion }: DistrictCardProps) {
       initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: idx * 0.055, ease: [0.16, 1, 0.3, 1] }}
+      role="group"
+      aria-label={`${group.label} District`}
       className="relative rounded-2xl p-5 flex flex-col gap-4 overflow-hidden"
       style={{
         background: `linear-gradient(145deg, hsl(230 48% 5%) 0%, ${d.gradientStop} 100%)`,
@@ -70,7 +73,19 @@ function DistrictCard({ group, idx, prefersReducedMotion }: DistrictCardProps) {
       />
 
       {/* District header */}
-      <div className="flex items-center gap-3 relative z-10">
+      <div
+        className="flex items-center gap-3 relative z-10"
+        role="button"
+        tabIndex={0}
+        aria-label={`Go to ${group.label} District`}
+        onClick={() => navigate(group.children[0].href)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            navigate(group.children[0].href);
+          }
+        }}
+      >
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300"
           style={{
@@ -101,16 +116,18 @@ function DistrictCard({ group, idx, prefersReducedMotion }: DistrictCardProps) {
       <div className="h-px" style={{ background: `${d.border}` }} />
 
       {/* Quick links */}
-      <div className="flex flex-col gap-0.5 relative z-10">
+      <div className="flex flex-col gap-0.5 relative z-10" role="list" aria-label={`${group.label} pages`}>
         {quickLinks.map((child) => (
           <Link
             key={child.href}
             href={child.href}
+            role="listitem"
             className="group/link flex items-center justify-between px-2.5 py-1.5 rounded-lg font-tech text-sm text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-white/[0.04]"
           >
             <span className="truncate">{child.label}</span>
             <ArrowUpRight
               className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover/link:opacity-50 transition-opacity duration-150 ml-1"
+              aria-hidden="true"
               style={{ color: d.color }}
             />
           </Link>

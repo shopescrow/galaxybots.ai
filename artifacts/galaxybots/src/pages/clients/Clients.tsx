@@ -172,36 +172,73 @@ export default function Clients() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit max-w-full overflow-x-auto">
-          {[
+        {(() => {
+          const tabItems = [
             { key: "clients", label: "All Clients", count: clients?.data?.length || 0 },
-            ...(isPlatformAdmin ? [{ key: "aeo-health", label: "AEO Health", count: null }] : []),
+            ...(isPlatformAdmin ? [{ key: "aeo-health", label: "AEO Health", count: null as null }] : []),
             { key: "partners", label: "Partner Referrals", count: referrals.length },
-          ].map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key as typeof tab)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all duration-200 min-h-[44px] whitespace-nowrap ${
-                tab === t.key
-                  ? "bg-primary/20 text-primary border border-primary/30"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+          ];
+          const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, idx: number) => {
+            if (e.key === "ArrowRight") {
+              e.preventDefault();
+              const next = (idx + 1) % tabItems.length;
+              setTab(tabItems[next].key as typeof tab);
+              (e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next])?.focus();
+            } else if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              const prev = (idx - 1 + tabItems.length) % tabItems.length;
+              setTab(tabItems[prev].key as typeof tab);
+              (e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[prev])?.focus();
+            } else if (e.key === "Home") {
+              e.preventDefault();
+              setTab(tabItems[0].key as typeof tab);
+              (e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[0])?.focus();
+            } else if (e.key === "End") {
+              e.preventDefault();
+              setTab(tabItems[tabItems.length - 1].key as typeof tab);
+              (e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[tabItems.length - 1])?.focus();
+            }
+          };
+          return (
+            <div
+              role="tablist"
+              aria-label="Client views"
+              className="flex gap-1 mb-8 p-1 rounded-xl bg-card border border-border/40 w-fit max-w-full overflow-x-auto"
             >
-              {t.label}
-              {t.count !== null && (
-                <span className={`text-xs px-2 py-0.5 rounded-full ${tab === t.key ? "bg-primary/20" : "bg-secondary"}`}>
-                  {t.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+              {tabItems.map((t, idx) => (
+                <button
+                  key={t.key}
+                  role="tab"
+                  id={`tab-${t.key}`}
+                  aria-selected={tab === t.key}
+                  aria-controls={`panel-${t.key}`}
+                  tabIndex={tab === t.key ? 0 : -1}
+                  onClick={() => setTab(t.key as typeof tab)}
+                  onKeyDown={(e) => handleTabKeyDown(e, idx)}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-tech transition-all duration-200 min-h-[44px] whitespace-nowrap ${
+                    tab === t.key
+                      ? "bg-primary/20 text-primary border border-primary/30"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                  {t.count !== null && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${tab === t.key ? "bg-primary/20" : "bg-secondary"}`}>
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Clients Tab */}
         {tab === "clients" && (
-          isLoading ? (
-            <ClientsCardsSkeleton />
-          ) : clients?.data?.length === 0 ? (
+          <div role="tabpanel" id="panel-clients" aria-labelledby="tab-clients">
+            {isLoading ? (
+              <ClientsCardsSkeleton />
+            ) : clients?.data?.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-border/40">
               <Users className="w-12 h-12 text-muted-foreground opacity-20 mb-4" />
               <h3 className="text-lg font-display font-bold mb-2">No Active Deployments</h3>
@@ -273,19 +310,27 @@ export default function Clients() {
               ))}
             </div>
           )
+          }
+          </div>
         )}
 
         {/* AEO Health Tab — platform admins only */}
-        {tab === "aeo-health" && isPlatformAdmin && <AeoHealthPanel />}
+        {tab === "aeo-health" && isPlatformAdmin && (
+          <div role="tabpanel" id="panel-aeo-health" aria-labelledby="tab-aeo-health">
+            <AeoHealthPanel />
+          </div>
+        )}
 
         {/* Partners Tab */}
         {tab === "partners" && (
-          <PartnersTab
-            referrals={referrals}
-            referralsLoading={referralsLoading}
-            bingolingoReferrals={bingolingoReferrals}
-            prefersReducedMotion={!!prefersReducedMotion}
-          />
+          <div role="tabpanel" id="panel-partners" aria-labelledby="tab-partners">
+            <PartnersTab
+              referrals={referrals}
+              referralsLoading={referralsLoading}
+              bingolingoReferrals={bingolingoReferrals}
+              prefersReducedMotion={!!prefersReducedMotion}
+            />
+          </div>
         )}
       </div>
     </AppLayout>

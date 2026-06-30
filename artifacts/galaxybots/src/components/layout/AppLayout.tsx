@@ -143,7 +143,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col w-full overflow-x-hidden">
-      <TopBar onSidebarToggle={toggle} onMobileToggle={toggleMobile} onOpenPalette={() => setPaletteOpen(true)} />
+      <TopBar onSidebarToggle={toggle} onMobileToggle={toggleMobile} onOpenPalette={() => setPaletteOpen(true)} sidebarCollapsed={collapsed} mobileOpen={mobileOpen} />
       <ResumeSetupPrompt />
 
       <Sidebar

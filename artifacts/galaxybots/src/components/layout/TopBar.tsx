@@ -15,6 +15,8 @@ interface TopBarProps {
   onSidebarToggle: () => void;
   onMobileToggle: () => void;
   onOpenPalette?: () => void;
+  sidebarCollapsed?: boolean;
+  mobileOpen?: boolean;
 }
 
 function UserAvatar() {
@@ -160,7 +162,7 @@ function OnboardingProgressBadge() {
           border: "1px solid hsl(270 80% 60% / 0.25)",
           color: "hsl(270 80% 75%)",
         }}
-        title={`Setup ${percent}% complete`}
+        aria-label={`Setup ${percent}% complete — click to continue`}
       >
         <CheckCircle className="w-3.5 h-3.5" />
         <span>{percent}%</span>
@@ -170,7 +172,7 @@ function OnboardingProgressBadge() {
   );
 }
 
-export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBarProps) {
+export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette, sidebarCollapsed, mobileOpen }: TopBarProps) {
   const { preferences } = useUserPreferences();
   const { partner } = usePartner();
   const { user } = useAuth();
@@ -192,18 +194,22 @@ export function TopBar({ onSidebarToggle, onMobileToggle, onOpenPalette }: TopBa
       <button
         onClick={onMobileToggle}
         className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors"
-        aria-label="Toggle navigation"
+        aria-label="Toggle navigation menu"
+        aria-expanded={mobileOpen ?? false}
+        aria-controls="mobile-nav"
       >
-        <Menu className="w-5 h-5" />
+        <Menu className="w-5 h-5" aria-hidden="true" />
       </button>
 
       {/* Desktop sidebar toggle */}
       <button
         onClick={onSidebarToggle}
         className="hidden lg:flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 min-w-[40px] min-h-[40px] items-center justify-center transition-colors"
-        aria-label="Toggle sidebar"
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!sidebarCollapsed}
+        aria-controls="galaxy-sidebar"
       >
-        <Menu className="w-5 h-5" />
+        <Menu className="w-5 h-5" aria-hidden="true" />
       </button>
 
       {/* Logo */}

@@ -5,4 +5,15 @@ import { installGlobalErrorReporter } from "./services/guardian-reporter";
 
 installGlobalErrorReporter();
 
-createRoot(document.getElementById("root")!).render(<App />);
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);
+
+if (import.meta.env.DEV) {
+  import("@axe-core/react").then(({ default: axe }) => {
+    import("react").then((React) => {
+      import("react-dom").then((ReactDOM) => {
+        axe(React, ReactDOM, 1000);
+      });
+    });
+  });
+}
