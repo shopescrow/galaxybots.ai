@@ -37,6 +37,8 @@ import {
   evaluateShadowPromotionForClient,
   getClientsWithShadowTelemetry,
 } from "../jobs/model-reputation.js";
+import { runDataRetention } from "../jobs/data-retention.js";
+import { runRollupRefresh } from "../jobs/rollup-refresh.js";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -45,6 +47,8 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export const QUEUE_MEMORY_BACKFILL  = "sweep:memory-embedding-backfill";
 export const QUEUE_EPISODIC_MEMORY  = "sweep:episodic-memory";
 export const QUEUE_MODEL_REPUTATION = "sweep:model-reputation";
+export const QUEUE_DATA_RETENTION   = "sweep:data-retention";
+export const QUEUE_ROLLUP_REFRESH   = "sweep:rollup-refresh";
 export const QUEUE_DLQ              = "sweep:dlq";
 
 // ── Job name constants ─────────────────────────────────────────────────────
@@ -322,12 +326,79 @@ function createModelReputationQueue(
   return { queue, worker };
 }
 
+// ── Data-retention queue ──────────────────────────────────────────────────
+//
+// Single global job (no fanout) — retention runs DELETE on the DB directly
+// and is naturally serialised through the table-lock mechanism.
+
+function createDataRetentionQueue(
+  connection: NonNullable<ReturnType<typeof getBullConnection>>,
+  dlqQueue: Queue,
+) {
+  const queue = new Queue(QUEUE_DATA_RETENTION, { connection });
+
+  const worker = new Worker(
+    QUEUE_DATA_RETENTION,
+    async () => {
+      await runDataRetention();
+    },
+    { connection, concurrency: 1 },
+  );
+
+  worker.on("failed", async (job, err) => {
+    console.error(
+      `[sweep:data-retention] Job ${job?.id} failed (attempt ${job?.attemptsMade}): ${errMsg(err)}`,
+    );
+    if (job && job.attemptsMade >= (job.opts?.attempts ?? defaultJobOpts.attempts)) {
+      await parkInDlq(dlqQueue, job, err);
+    }
+  });
+
+  return { queue, worker };
+}
+
+// ── Rollup-refresh queue ──────────────────────────────────────────────────
+//
+// Single global job — computes yesterday's aggregates into the daily rollup
+// tables so dashboard queries stop scanning raw event rows.
+
+function createRollupRefreshQueue(
+  connection: NonNullable<ReturnType<typeof getBullConnection>>,
+  dlqQueue: Queue,
+) {
+  const queue = new Queue(QUEUE_ROLLUP_REFRESH, { connection });
+
+  const worker = new Worker(
+    QUEUE_ROLLUP_REFRESH,
+    async () => {
+      await runRollupRefresh();
+    },
+    { connection, concurrency: 1 },
+  );
+
+  worker.on("failed", async (job, err) => {
+    console.error(
+      `[sweep:rollup-refresh] Job ${job?.id} failed (attempt ${job?.attemptsMade}): ${errMsg(err)}`,
+    );
+    if (job && job.attemptsMade >= (job.opts?.attempts ?? defaultJobOpts.attempts)) {
+      await parkInDlq(dlqQueue, job, err);
+    }
+  });
+
+  return { queue, worker };
+}
+
 // ── Register cluster-safe repeat triggers ─────────────────────────────────
+
+const DATA_RETENTION_EVERY_MS  = 24 * 60 * 60 * 1000; // 24 h
+const ROLLUP_REFRESH_EVERY_MS  = 24 * 60 * 60 * 1000; // 24 h
 
 async function registerRepeatTriggers(
   memQueue:        Queue,
   episodicQueue:   Queue,
   reputationQueue: Queue,
+  retentionQueue:  Queue,
+  rollupQueue:     Queue,
 ): Promise<void> {
   await memQueue.upsertJobScheduler(
     "memory-backfill-trigger",
@@ -345,6 +416,18 @@ async function registerRepeatTriggers(
     "model-reputation-trigger",
     { every: MODEL_REPUTATION_EVERY_MS },
     { name: JOB_FANOUT, opts: defaultJobOpts },
+  );
+
+  await retentionQueue.upsertJobScheduler(
+    "data-retention-trigger",
+    { every: DATA_RETENTION_EVERY_MS },
+    { name: "run", opts: defaultJobOpts },
+  );
+
+  await rollupQueue.upsertJobScheduler(
+    "rollup-refresh-trigger",
+    { every: ROLLUP_REFRESH_EVERY_MS },
+    { name: "run", opts: defaultJobOpts },
   );
 
   console.log("[sweep-queues] Cluster-safe repeat triggers registered");
@@ -376,15 +459,32 @@ export async function startSweepQueues(): Promise<boolean> {
   const memResult        = createMemoryBackfillQueue(connection, dlqQueue);
   const episodicResult   = createEpisodicMemoryQueue(connection, dlqQueue);
   const reputationResult = createModelReputationQueue(connection, dlqQueue);
+  const retentionResult  = createDataRetentionQueue(connection, dlqQueue);
+  const rollupResult     = createRollupRefreshQueue(connection, dlqQueue);
 
-  queues  = [dlqQueue, memResult.queue, episodicResult.queue, reputationResult.queue];
-  workers = [memResult.worker, episodicResult.worker, reputationResult.worker];
+  queues  = [
+    dlqQueue,
+    memResult.queue,
+    episodicResult.queue,
+    reputationResult.queue,
+    retentionResult.queue,
+    rollupResult.queue,
+  ];
+  workers = [
+    memResult.worker,
+    episodicResult.worker,
+    reputationResult.worker,
+    retentionResult.worker,
+    rollupResult.worker,
+  ];
 
   try {
     await registerRepeatTriggers(
       memResult.queue,
       episodicResult.queue,
       reputationResult.queue,
+      retentionResult.queue,
+      rollupResult.queue,
     );
   } catch (err) {
     console.error(
@@ -401,7 +501,7 @@ export async function startSweepQueues(): Promise<boolean> {
   }
 
   console.log(
-    "[sweep-queues] Distributed sweep queues started (memory-backfill, episodic-memory, model-reputation)",
+    "[sweep-queues] Distributed sweep queues started (memory-backfill, episodic-memory, model-reputation, data-retention, rollup-refresh)",
   );
   return true;
 }

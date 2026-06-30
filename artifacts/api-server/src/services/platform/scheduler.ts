@@ -64,6 +64,8 @@ import { checkMoltbookHeartbeats } from "./jobs/check-moltbook-heartbeats";
 import { runAssetManagementCycle } from "./jobs/asset-lifecycle";
 import { runDemandRefresh } from "./jobs/demand-refresh";
 import { runMetricRollupsAndSloEval } from "./jobs/compute-metric-rollups";
+import { runDataRetention } from "./jobs/data-retention";
+import { runRollupRefresh } from "./jobs/rollup-refresh";
 
 export { checkApprovalSLAs };
 export { checkActivationNurture };
@@ -148,6 +150,8 @@ const lowFreqJobs: Job[] = [
   { name: "monthly-compliance-reports", fn: runMonthlyComplianceReports },
   { name: "asset-management-cycle", fn: runAssetManagementCycle },
   { name: "demand-refresh", fn: runDemandRefresh },
+  { name: "data-retention", fn: async () => { if (!areSweepQueuesActive()) await runDataRetention(); } },
+  { name: "rollup-refresh", fn: async () => { if (!areSweepQueuesActive()) await runRollupRefresh(); } },
 ];
 
 const running = new Set<string>();

@@ -15,6 +15,8 @@ import {
   botSlaOverridesTable,
   modelSelectionTelemetryTable,
   modelReputationTable,
+  llmUsageDailyRollupTable,
+  modelTelemetryDailyRollupTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -47,6 +49,14 @@ function parseDateRange(query: { dateFrom?: string; dateTo?: string }) {
   return { dateFrom, dateTo };
 }
 
+// Returns true when the entire query window is at least 2 days in the past,
+// meaning the rollup tables have complete data for the requested range.
+function canUseRollup(dateFrom?: Date, dateTo?: Date): boolean {
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const effectiveTo = dateTo ?? new Date();
+  return effectiveTo < twoDaysAgo;
+}
+
 router.get("/analytics/spend", async (req, res): Promise<void> => {
   const clientId = req.user!.clientId;
   if (!clientId) { res.status(400).json({ error: "No client context" }); return; }
@@ -54,6 +64,77 @@ router.get("/analytics/spend", async (req, res): Promise<void> => {
   try {
     const { dateFrom, dateTo } = parseDateRange(req.query as Record<string, string>);
 
+    const monthlySpend = await getMonthlySpend(clientId);
+
+    // Use pre-aggregated rollup tables when the window is fully in the past
+    // (rollup worker runs at 24 h cadence, so data is complete after 2 days).
+    if (canUseRollup(dateFrom, dateTo)) {
+      const rollupConds: any[] = [eq(llmUsageDailyRollupTable.clientId, clientId)];
+      if (dateFrom) rollupConds.push(gte(llmUsageDailyRollupTable.rollupDate, dateFrom.toISOString().slice(0, 10)));
+      if (dateTo)   rollupConds.push(lte(llmUsageDailyRollupTable.rollupDate, dateTo.toISOString().slice(0, 10)));
+
+      const [rollupByModel, rollupOverTime, rollupByBot] = await Promise.all([
+        db.select({
+          model:            llmUsageDailyRollupTable.model,
+          totalCost:        sql<string>`SUM(${llmUsageDailyRollupTable.totalCostUsd})`,
+          totalPromptTokens: sql<number>`SUM(${llmUsageDailyRollupTable.promptTokens})`,
+          totalCompletionTokens: sql<number>`SUM(${llmUsageDailyRollupTable.completionTokens})`,
+          callCount:        sql<number>`SUM(${llmUsageDailyRollupTable.callCount})`,
+          avgLatencyMs:     sql<number>`AVG(${llmUsageDailyRollupTable.avgLatencyMs})`,
+        })
+          .from(llmUsageDailyRollupTable)
+          .where(and(...rollupConds))
+          .groupBy(llmUsageDailyRollupTable.model),
+
+        db.select({
+          date:        llmUsageDailyRollupTable.rollupDate,
+          totalCost:   sql<string>`SUM(${llmUsageDailyRollupTable.totalCostUsd})`,
+          totalTokens: sql<number>`SUM(${llmUsageDailyRollupTable.promptTokens} + ${llmUsageDailyRollupTable.completionTokens})`,
+          callCount:   sql<number>`SUM(${llmUsageDailyRollupTable.callCount})`,
+        })
+          .from(llmUsageDailyRollupTable)
+          .where(and(...rollupConds))
+          .groupBy(llmUsageDailyRollupTable.rollupDate)
+          .orderBy(llmUsageDailyRollupTable.rollupDate),
+
+        db.select({
+          botId:     llmUsageDailyRollupTable.botId,
+          totalCost: sql<string>`SUM(${llmUsageDailyRollupTable.totalCostUsd})`,
+          callCount: sql<number>`SUM(${llmUsageDailyRollupTable.callCount})`,
+        })
+          .from(llmUsageDailyRollupTable)
+          .where(and(...rollupConds))
+          .groupBy(llmUsageDailyRollupTable.botId),
+      ]);
+
+      const totalSpend = rollupByModel.reduce((s, m) => s + parseFloat(m.totalCost || "0"), 0);
+      res.json({
+        totalSpend:   Math.round(totalSpend * 1_000_000) / 1_000_000,
+        monthlySpend: Math.round(monthlySpend * 1_000_000) / 1_000_000,
+        spendByModel: rollupByModel.map((m) => ({
+          model:             m.model,
+          totalCost:         parseFloat(m.totalCost || "0"),
+          promptTokens:      Number(m.totalPromptTokens || 0),
+          completionTokens:  Number(m.totalCompletionTokens || 0),
+          callCount:         Number(m.callCount || 0),
+          avgLatencyMs:      Math.round(Number(m.avgLatencyMs || 0)),
+        })),
+        spendOverTime: rollupOverTime.map((d) => ({
+          date:       d.date,
+          totalCost:  parseFloat(d.totalCost || "0"),
+          totalTokens: Number(d.totalTokens || 0),
+          callCount:  Number(d.callCount || 0),
+        })),
+        spendByBot: rollupByBot.map((b) => ({
+          botId:     b.botId,
+          totalCost: parseFloat(b.totalCost || "0"),
+          callCount: Number(b.callCount || 0),
+        })),
+      });
+      return;
+    }
+
+    // Recent data (includes today or yesterday): scan raw table.
     const conditions: any[] = [eq(llmUsageLogTable.clientId, clientId)];
     if (dateFrom) conditions.push(gte(llmUsageLogTable.calledAt, dateFrom));
     if (dateTo) conditions.push(lte(llmUsageLogTable.calledAt, dateTo));
@@ -94,7 +175,6 @@ router.get("/analytics/spend", async (req, res): Promise<void> => {
       .groupBy(llmUsageLogTable.botId);
 
     const totalSpend = spendByModel.reduce((sum, m) => sum + parseFloat(m.totalCost || "0"), 0);
-    const monthlySpend = await getMonthlySpend(clientId);
 
     res.json({
       totalSpend: Math.round(totalSpend * 1_000_000) / 1_000_000,
