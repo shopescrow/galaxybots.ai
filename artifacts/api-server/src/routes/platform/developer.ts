@@ -360,9 +360,15 @@ router.post("/developer/webhook-test", async (req, res): Promise<void> => {
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
+      redirect: "manual",
     });
 
     clearTimeout(timeout);
+
+    if (response.status >= 300 && response.status < 400) {
+      res.status(400).json({ error: "URL must not redirect. Redirects are not followed to prevent SSRF." });
+      return;
+    }
 
     res.json({
       success: true,
