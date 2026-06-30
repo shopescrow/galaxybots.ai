@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, inArray, ne, and } from "drizzle-orm";
 import { executeSequentialDebate } from "../conductor/strategies";
+import { broadcastSSEToAll } from "../platform/sse.js";
 
 // ---------------------------------------------------------------------------
 // Goal conflict arbiter. Detects pairs of active goals that compete for the
@@ -179,6 +180,7 @@ function arbitrateViaPriority(conflict: GoalConflict): ArbitrationResult {
 
 /**
  * Resolve a single conflict: loser is suspended (deferred), winner proceeds.
+ * Emits a gaa_conflict_resolved SSE event to all admin-connected clients.
  */
 export async function resolveConflict(
   conflict: GoalConflict,
@@ -214,6 +216,19 @@ export async function resolveConflict(
     },
   });
 
+  broadcastSSEToAll("gaa_conflict_resolved", {
+    winnerId: result.winnerId,
+    loserId: result.loserId,
+    goalAId: conflict.goalA.id,
+    goalATitle: conflict.goalA.title,
+    goalBId: conflict.goalB.id,
+    goalBTitle: conflict.goalB.title,
+    conflictType: conflict.conflictType,
+    method: result.method,
+    reason: result.reason,
+    at: new Date().toISOString(),
+  });
+
   return result;
 }
 
@@ -221,6 +236,22 @@ export async function detectAndResolveConflicts(): Promise<number> {
   const conflicts = await detectConflicts();
   let resolved = 0;
   const touched = new Set<number>();
+
+  if (conflicts.length > 0) {
+    broadcastSSEToAll("gaa_conflicts_detected", {
+      count: conflicts.length,
+      conflicts: conflicts.map((c) => ({
+        goalAId: c.goalA.id,
+        goalATitle: c.goalA.title,
+        goalBId: c.goalB.id,
+        goalBTitle: c.goalB.title,
+        conflictType: c.conflictType,
+        overlap: c.overlap,
+      })),
+      at: new Date().toISOString(),
+    });
+  }
+
   for (const c of conflicts) {
     // Skip if either goal already deferred in this pass.
     if (touched.has(c.goalA.id) || touched.has(c.goalB.id)) continue;

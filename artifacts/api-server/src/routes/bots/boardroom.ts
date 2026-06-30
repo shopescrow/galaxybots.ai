@@ -1,13 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db, boardroomMessagesTable, botsTable } from "@workspace/db";
-import { desc, eq, and, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { PostBoardroomMessageBody, GetBoardroomMessagesResponse } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
+import { broadcastSSE } from "../../services/platform/sse";
 
 const router: IRouter = Router();
-
-const BOARDROOM_DIRECTORS = [1, 2, 3, 4, 5];
 
 function generateEncodedMessage(englishContent: string, botTitle: string): string {
   const prefix = botTitle.split(" ").map(w => w[0]).join("").toUpperCase();
@@ -40,8 +39,10 @@ router.post("/boardroom/messages", llmRateLimit, tenantFairShareConcurrency, asy
     return;
   }
 
+  const clientId = req.user!.clientId;
+
   const [ceoMsg] = await db.insert(boardroomMessagesTable).values({
-    clientId: req.user!.clientId,
+    clientId,
     role: "ceo",
     contentEncoded: `[CEO::${Buffer.from(body.data.content.substring(0, 40)).toString("base64")}]`,
     contentEnglish: body.data.content,
@@ -49,6 +50,8 @@ router.post("/boardroom/messages", llmRateLimit, tenantFairShareConcurrency, asy
     botTitle: "CEO / Architect",
     topic: body.data.content.substring(0, 50),
   }).returning();
+
+  broadcastSSE("boardroom_message", { clientId, message: ceoMsg });
 
   const allBots = await db.select().from(botsTable).limit(8);
   if (allBots.length === 0) {
@@ -79,7 +82,7 @@ The CEO has raised a topic. Respond with a brief, professional boardroom perspec
     const encodedContent = generateEncodedMessage(englishContent, bot.title);
 
     const [botMsg] = await db.insert(boardroomMessagesTable).values({
-      clientId: req.user!.clientId,
+      clientId,
       botId: bot.id,
       botName: bot.name,
       botTitle: bot.title,
@@ -89,6 +92,7 @@ The CEO has raised a topic. Respond with a brief, professional boardroom perspec
       topic: body.data.content.substring(0, 50),
     }).returning();
 
+    broadcastSSE("boardroom_message", { clientId, message: botMsg });
     responses.push(botMsg);
   }
 

@@ -22,6 +22,7 @@ import { seedFacelessVideoBots } from "./services/platform/seed-faceless-video-b
 import { pool, db, partnerRegistrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { initRedis, closeRedis } from "./services/scaling/redis-store";
+import { initPubSub, closePubSub } from "./services/platform/pubsub";
 import { rebuildRateLimiters } from "./middleware/rate-limit";
 import { startSweepQueues, stopSweepQueues } from "./services/platform/queue/sweep-queues";
 import { seedDefaultSlos } from "./services/observability/slo-evaluator";
@@ -565,6 +566,13 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
   }
 
   try {
+    await closePubSub();
+    console.log("[shutdown] Redis pub/sub subscriber closed");
+  } catch (err) {
+    console.error("[shutdown] Error closing pub/sub subscriber:", err);
+  }
+
+  try {
     await closeRedis();
     console.log("[shutdown] Redis shared store closed");
   } catch (err) {
@@ -578,6 +586,7 @@ async function gracefulShutdown(signal: string, server: ReturnType<typeof app.li
 const server = app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
   await initRedis();
+  await initPubSub();
   rebuildRateLimiters();
   await startSweepQueues();
   await ensureOllamaTables();

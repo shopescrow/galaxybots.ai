@@ -1,5 +1,6 @@
 import { db, gaaMemoryTable, type GaaMemory } from "@workspace/db";
 import { eq, and, lt, desc, sql } from "drizzle-orm";
+import { broadcastSSEToAll } from "../platform/sse.js";
 
 // ---------------------------------------------------------------------------
 // Multi-horizon memory. Lessons start in the "hot" tier; reinforced/high-
@@ -96,6 +97,7 @@ export async function recall(params: {
 /**
  * Promote memories across tiers based on reinforcement + confidence, and
  * expire stale warm memories. Run periodically by the GAA service.
+ * Emits SSE push events for each promotion so the frontend receives live updates.
  */
 export async function consolidateMemory(): Promise<{
   promotedToWarm: number;
@@ -115,7 +117,7 @@ export async function consolidateMemory(): Promise<{
         sql`${gaaMemoryTable.timesReinforced} >= ${HOT_PROMOTE_REINFORCEMENTS}`,
       ),
     )
-    .returning({ id: gaaMemoryTable.id });
+    .returning({ id: gaaMemoryTable.id, key: gaaMemoryTable.key, scope: gaaMemoryTable.scope, clientId: gaaMemoryTable.clientId });
 
   const warmToCold = await db
     .update(gaaMemoryTable)
@@ -127,7 +129,7 @@ export async function consolidateMemory(): Promise<{
         sql`${gaaMemoryTable.timesReinforced} >= 4`,
       ),
     )
-    .returning({ id: gaaMemoryTable.id });
+    .returning({ id: gaaMemoryTable.id, key: gaaMemoryTable.key, scope: gaaMemoryTable.scope, clientId: gaaMemoryTable.clientId });
 
   const expired = await db
     .delete(gaaMemoryTable)
@@ -138,6 +140,32 @@ export async function consolidateMemory(): Promise<{
       ),
     )
     .returning({ id: gaaMemoryTable.id });
+
+  const at = new Date().toISOString();
+
+  for (const m of hotToWarm) {
+    broadcastSSEToAll("gaa_memory_promoted", {
+      memoryId: m.id,
+      key: m.key,
+      fromTier: "hot",
+      toTier: "warm",
+      scope: m.scope,
+      clientId: m.clientId ?? null,
+      at,
+    });
+  }
+
+  for (const m of warmToCold) {
+    broadcastSSEToAll("gaa_memory_promoted", {
+      memoryId: m.id,
+      key: m.key,
+      fromTier: "warm",
+      toTier: "cold",
+      scope: m.scope,
+      clientId: m.clientId ?? null,
+      at,
+    });
+  }
 
   return {
     promotedToWarm: hotToWarm.length,

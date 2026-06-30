@@ -32,6 +32,8 @@ import {
   CheckCircle2,
   Gauge,
   Sparkles,
+  Database,
+  GitMerge,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SelfActualizationTab } from "./SelfActualizationTab";
@@ -44,6 +46,9 @@ import {
   useCreateGoal,
   useResolveEscalation,
   useRunTick,
+  useGaaSSE,
+  useGaaMemory,
+  useGaaConflicts,
 } from "@/hooks/use-gaa";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -60,6 +65,13 @@ const MODE_COLORS: Record<string, string> = {
   autonomous: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   agenda: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   mission: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",
+};
+
+const TIER_COLORS: Record<string, string> = {
+  hot: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  warm: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  cold: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+  permanent: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
 };
 
 function StatCard({
@@ -90,11 +102,18 @@ function StatCard({
 
 export default function GaaConsole() {
   const { toast } = useToast();
+
+  // Open SSE connection: invalidates memory/conflict queries in real-time
+  // when gaa_memory_promoted, gaa_conflicts_detected, gaa_conflict_resolved arrive.
+  useGaaSSE();
+
   const overview = useGaaOverview();
   const goals = useGaaGoals();
   const journal = useGaaJournal();
   const escalations = useGaaEscalations();
   const constitution = useGaaConstitution();
+  const memory = useGaaMemory();
+  const conflicts = useGaaConflicts();
   const createGoal = useCreateGoal();
   const resolveEscalation = useResolveEscalation();
   const runTick = useRunTick();
@@ -292,6 +311,17 @@ export default function GaaConsole() {
               )}
             </TabsTrigger>
             <TabsTrigger value="journal">Journal</TabsTrigger>
+            <TabsTrigger value="memory">
+              <Database className="mr-1.5 h-3.5 w-3.5" />
+              Memory
+            </TabsTrigger>
+            <TabsTrigger value="conflicts">
+              <GitMerge className="mr-1.5 h-3.5 w-3.5" />
+              Conflicts
+              {(conflicts.data?.length ?? 0) > 0 && (
+                <Badge className="ml-2 bg-amber-500/20 text-amber-300">{conflicts.data!.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="constitution">Constitution</TabsTrigger>
             <TabsTrigger value="self-actualization">
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -402,6 +432,79 @@ export default function GaaConsole() {
                 ))}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Memory — updated in real-time via useGaaSSE when memories are promoted */}
+          <TabsContent value="memory" className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-white/40 uppercase tracking-wide">
+                Live · updated via SSE on tier promotion
+              </p>
+              {memory.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-white/30" />}
+            </div>
+            {memory.isLoading && <Loader2 className="h-5 w-5 animate-spin text-white/50" />}
+            {memory.data?.length === 0 && (
+              <p className="text-sm text-white/50">No memories recorded yet.</p>
+            )}
+            {memory.data?.map((m) => (
+              <Card key={m.id} className="border-white/10 bg-white/5">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs text-white/60 bg-white/5 px-2 py-0.5 rounded">{m.key}</span>
+                        <Badge variant="outline" className={TIER_COLORS[m.tier] ?? ""}>{m.tier}</Badge>
+                        <Badge variant="outline" className="text-xs">{m.scope}</Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-white/80 line-clamp-2">{m.content}</p>
+                    </div>
+                    <div className="shrink-0 text-right text-xs text-white/30">
+                      <div>conf {m.confidence}%</div>
+                      <div>×{m.timesReinforced}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+
+          {/* Conflicts — updated in real-time via useGaaSSE when conflicts are detected/resolved */}
+          <TabsContent value="conflicts" className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-white/40 uppercase tracking-wide">
+                Live · updated via SSE on conflict detection
+              </p>
+              {conflicts.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-white/30" />}
+            </div>
+            {conflicts.isLoading && <Loader2 className="h-5 w-5 animate-spin text-white/50" />}
+            {conflicts.data?.length === 0 && (
+              <p className="text-sm text-white/50">No active goal conflicts detected.</p>
+            )}
+            {conflicts.data?.map((c, i) => (
+              <Card key={i} className="border-amber-500/20 bg-amber-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GitMerge className="h-4 w-4 text-amber-400" />
+                    <Badge variant="outline" className="border-amber-500/30 text-amber-300 text-xs">
+                      {c.conflictType}
+                    </Badge>
+                    <span className="text-xs text-white/30">
+                      {Math.round(c.overlap * 100)}% overlap
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded bg-white/5 p-2">
+                      <p className="text-[10px] text-white/30 uppercase tracking-wide mb-1">Goal A #{c.goalAId}</p>
+                      <p className="text-sm text-white/80">{c.goalATitle}</p>
+                    </div>
+                    <div className="rounded bg-white/5 p-2">
+                      <p className="text-[10px] text-white/30 uppercase tracking-wide mb-1">Goal B #{c.goalBId}</p>
+                      <p className="text-sm text-white/80">{c.goalBTitle}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </TabsContent>
 
           {/* Constitution */}

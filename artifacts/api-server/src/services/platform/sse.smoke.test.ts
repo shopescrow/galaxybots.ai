@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { createTestUser, cleanupTestUser, createSSEClient, type TestUser } from "../../test-utils";
-import { addSSEClient, broadcastSSE, stopHeartbeat, closeAllSSEClients, getSSEClientCount } from "./sse";
+import { addSSEClient, broadcastSSE, broadcastSSEToAll, stopHeartbeat, closeAllSSEClients, getSSEClientCount } from "./sse";
 import app from "../../app";
 import http from "http";
 
@@ -80,6 +80,36 @@ describe("SSE smoke tests", () => {
 
     expect(chunks1.length).toBe(1);
     expect(chunks2.length).toBe(0);
+  });
+
+  it("should deliver platform events to admin clients but not to non-admin clients", () => {
+    const adminChunks: string[] = [];
+    const nonAdminChunks: string[] = [];
+
+    const adminRes = {
+      write: (data: string) => { adminChunks.push(data); return true; },
+      on: () => adminRes,
+    } as unknown as import("express").Response;
+
+    const nonAdminRes = {
+      write: (data: string) => { nonAdminChunks.push(data); return true; },
+      on: () => nonAdminRes,
+    } as unknown as import("express").Response;
+
+    addSSEClient(`sse-admin-${Date.now()}`, adminRes, 200001, { subscribeToPlatform: true });
+    addSSEClient(`sse-nonadmin-${Date.now()}`, nonAdminRes, 200002, { subscribeToPlatform: false });
+
+    broadcastSSEToAll("gaa_memory_promoted", {
+      memoryId: 42,
+      key: "test.key",
+      fromTier: "hot",
+      toTier: "warm",
+      at: new Date().toISOString(),
+    });
+
+    expect(adminChunks.length).toBe(1);
+    expect(adminChunks[0]).toContain("gaa_memory_promoted");
+    expect(nonAdminChunks.length).toBe(0);
   });
 
   it("should prune dead clients during heartbeat tick", async () => {

@@ -452,7 +452,10 @@ You have been assigned an ongoing monitoring responsibility. Produce a professio
 router.get("/events/background", (req, res) => {
   const sseId = `sse-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   const tenantClientId = req.user!.clientId;
-  const accepted = addSSEClient(sseId, res, tenantClientId);
+  const userRole = req.user!.role;
+  const isAdmin = userRole === "owner";
+
+  const accepted = addSSEClient(sseId, res, tenantClientId, { subscribeToPlatform: isAdmin });
   if (!accepted) {
     res.status(503).json({ error: "Service Unavailable", message: "Too many SSE connections" });
     return;
@@ -464,7 +467,7 @@ router.get("/events/background", (req, res) => {
     "Connection": "keep-alive",
   });
 
-  res.write(`event: connected\ndata: ${JSON.stringify({ clientId: sseId })}\n\n`);
+  res.write(`event: connected\ndata: ${JSON.stringify({ clientId: sseId, isAdmin })}\n\n`);
 
   req.on("close", () => {
     res.end();

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef, useEffect } from "react";
 import {
   gaaGet,
   gaaPost,
@@ -18,6 +19,8 @@ import {
   type SelfActMetricRow,
 } from "@/lib/gaa-fetch";
 
+const SSE_ENDPOINT = "/api/events/background";
+
 const keys = {
   overview: ["gaa", "overview"] as const,
   goals: (status?: string) => ["gaa", "goals", status ?? "all"] as const,
@@ -25,6 +28,8 @@ const keys = {
   escalations: (status?: string) =>
     ["gaa", "escalations", status ?? "all"] as const,
   constitution: ["gaa", "constitution"] as const,
+  memory: ["gaa", "memory"] as const,
+  conflicts: ["gaa", "conflicts"] as const,
   selfAct: {
     overview: ["gaa", "self-act", "overview"] as const,
     capability: ["gaa", "self-act", "capability"] as const,
@@ -35,6 +40,110 @@ const keys = {
     metrics: ["gaa", "self-act", "metrics"] as const,
   },
 };
+
+/**
+ * Opens a shared SSE connection for GAA real-time events.
+ * Invalidates the memory query on gaa_memory_promoted and the
+ * conflicts query on gaa_conflicts_detected / gaa_conflict_resolved.
+ * Admin-only: the backend gates platform-channel events on role.
+ */
+export function useGaaSSE() {
+  const queryClient = useQueryClient();
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (esRef.current) return;
+
+    const es = new EventSource(SSE_ENDPOINT);
+    esRef.current = es;
+
+    const handleMemory = () => {
+      queryClient.invalidateQueries({ queryKey: keys.memory });
+    };
+    const handleConflicts = () => {
+      queryClient.invalidateQueries({ queryKey: keys.conflicts });
+      queryClient.invalidateQueries({ queryKey: ["gaa", "goals"] });
+    };
+
+    es.addEventListener("gaa_memory_promoted", handleMemory);
+    es.addEventListener("gaa_conflicts_detected", handleConflicts);
+    es.addEventListener("gaa_conflict_resolved", handleConflicts);
+
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    es.onerror = () => {
+      es.close();
+      esRef.current = null;
+      retryTimeout = setTimeout(() => {
+        if (!esRef.current) {
+          const next = new EventSource(SSE_ENDPOINT);
+          esRef.current = next;
+          next.addEventListener("gaa_memory_promoted", handleMemory);
+          next.addEventListener("gaa_conflicts_detected", handleConflicts);
+          next.addEventListener("gaa_conflict_resolved", handleConflicts);
+          next.onerror = () => {
+            next.close();
+            esRef.current = null;
+          };
+        }
+      }, 5000);
+    };
+
+    return () => {
+      if (retryTimeout) clearTimeout(retryTimeout);
+      es.close();
+      esRef.current = null;
+    };
+  }, [queryClient]);
+}
+
+export type GaaMemoryRow = {
+  id: number;
+  key: string;
+  content: string;
+  tier: string;
+  scope: string;
+  clientId: number | null;
+  confidence: number;
+  timesReinforced: number;
+  updatedAt: string;
+};
+
+export type GaaConflictRow = {
+  goalAId: number;
+  goalATitle: string;
+  goalBId: number;
+  goalBTitle: string;
+  conflictType: string;
+  overlap: number;
+};
+
+/**
+ * Fetches GAA memory. Invalidated in real-time by useGaaSSE when
+ * gaa_memory_promoted events arrive — no polling needed.
+ */
+export function useGaaMemory(scope?: "platform" | "client", clientId?: number) {
+  return useQuery({
+    queryKey: [...keys.memory, scope, clientId] as const,
+    queryFn: () => {
+      const params: Record<string, string> = {};
+      if (scope) params.scope = scope;
+      if (clientId != null) params.clientId = String(clientId);
+      return gaaGet<GaaMemoryRow[]>("/memory", params);
+    },
+  });
+}
+
+/**
+ * Fetches active goal conflicts. Invalidated in real-time by useGaaSSE when
+ * gaa_conflicts_detected / gaa_conflict_resolved events arrive — no polling needed.
+ */
+export function useGaaConflicts() {
+  return useQuery({
+    queryKey: keys.conflicts,
+    queryFn: () => gaaGet<GaaConflictRow[]>("/conflicts"),
+  });
+}
 
 export function useGaaOverview() {
   return useQuery({
