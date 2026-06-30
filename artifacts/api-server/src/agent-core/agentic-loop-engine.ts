@@ -30,6 +30,8 @@ import { isCircuitOpen, recordCircuitFailure, recordCircuitSuccess } from "./cir
 import { agentMetrics } from "./metrics.js";
 import type { AgenticEvent, AgenticLoopResult } from "../tools/agentic-loop.js";
 import { emitBotHandoffRequest } from "../services/platform/jobs/bot-handoff.js";
+import { getTracer, setSpanError, SpanStatusCode } from "../lib/tracing.js";
+import { context as otelCtx } from "@opentelemetry/api";
 
 const CIRCUIT_KEY = "llm-primary";
 
@@ -150,6 +152,30 @@ Return a JSON object with these fields (all scores 0.0–1.0):
 }
 
 export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): Promise<AgenticLoopResult> {
+  const tracer = getTracer();
+  const { context } = options;
+
+  return tracer.startActiveSpan("agentic_loop.run", async (rootSpan) => {
+    rootSpan.setAttributes({
+      "session.id": String(context.sessionId ?? ""),
+      "client.id": String(context.clientId ?? ""),
+      "bot.id": String(context.botId ?? ""),
+      "bot.name": context.botName ?? "",
+    });
+    try {
+      const result = await _runAgenticLoopEngine(options, rootSpan);
+      rootSpan.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (err) {
+      setSpanError(rootSpan, err);
+      throw err;
+    } finally {
+      rootSpan.end();
+    }
+  });
+}
+
+async function _runAgenticLoopEngine(options: AgenticLoopEngineOptions, rootSpan: import("@opentelemetry/api").Span): Promise<AgenticLoopResult> {
   const startMs = Date.now();
 
   // Resolve injected ports — fall back to module-level singletons
@@ -522,47 +548,90 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
 
     let normalized: NormalizedCompletion;
     try {
-      if (options.deps?.llmProvider && options.deps.llmProvider.isAvailable()) {
-        // ── Injected LLMProvider path (e.g. GLM52Adapter) ──────────────────────
-        type PortTools = Parameters<LLMProvider["complete"]>[0]["tools"];
-        const portResult = await options.deps.llmProvider.complete({
-          model: config.model,
-          messages: trimmed as Parameters<LLMProvider["complete"]>[0]["messages"],
-          maxTokens,
-          tools: tools.length > 0 ? tools as unknown as PortTools : undefined,
-          clientId: context.clientId,
-          botId: context.botId,
-          sessionId: context.sessionId ? Number(context.sessionId) : undefined,
-          conversationId: context.conversationId ? Number(context.conversationId) : undefined,
+      const tracer = getTracer();
+      normalized = await tracer.startActiveSpan("llm.completion", async (llmSpan) => {
+        const llmStart = Date.now();
+        llmSpan.setAttributes({
+          "llm.model": config.model,
+          "bot.id": String(context.botId ?? ""),
+          "bot.name": context.botName ?? "",
+          "session.id": String(context.sessionId ?? ""),
+          "llm.iteration": iteration,
         });
-        cumulativeTokens += portResult.promptTokens + portResult.completionTokens;
-        totalCost = totalCost.add(Cost.ofCents(portResult.costCents));
-        normalized = { content: portResult.content, tool_calls: portResult.tool_calls };
-      } else {
-        // ── Default OpenAI / callWithFallback path ─────────────────────────────
-        const result = await callWithFallback({
-          model: config.model,
-          messages: trimmed,
-          maxCompletionTokens: maxTokens,
-          tools: tools.length > 0 ? tools : undefined,
-          clientId: context.clientId,
-          botId: context.botId,
-          sessionId: context.sessionId ? Number(context.sessionId) : undefined,
-          conversationId: context.conversationId ? Number(context.conversationId) : undefined,
-        });
-        const completion = result.completion;
-        const usage = completion.usage;
-        if (usage) {
-          cumulativeTokens += (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0);
-          const costCents = Math.ceil(((usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)) / 1000 * 0.15);
-          totalCost = totalCost.add(Cost.ofCents(costCents));
+        rootSpan.addEvent("llm.call.start", { model: config.model, iteration });
+        try {
+          let result: NormalizedCompletion;
+          if (options.deps?.llmProvider && options.deps.llmProvider.isAvailable()) {
+            // ── Injected LLMProvider path (e.g. GLM52Adapter) ──────────────────────
+            type PortTools = Parameters<LLMProvider["complete"]>[0]["tools"];
+            const portResult = await options.deps.llmProvider.complete({
+              model: config.model,
+              messages: trimmed as Parameters<LLMProvider["complete"]>[0]["messages"],
+              maxTokens,
+              tools: tools.length > 0 ? tools as unknown as PortTools : undefined,
+              clientId: context.clientId,
+              botId: context.botId,
+              sessionId: context.sessionId ? Number(context.sessionId) : undefined,
+              conversationId: context.conversationId ? Number(context.conversationId) : undefined,
+            });
+            const promptTok = portResult.promptTokens;
+            const completionTok = portResult.completionTokens;
+            cumulativeTokens += promptTok + completionTok;
+            totalCost = totalCost.add(Cost.ofCents(portResult.costCents));
+            llmSpan.setAttributes({
+              "llm.prompt_tokens": promptTok,
+              "llm.completion_tokens": completionTok,
+              "llm.cost_usd": portResult.costCents / 100,
+              "llm.latency_ms": Date.now() - llmStart,
+              "llm.success": true,
+            });
+            result = { content: portResult.content, tool_calls: portResult.tool_calls };
+          } else {
+            // ── Default OpenAI / callWithFallback path ─────────────────────────────
+            const fbResult = await callWithFallback({
+              model: config.model,
+              messages: trimmed,
+              maxCompletionTokens: maxTokens,
+              tools: tools.length > 0 ? tools : undefined,
+              clientId: context.clientId,
+              botId: context.botId,
+              sessionId: context.sessionId ? Number(context.sessionId) : undefined,
+              conversationId: context.conversationId ? Number(context.conversationId) : undefined,
+            });
+            const completion = fbResult.completion;
+            const usage = completion.usage;
+            const promptTok = usage?.prompt_tokens ?? 0;
+            const completionTok = usage?.completion_tokens ?? 0;
+            if (usage) {
+              cumulativeTokens += promptTok + completionTok;
+              const costCents = Math.ceil((promptTok + completionTok) / 1000 * 0.15);
+              totalCost = totalCost.add(Cost.ofCents(costCents));
+            }
+            llmSpan.setAttributes({
+              "llm.model_used": fbResult.model,
+              "llm.provider": fbResult.provider,
+              "llm.fallback_used": fbResult.fallbackUsed,
+              "llm.prompt_tokens": promptTok,
+              "llm.completion_tokens": completionTok,
+              "llm.latency_ms": Date.now() - llmStart,
+              "llm.success": true,
+            });
+            const choice = completion.choices[0];
+            result = {
+              content: choice?.message?.content ?? null,
+              tool_calls: choice?.message?.tool_calls as NormalizedCompletion["tool_calls"],
+            };
+          }
+          llmSpan.setStatus({ code: SpanStatusCode.OK });
+          return result;
+        } catch (err) {
+          llmSpan.setAttributes({ "llm.success": false, "llm.latency_ms": Date.now() - llmStart });
+          setSpanError(llmSpan, err);
+          throw err;
+        } finally {
+          llmSpan.end();
         }
-        const choice = completion.choices[0];
-        normalized = {
-          content: choice?.message?.content ?? null,
-          tool_calls: choice?.message?.tool_calls as typeof normalized.tool_calls,
-        };
-      }
+      });
       recordCircuitSuccess(CIRCUIT_KEY);
     } catch (err) {
       recordCircuitFailure(CIRCUIT_KEY);
@@ -626,7 +695,7 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
 
         // Apply temperature scaling to the raw confidence score so that
         // calibrated confidence drives gate decisions and downstream logging.
-        const tempScale = await getTemperatureScaleFactor(context.botId).catch(() => 1.0);
+        const tempScale = await getTemperatureScaleFactor(context.botId ?? 0).catch(() => 1.0);
         const calibratedScore = applyTemperatureScaling(evaluation.overallScore, tempScale);
         const calibratedPassedGate = calibratedScore >= (config.qualityThreshold ?? 0.7);
 
@@ -896,6 +965,15 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
         let result: unknown;
         let toolError: string | undefined;
 
+        const toolTracer = getTracer();
+        await toolTracer.startActiveSpan("tool.invoke", async (toolSpan) => {
+          toolSpan.setAttributes({
+            "tool.name": toolName,
+            "bot.id": String(context.botId ?? ""),
+            "session.id": String(context.sessionId ?? ""),
+            "tool.call_id": toolCall.id,
+          });
+          try {
         if (context.isGuest && isToolSandboxed(toolName)) {
           result = getSandboxedToolResponse(toolName);
         } else if (resolvedToolRegistry) {
@@ -947,6 +1025,25 @@ export async function runAgenticLoopEngine(options: AgenticLoopEngineOptions): P
             }
           }
         }
+            const toolDurationMs = Date.now() - toolStart;
+            const toolSuccess = !toolError;
+            toolSpan.setAttributes({
+              "tool.success": toolSuccess,
+              "tool.latency_ms": toolDurationMs,
+              "tool.result_summary": JSON.stringify(result).slice(0, 200),
+            });
+            if (!toolSuccess) {
+              toolSpan.setStatus({ code: SpanStatusCode.ERROR, message: toolError });
+            } else {
+              toolSpan.setStatus({ code: SpanStatusCode.OK });
+            }
+          } catch (e) {
+            setSpanError(toolSpan, e);
+            throw e;
+          } finally {
+            toolSpan.end();
+          }
+        });
 
         const toolDurationMs = Date.now() - toolStart;
         const obs = new Observation({

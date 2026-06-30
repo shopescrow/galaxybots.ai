@@ -904,6 +904,8 @@ export async function execute(input: JointPlanExecutorInput): Promise<JointPlanE
             fidelityRatio: result.aggregationTrace.fidelityRatio,
             fellBackToFlat: result.aggregationTrace.fellBackToFlat,
             flaggedForReview: result.aggregationTrace.flaggedForReview,
+            otelTraceId: result.aggregationTrace.otelTraceId,
+            otelSpanId: result.aggregationTrace.otelSpanId,
           }
         : undefined,
     },

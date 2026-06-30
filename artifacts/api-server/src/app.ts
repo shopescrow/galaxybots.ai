@@ -12,6 +12,7 @@ import { instrumentHealthSignals } from "./middleware/health-signals";
 import { developerApiKeyAuth } from "./middleware/developer-api-key";
 import { platformApiKeyAuth } from "./middleware/platform-api-key";
 import { attachTenantDbContext } from "./middleware/tenant";
+import { getCurrentTraceId } from "./lib/tracing";
 
 let shuttingDown = false;
 
@@ -257,9 +258,10 @@ app.use("/api", router);
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   const requestId = (req as unknown as Record<string, unknown>)["requestId"] as string | undefined;
   const user = (req as unknown as Record<string, unknown>)["user"] as { id?: number; clientId?: number } | undefined;
+  const traceId = getCurrentTraceId();
 
   console.error(
-    `[error-handler] ${req.method} ${req.path} requestId=${requestId || "unknown"} userId=${user?.id ?? "anon"} clientId=${user?.clientId ?? "none"} error=${err.message}`,
+    `[error-handler] ${req.method} ${req.path} requestId=${requestId || "unknown"} traceId=${traceId || "none"} userId=${user?.id ?? "anon"} clientId=${user?.clientId ?? "none"} error=${err.message}`,
     err.stack
   );
 
@@ -271,6 +273,7 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
     error: status >= 500 ? "Internal Server Error" : err.message,
     message: status >= 500 ? "An unexpected error occurred" : err.message,
     requestId: requestId || "unknown",
+    ...(traceId ? { traceId } : {}),
   });
 });
 

@@ -1,3 +1,4 @@
+import "./instrumentation.js";
 import app from "./app";
 import { setShuttingDown } from "./app";
 import { startScheduler, stopScheduler } from "./services/platform/scheduler";

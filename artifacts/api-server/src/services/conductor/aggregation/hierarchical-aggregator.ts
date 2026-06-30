@@ -5,6 +5,7 @@ import { trimToFitContextWindow } from "../../ai-safety/context-window";
 import { computeDivergence, computePairwiseDivergence } from "./divergence";
 import { getAggregationConfig, type AggregationFidelityConfig } from "./fidelity-config";
 import { type AggregationTrace, type AggregationClusterTrace, emptyAggregationTrace } from "./aggregation-trace";
+import { getCurrentTraceId, getCurrentSpanId } from "../../../lib/tracing";
 
 const SYNTH_MODEL = resolveCapability(ModelCapability.REASONING_PREMIUM);
 const EFFICIENT_MODEL = resolveCapability(ModelCapability.REASONING_EFFICIENT);
@@ -205,6 +206,8 @@ export async function aggregateWithFidelityGuardrail(input: AggregateInput): Pro
   trace.taskCategory = input.taskCategory;
   trace.fidelityFloor = config.fidelityFloor;
   trace.divergenceThreshold = config.divergenceEscalationThreshold;
+  trace.otelTraceId = getCurrentTraceId();
+  trace.otelSpanId = getCurrentSpanId();
 
   if (perspectives.length === 0) {
     return { content: "", trace };

@@ -48,6 +48,10 @@ export interface AggregationTrace {
   flaggedForReview: boolean;
   taskCategory?: string;
   notes: string[];
+  /** OpenTelemetry trace ID for correlating this record with distributed traces. */
+  otelTraceId?: string;
+  /** OpenTelemetry span ID of the aggregation span that produced this record. */
+  otelSpanId?: string;
 }
 
 export function emptyAggregationTrace(agentCount: number): AggregationTrace {

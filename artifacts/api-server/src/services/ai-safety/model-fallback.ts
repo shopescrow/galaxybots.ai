@@ -14,6 +14,7 @@ import {
   reconcileBudgetSpend,
   rollbackBudgetReservation,
 } from "./budget-enforcer";
+import { getTracer, setSpanError, SpanStatusCode } from "../../lib/tracing.js";
 
 /**
  * The Replit AI integration proxy (`@workspace/integrations-openai-ai-server`)
@@ -212,8 +213,10 @@ async function executeChain(options: {
       continue;
     }
 
+    const callStart = Date.now();
+    const tracer = getTracer();
+
     try {
-      const callStart = Date.now();
       let completion: CompletionResult;
 
       if (provider === GLM_CIRCUIT_KEY) {
@@ -335,6 +338,22 @@ async function executeChain(options: {
           modelTier: options.effectiveTier,
         });
       }
+
+      tracer.startActiveSpan("llm.completion", (llmSpan) => {
+        llmSpan.setAttributes({
+          "llm.model": model,
+          "llm.provider": provider,
+          "llm.prompt_tokens": promptTokens,
+          "llm.completion_tokens": completionTokens,
+          "llm.latency_ms": latencyMs,
+          "llm.fallback_used": i > 0,
+          "llm.success": true,
+          "llm.tier": options.effectiveTier,
+        });
+        llmSpan.setStatus({ code: SpanStatusCode.OK });
+        llmSpan.end();
+      });
+
 
       return {
         completion,

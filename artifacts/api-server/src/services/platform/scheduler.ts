@@ -4,6 +4,7 @@ import { eq, and, isNotNull } from "drizzle-orm";
 import { executeWorkflow } from "../missions/workflow-engine";
 import { createNotification } from "../admin/notifications";
 import { dispatchScanToPirateMonster } from "../partner/piratemonster-client";
+import { getTracer, setSpanError, SpanStatusCode } from "../../lib/tracing";
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 import { checkSlaBreaches } from "./jobs/check-sla-breaches";
@@ -171,9 +172,23 @@ function runWithOverlapGuard(job: Job) {
     return;
   }
   running.add(job.name);
-  job.fn()
-    .catch(handleTickError(job.name))
-    .finally(() => running.delete(job.name));
+  const tracer = getTracer();
+  tracer.startActiveSpan(`scheduler.job`, async (span) => {
+    span.setAttributes({ "job.name": job.name });
+    try {
+      await job.fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+    } catch (err) {
+      setSpanError(span, err);
+      handleTickError(job.name)(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      span.end();
+      running.delete(job.name);
+    }
+  }).catch((err) => {
+    console.error(`[scheduler] Span wrapper error for "${job.name}":`, err);
+    running.delete(job.name);
+  });
 }
 
 function staggerJobs(jobs: Job[], intervalMs: number) {

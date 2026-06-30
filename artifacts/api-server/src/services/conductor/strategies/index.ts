@@ -1,5 +1,6 @@
 import { callWithFallback, ModelTier } from "../../ai-safety/model-fallback";
 import { ModelCapability, resolveCapability } from "../../ai-safety/model-router";
+import { getTracer, setSpanError, SpanStatusCode, type Span } from "../../../lib/tracing";
 import { trimToFitContextWindow, estimateTokens } from "../../ai-safety/context-window";
 import { runFanOut } from "../../ai-safety/internal-concurrency";
 import { checkCostCapAlerts } from "../../analytics/cost-caps";
@@ -503,11 +504,25 @@ export async function executeParallelSynthesis(input: StrategyInput): Promise<St
 
   await runFanOut(
     agents.map((agent, i) => async () => {
-      try {
-        perspectives[i] = await callAgent(agent.systemPrompt, userContent, temperatures[i], clientId, botId, conversationId, sessionId, agentModel, agentTier);
-      } catch {
-        perspectives[i] = "";
-      }
+      const tracer = getTracer();
+      await tracer.startActiveSpan("bot.process", async (botSpan: Span) => {
+        botSpan.setAttributes({
+          "bot.agent_index": i,
+          "bot.agent_name": agent.name ?? `agent-${i}`,
+          "bot.model": agentModel,
+          "bot.temperature": temperatures[i],
+          "bot.strategy": "parallel_synthesis",
+        });
+        try {
+          perspectives[i] = await callAgent(agent.systemPrompt, userContent, temperatures[i], clientId, botId, conversationId, sessionId, agentModel, agentTier);
+          botSpan.setStatus({ code: SpanStatusCode.OK });
+        } catch (err) {
+          setSpanError(botSpan, err);
+          perspectives[i] = "";
+        } finally {
+          botSpan.end();
+        }
+      });
       completed++;
       onProgress?.({ type: "conductor_progress", content: `GalaxyMind — ${completed}/${agents.length} perspectives captured`, strategy: "parallel_synthesis" });
     }),
