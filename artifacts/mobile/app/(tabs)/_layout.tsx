@@ -8,6 +8,7 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import colors from "@/constants/colors";
+
 function NativeTabLayout() {
   return (
     <NativeTabs>
@@ -15,17 +16,17 @@ function NativeTabLayout() {
         <Icon sf={{ default: "command", selected: "command.circle.fill" }} />
         <Label>Command</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="approvals">
-        <Icon sf={{ default: "checkmark.shield", selected: "checkmark.shield.fill" }} />
-        <Label>Approvals</Label>
+      <NativeTabs.Trigger name="missions">
+        <Icon sf={{ default: "target", selected: "target" }} />
+        <Label>Missions</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="bots">
-        <Icon sf={{ default: "cpu", selected: "cpu.fill" }} />
-        <Label>Bots</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="journal">
+      <NativeTabs.Trigger name="knowledge">
         <Icon sf={{ default: "book", selected: "book.fill" }} />
-        <Label>Journal</Label>
+        <Label>Knowledge</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="governance">
+        <Icon sf={{ default: "shield.checkered", selected: "shield.checkered" }} />
+        <Label>Governance</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
@@ -37,7 +38,6 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
 
@@ -89,38 +89,38 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="approvals"
+        name="missions"
         options={{
-          title: "Approvals",
+          title: "Missions",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="checkmark.shield" tintColor={color} size={22} />
+              <SymbolView name="target" tintColor={color} size={22} />
             ) : (
-              <Feather name="shield" size={22} color={color} />
+              <Feather name="target" size={22} color={color} />
             ),
         }}
       />
       <Tabs.Screen
-        name="bots"
+        name="knowledge"
         options={{
-          title: "Bots",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="cpu" tintColor={color} size={22} />
-            ) : (
-              <Feather name="cpu" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="journal"
-        options={{
-          title: "Journal",
+          title: "Knowledge",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="book" tintColor={color} size={22} />
             ) : (
-              <Feather name="book-open" size={22} color={color} />
+              <Feather name="book" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="governance"
+        options={{
+          title: "Governance",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="shield.checkered" tintColor={color} size={22} />
+            ) : (
+              <Feather name="shield" size={22} color={color} />
             ),
         }}
       />
@@ -136,6 +136,9 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen name="approvals" options={{ href: null }} />
+      <Tabs.Screen name="bots" options={{ href: null }} />
+      <Tabs.Screen name="journal" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -126,3 +126,37 @@ export interface SessionOutcome {
   department: string | null;
   createdAt: string;
 }
+
+export interface TaskSession {
+  id: number;
+  clientId: number;
+  objective: string | null;
+  status: string;
+  teamBots: Bot[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionMessage {
+  id: number;
+  sessionId: number;
+  botId: number | null;
+  botName: string | null;
+  botTitle: string | null;
+  role: string;
+  content: string;
+  messageType: string;
+  toolData: unknown;
+  flaggedRoles: string[] | null;
+  createdAt: string;
+}
+
+export interface KnowledgeDoc {
+  id: number;
+  clientId: number;
+  title: string;
+  sourceFilename: string;
+  fileType: string;
+  chunkCount: number;
+  uploadedAt: string;
+}

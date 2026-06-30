@@ -16,6 +16,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { ClientProvider } from "@/lib/client-context";
 import colors from "@/constants/colors";
 
 Notifications.setNotificationHandler({
@@ -42,15 +43,18 @@ const ALLOWED_ROUTE_PREFIXES = [
   "/chat/",
   "/approval/",
   "/roi/",
+  "/mission/",
 ];
 
 const WEB_TO_MOBILE_ROUTE_MAP: Record<string, string> = {
   "/command-center": "/(tabs)",
   "/analytics": "/(tabs)",
-  "/bots": "/(tabs)/bots",
-  "/governance": "/(tabs)/approvals",
-  "/approvals": "/(tabs)/approvals",
-  "/journal": "/(tabs)/journal",
+  "/bots": "/(tabs)",
+  "/governance": "/(tabs)/governance",
+  "/approvals": "/(tabs)/governance",
+  "/missions": "/(tabs)/missions",
+  "/knowledge": "/(tabs)/knowledge",
+  "/journal": "/(tabs)/settings",
   "/settings": "/(tabs)/settings",
   "/notifications": "/(tabs)",
 };
@@ -67,6 +71,8 @@ function resolveRoute(route: string): string | null {
   if (roiMatch) return `/roi/${roiMatch[1]}`;
   const chatMatch = route.match(/^\/chat\/(\d+)$/);
   if (chatMatch) return `/chat/${chatMatch[1]}`;
+  const missionMatch = route.match(/^\/mission\/(\d+)$/);
+  if (missionMatch) return `/mission/${missionMatch[1]}`;
   return null;
 }
 
@@ -161,6 +167,14 @@ function RootLayoutNav() {
           name="roi/[clientId]"
           options={{ headerShown: false, presentation: "card" }}
         />
+        <Stack.Screen
+          name="mission/[id]"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="mission/new"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
       </Stack>
     </AuthGate>
   );
@@ -189,7 +203,9 @@ export default function RootLayout() {
           <GestureHandlerRootView>
             <KeyboardProvider>
               <AuthProvider>
-                <RootLayoutNav />
+                <ClientProvider>
+                  <RootLayoutNav />
+                </ClientProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

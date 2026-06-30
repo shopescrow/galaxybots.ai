@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireRole } from "../../middleware/auth";
+import { requireTenantAccess } from "../../middleware/tenant";
 import {
   extractTextFromFile,
   ingestDocument,
@@ -38,18 +39,23 @@ const upload = multer({
   },
 });
 
-router.get("/knowledge-base/documents", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const clientId = req.user!.clientId;
-  const docs = await listDocuments(clientId);
+router.get("/knowledge-base/documents", requireRole("owner", "admin"), requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const effectiveClientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
+  const docs = await listDocuments(effectiveClientId);
   res.json(docs);
 });
 
 router.post(
   "/knowledge-base/documents",
   requireRole("owner", "admin"),
+  requireTenantAccess("subClientId"),
   upload.single("file"),
   async (req, res): Promise<void> => {
-    const clientId = req.user!.clientId;
+    const rawSub = req.query.subClientId ?? req.body?.subClientId;
+    const sub = rawSub ? Number(rawSub) : NaN;
+    const clientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
     const file = req.file;
 
     if (!file) {
@@ -89,8 +95,10 @@ router.post(
   },
 );
 
-router.delete("/knowledge-base/documents/:id", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const clientId = req.user!.clientId;
+router.delete("/knowledge-base/documents/:id", requireRole("owner", "admin"), requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const clientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
   const documentId = Number(req.params.id);
 
   if (isNaN(documentId)) {

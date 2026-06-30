@@ -156,9 +156,11 @@ router.post("/bots/fabricate", requireRole("owner", "admin"), llmRateLimit, tena
   res.status(201).json(bot);
 });
 
-router.get("/task-sessions", async (req, res): Promise<void> => {
-  const clientId = req.user!.clientId;
-  const result = await getSessionsByClient(clientId);
+router.get("/task-sessions", requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const effectiveClientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
+  const result = await getSessionsByClient(effectiveClientId);
   res.json(result);
 });
 
@@ -205,15 +207,19 @@ router.post("/task-sessions", requireRole("owner", "admin"), requireTenantAccess
   res.status(201).json(result);
 });
 
-router.get("/task-sessions/:id", async (req, res): Promise<void> => {
+router.get("/task-sessions/:id", requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
   const params = GetTaskSessionParams.safeParse(req.params);
   if (!params.success) {
     sendValidationError(res, params.error);
     return;
   }
 
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const effectiveClientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
+
   const result = await getSessionWithBots(params.data.id);
-  if (!result || result.clientId !== req.user!.clientId) {
+  if (!result || result.clientId !== effectiveClientId) {
     res.status(404).json({ error: "Task session not found" });
     return;
   }
@@ -221,17 +227,21 @@ router.get("/task-sessions/:id", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.get("/task-sessions/:id/messages", async (req, res): Promise<void> => {
+router.get("/task-sessions/:id/messages", requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
   const params = GetTaskSessionMessagesParams.safeParse(req.params);
   if (!params.success) {
     sendValidationError(res, params.error);
     return;
   }
 
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const effectiveClientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
+
   const [session] = await db
     .select()
     .from(taskSessionsTable)
-    .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, req.user!.clientId)));
+    .where(and(eq(taskSessionsTable.id, params.data.id), eq(taskSessionsTable.clientId, effectiveClientId)));
   if (!session) {
     res.status(404).json({ error: "Task session not found" });
     return;

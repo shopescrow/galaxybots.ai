@@ -4,6 +4,7 @@ import { eq, and, gte, desc, sql, or, isNull } from "drizzle-orm";
 import { GetBotParams, ListBotsResponse, GetBotResponse } from "@workspace/api-zod";
 import { openai, batchProcessWithSSE } from "@workspace/integrations-openai-ai-server";
 import { llmRateLimit, tenantFairShareConcurrency } from "../../middleware/rate-limit";
+import { requireTenantAccess } from "../../middleware/tenant";
 import { getEffectiveSlaTargets } from "../../services/analytics/sla";
 import { sendValidationError, sendParamError } from "../../utils/validation";
 import { z } from "zod/v4";
@@ -38,7 +39,7 @@ const PaginationQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-router.get("/bots", async (req, res): Promise<void> => {
+router.get("/bots", requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
   const pagination = PaginationQuery.safeParse(req.query);
   if (!pagination.success) {
     sendValidationError(res, pagination.error, "Invalid pagination parameters");
@@ -46,9 +47,12 @@ router.get("/bots", async (req, res): Promise<void> => {
   }
   const { cursor, limit } = pagination.data;
   const callerClientId = req.user?.clientId;
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const effectiveClientId = (!isNaN(sub) && sub > 0) ? sub : callerClientId;
 
-  const conditions = callerClientId
-    ? or(isNull(botsTable.tenantId), eq(botsTable.tenantId, callerClientId))
+  const conditions = effectiveClientId
+    ? or(isNull(botsTable.tenantId), eq(botsTable.tenantId, effectiveClientId))
     : isNull(botsTable.tenantId);
 
   let query = db.select().from(botsTable)

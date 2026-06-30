@@ -14,6 +14,7 @@ import {
 } from "@workspace/db";
 import { eq, and, sql, gte, or, isNull } from "drizzle-orm";
 import { requireRole } from "../../middleware/auth";
+import { requireTenantAccess } from "../../middleware/tenant";
 import {
   getModelOptimizerSettings,
   setModelOptimizerSetting,
@@ -294,11 +295,13 @@ router.post("/governance/bots/:botId/permissions/seed", requireRole("owner", "ad
   res.json(seeded);
 });
 
-router.get("/governance/approvals", requireRole("owner", "admin"), async (req, res): Promise<void> => {
-  const clientId = req.user!.clientId;
+router.get("/governance/approvals", requireRole("owner", "admin"), requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
+  const rawSub = req.query.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const effectiveClientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
   const status = (req.query.status as string) || "pending";
 
-  const conditions = [eq(pendingApprovalsTable.clientId, clientId)];
+  const conditions = [eq(pendingApprovalsTable.clientId, effectiveClientId)];
   if (status !== "all") {
     conditions.push(eq(pendingApprovalsTable.status, status));
   }
@@ -311,9 +314,11 @@ router.get("/governance/approvals", requireRole("owner", "admin"), async (req, r
   res.json(approvals);
 });
 
-router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.post("/governance/approvals/:id/approve", requireRole("owner", "admin"), requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const clientId = req.user!.clientId;
+  const rawSub = (req.body as Record<string, unknown>)?.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const clientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
 
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid approval ID" });
@@ -533,9 +538,11 @@ router.post("/governance/approvals/batch-approve", requireRole("owner", "admin")
   res.json({ approved, failed, total: targetIds.length });
 });
 
-router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.post("/governance/approvals/:id/reject", requireRole("owner", "admin"), requireTenantAccess("subClientId"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const clientId = req.user!.clientId;
+  const rawSub = (req.body as Record<string, unknown>)?.subClientId;
+  const sub = rawSub ? Number(rawSub) : NaN;
+  const clientId = (!isNaN(sub) && sub > 0) ? sub : req.user!.clientId;
 
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid approval ID" });
