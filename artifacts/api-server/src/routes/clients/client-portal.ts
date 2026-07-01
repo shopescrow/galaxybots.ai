@@ -14,7 +14,7 @@ import {
   sessionOutcomesTable,
   botsTable,
 } from "@workspace/db";
-import { eq, and, desc, inArray, or } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { getClientROI } from "../../services/analytics/roi";
 import { requireRole } from "../../middleware/auth";
@@ -46,7 +46,7 @@ function signStakeholderToken(payload: StakeholderToken): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: "4h" });
 }
 
-function authenticateStakeholder(req: Request, res: Response, next: NextFunction): void {
+async function authenticateStakeholder(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   let token: string | undefined;
 
@@ -65,6 +65,22 @@ function authenticateStakeholder(req: Request, res: Response, next: NextFunction
       res.status(401).json({ error: "Invalid token" });
       return;
     }
+
+    const [stakeholder] = await db
+      .select({ id: clientStakeholdersTable.id })
+      .from(clientStakeholdersTable)
+      .where(
+        and(
+          eq(clientStakeholdersTable.id, decoded.stakeholderId),
+          eq(clientStakeholdersTable.clientId, decoded.clientId)
+        )
+      );
+
+    if (!stakeholder) {
+      res.status(401).json({ error: "Account no longer exists" });
+      return;
+    }
+
     req.stakeholder = decoded;
     next();
   } catch {
@@ -95,7 +111,7 @@ router.post("/client-portal/request-pin", async (req, res): Promise<void> => {
   const stakeholders = await db
     .select()
     .from(clientStakeholdersTable)
-    .where(conditions.length === 1 ? conditions[0] : or(...conditions));
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions));
 
   if (stakeholders.length === 0) {
     res.json({ message: "If an account exists, a PIN has been sent." });
@@ -123,33 +139,35 @@ router.post("/client-portal/request-pin", async (req, res): Promise<void> => {
   const smsConfigured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
   let deliveryFailed = false;
 
-  if (parsed.data.email) {
-    try {
-      await sendEmail({
-        to: parsed.data.email,
-        subject: "Your GalaxyBots client portal PIN",
-        html: pinHtml,
-        text: pinText,
-      });
-      console.log(`[client-portal] PIN delivered via email to ${parsed.data.email}`);
-    } catch (err) {
-      console.error(`[client-portal] Failed to deliver PIN via email to ${parsed.data.email}:`, err);
+  for (const stakeholder of stakeholders) {
+    if (stakeholder.email) {
+      try {
+        await sendEmail({
+          to: stakeholder.email,
+          subject: "Your GalaxyBots client portal PIN",
+          html: pinHtml,
+          text: pinText,
+        });
+        console.log(`[client-portal] PIN delivered via email to ${stakeholder.email}`);
+      } catch (err) {
+        console.error(`[client-portal] Failed to deliver PIN via email to ${stakeholder.email}:`, err);
+        if (!stakeholder.phone) deliveryFailed = true;
+      }
+    }
+
+    if (stakeholder.phone && smsConfigured) {
+      try {
+        await sendSms(stakeholder.phone, pinText);
+        console.log(`[client-portal] PIN delivered via SMS to ${stakeholder.phone}`);
+        deliveryFailed = false;
+      } catch (err) {
+        console.error(`[client-portal] Failed to deliver PIN via SMS to ${stakeholder.phone}:`, err);
+        if (!stakeholder.email) deliveryFailed = true;
+      }
+    } else if (!stakeholder.email && stakeholder.phone) {
+      console.warn(`[client-portal] SMS not configured — PIN for ${stakeholder.phone} not delivered`);
       deliveryFailed = true;
     }
-  }
-
-  if (parsed.data.phone && smsConfigured) {
-    try {
-      await sendSms(parsed.data.phone, pinText);
-      console.log(`[client-portal] PIN delivered via SMS to ${parsed.data.phone}`);
-      deliveryFailed = false;
-    } catch (err) {
-      console.error(`[client-portal] Failed to deliver PIN via SMS to ${parsed.data.phone}:`, err);
-      if (!parsed.data.email) deliveryFailed = true;
-    }
-  } else if (!parsed.data.email && parsed.data.phone) {
-    console.warn(`[client-portal] SMS not configured — PIN for ${parsed.data.phone} not delivered`);
-    deliveryFailed = true;
   }
 
   if (deliveryFailed) {
