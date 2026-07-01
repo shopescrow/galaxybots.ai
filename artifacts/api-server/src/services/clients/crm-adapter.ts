@@ -3,39 +3,7 @@ import { db, clientIntegrationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { decryptCredential } from "../../utils/credential-encryption";
 import type { CallLog, ReceptionistConfig } from "@workspace/db";
-
-function validateWebhookUrl(urlStr: string): { valid: boolean; error?: string } {
-  let parsed: URL;
-  try {
-    parsed = new URL(urlStr);
-  } catch {
-    return { valid: false, error: "Invalid URL format" };
-  }
-
-  if (parsed.protocol !== "https:") {
-    return { valid: false, error: "Webhook URL must use HTTPS" };
-  }
-
-  const hostname = parsed.hostname.toLowerCase();
-  const blockedPatterns = [
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-    "::1",
-    "[::1]",
-    "metadata.google.internal",
-    "169.254.169.254",
-  ];
-  if (blockedPatterns.some(p => hostname === p || hostname.endsWith(`.${p}`))) {
-    return { valid: false, error: "Webhook URL cannot target internal/private addresses" };
-  }
-
-  if (hostname.endsWith(".local") || hostname.endsWith(".internal") || hostname.startsWith("10.") || hostname.startsWith("192.168.")) {
-    return { valid: false, error: "Webhook URL cannot target private network addresses" };
-  }
-
-  return { valid: true };
-}
+import { assertSafeUrl } from "../../lib/ssrf-guard";
 
 async function getClientCredential(clientId: number, service: string): Promise<string | null> {
   const [row] = await db
@@ -169,9 +137,14 @@ async function syncToWebhook(callLog: CallLog, config: ReceptionistConfig): Prom
     return { success: false, error: "No webhook URL configured" };
   }
 
-  const urlCheck = validateWebhookUrl(config.crmWebhookUrl);
-  if (!urlCheck.valid) {
-    return { success: false, error: `Invalid webhook URL: ${urlCheck.error}` };
+  try {
+    const parsed = new URL(config.crmWebhookUrl);
+    if (parsed.protocol !== "https:") {
+      return { success: false, error: "Invalid webhook URL: Webhook URL must use HTTPS" };
+    }
+    await assertSafeUrl(config.crmWebhookUrl);
+  } catch (err) {
+    return { success: false, error: `Invalid webhook URL: ${err instanceof Error ? err.message : "URL validation failed"}` };
   }
 
   const payload = buildCallPayload(callLog, config);
@@ -217,9 +190,14 @@ export async function syncCallToCRM(
 }
 
 export async function sendTestWebhook(webhookUrl: string): Promise<{ success: boolean; error?: string }> {
-  const urlCheck = validateWebhookUrl(webhookUrl);
-  if (!urlCheck.valid) {
-    return { success: false, error: `Invalid webhook URL: ${urlCheck.error}` };
+  try {
+    const parsed = new URL(webhookUrl);
+    if (parsed.protocol !== "https:") {
+      return { success: false, error: "Invalid webhook URL: Webhook URL must use HTTPS" };
+    }
+    await assertSafeUrl(webhookUrl);
+  } catch (err) {
+    return { success: false, error: `Invalid webhook URL: ${err instanceof Error ? err.message : "URL validation failed"}` };
   }
 
   const testPayload = {

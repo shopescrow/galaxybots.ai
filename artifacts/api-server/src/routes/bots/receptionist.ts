@@ -207,16 +207,31 @@ router.put("/receptionist/config/:clientId", requireTenantAccess("clientId"), va
   res.json(updated);
 });
 
-router.post("/receptionist/config/test", async (req, res): Promise<void> => {
-  const { elevenlabsAgentId, crmType, crmWebhookUrl } = req.body;
-  const results: Record<string, unknown> = {};
-
-  if (elevenlabsAgentId) {
-    results.elevenlabs = await testElevenLabsAgent(elevenlabsAgentId);
+router.post("/receptionist/config/test", requireTenantAccess("clientId"), validateClientExists, async (req, res): Promise<void> => {
+  const clientId = Number(req.body?.clientId);
+  if (!clientId || isNaN(clientId)) {
+    res.status(400).json({ error: "clientId is required" });
+    return;
   }
 
-  if (crmType === "custom_webhook" && crmWebhookUrl) {
-    results.webhook = await sendTestWebhook(crmWebhookUrl);
+  const [config] = await db
+    .select()
+    .from(receptionistConfigsTable)
+    .where(eq(receptionistConfigsTable.clientId, clientId));
+
+  if (!config) {
+    res.status(404).json({ error: "Config not found" });
+    return;
+  }
+
+  const results: Record<string, unknown> = {};
+
+  if (config.elevenlabsAgentId) {
+    results.elevenlabs = await testElevenLabsAgent(config.elevenlabsAgentId);
+  }
+
+  if (config.crmType === "custom_webhook" && config.crmWebhookUrl) {
+    results.webhook = await sendTestWebhook(config.crmWebhookUrl);
   }
 
   res.json(results);
