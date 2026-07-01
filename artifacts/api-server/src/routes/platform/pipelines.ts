@@ -595,30 +595,6 @@ router.post("/webhooks/pipeline/:pipelineId", async (req, res): Promise<void> =>
     return;
   }
 
-  // withBypassRLS: public webhook endpoint (no auth user). The pipeline
-  // lookup must succeed before we can validate the bearer token in the body.
-  const [pipeline] = await withBypassRLS(pool, (bypassDb) =>
-    bypassDb
-      .select()
-      .from(pipelinesTable)
-      .where(eq(pipelinesTable.id, pipelineId)),
-  );
-
-  if (!pipeline) {
-    res.status(404).json({ error: "Pipeline not found" });
-    return;
-  }
-
-  if (!pipeline.active) {
-    res.status(400).json({ error: "Pipeline is not active" });
-    return;
-  }
-
-  if (pipeline.triggerType !== "webhook") {
-    res.status(400).json({ error: "Pipeline is not configured for webhook triggers" });
-    return;
-  }
-
   const authHeader = req.headers["authorization"];
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "Missing or invalid authorization header" });
@@ -626,22 +602,50 @@ router.post("/webhooks/pipeline/:pipelineId", async (req, res): Promise<void> =>
   }
   const token = authHeader.slice(7);
 
-  // Validate webhook token + run pipeline inside bypass context.
-  // clientsTable has RLS on `id`; since this is a system-level webhook
-  // (no authenticated user), use withBypassRLS for all remaining DB access.
+  // withBypassRLS: public webhook endpoint (no auth user). Look up both the
+  // pipeline and its associated per-trigger signing secret in one bypass context.
   await withBypassRLS(pool, async (bypassDb) => {
-    const [client] = await bypassDb
+    const [pipeline] = await bypassDb
       .select()
-      .from(clientsTable)
-      .where(eq(clientsTable.id, pipeline.clientId));
+      .from(pipelinesTable)
+      .where(eq(pipelinesTable.id, pipelineId));
 
-    if (!client || !client.webhookSecret) {
-      res.status(403).json({ error: "Webhook not configured" });
+    if (!pipeline) {
+      res.status(404).json({ error: "Pipeline not found" });
+      return;
+    }
+
+    if (!pipeline.active) {
+      res.status(400).json({ error: "Pipeline is not active" });
+      return;
+    }
+
+    if (pipeline.triggerType !== "webhook") {
+      res.status(400).json({ error: "Pipeline is not configured for webhook triggers" });
+      return;
+    }
+
+    // Authorise against the per-pipeline trigger's signingSecret, not the
+    // client-wide webhookSecret. Using the client-wide secret would allow any
+    // party that legitimately holds it for one purpose (e.g. a lead webhook)
+    // to invoke arbitrary pipelines for the same tenant.
+    const [trigger] = await bypassDb
+      .select()
+      .from(pipelineTriggersTable)
+      .where(
+        and(
+          eq(pipelineTriggersTable.pipelineId, pipelineId),
+          eq(pipelineTriggersTable.active, true),
+        ),
+      );
+
+    if (!trigger) {
+      res.status(403).json({ error: "Webhook trigger not configured for this pipeline" });
       return;
     }
 
     const tokenBuf = Buffer.from(token);
-    const secretBuf = Buffer.from(client.webhookSecret);
+    const secretBuf = Buffer.from(trigger.signingSecret);
     if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
       res.status(403).json({ error: "Invalid webhook token" });
       return;
