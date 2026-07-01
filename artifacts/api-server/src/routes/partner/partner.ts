@@ -104,7 +104,7 @@ router.post("/partner/register", async (req, res) => {
       contactEmail,
       plan,
       source: source || partnerRef,
-      status: "active",
+      status: "pending",
     }).returning();
 
     res.status(201).json(registration);
@@ -220,6 +220,12 @@ router.post("/partner/apply", async (req, res) => {
 router.get("/partner/:ref/status", async (req, res) => {
   try {
     const { ref } = req.params;
+    const adminPassword = req.headers["x-partner-password"] as string | undefined;
+
+    if (!adminPassword) {
+      res.status(401).json({ error: "Admin password required" }); return;
+    }
+
     const [partner] = await db
       .select()
       .from(partnersTable)
@@ -227,6 +233,15 @@ router.get("/partner/:ref/status", async (req, res) => {
 
     if (!partner) {
       res.status(404).json({ error: "Partner not found" }); return;
+    }
+
+    if (!partner.adminPasswordHash) {
+      res.status(401).json({ error: "Partner admin not configured" }); return;
+    }
+
+    const valid = await bcrypt.compare(adminPassword, partner.adminPasswordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid credentials" }); return;
     }
 
     const recentLogs = await db

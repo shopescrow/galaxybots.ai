@@ -148,7 +148,6 @@ const PUBLIC_SUFFIXES = [
   "/integrations/piratemonster/register-partner",
   "/prospecting/webhook/piratemonster",
   "/partner/link",
-  "/partner/register",
   "/partner/admin/login",
   "/partner/apply",
   "/billing/plans",
@@ -177,7 +176,6 @@ const PUBLIC_SUFFIXES = [
 ];
 
 const PUBLIC_PREFIX_SUFFIXES = [
-  "/partner/",
   "/packs/",
   "/marketplace/",
   "/webhooks/lead/",
@@ -209,9 +207,11 @@ function createAuthMiddleware(prefix: string) {
     if (paths.includes(fullPath) || prefixes.some(p => fullPath.startsWith(p))) {
       return next();
     }
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (
-      (req.method === "POST" && new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/partner\\/[^/]+\\/clients$`).test(fullPath)) ||
-      (req.method === "PUT" && new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/partner\\/[^/]+$`).test(fullPath))
+      (req.method === "POST" && new RegExp(`^${escapedPrefix}\\/partner\\/[^/]+\\/clients$`).test(fullPath)) ||
+      (req.method === "PUT" && new RegExp(`^${escapedPrefix}\\/partner\\/[^/]+$`).test(fullPath)) ||
+      (req.method === "GET" && new RegExp(`^${escapedPrefix}\\/partner\\/[^/]+\\/status$`).test(fullPath))
     ) {
       return next();
     }
