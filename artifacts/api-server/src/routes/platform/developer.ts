@@ -67,8 +67,15 @@ router.post("/developer/keys", async (req, res): Promise<void> => {
   const parsed = createKeySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  if (parsed.data.tier === "partner" && req.user!.role !== "admin") {
+  if (parsed.data.tier === "partner" && req.user!.role !== "admin" && req.user!.role !== "owner") {
     res.status(403).json({ error: "Partner-tier keys require admin privileges" });
+    return;
+  }
+
+  const requestedScopes = parsed.data.scopes;
+  const callerRole = req.user!.role;
+  if (requestedScopes.includes("admin") && callerRole !== "admin" && callerRole !== "owner") {
+    res.status(403).json({ error: "Admin-scoped keys require admin or owner privileges" });
     return;
   }
 

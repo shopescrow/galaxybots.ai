@@ -80,13 +80,28 @@ async function validateAndAuthorize(keyRecord: any, req: Request, res: Response,
       .where(eq(platformApiKeysTable.id, keyRecord.id)),
   );
 
-  req.user = {
-    userId: 0,
-    clientId: keyRecord.clientId ?? 0,
-    role: "platform",
-    email: `platform@${keyRecord.platform}.com`,
-    bypassPayment: true,
-  };
+  if (keyRecord.clientId) {
+    // Tenant-created key (e.g. Piratemonster MCP keys): scope the identity to
+    // the owning tenant only. Do NOT grant role "platform" or bypassPayment —
+    // that would allow cross-tenant RLS bypass. Treat it as a machine-identity
+    // for that tenant, equivalent to an admin user within the tenant boundary.
+    req.user = {
+      userId: 0,
+      clientId: keyRecord.clientId,
+      role: "admin",
+      email: `partner@${keyRecord.platform}.com`,
+    };
+  } else {
+    // True platform key (no tenant binding): grant full platform identity with
+    // RLS bypass for cross-tenant operations.
+    req.user = {
+      userId: 0,
+      clientId: 0,
+      role: "platform",
+      email: `platform@${keyRecord.platform}.com`,
+      bypassPayment: true,
+    };
+  }
 
   next();
 }

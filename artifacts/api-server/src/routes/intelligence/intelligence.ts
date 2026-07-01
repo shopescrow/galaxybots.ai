@@ -153,7 +153,7 @@ router.get("/intelligence/experiments/:id/results", requireRole("owner", "admin"
   }
 });
 
-router.post("/intelligence/global-priors/compute", platformApiKeyAuth, async (req, res): Promise<void> => {
+router.post("/intelligence/global-priors/compute", platformApiKeyAuth, requireRole("platform"), async (req, res): Promise<void> => {
   try {
     const { modelVersion } = req.body ?? {};
     await computeAndStoreGlobalPriors(modelVersion);

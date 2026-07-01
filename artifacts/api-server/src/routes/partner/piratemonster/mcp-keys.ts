@@ -13,10 +13,13 @@ router.post("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin"
     const rawKey = `pmk_${crypto.randomBytes(32).toString("hex")}`;
     const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
 
+    const clientId = req.user!.clientId;
+
     const [key] = await db.insert(platformApiKeysTable).values({
       platform: "piratemonster_mcp",
       label: label || null,
       keyHash,
+      clientId,
       status: "active",
       rateLimit: 100,
     }).returning();
@@ -36,8 +39,9 @@ router.post("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin"
   }
 });
 
-router.get("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+router.get("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin"), async (req, res): Promise<void> => {
   try {
+    const clientId = req.user!.clientId;
     const keys = await db
       .select({
         id: platformApiKeysTable.id,
@@ -49,7 +53,10 @@ router.get("/integrations/piratemonster/mcp-keys", requireRole("owner", "admin")
         revokedAt: platformApiKeysTable.revokedAt,
       })
       .from(platformApiKeysTable)
-      .where(eq(platformApiKeysTable.platform, "piratemonster_mcp"))
+      .where(and(
+        eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+        eq(platformApiKeysTable.clientId, clientId),
+      ))
       .orderBy(desc(platformApiKeysTable.createdAt));
 
     res.json(keys);
@@ -67,13 +74,16 @@ router.post("/integrations/piratemonster/mcp-keys/:id/revoke", requireRole("owne
       return;
     }
 
+    const clientId = req.user!.clientId;
+
     const [updated] = await db
       .update(platformApiKeysTable)
       .set({ status: "revoked", revokedAt: new Date() })
       .where(
         and(
           eq(platformApiKeysTable.id, keyId),
-          eq(platformApiKeysTable.platform, "piratemonster_mcp")
+          eq(platformApiKeysTable.platform, "piratemonster_mcp"),
+          eq(platformApiKeysTable.clientId, clientId),
         )
       )
       .returning();
