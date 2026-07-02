@@ -3,6 +3,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { ModelCapability, resolveCapability } from "../ai-safety/model-router";
 import { db, extractionJobsTable, extractionPagesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { assertSafeUrl } from "../../lib/ssrf-guard";
 const logger = {
   info: (obj: Record<string, unknown>, msg?: string) => console.log(`[liberator] ${msg || ""}`, JSON.stringify(obj)),
   warn: (objOrMsg: Record<string, unknown> | string, msg?: string) => {
@@ -139,7 +140,32 @@ export async function runExtractionForJob(jobId: number): Promise<void> {
     browser = await getBrowser();
     page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
+    // Block every outbound request—including redirect destinations—before
+    // Playwright sends it.  assertSafeUrl() rejects private/reserved
+    // addresses, so an open-redirect chain (public URL → 302 → localhost or
+    // cloud-metadata) is stopped at the redirect hop, before any connection
+    // to the internal target is established.
+    let ssrfBlockedUrl: string | null = null;
+    await page.route("**/*", async (route) => {
+      const requestUrl = route.request().url();
+      try {
+        await assertSafeUrl(requestUrl);
+        await route.continue();
+      } catch {
+        ssrfBlockedUrl = requestUrl;
+        await route.abort("accessdenied");
+      }
+    });
+
     await page.goto(job.sourceUrl, { waitUntil: "networkidle", timeout: 30000 });
+
+    if (ssrfBlockedUrl !== null) {
+      throw Object.assign(
+        new Error(`Redirect destination blocked by SSRF policy: ${ssrfBlockedUrl}`),
+        { status: 400 }
+      );
+    }
+
     await page.waitForTimeout(2000);
 
     const existingPages = await db

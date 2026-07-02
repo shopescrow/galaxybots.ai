@@ -32,6 +32,17 @@ function isPrivateIpv6(ip: string): boolean {
   );
 }
 
+/**
+ * A fetch wrapper that refuses to follow any HTTP redirect.
+ * This prevents SSRF via open-redirect chains: the initial URL is already
+ * validated by assertSafeUrl(), and a redirect to an internal address would
+ * otherwise bypass that check.  Callers that need the response body should
+ * use this instead of the global fetch().
+ */
+export async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, redirect: "error" });
+}
+
 export async function assertSafeUrl(rawUrl: string): Promise<void> {
   let parsed: URL;
   try {

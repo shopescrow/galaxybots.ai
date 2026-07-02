@@ -3,7 +3,7 @@ import { db, clientIntegrationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { decryptCredential } from "../../utils/credential-encryption";
 import type { CallLog, ReceptionistConfig } from "@workspace/db";
-import { assertSafeUrl } from "../../lib/ssrf-guard";
+import { assertSafeUrl, safeFetch } from "../../lib/ssrf-guard";
 
 async function getClientCredential(clientId: number, service: string): Promise<string | null> {
   const [row] = await db
@@ -156,7 +156,7 @@ async function syncToWebhook(callLog: CallLog, config: ReceptionistConfig): Prom
   }
   const signature = createHmac("sha256", secret).update(payloadStr).digest("hex");
 
-  const response = await fetch(config.crmWebhookUrl, {
+  const response = await safeFetch(config.crmWebhookUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -222,7 +222,7 @@ export async function sendTestWebhook(webhookUrl: string): Promise<{ success: bo
   const signature = createHmac("sha256", secret).update(payloadStr).digest("hex");
 
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await safeFetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
