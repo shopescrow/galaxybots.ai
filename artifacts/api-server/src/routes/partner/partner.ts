@@ -306,15 +306,16 @@ router.put("/partner/:ref", async (req, res) => {
       res.status(404).json({ error: "Partner not found" }); return;
     }
 
+    if (!partner.adminPasswordHash) {
+      res.status(401).json({ error: "Partner admin not configured" }); return;
+    }
     const providedPassword = password || adminPassword;
-    if (partner.adminPasswordHash) {
-      if (!providedPassword) {
-        res.status(401).json({ error: "Admin password required" }); return;
-      }
-      const valid = await bcrypt.compare(providedPassword, partner.adminPasswordHash);
-      if (!valid) {
-        res.status(401).json({ error: "Invalid admin password" }); return;
-      }
+    if (!providedPassword) {
+      res.status(401).json({ error: "Admin password required" }); return;
+    }
+    const valid = await bcrypt.compare(providedPassword, partner.adminPasswordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid admin password" }); return;
     }
 
     const updateData: Record<string, unknown> = {};

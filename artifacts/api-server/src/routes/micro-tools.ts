@@ -1,17 +1,17 @@
 import { Router, type IRouter } from "express";
 import { callWithFallback, ModelTier } from "../services/ai-safety/model-fallback";
+import { llmRateLimit } from "../middleware/rate-limit";
 
 /**
- * Public Micro-SaaS tool endpoints (task #264).
+ * Micro-SaaS tool endpoints.
  *
- * These power standalone single-purpose AI tools (their own web artifacts) and
- * are intentionally PUBLIC — "/micro-tools/" is listed in PUBLIC_PREFIX_SUFFIXES
- * in app.ts so unauthenticated subscribers of a standalone tool can reach them.
- * Every endpoint runs through `callWithFallback`, the single shared, governed AI
- * access path (circuit breakers, fallback chains, usage logging).
+ * POST /micro-tools/caption-writer requires an authenticated session — the
+ * auth middleware (createAuthMiddleware in app.ts) enforces this because
+ * "/micro-tools/" is no longer in PUBLIC_PREFIX_SUFFIXES.  Only
+ * GET /micro-tools/catalog is public (listed in PUBLIC_SUFFIXES).
  *
- * The bundled example tool is the caption writer, which validates the builder →
- * scaffold → standalone-artifact pipeline end to end.
+ * Every LLM endpoint also runs through `callWithFallback` (circuit breakers,
+ * fallback chains, usage logging) and the per-plan llmRateLimit.
  */
 
 const router: IRouter = Router();
@@ -58,7 +58,7 @@ router.get("/micro-tools/catalog", (_req, res): void => {
 });
 
 // ---- Caption writer (example micro-SaaS tool) -------------------------------
-router.post("/micro-tools/caption-writer", async (req, res): Promise<void> => {
+router.post("/micro-tools/caption-writer", llmRateLimit, async (req, res): Promise<void> => {
   const body = (req.body ?? {}) as {
     topic?: unknown;
     tone?: unknown;

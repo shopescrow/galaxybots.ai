@@ -29,6 +29,7 @@ export function useCaptionGenerator() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(params),
       });
 

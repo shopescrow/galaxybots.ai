@@ -173,6 +173,7 @@ const PUBLIC_SUFFIXES = [
   "/pdf/health",
   "/data-export",
   "/liberator/transforms",
+  "/micro-tools/catalog",
 ];
 
 const PUBLIC_PREFIX_SUFFIXES = [
@@ -190,7 +191,6 @@ const PUBLIC_PREFIX_SUFFIXES = [
   "/scim/v2/",
   "/proposals/shared/",
   "/roi/shared/",
-  "/micro-tools/",
 ];
 
 function buildPublicPaths(prefix: string) {
