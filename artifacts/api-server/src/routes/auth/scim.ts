@@ -37,7 +37,8 @@ async function scimAuth(req: Request, res: Response, next: NextFunction): Promis
   const token = authHeader.slice(7);
   const configs = await db
     .select()
-    .from(ssoConfigsTable);
+    .from(ssoConfigsTable)
+    .where(eq(ssoConfigsTable.enabled, true));
 
   const config = configs.find((c) => {
     if (!c.scimToken) return false;

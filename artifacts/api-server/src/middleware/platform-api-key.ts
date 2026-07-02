@@ -59,6 +59,15 @@ async function validateAndAuthorize(keyRecord: any, req: Request, res: Response,
     return;
   }
 
+  // Enforce platform-specific path scoping. A piratemonster_mcp key is a
+  // narrowly-scoped integration credential and must not grant access to
+  // general tenant-admin routes.
+  if (keyRecord.platform === "piratemonster_mcp" &&
+      !req.path.startsWith("/integrations/piratemonster/")) {
+    res.status(403).json({ error: "This API key is not authorized for this endpoint" });
+    return;
+  }
+
   if (keyRecord.expiresAt && new Date(keyRecord.expiresAt) < new Date()) {
     res.status(401).json({ error: "API key has expired" });
     return;
