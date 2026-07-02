@@ -158,6 +158,38 @@ export const authRateLimit = rateLimit({
   store: new AdaptiveStore("rl:auth:", 15 * 60 * 1000),
 });
 
+export const portalPinRequestLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 3,
+  keyGenerator: (req: Request) => {
+    const body = req.body as { email?: string; phone?: string } | undefined;
+    const identifier = body?.email?.toLowerCase() ?? body?.phone;
+    return identifier ? `portal-req:${identifier}` : `portal-req-ip:${req.ip ?? "unknown"}`;
+  },
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  validate: false,
+  passOnStoreError: true,
+  message: { error: "Too many PIN requests for this account. Please try again later." },
+  store: new AdaptiveStore("rl:portal-req:", 15 * 60 * 1000),
+});
+
+export const portalPinVerifyLimit = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 5,
+  keyGenerator: (req: Request) => {
+    const body = req.body as { email?: string; phone?: string } | undefined;
+    const identifier = body?.email?.toLowerCase() ?? body?.phone;
+    return identifier ? `portal-ver:${identifier}` : `portal-ver-ip:${req.ip ?? "unknown"}`;
+  },
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  validate: false,
+  passOnStoreError: true,
+  message: { error: "Too many PIN attempts. Please request a new PIN and try again." },
+  store: new AdaptiveStore("rl:portal-ver:", 10 * 60 * 1000),
+});
+
 export const generalRateLimit = rateLimit({
   windowMs: 60 * 1000,
   limit: (req: Request) => {

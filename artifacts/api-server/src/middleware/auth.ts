@@ -79,7 +79,11 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   }
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthUser & { purpose?: string };
+    if (decoded.purpose === "client_portal") {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
     if (checkRevocation && decoded.email && decoded.iat) {
       if (checkRevocation(decoded.email, decoded.iat)) {
         res.status(401).json({ error: "Session has been revoked" });

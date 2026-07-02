@@ -18,6 +18,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { getClientROI } from "../../services/analytics/roi";
 import { requireRole } from "../../middleware/auth";
+import { authRateLimit, portalPinRequestLimit, portalPinVerifyLimit } from "../../middleware/rate-limit";
 
 const router: IRouter = Router();
 
@@ -88,7 +89,7 @@ async function authenticateStakeholder(req: Request, res: Response, next: NextFu
   }
 }
 
-router.post("/client-portal/request-pin", async (req, res): Promise<void> => {
+router.post("/client-portal/request-pin", authRateLimit, portalPinRequestLimit, async (req, res): Promise<void> => {
   const schema = z.object({
     email: z.string().email().optional(),
     phone: z.string().min(7).optional(),
@@ -181,7 +182,7 @@ router.post("/client-portal/request-pin", async (req, res): Promise<void> => {
   res.json({ message: "If an account exists, a PIN has been sent." });
 });
 
-router.post("/client-portal/verify-pin", async (req, res): Promise<void> => {
+router.post("/client-portal/verify-pin", authRateLimit, portalPinVerifyLimit, async (req, res): Promise<void> => {
   const schema = z.object({
     email: z.string().email().optional(),
     phone: z.string().min(7).optional(),
