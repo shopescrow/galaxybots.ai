@@ -30,12 +30,13 @@ This threat model assumes `NODE_ENV=production`, TLS is terminated by the platfo
 - **Public surfaces:** billing webhooks, SSO routes, partner/webhook endpoints, shared proposal/ROI routes, developer docs/changelog endpoints, Liberator public routes, stakeholder client-portal auth flow
 - **Dev-only / usually ignore:** `artifacts/mockup-sandbox/**`, presentation/user-guide artifacts, local scripts/tests unless they expose production code paths
 
-## Current Scan Notes (2026-06-30)
+## Current Scan Notes (2026-07-02)
 
-- Confirmed hot spots for future scans are the client-portal PIN and stakeholder-token flows, developer/platform key trust boundaries, public `/partner/*` endpoints, public pipeline webhook auth, and outbound request test endpoints such as the receptionist webhook tester.
-- The public route allowlist in `artifacts/api-server/src/app.ts` remains a primary source of production exposure and should be re-checked whenever new endpoints are added under `/partner/`, `/client-portal/`, `/webhooks/`, `/scim/`, `/sso/`, or shared-link prefixes.
-- Liberator's stateful job and CRM routes were reviewed in this scan and currently rely on authenticated app access plus tenant RLS and explicit owner checks; the only public Liberator surface identified here was metadata-style `/liberator/transforms` exposure. Re-scan Liberator deeply only if the auth model, RLS wiring, or public allowlist changes.
-- Several top SAST hits in onboarding, user-preferences, object-storage localhost transport, and Piratemonster SQL usage were reviewed and did not yield production-impactful findings in the current code.
+- Confirmed exploitable credential-boundary failures in the stakeholder client-portal flow, SCIM disable/revocation behavior, and Piratemonster MCP `x-platform-key` handling.
+- Confirmed a production-seeded default partner credential on the public Bingolingo partner surface; re-scan any startup seeders and public partner routes whenever partner onboarding changes.
+- Confirmed redirect-following SSRF in Liberator and webhook-delivery flows. For future scans, treat any outbound request guarded only by preflight hostname validation as suspicious unless redirects are disabled or the final destination is revalidated.
+- Public micro-tools remain a standing anonymous cost-abuse surface because they invoke paid LLM operations behind a public prefix with only coarse IP limiting.
+- Areas reviewed and not currently promoted to findings in this scan: pipeline/lead webhook secret validation, developer webhook-test redirect handling, share-token proposal/ROI routes, and core SAML/OIDC state/nonce validation.
 
 ## Threat Categories
 
