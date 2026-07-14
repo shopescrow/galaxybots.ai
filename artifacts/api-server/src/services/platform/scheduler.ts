@@ -68,6 +68,7 @@ import { runDemandRefresh } from "./jobs/demand-refresh";
 import { runMetricRollupsAndSloEval } from "./jobs/compute-metric-rollups";
 import { runDataRetention } from "./jobs/data-retention";
 import { runRollupRefresh } from "./jobs/rollup-refresh";
+import { runEmployeeProfileUpdateCycle } from "./jobs/employee-profile-update";
 import { runBillingCycleClose, runBillingDunning } from "./jobs/billing-cycle-close";
 
 export { checkApprovalSLAs };
@@ -97,6 +98,7 @@ const mediumFreqJobs: Job[] = [
   { name: "billing-dunning", fn: runBillingDunning },
   { name: "billing-cycle-close", fn: runBillingCycleClose },
   { name: "gaa-cycle", fn: runGaaTick },
+  { name: "employee-profile-update", fn: runEmployeeProfileUpdateCycle },
   { name: "assignments", fn: checkDueAssignments },
   { name: "KB sync", fn: checkKnowledgeBaseSyncs },
   { name: "scheduled workflows", fn: checkScheduledWorkflows },

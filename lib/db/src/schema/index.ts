@@ -105,3 +105,4 @@ export * from "./asset-autonomy";
 export * from "./client-token-quotas";
 export * from "./tenant-observability";
 export * from "./data-lifecycle";
+export * from "./employee-learning";

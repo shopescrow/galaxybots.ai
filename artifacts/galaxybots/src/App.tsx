@@ -112,6 +112,7 @@ const SelfImprovementDashboard = lazy(() => import("@/pages/self-improvement/Sel
 const ExperimentsPage     = lazy(() => import("@/pages/self-improvement/ExperimentsPage"));
 const AlignmentAuditPage  = lazy(() => import("@/pages/self-improvement/AlignmentAuditPage"));
 const PromptVersionsPage  = lazy(() => import("@/pages/self-improvement/PromptVersionsPage"));
+const EmployeeLearningDashboard = lazy(() => import("@/pages/self-improvement/EmployeeLearningDashboard"));
 const PlatformIntelligence = lazy(() => import("@/pages/platform-intelligence/PlatformIntelligence"));
 const GalaxyIntelligence  = lazy(() => import("@/pages/intelligence/GalaxyIntelligence"));
 const DemandEngine        = lazy(() => import("@/pages/intelligence/DemandEngine"));
@@ -275,6 +276,7 @@ function AuthenticatedRoutes() {
         <Route path="/security-events"        component={() => <AdminOnly component={SecurityEventLog} />} />
         <Route path="/anomaly-queue"          component={() => <AdminOnly component={AnomalyQueue} />} />
         <Route path="/causal-model"           component={() => <AdminOnly component={CausalModelDashboard} />} />
+        <Route path="/employee-learning"      component={EmployeeLearningDashboard} />
         <Route path="/self-improvement"       component={SelfImprovementDashboard} />
         <Route path="/experiments"            component={ExperimentsPage} />
         <Route path="/alignment-audit"        component={AlignmentAuditPage} />

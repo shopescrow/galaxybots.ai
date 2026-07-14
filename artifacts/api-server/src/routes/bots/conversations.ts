@@ -23,6 +23,7 @@ import { applySlidingWindow, trimToFitContextWindow } from "../../services/ai-sa
 import { callWithFallback } from "../../services/ai-safety/model-fallback";
 import { selectStrategy, recordStrategyRun, recordRunTelemetry, buildConductorMeta, deriveModelTier } from "../../services/conductor/galaxy-conductor";
 import { recordScalingTelemetry } from "../../services/analytics/scaling-telemetry";
+import { detectAndEmitMessageSignals, buildEmployeeProfileContext } from "../../services/gaa/employee-learning";
 import { executeStrategy } from "../../services/conductor/strategies/index";
 
 const router: IRouter = Router();
@@ -190,6 +191,30 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     console.error(`[conversations/messages] POST /conversations/${params.data.id}/messages botId=${bot.id} requestId=${convRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
   }
 
+  let employeeProfileContext = "";
+  if (req.user!.userId && req.user!.clientId && req.user!.role !== "guest") {
+    try {
+      const priorBotMessages = history
+        .filter((m) => m.role === "bot" && (m.messageType === "text" || !m.messageType))
+        .slice(-3)
+        .map((m) => ({ content: m.content, botId: bot.id }));
+      detectAndEmitMessageSignals({
+        sessionId: -params.data.id,
+        userId: req.user!.userId,
+        clientId: req.user!.clientId,
+        botIds: [bot.id],
+        humanContent: body.data.content,
+        priorBotMessages,
+      }).catch(() => {});
+      employeeProfileContext = await buildEmployeeProfileContext(
+        req.user!.userId,
+        bot.id,
+        req.user!.clientId,
+      );
+    } catch {
+    }
+  }
+
   const isGuardianQueen = (bot as { rank?: string }).rank === "guardian_queen";
 
   const systemPrompt = isGuardianQueen
@@ -215,7 +240,7 @@ Your department: ${bot.department}
 
 Your key responsibilities:
 ${bot.responsibilities.map((r, i) => `${i + 1}. ${r}`).join("\n")}
-${memoryContext}${kbContext}${packOverlay}
+${memoryContext}${kbContext}${packOverlay}${employeeProfileContext}
 You speak with the authority, expertise, and professionalism of a Fortune 500 executive. Provide strategic, insightful, and actionable advice from your professional perspective. Be direct, confident, and brilliant. You are speaking to the CEO or a client. Always stay in character.
 
 You have access to tools that allow you to search the web, read/write shared state, query platform data, and delegate tasks to other bots. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.${langInstruction}`;

@@ -97,6 +97,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/documents",             label: "Documents",             description: "Document management" },
       { href: "/asset-studio",          label: "Asset Studio",          description: "Portfolio of income-producing digital assets" },
       { href: "/bots/ai-receptionist",  label: "AI Receptionist",       description: "Front-desk automation" },
+      { href: "/employee-learning",     label: "AI Profiles",           description: "Employee behavioral profiles & learning loop" },
       { href: "/self-improvement",      label: "Self-Improvement",      description: "Calibration, prompt evolution & alignment" },
       { href: "/experiments",           label: "Experiments",           description: "A/B hypothesis testing" },
       { href: "/alignment-audit",       label: "Alignment Audit",       description: "Multi-stakeholder learned preferences" },

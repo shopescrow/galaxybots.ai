@@ -10,6 +10,10 @@ import { eq, desc, inArray, and, gt, or, isNull } from "drizzle-orm";
 import { captureSessionOutcome } from "../../services/analytics/outcome-capture";
 import { getPackOverlayForBot } from "../../services/billing/pack-overlays";
 import {
+  detectAndEmitMessageSignals,
+  buildEmployeeProfileContext,
+} from "../../services/gaa/employee-learning";
+import {
   AnalyzeTaskBody,
   CreateTaskSessionBody,
   SendTaskSessionMessageBody,
@@ -191,7 +195,7 @@ router.post("/task-sessions", requireRole("owner", "admin"), requireTenantAccess
 
   const [session] = await db
     .insert(taskSessionsTable)
-    .values({ objective: body.data.objective, clientId: sessionClientId })
+    .values({ objective: body.data.objective, clientId: sessionClientId, userId: req.user!.userId ?? null })
     .returning();
 
   if (body.data.botIds.length > 0) {
@@ -308,8 +312,8 @@ router.post(
       .orderBy(desc(taskSessionMessagesTable.createdAt))
       .limit(10);
 
-    const contextMessages = recentMsgs
-      .reverse()
+    const recentMsgsOrdered = recentMsgs.slice().reverse();
+    const contextMessages = recentMsgsOrdered
       .map((m) => `${m.botName || "User"}: ${m.content}`)
       .join("\n");
 
@@ -331,6 +335,20 @@ router.post(
       console.error(`[task-sessions/messages] POST /task-sessions/${params.data.id}/messages requestId=${msgRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
     }
 
+    const msgUserId = req.user!.userId;
+    const priorBotMessages = recentMsgsOrdered
+      .filter((m) => m.role === "bot" && m.messageType === "text")
+      .map((m) => ({ content: m.content, botId: m.botId }));
+
+    detectAndEmitMessageSignals({
+      sessionId: session.id,
+      userId: msgUserId,
+      clientId: msgContextClientId,
+      botIds: teamBots.map((b) => b.id),
+      humanContent: body.data.content,
+      priorBotMessages,
+    }).catch(() => {});
+
     for (const bot of teamBots) {
       let memoryContext = "";
       try {
@@ -346,13 +364,24 @@ router.post(
         console.error(`[task-sessions/messages] POST /task-sessions/${params.data.id}/messages botId=${bot.id} requestId=${msgRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
       }
 
+      let employeeProfileCtx = "";
+      try {
+        employeeProfileCtx = await buildEmployeeProfileContext(
+          msgUserId,
+          bot.id,
+          msgContextClientId,
+        );
+      } catch (err) {
+        console.warn(`[task-sessions/messages] employee profile context failed (non-fatal):`, err instanceof Error ? err.message : err);
+      }
+
       const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 ${clientContext}${packOverlay}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
-${memoryContext}${taskKbContext}
+${memoryContext}${taskKbContext}${employeeProfileCtx}
 You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
 
 You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.
@@ -521,8 +550,8 @@ router.post(
         .orderBy(desc(taskSessionMessagesTable.createdAt))
         .limit(10);
 
-      const contextMessages = recentMsgs
-        .reverse()
+      const recentMsgsOrdered = recentMsgs.slice().reverse();
+      const contextMessages = recentMsgsOrdered
         .map((m) => `${m.botName || "User"}: ${m.content}`)
         .join("\n");
 
@@ -541,6 +570,20 @@ router.post(
         console.error(`[task-sessions/messages/stream] POST /task-sessions/${params.data.id}/messages/stream requestId=${streamRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
       }
 
+      const streamUserId = req.user!.userId;
+      const streamPriorBotMessages = recentMsgsOrdered
+        .filter((m) => m.role === "bot" && m.messageType === "text")
+        .map((m) => ({ content: m.content, botId: m.botId }));
+
+      detectAndEmitMessageSignals({
+        sessionId: session.id,
+        userId: streamUserId,
+        clientId: streamContextClientId,
+        botIds: teamBots.map((b) => b.id),
+        humanContent: body.data.content,
+        priorBotMessages: streamPriorBotMessages,
+      }).catch(() => {});
+
       await batchProcessWithSSE(
         teamBots,
         async (bot) => {
@@ -551,13 +594,23 @@ router.post(
             console.error(`[task-sessions/messages/stream] POST /task-sessions/${params.data.id}/messages/stream botId=${bot.id} requestId=${streamRequestId} error=${err instanceof Error ? err.message : String(err)}`, err instanceof Error ? err.stack : err);
           }
 
+          let streamEmployeeProfileCtx = "";
+          try {
+            streamEmployeeProfileCtx = await buildEmployeeProfileContext(
+              streamUserId,
+              bot.id,
+              streamContextClientId,
+            );
+          } catch {
+          }
+
           const systemPrompt = `You are ${bot.name}, ${bot.title} in the ${bot.department} department — a master's-level domain expert.
 Personality: ${bot.personality}
 Your responsibilities: ${bot.responsibilities.join("; ")}
 ${clientContext}${packOverlay}
 TASK OBJECTIVE: ${session.objective}
 TEAM MEMBERS: ${teamRoster}
-${streamTaskKbContext}
+${streamTaskKbContext}${streamEmployeeProfileCtx}
 You are participating in a dedicated task session. Respond with deep domain expertise, citing relevant frameworks, standards, regulations, and best practices from your specialty. Keep responses focused and actionable (3-5 sentences).
 
 You have access to tools that allow you to search the web, read/write shared session state, query platform data, and delegate tasks to teammates. Use tools when they would genuinely help you provide better answers. Don't use tools if the question can be answered from your expertise alone.

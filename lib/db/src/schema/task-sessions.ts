@@ -3,10 +3,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { botsTable } from "./bots";
 import { clientsTable } from "./clients";
+import { usersTable } from "./users";
 
 export const taskSessionsTable = pgTable("task_sessions", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   objective: text("objective").notNull(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
