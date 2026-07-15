@@ -66,6 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/journal",    label: "Journal",           description: "Activity journal" },
       { href: "/governance", label: "Governance",        description: "Governance controls" },
       { href: "/gaa",        label: "Autonomous Agent",  description: "Galaxy Autonomous Agent — goals, constitution & escalations" },
+      { href: "/staff",      label: "Staff Directory",   description: "Team member profiles and org directory" },
     ],
   },
   {

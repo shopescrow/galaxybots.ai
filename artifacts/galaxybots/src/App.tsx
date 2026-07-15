@@ -104,6 +104,7 @@ const McpLaunch           = lazy(() => import("@/pages/mcp-marketing/McpLaunch")
 const McpDocs             = lazy(() => import("@/pages/mcp-marketing/McpDocs"));
 const SlaWalkthrough      = lazy(() => import("@/pages/sla-walkthrough/SlaWalkthrough"));
 const GuardianHive        = lazy(() => import("@/pages/guardian/GuardianHive"));
+const StaffDirectory      = lazy(() => import("@/pages/staff/StaffDirectory"));
 const BeliefBrowser       = lazy(() => import("@/pages/beliefs/BeliefBrowser"));
 const SecurityEventLog    = lazy(() => import("@/pages/beliefs/SecurityEventLog"));
 const AnomalyQueue        = lazy(() => import("@/pages/beliefs/AnomalyQueue"));
@@ -272,6 +273,7 @@ function AuthenticatedRoutes() {
         <Route path="/mcp-growth-hub"         component={McpGrowthHub} />
         <Route path="/sla-walkthrough"        component={SlaWalkthrough} />
         <Route path="/guardian-hive"          component={GuardianHive} />
+        <Route path="/staff"                  component={StaffDirectory} />
         <Route path="/belief-browser"         component={() => <AdminOnly component={BeliefBrowser} />} />
         <Route path="/security-events"        component={() => <AdminOnly component={SecurityEventLog} />} />
         <Route path="/anomaly-queue"          component={() => <AdminOnly component={AnomalyQueue} />} />

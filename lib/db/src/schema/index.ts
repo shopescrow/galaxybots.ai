@@ -58,6 +58,7 @@ export * from "./mcp-oauth-clients";
 export * from "./intelligence-briefs";
 export * from "./mission-templates";
 export * from "./workflows";
+export * from "./staff-profiles";
 export * from "./activation-emails";
 export * from "./causal-outcomes";
 export * from "./platform-causal-patterns";
