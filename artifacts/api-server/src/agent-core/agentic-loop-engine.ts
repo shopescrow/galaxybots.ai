@@ -11,7 +11,7 @@ import { checkToolPermission, createPendingApproval, getResolvedApprovals, ROUTI
 import { checkConsequenceRisk, isNonIdempotentTool, getToolContextType, CONSEQUENCE_RISK_THRESHOLD, evaluateAutoApproval } from "../services/platform/consequence-gate.js";
 import { getClientPlatformPriorText } from "../services/platform/jobs/cross-client-causal-aggregation.js";
 import { writeAuditEntry } from "../services/audit/audit-ledger.js";
-import { db, botVariantAssignmentsTable, botsTable, promptVersionsTable } from "@workspace/db";
+import { db, botVariantAssignmentsTable, botsTable, promptVersionsTable, toolActivityLogTable } from "@workspace/db";
 import { eq, and as drizzleAnd, desc, sql } from "drizzle-orm";
 import { isToolSandboxed, getSandboxedToolResponse } from "../services/platform/demo-sandbox.js";
 import {
@@ -1069,6 +1069,24 @@ async function _runAgenticLoopEngine(options: AgenticLoopEngineOptions, rootSpan
 
         const resultEv: AgenticEvent = { type: "tool_result", toolName, toolCallId: toolCall.id, input: parsedArgs, output: result, botId: context.botId, botName: context.botName, iteration };
         events.push(resultEv); emit(resultEv);
+
+        db.insert(toolActivityLogTable).values({
+          toolName,
+          clientId: context.clientId ?? null,
+          sessionId: context.sessionId ?? null,
+          botName: context.botName ?? null,
+          metadata: {
+            toolCallId: toolCall.id,
+            botId: context.botId,
+            input: parsedArgs,
+            success: !toolError,
+            error: toolError ?? null,
+            durationMs: toolDurationMs,
+            iteration,
+          },
+        }).catch((err: unknown) => {
+          console.error("[AgenticLoop] Tool activity log write failed:", err instanceof Error ? err.message : err);
+        });
 
         return { toolCallId: toolCall.id, result };
       })
