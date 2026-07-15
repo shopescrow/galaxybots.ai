@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
+  AlertTriangle,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -103,6 +104,17 @@ export function ComedyClashPanel() {
       return res.json();
     },
   });
+
+  const { data: inboundSecretStatus } = useQuery<{ configured: boolean }>({
+    queryKey: ["cc-inbound-secret-status"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/integrations/comedyclash/inbound-secret/status`);
+      if (!res.ok) return { configured: false };
+      return res.json();
+    },
+  });
+
+  const inboundSecretConfigured = inboundSecretStatus?.configured ?? true;
 
   const { data: inboundEvents = [] } = useQuery<InboundEvent[]>({
     queryKey: ["cc-inbound-events"],
@@ -263,6 +275,7 @@ export function ComedyClashPanel() {
       return res.json();
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["cc-inbound-secret-status"] });
       navigator.clipboard.writeText(data.secret);
       toast({ title: "Secret Regenerated", description: "New inbound secret copied to clipboard. Configure it in ComedyClash." });
     },
@@ -303,7 +316,12 @@ export function ComedyClashPanel() {
             <TabsTrigger value="connection" className="text-xs gap-1"><Zap className="w-3 h-3" /> Connection</TabsTrigger>
             <TabsTrigger value="api-keys" className="text-xs gap-1"><Key className="w-3 h-3" /> API Keys</TabsTrigger>
             <TabsTrigger value="webhooks" className="text-xs gap-1"><Webhook className="w-3 h-3" /> Webhooks</TabsTrigger>
-            <TabsTrigger value="inbound" className="text-xs gap-1"><Radio className="w-3 h-3" /> Inbound</TabsTrigger>
+            <TabsTrigger value="inbound" className="text-xs gap-1">
+              <Radio className="w-3 h-3" /> Inbound
+              {!inboundSecretConfigured && (
+                <AlertTriangle className="w-3 h-3 text-amber-500 ml-0.5" />
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="connection" className="space-y-4">
@@ -497,6 +515,15 @@ export function ComedyClashPanel() {
           </TabsContent>
 
           <TabsContent value="inbound" className="space-y-4">
+            {!inboundSecretConfigured && (
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div className="text-xs space-y-1">
+                  <p className="font-medium">No inbound signing secret configured</p>
+                  <p>Events sent by ComedyClash before a secret is generated will be stored as <span className="font-mono">unauthenticated</span> and will not trigger any pipelines. Generate a secret below and configure it in ComedyClash to start processing events.</p>
+                </div>
+              </div>
+            )}
             <div className="p-3 rounded-lg bg-secondary/40 space-y-2">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Inbound Webhook URL</label>
               <div className="flex items-center gap-2">
@@ -529,7 +556,14 @@ export function ComedyClashPanel() {
                     <div key={ev.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/40 text-xs">
                       <Badge variant="outline" className="text-xs shrink-0">{ev.eventType}</Badge>
                       <span className="text-muted-foreground flex-1">{ev.sessionId || "—"}</span>
-                      <Badge variant={ev.status === "received" ? "default" : "secondary"} className="text-xs">{ev.status}</Badge>
+                      {ev.status === "unauthenticated" ? (
+                        <Badge variant="outline" className="text-xs border-amber-500/60 text-amber-600 dark:text-amber-400 gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          unauthenticated
+                        </Badge>
+                      ) : (
+                        <Badge variant={ev.status === "received" ? "default" : "secondary"} className="text-xs">{ev.status}</Badge>
+                      )}
                       <span className="text-muted-foreground">{new Date(ev.createdAt).toLocaleTimeString()}</span>
                     </div>
                   ))}

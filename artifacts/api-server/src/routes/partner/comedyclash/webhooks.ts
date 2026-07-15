@@ -41,61 +41,73 @@ function decryptSecret(encryptedSecret: string, iv: string, authTag: string): st
   return decrypted;
 }
 
-async function requireInboundHmac(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const [secretRecord] = await db
-    .select()
-    .from(partnerInboundSecretsTable)
-    .where(eq(partnerInboundSecretsTable.partner, "comedyclash"))
-    .limit(1);
-
-  if (!secretRecord) {
-    res.status(503).json({ error: "ComedyClash inbound secret not configured. Visit the admin UI to generate one." });
-    return;
-  }
-
-  const signature = req.headers["x-comedyclash-signature"] as string | undefined;
-  if (!signature) {
-    res.status(401).json({ error: "Missing x-comedyclash-signature header" });
-    return;
-  }
-
-  let rawSecret: string;
-  try {
-    rawSecret = decryptSecret(secretRecord.encryptedSecret, secretRecord.iv, secretRecord.authTag);
-  } catch {
-    res.status(500).json({ error: "Failed to load inbound secret" });
-    return;
-  }
-
-  const rawBody: Buffer | undefined = (req as unknown as Record<string, unknown>)["rawBody"] as Buffer | undefined;
-  const bodyBytes = rawBody ?? Buffer.from(JSON.stringify(req.body));
-
-  const expected = `sha256=${crypto.createHmac("sha256", rawSecret).update(bodyBytes).digest("hex")}`;
-
-  try {
-    if (
-      signature.length !== expected.length ||
-      !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-    ) {
-      res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
-      return;
-    }
-  } catch {
-    res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
-    return;
-  }
-
-  next();
-}
-
 const InboundEventSchema = z.object({
   eventType: z.string(),
   payload: z.record(z.string(), z.unknown()).optional().default({}),
   sessionId: z.string().optional(),
 });
 
-router.post("/integrations/comedyclash/inbound-webhook", requireInboundHmac, async (req, res): Promise<void> => {
+router.post("/integrations/comedyclash/inbound-webhook", async (req, res): Promise<void> => {
   try {
+    const [secretRecord] = await db
+      .select()
+      .from(partnerInboundSecretsTable)
+      .where(eq(partnerInboundSecretsTable.partner, "comedyclash"))
+      .limit(1);
+
+    if (!secretRecord) {
+      const parsed = InboundEventSchema.safeParse(req.body);
+      const eventType = parsed.success ? parsed.data.eventType : "unknown";
+      const payload = parsed.success ? parsed.data.payload : {};
+      const sessionId = parsed.success ? (parsed.data.sessionId ?? null) : null;
+      const [queued] = await db.insert(partnerInboundEventsTable).values({
+        partner: "comedyclash",
+        clientId: null,
+        eventType,
+        payload,
+        status: "unauthenticated",
+        sessionId,
+      }).returning({ id: partnerInboundEventsTable.id });
+      console.warn(`[CC] Inbound event stored as unauthenticated (no secret configured): ${eventType} (id=${queued.id})`);
+      res.status(202).json({
+        queued: true,
+        eventId: queued.id,
+        warning: "No inbound signing secret is configured. Event stored as unauthenticated and will not trigger pipelines until a secret is generated.",
+      });
+      return;
+    }
+
+    const signature = req.headers["x-comedyclash-signature"] as string | undefined;
+    if (!signature) {
+      res.status(401).json({ error: "Missing x-comedyclash-signature header" });
+      return;
+    }
+
+    let rawSecret: string;
+    try {
+      rawSecret = decryptSecret(secretRecord.encryptedSecret, secretRecord.iv, secretRecord.authTag);
+    } catch {
+      res.status(500).json({ error: "Failed to load inbound secret" });
+      return;
+    }
+
+    const rawBody: Buffer | undefined = (req as unknown as Record<string, unknown>)["rawBody"] as Buffer | undefined;
+    const bodyBytes = rawBody ?? Buffer.from(JSON.stringify(req.body));
+    const expected = `sha256=${crypto.createHmac("sha256", rawSecret).update(bodyBytes).digest("hex")}`;
+
+    try {
+      if (
+        signature.length !== expected.length ||
+        !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+      ) {
+        res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
+        return;
+      }
+    } catch {
+      res.status(401).json({ error: "Invalid HMAC-SHA256 signature" });
+      return;
+    }
+
     const parsed = InboundEventSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid payload", details: parsed.error.flatten().fieldErrors });
@@ -242,6 +254,20 @@ router.get("/integrations/comedyclash/inbound-events", requireRole("owner", "adm
   } catch (err) {
     console.error("[CC] Error listing inbound events:", err);
     res.status(500).json({ error: "Failed to list inbound events" });
+  }
+});
+
+router.get("/integrations/comedyclash/inbound-secret/status", requireRole("owner", "admin"), async (_req, res): Promise<void> => {
+  try {
+    const [secretRecord] = await db
+      .select({ id: partnerInboundSecretsTable.id })
+      .from(partnerInboundSecretsTable)
+      .where(eq(partnerInboundSecretsTable.partner, "comedyclash"))
+      .limit(1);
+    res.json({ configured: !!secretRecord });
+  } catch (err) {
+    console.error("[CC] Error checking inbound secret status:", err);
+    res.status(500).json({ error: "Failed to check inbound secret status" });
   }
 });
 
