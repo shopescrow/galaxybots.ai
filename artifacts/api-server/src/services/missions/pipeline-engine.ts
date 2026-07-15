@@ -483,6 +483,29 @@ Complete your assigned task thoroughly and provide a clear summary of what you a
     .set({ status: finalStatus, completedAt: new Date() })
     .where(eq(pipelineRunsTable.id, runId));
 
+  // Emit partner outbound events for CC webhook subscriptions (best-effort).
+  if (pipeline.clientId) {
+    import("../platform/partner-webhook-emitter").then(({ enqueueComedyClashEvent }) => {
+      const eventSlug = finalStatus === "done" ? "task.finished" : "session.failed";
+      return enqueueComedyClashEvent(eventSlug, {
+        pipelineId: pipeline.id,
+        runId,
+        status: finalStatus,
+        output: previousOutput ?? null,
+      }, pipeline.clientId);
+    }).catch(() => {});
+
+    if (finalStatus === "done" && previousOutput) {
+      import("../platform/partner-webhook-emitter").then(({ enqueueComedyClashEvent }) =>
+        enqueueComedyClashEvent("bot.output_ready", {
+          pipelineId: pipeline.id,
+          runId,
+          output: previousOutput,
+        }, pipeline.clientId)
+      ).catch(() => {});
+    }
+  }
+
   if (finalStatus === "done") {
     triggerDownstreamPipelines(pipeline.id, pipeline.clientId, previousOutput).catch((err) => {
       console.error(`Downstream pipeline trigger error for pipeline ${pipeline.id}:`, err);

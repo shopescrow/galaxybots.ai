@@ -13,6 +13,7 @@ export interface AuthUser {
   guestSessionId?: number;
   iat?: number;
   developerKeyId?: number;
+  allowedTools?: string[] | null;
 }
 
 let checkRevocation: ((email: string, iat: number) => boolean) | null = null;

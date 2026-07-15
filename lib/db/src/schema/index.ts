@@ -107,3 +107,5 @@ export * from "./client-token-quotas";
 export * from "./tenant-observability";
 export * from "./data-lifecycle";
 export * from "./employee-learning";
+export * from "./partner-credentials";
+export * from "./partner-webhook-deliveries";

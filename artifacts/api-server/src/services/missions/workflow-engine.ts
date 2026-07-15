@@ -242,6 +242,18 @@ async function dispatchAction(
           .update(prospectsTable)
           .set({ status: status as "qualified" | "contacted" | "rejected", updatedAt: new Date() })
           .where(and(eq(prospectsTable.id, prospectId), eq(prospectsTable.clientId, clientId)));
+
+        // Emit lead.qualified partner outbound event when a lead is qualified.
+        if (status === "qualified") {
+          import("../platform/partner-webhook-emitter").then(({ enqueueComedyClashEvent }) =>
+            enqueueComedyClashEvent("lead.qualified", {
+              prospectId,
+              workflowId,
+              qualifiedAt: new Date().toISOString(),
+            }, clientId)
+          ).catch(() => {});
+        }
+
         return `Prospect ${prospectId} status updated to "${status}"`;
       }
       return `Prospect status action: no prospectId in payload`;

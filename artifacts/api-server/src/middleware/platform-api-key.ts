@@ -68,6 +68,12 @@ async function validateAndAuthorize(keyRecord: any, req: Request, res: Response,
     return;
   }
 
+  if (keyRecord.platform === "comedyclash" &&
+      !req.path.startsWith("/integrations/comedyclash/")) {
+    res.status(403).json({ error: "This API key is not authorized for this endpoint" });
+    return;
+  }
+
   if (keyRecord.expiresAt && new Date(keyRecord.expiresAt) < new Date()) {
     res.status(401).json({ error: "API key has expired" });
     return;
@@ -99,6 +105,7 @@ async function validateAndAuthorize(keyRecord: any, req: Request, res: Response,
       clientId: keyRecord.clientId,
       role: "admin",
       email: `partner@${keyRecord.platform}.com`,
+      allowedTools: (keyRecord.allowedTools as string[] | null) ?? null,
     };
   } else {
     // True platform key (no tenant binding): grant full platform identity with

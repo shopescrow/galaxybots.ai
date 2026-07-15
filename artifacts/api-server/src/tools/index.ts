@@ -17,5 +17,6 @@ import "./web3-tools";
 import "./prospecting-tools";
 import "./demand-tools";
 import "./browser-agent";
+import "./comedyclash-tools";
 export { getTool, getAllTools, getOpenAIToolDefinitions, type ToolContext } from "./registry";
 export { runAgenticLoop, type AgenticEvent, type AgenticLoopOptions, type AgenticLoopResult } from "./agentic-loop";

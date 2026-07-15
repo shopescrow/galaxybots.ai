@@ -1,6 +1,17 @@
-import { db, webhookDeliveriesTable, aeoWebhooksTable } from "@workspace/db";
-import { eq, and, or, sql } from "drizzle-orm";
+import { db, webhookDeliveriesTable, aeoWebhooksTable, partnerWebhookSubscriptionsTable } from "@workspace/db";
+import { eq, and, or, sql, inArray } from "drizzle-orm";
 import crypto from "node:crypto";
+
+export const COMEDYCLASH_EVENTS = [
+  "session.started",
+  "session.completed",
+  "session.failed",
+  "bot.output_ready",
+  "lead.qualified",
+  "task.finished",
+] as const;
+
+export type ComedyClashEvent = (typeof COMEDYCLASH_EVENTS)[number];
 
 const DELIVERY_INTERVAL_MS = 10_000;
 const MAX_ATTEMPTS = 3;
@@ -178,8 +189,10 @@ let deliveryInterval: ReturnType<typeof setInterval> | null = null;
 export function startWebhookDeliveryWorker() {
   if (deliveryInterval) return;
   console.log("[WebhookWorker] Starting webhook delivery worker (10s interval, exponential backoff)");
-  deliveryInterval = setInterval(() => {
-    processDeliveries().catch((err) => {
+  deliveryInterval = setInterval(async () => {
+    try {
+      await processDeliveries();
+    } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("relation") && msg.includes("does not exist")) {
         console.error(
@@ -189,7 +202,13 @@ export function startWebhookDeliveryWorker() {
       } else {
         console.error("[WebhookWorker] Unhandled error in delivery tick (will retry next interval):", err);
       }
-    });
+    }
+
+    import("./partner-webhook-emitter").then(({ processPartnerDeliveries }) =>
+      processPartnerDeliveries().catch((err) => {
+        console.error("[WebhookWorker] Partner delivery tick error:", err instanceof Error ? err.message : err);
+      })
+    ).catch(() => {});
   }, DELIVERY_INTERVAL_MS);
 }
 

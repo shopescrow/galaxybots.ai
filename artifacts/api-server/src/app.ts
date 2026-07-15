@@ -146,6 +146,7 @@ const PUBLIC_SUFFIXES = [
   "/compliance/platform/config",
   "/integrations/piratemonster/webhook",
   "/integrations/piratemonster/register-partner",
+  "/integrations/comedyclash/inbound-webhook",
   "/prospecting/webhook/piratemonster",
   "/partner/link",
   "/partner/admin/login",
