@@ -6,8 +6,10 @@ import triggersRouter from "./triggers";
 import missionTemplatesRouter from "./mission-templates";
 import playbooksRouter from "./playbooks";
 import briefsRouter from "./briefs";
+import liveRoomsRouter from "./live-rooms";
 
 export function registerMissionRoutes(router: IRouter) {
+  router.use(liveRoomsRouter);
   router.use(taskSessionsRouter);
   router.use(taskSessionMessagesRouter);
   router.use(workflowsRouter);

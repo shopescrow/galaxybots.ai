@@ -47,6 +47,7 @@ const PartnerAdminPortal  = lazy(() => import("@/pages/partner/PartnerAdminPorta
 const TaskSessions        = lazy(() => import("@/pages/task-sessions/TaskSessions"));
 const DeployTeam          = lazy(() => import("@/pages/task-sessions/DeployTeam"));
 const TaskBoardroom       = lazy(() => import("@/pages/task-sessions/TaskBoardroom"));
+const LiveRooms           = lazy(() => import("@/pages/task-sessions/LiveRooms"));
 
 const Compliance          = lazy(() => import("@/pages/compliance/Compliance"));
 const Integrations        = lazy(() => import("@/pages/integrations/Integrations"));
@@ -178,6 +179,14 @@ function AdminOnly({ component: Component }: { component: React.ComponentType })
   return <Component />;
 }
 
+function CsuiteOrAdmin({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <PageLoader />;
+  if (!user) return <Redirect to="/login" />;
+  if (user.role !== "owner" && user.role !== "admin" && user.role !== "csuite") return <Redirect to="/boardroom" />;
+  return <Component />;
+}
+
 function OwnerOnly({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <PageLoader />;
@@ -241,6 +250,7 @@ function AuthenticatedRoutes() {
         <Route path="/task-rooms"             component={TaskSessions} />
         <Route path="/deploy-team"            component={DeployTeam} />
         <Route path="/task-rooms/:id"         component={TaskBoardroom} />
+        <Route path="/live-rooms"             component={() => <CsuiteOrAdmin component={LiveRooms} />} />
         <Route path="/assembly"               component={Assembly} />
         <Route path="/compliance"             component={Compliance} />
         <Route path="/integrations"           component={Integrations} />

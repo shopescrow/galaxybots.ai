@@ -14,8 +14,9 @@ import {
 import { useSSEStream, type AgenticEvent } from "@/hooks/use-sse";
 import { ToolStepsDisplay, WorkingIndicator, MessageToolSteps } from "@/components/missions/ToolStepCard";
 import { SaveAsTemplateModal } from "@/components/missions/SaveAsTemplate";
+import { LiveRoomPanel } from "@/components/task-sessions/LiveRoomPanel";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -41,6 +42,7 @@ import {
   Search,
   Calendar,
   Download,
+  Radio,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -143,11 +145,14 @@ export default function TaskBoardroom() {
   const sessionId = Number(params.id) || 0;
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const searchParams = useSearch();
+  const openLiveByDefault = new URLSearchParams(searchParams).get("live") === "1";
   const scrollRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [showLiveRoom, setShowLiveRoom] = useState(openLiveByDefault);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(
     new Set(),
   );
@@ -353,7 +358,7 @@ export default function TaskBoardroom() {
 
       <div className="relative w-full h-[calc(100vh-5rem)] flex overflow-hidden bg-background print:hidden">
         {/* Sidebar */}
-        <div className="hidden lg:flex flex-col w-72 border-r border-primary/20 bg-black/30">
+        <div className="hidden lg:flex flex-col w-72 border-r border-primary/20 bg-black/30 flex-shrink-0">
           {/* Back nav */}
           <div className="px-4 pt-3 pb-2 border-b border-primary/10">
             <Button
@@ -480,6 +485,15 @@ export default function TaskBoardroom() {
 
             {/* Action buttons */}
             <div className="flex items-center gap-1 flex-shrink-0">
+              <Button
+                size="sm"
+                variant={showLiveRoom ? "default" : "outline"}
+                className="h-7 text-[10px] font-tech border-primary/30 hover:border-primary/60 px-2"
+                onClick={() => setShowLiveRoom((v) => !v)}
+              >
+                <Radio className="w-3 h-3" />
+                <span className="hidden sm:inline ml-1">Live</span>
+              </Button>
               <Button
                 size="sm"
                 variant={showSearch ? "default" : "outline"}
@@ -732,6 +746,21 @@ export default function TaskBoardroom() {
             </form>
           </div>
         </div>
+
+        {/* Live Room Panel */}
+        {showLiveRoom && (
+          <LiveRoomPanel
+            sessionId={sessionId}
+            sessionStatus={session.status ?? "active"}
+            sessionMessages={(messages ?? []).map((m) => ({
+              id: m.id,
+              content: m.content,
+              botName: m.botName ?? null,
+              senderRole: (m as { senderRole?: string }).senderRole ?? "agent",
+              createdAt: m.createdAt,
+            }))}
+          />
+        )}
       </div>
 
       <SaveAsTemplateModal

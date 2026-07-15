@@ -12,6 +12,7 @@ import {
   Radio,
   Brain,
 } from "lucide-react";
+
 import type { LucideIcon } from "lucide-react";
 
 export interface NavChild {
@@ -38,7 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "command",
     label: "Command",
     icon: Zap,
-    roles: ["owner", "admin"],
+    roles: ["owner", "admin", "csuite"],
     color: "gold",
     district: "HQ District",
     children: [
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/assembly",      label: "Assembly",        description: "Build and configure assemblies" },
       { href: "/global",        label: "Global Assembly", description: "Global assembly management" },
       { href: "/task-rooms",    label: "Task Rooms",      description: "Collaborative task rooms" },
+      { href: "/live-rooms",    label: "Live Rooms",      description: "Monitor all active sessions in real time" },
       { href: "/pipelines",     label: "Pipelines",       description: "Automation pipelines" },
     ],
   },

@@ -5,6 +5,44 @@ import { useState, useEffect, useRef, useCallback, memo, KeyboardEvent } from "r
 import { NAV_GROUPS, type NavGroup } from "./navConfig";
 import { useAuth } from "@/contexts/AuthContext";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const LIVE_BADGE_HREFS = new Set(["/live-rooms"]);
+const LIVE_ROLES = new Set(["owner", "admin", "csuite"]);
+
+function useActiveLiveHrefs(role: string | undefined, token: string | null): Set<string> {
+  const [activeHrefs, setActiveHrefs] = useState<Set<string>>(new Set());
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!role || !token || !LIVE_ROLES.has(role)) {
+      setActiveHrefs(new Set());
+      return;
+    }
+
+    const check = async () => {
+      try {
+        const res = await fetch(`${BASE}/api/task-sessions/active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveHrefs(data.length > 0 ? LIVE_BADGE_HREFS : new Set());
+        }
+      } catch {
+        /* non-fatal */
+      }
+    };
+
+    check();
+    timerRef.current = setInterval(check, 30000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [role, token]);
+
+  return activeHrefs;
+}
+
 interface SidebarProps {
   collapsed: boolean;
   mobileOpen: boolean;
@@ -77,9 +115,10 @@ interface FlyoutProps {
   group: NavGroup;
   onLinkClick?: () => void;
   location: string;
+  liveHrefs: Set<string>;
 }
 
-function GroupFlyout({ group, onLinkClick, location }: FlyoutProps) {
+function GroupFlyout({ group, onLinkClick, location, liveHrefs }: FlyoutProps) {
   const activeHref = findActiveChild(location, group);
   const d = dc(group);
   return (
@@ -103,19 +142,23 @@ function GroupFlyout({ group, onLinkClick, location }: FlyoutProps) {
       </div>
       {group.children.map((child) => {
         const active = activeHref === child.href;
+        const hasLiveBadge = liveHrefs.has(child.href);
         return (
           <Link
             key={child.href}
             href={child.href}
             onClick={onLinkClick}
             role="menuitem"
-            className="flex flex-col px-3 py-2 text-sm font-tech transition-all duration-150"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-tech transition-all duration-150"
             style={active ? { color: d.color, backgroundColor: d.bg } : undefined}
             aria-current={active ? "page" : undefined}
           >
-            <span className={cn(active ? "" : "text-muted-foreground hover:text-foreground")}>{child.label}</span>
-            {child.description && (
-              <span className="text-[10px] text-muted-foreground/50 mt-0.5">{child.description}</span>
+            <span className={cn("flex-1", active ? "" : "text-muted-foreground hover:text-foreground")}>{child.label}</span>
+            {child.description && !hasLiveBadge && (
+              <span className="text-[10px] text-muted-foreground/50 mt-0.5 hidden">{child.description}</span>
+            )}
+            {hasLiveBadge && (
+              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" title="Sessions active" />
             )}
           </Link>
         );
@@ -130,9 +173,10 @@ interface IconRailItemProps {
   onLinkClick?: () => void;
   location: string;
   active: boolean;
+  liveHrefs: Set<string>;
 }
 
-function IconRailItem({ group, onLinkClick, location, active }: IconRailItemProps) {
+function IconRailItem({ group, onLinkClick, location, active, liveHrefs }: IconRailItemProps) {
   const [showFlyout, setShowFlyout] = useState(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -206,6 +250,7 @@ function IconRailItem({ group, onLinkClick, location, active }: IconRailItemProp
           group={group}
           onLinkClick={() => { setShowFlyout(false); onLinkClick?.(); }}
           location={location}
+          liveHrefs={liveHrefs}
         />
       )}
     </div>
@@ -222,6 +267,7 @@ interface AccordionGroupProps {
   location: string;
   activeChildHref: string | null;
   showDistrictLabel: boolean;
+  liveHrefs: Set<string>;
 }
 
 const AccordionGroup = memo(function AccordionGroup({
@@ -233,6 +279,7 @@ const AccordionGroup = memo(function AccordionGroup({
   location,
   activeChildHref,
   showDistrictLabel,
+  liveHrefs,
 }: AccordionGroupProps) {
   const Icon = group.icon;
   const groupRef = useRef<HTMLDivElement>(null);
@@ -329,6 +376,7 @@ const AccordionGroup = memo(function AccordionGroup({
         >
           {group.children.map((child, idx) => {
             const active = activeChildHref === child.href;
+            const hasLiveBadge = liveHrefs.has(child.href);
             return (
               <Link
                 key={child.href}
@@ -348,9 +396,12 @@ const AccordionGroup = memo(function AccordionGroup({
                 >
                   ●
                 </span>
-                <span className={cn("text-sm leading-none", active ? "" : "text-muted-foreground")}>
+                <span className={cn("text-sm leading-none flex-1", active ? "" : "text-muted-foreground")}>
                   {child.label}
                 </span>
+                {hasLiveBadge && (
+                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" title="Sessions active" />
+                )}
               </Link>
             );
           })}
@@ -362,14 +413,16 @@ const AccordionGroup = memo(function AccordionGroup({
   prev.isOpen === next.isOpen &&
   prev.isActive === next.isActive &&
   prev.activeChildHref === next.activeChildHref &&
-  prev.showDistrictLabel === next.showDistrictLabel
+  prev.showDistrictLabel === next.showDistrictLabel &&
+  prev.liveHrefs === next.liveHrefs
 );
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: SidebarProps) {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [openGroups, toggleGroup] = useOpenGroups(location);
+  const liveHrefs = useActiveLiveHrefs(user?.role, token);
 
   const visibleGroups = NAV_GROUPS.filter((g) => {
     if (!g.roles) return true;
@@ -398,6 +451,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
               onLinkClick={handleLinkClick}
               location={location}
               active={isGroupActive(location, group)}
+              liveHrefs={liveHrefs}
             />
           ))}
         </div>
@@ -414,6 +468,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
               onLinkClick={handleLinkClick}
               location={location}
               showDistrictLabel={idx > 0}
+              liveHrefs={liveHrefs}
             />
           ))}
         </div>
@@ -487,6 +542,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onLinkClick }: S
                 onLinkClick={handleLinkClick}
                 location={location}
                 showDistrictLabel={idx > 0}
+                liveHrefs={liveHrefs}
               />
             ))}
           </div>
